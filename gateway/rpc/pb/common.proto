@@ -1,0 +1,16 @@
+syntax="proto3";
+package io.yunka.gateway.rpc;
+
+message NotParamRequest {
+
+}
+
+message NotResponse{
+    ResponseCode code = 1;
+}
+
+
+enum ResponseCode {
+    Not = 0;
+    Response = 1;
+}
