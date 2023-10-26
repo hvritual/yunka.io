@@ -7,6 +7,7 @@ import (
 	"yunka.io/gateway/dispatcher/proxy"
 	"yunka.io/gateway/rpc/meta"
 	"yunka.io/pkg/aliLogStore"
+	"yunka.io/pkg/define"
 )
 
 const (
@@ -55,7 +56,7 @@ func (erm *AliLogMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.R
 	}
 
 	var (
-		traceId = rt.GetRequestCtx().RequestCtx.UserValue(traceIdKey)
+		traceId = rt.GetRequestCtx().RequestCtx.UserValue(define.TraceId)
 		start   = time.Now().Unix()
 	)
 
@@ -90,7 +91,7 @@ func (erm *AliLogMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.R
 		RequestParam: string(paramByte),
 		ResponseBody: string(responseByte),
 	}
-	
+
 	err := erm.log.Put(body)
 	if err != nil {
 		rt.Logger().Error(err)

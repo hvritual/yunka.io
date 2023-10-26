@@ -16,4 +16,5 @@ const (
 	UserUUID        = `uid`
 	RoleUUID        = `rid`
 	RoleContactFLag = `|`
+	TraceId         = "trace_id"
 )

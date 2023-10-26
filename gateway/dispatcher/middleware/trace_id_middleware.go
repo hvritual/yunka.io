@@ -6,11 +6,8 @@ import (
 	"yunka.io/framework/core/request"
 	"yunka.io/gateway/dispatcher/proxy"
 	"yunka.io/gateway/rpc/meta"
+	"yunka.io/pkg/define"
 	"yunka.io/pkg/stringsExt"
-)
-
-const (
-	traceIdKey = "trace_id"
 )
 
 type TraceIdMiddleware struct {
@@ -23,13 +20,13 @@ func (erm *TraceIdMiddleware) Name() string {
 
 func (erm *TraceIdMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.RuntimeApi) {
 
-	traceId := strings.TrimSpace(stringsExt.SliceToString(rt.GetRequestCtx().Request.Header.Peek(traceIdKey)))
+	traceId := strings.TrimSpace(stringsExt.SliceToString(rt.GetRequestCtx().Request.Header.Peek(define.TraceId)))
 
 	if traceId == "" {
 		traceId = uuid.New().String()
 	}
 
-	rt.GetRequestCtx().RequestCtx.SetUserValue(traceIdKey, traceId)
+	rt.GetRequestCtx().RequestCtx.SetUserValue(define.TraceId, traceId)
 
 	erm.Next.Do(authStatus, rt, api)
 
