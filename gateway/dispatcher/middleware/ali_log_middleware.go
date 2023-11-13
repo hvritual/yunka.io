@@ -71,41 +71,40 @@ func (aliLog *AliLogMiddleware) Do(authStatus bool, rt request.Runtime, api *met
 	var (
 		key = api.GetUri()
 	)
-	if _, ok := aliLog.whiteHandleMap[key]; !ok {
-		return
-	}
-	var (
-		body = &AliYunKaLogBody{}
-	)
-	// 前置
-	if aliLog.beforeHandle != nil {
-		for i := 0; i < len(aliLog.beforeHandle); i++ {
-			aliLog.beforeHandle[i](body, rt, api)
+	if _, ok := aliLog.whiteHandleMap[key]; ok {
+		var (
+			body = &AliYunKaLogBody{}
+		)
+		// 前置
+		if aliLog.beforeHandle != nil {
+			for i := 0; i < len(aliLog.beforeHandle); i++ {
+				aliLog.beforeHandle[i](body, rt, api)
+			}
 		}
+
+		aliLog.Next.Do(authStatus, rt, api)
+
+		// 后置
+		if aliLog.afterHandle != nil {
+			for i := 0; i < len(aliLog.afterHandle); i++ {
+				aliLog.afterHandle[i](body, rt, api)
+			}
+		}
+		// 覆盖
+		if aliLog.whiteHandleMap[key] != nil {
+			for i := 0; i < len(aliLog.whiteHandleMap[key]); i++ {
+				aliLog.whiteHandleMap[key][i](body, rt, api)
+			}
+		}
+
+		err := aliLog.log.Put(body)
+		if err != nil {
+			rt.Logger().Error(err)
+		}
+		return
 	}
 
 	aliLog.Next.Do(authStatus, rt, api)
-
-	// 后置
-	if aliLog.afterHandle != nil {
-		for i := 0; i < len(aliLog.afterHandle); i++ {
-			aliLog.afterHandle[i](body, rt, api)
-		}
-	}
-	// 覆盖
-	if aliLog.whiteHandleMap[key] != nil {
-		for i := 0; i < len(aliLog.whiteHandleMap[key]); i++ {
-			aliLog.whiteHandleMap[key][i](body, rt, api)
-		}
-	}
-
-	err := aliLog.log.Put(body)
-	if err != nil {
-		rt.Logger().Error(err)
-	}
-
-	return
-
 }
 
 func (aliLog *AliLogMiddleware) setTraceId(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
