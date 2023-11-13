@@ -1,7 +1,9 @@
 package middleware
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 	"yunka.io/framework/core/request"
 	"yunka.io/gateway/dispatcher/proxy"
@@ -11,113 +13,167 @@ import (
 )
 
 const (
-	aliLogName     = "ali-log"
-	deviceUUIDKey  = "device_uuid"
-	ServiceNameKey = "service_name"
-	ModuleNameKey  = "module_name"
+	aliLogName         = "ali-log"
+	deviceUUIDKey      = "device_uuid"
+	ServiceNameKey     = "service_name"
+	ModuleNameKey      = "module_name"
+	ProveNameHeaderKey = "prove_name"
 )
 
 type AliLogMiddleware struct {
 	proxy.Next
-	log             *aliLogStore.Log
-	whiteList       []string
-	whiteListHandle map[string][]LogHandle
+	log            *aliLogStore.Log
+	beforeHandle   []AliLogHandle
+	afterHandle    []AliLogHandle
+	whiteHandleMap map[string][]AliLogHandle
 }
 
-type LogHandle func(rt request.Runtime, api *meta.RuntimeApi)
+func NewAliLogMiddleware(log *aliLogStore.Log, whiteHandleMap map[string][]AliLogHandle) *AliLogMiddleware {
+	var m = &AliLogMiddleware{
+		log:            log,
+		whiteHandleMap: whiteHandleMap,
+	}
 
-func NewAliLogMiddleware(log *aliLogStore.Log, whiteList []string, whiteListHandle map[string][]LogHandle) *AliLogMiddleware {
-	return &AliLogMiddleware{log: log, whiteList: whiteList, whiteListHandle: whiteListHandle}
+	m.beforeHandle = []AliLogHandle{
+		m.setTraceId,
+		m.setStart,
+		m.setOrgUUID,
+		m.setProveUuid,
+		m.setProveName,
+		m.setModuleName,
+		m.setActionType,
+		m.setActionDesc,
+		m.setCustomerUuid,
+		m.setDeviceUUID,
+		m.setServiceName,
+		m.setClientIp,
+		m.setPath,
+		m.setMethod,
+		m.setRequestBody,
+		m.setRequestParam,
+	}
+
+	m.afterHandle = []AliLogHandle{
+		m.setEnd,
+		m.setActionResult,
+		m.setResponseBody,
+	}
+
+	return m
 }
 
-func (erm *AliLogMiddleware) Name() string {
+type AliLogHandle func(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi)
+
+func (aliLog *AliLogMiddleware) Name() string {
 	return aliLogName
 }
-
-func (erm *AliLogMiddleware) doHandle(key string, handleMap map[string][]LogHandle, rt request.Runtime, api *meta.RuntimeApi) {
-	if handleMap == nil {
+func (aliLog *AliLogMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.RuntimeApi) {
+	var (
+		key = api.GetUri()
+	)
+	if _, ok := aliLog.whiteHandleMap[key]; !ok {
 		return
 	}
-	if _, ok := handleMap[key]; !ok {
-		return
-	}
-	if handleMap[key] == nil || len(handleMap[key]) == 0 {
-		return
-	}
-	for i := 0; i < len(handleMap[key]); i++ {
-		handleMap[key][i](rt, api)
-	}
-}
-func (erm *AliLogMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.RuntimeApi) {
-	// 白名单过滤
-	var uri = api.GetUri()
-	var cancelFlag = false
-	if erm.whiteList != nil && len(erm.whiteList) > 0 {
-		for i := 0; i < len(erm.whiteList); i++ {
-			if uri == erm.whiteList[i] {
-				cancelFlag = true
-				// 执行 handle
-				erm.doHandle(uri, erm.whiteListHandle, rt, api)
-				break
-			}
+	var (
+		body = &AliYunKaLogBody{}
+	)
+	// 前置
+	if aliLog.beforeHandle != nil {
+		for i := 0; i < len(aliLog.beforeHandle); i++ {
+			aliLog.beforeHandle[i](body, rt, api)
 		}
 	}
-	if !cancelFlag {
-		erm.Next.Do(authStatus, rt, api)
-		return
+
+	aliLog.Next.Do(authStatus, rt, api)
+
+	// 后置
+	if aliLog.afterHandle != nil {
+		for i := 0; i < len(aliLog.afterHandle); i++ {
+			aliLog.afterHandle[i](body, rt, api)
+		}
+	}
+	// 覆盖
+	if aliLog.whiteHandleMap[key] != nil {
+		for i := 0; i < len(aliLog.whiteHandleMap[key]); i++ {
+			aliLog.whiteHandleMap[key][i](body, rt, api)
+		}
 	}
 
-	var (
-		traceId = rt.GetRequestCtx().RequestCtx.UserValue(define.TraceId)
-		start   = time.Now().Unix()
-	)
-
-	erm.Next.Do(authStatus, rt, api)
-
-	var (
-		end          = time.Now().Unix()
-		bodyByte     = rt.GetRequestCtx().Request.Body()
-		paramByte    = rt.GetRequestCtx().Request.URI().QueryString()
-		responseByte = rt.GetRequestCtx().Response.Body()
-		serviceName  = rt.GetServiceName()
-		moduleName   = api.GetModuleName()
-	)
-	sKey := rt.GetRequestCtx().UserValue(ServiceNameKey)
-	if sKey != nil {
-		serviceName = sKey.(string)
-	}
-	mKey := rt.GetRequestCtx().UserValue(ModuleNameKey)
-	if sKey != nil {
-		moduleName = mKey.(string)
-	}
-
-	responseByte = rt.GetRequestCtx().Response.Body()
-	var deviceUUID = rt.GetRequestCtx().RequestCtx.UserValue(deviceUUIDKey)
-	if deviceUUID == nil {
-		deviceUUID = ""
-	}
-	var body = aliLogStore.YunKaLog{
-		TraceId:      traceId.(string),
-		OrgUuid:      rt.GetRequestCtx().GetOrgUUID(),
-		ProveUuid:    rt.GetRequestCtx().GetProveUUID(),
-		CustomerUuid: rt.GetRequestCtx().GetOrgUUID(),
-		DeviceUuid:   deviceUUID.(string),
-		ModuleName:   moduleName,
-		ServiceName:  serviceName,
-		Start:        fmt.Sprintf("%d", start),
-		End:          fmt.Sprintf("%d", end),
-		ClientIp:     rt.GetRequestCtx().ClientIP(),
-		Path:         uri,
-		Method:       string(rt.GetRequestCtx().Method()),
-		RequestBody:  string(bodyByte),
-		RequestParam: string(paramByte),
-		ResponseBody: string(responseByte),
-	}
-
-	err := erm.log.Put(body)
+	err := aliLog.log.Put(body)
 	if err != nil {
 		rt.Logger().Error(err)
 	}
 
 	return
+
+}
+
+func (aliLog *AliLogMiddleware) setTraceId(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	body.TraceId = rt.GetRequestCtx().RequestCtx.UserValue(define.TraceId).(string)
+}
+func (aliLog *AliLogMiddleware) setStart(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	body.Start = fmt.Sprintf("%d", time.Now().UnixMilli())
+}
+func (aliLog *AliLogMiddleware) setEnd(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	body.End = fmt.Sprintf("%d", time.Now().UnixMilli())
+}
+func (aliLog *AliLogMiddleware) setOrgUUID(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	body.OrgUuid = rt.GetRequestCtx().GetOrgUUID()
+}
+func (aliLog *AliLogMiddleware) setProveUuid(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	body.ProveUuid = rt.GetRequestCtx().GetProveUUID()
+}
+func (aliLog *AliLogMiddleware) setProveName(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	body.ProveName = string(rt.GetRequestCtx().Request.Header.Peek(ProveNameHeaderKey))
+}
+func (aliLog *AliLogMiddleware) setModuleName(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	body.ModuleName = api.GetModuleName()
+}
+func (aliLog *AliLogMiddleware) setActionType(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	body.ActionType = api.GetName()
+}
+func (aliLog *AliLogMiddleware) setActionResult(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	body.ActionResult = "失败"
+	if rt.GetRequestCtx().Response.StatusCode() == http.StatusOK {
+		var respBody = rt.GetRequestCtx().Response.Body()
+		var mapRes = make(map[string]string)
+		_ = json.Unmarshal(respBody, &mapRes)
+		if mapRes["code"] == "0" {
+			body.ActionResult = "成功"
+		}
+	}
+}
+func (aliLog *AliLogMiddleware) setActionDesc(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	// TODO: add api desc
+}
+func (aliLog *AliLogMiddleware) setCustomerUuid(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	body.CustomerUuid = rt.GetRequestCtx().GetOrgUUID()
+}
+func (aliLog *AliLogMiddleware) setServiceName(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	body.ServiceName = rt.GetServiceName()
+}
+func (aliLog *AliLogMiddleware) setClientIp(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	body.ClientIp = rt.GetRequestCtx().LocalIP().String()
+}
+func (aliLog *AliLogMiddleware) setPath(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	body.Path = api.GetUri()
+}
+func (aliLog *AliLogMiddleware) setMethod(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	body.Method = string(rt.GetRequestCtx().Method())
+}
+func (aliLog *AliLogMiddleware) setRequestBody(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	body.RequestBody = string(rt.GetRequestCtx().Request.Body())
+}
+func (aliLog *AliLogMiddleware) setRequestParam(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	body.RequestParam = string(rt.GetRequestCtx().Request.URI().QueryString())
+}
+func (aliLog *AliLogMiddleware) setResponseBody(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	body.ResponseBody = string(rt.GetRequestCtx().Response.Body())
+}
+func (aliLog *AliLogMiddleware) setDeviceUUID(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	var deviceUUID = rt.GetRequestCtx().RequestCtx.UserValue(deviceUUIDKey)
+	if deviceUUID == nil {
+		deviceUUID = ""
+	}
+	body.DeviceUuid = deviceUUID.(string)
 }
