@@ -13,11 +13,13 @@ import (
 )
 
 const (
-	aliLogName         = "ali-log"
-	deviceUUIDKey      = "device_uuid"
-	ServiceNameKey     = "service_name"
-	ModuleNameKey      = "module_name"
-	ProveNameHeaderKey = "prove_name"
+	aliLogName              = "ali-log"
+	deviceUUIDKey           = "device_uuid"
+	ServiceNameKey          = "service_name"
+	ModuleNameKey           = "module_name"
+	ProveNameHeaderKey      = "proveName"
+	ReplaceOrgNameHeaderKey = "replaceOrgName"
+	OrgNameHeaderKey        = "orgName"
 )
 
 type AliLogMiddleware struct {
@@ -108,7 +110,10 @@ func (aliLog *AliLogMiddleware) Do(authStatus bool, rt request.Runtime, api *met
 }
 
 func (aliLog *AliLogMiddleware) setTraceId(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
-	body.TraceId = rt.GetRequestCtx().RequestCtx.UserValue(define.TraceId).(string)
+	traceId := rt.GetRequestCtx().UserValue(define.TraceId)
+	if traceId != nil {
+		body.TraceId = traceId.(string)
+	}
 }
 func (aliLog *AliLogMiddleware) setStart(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
 	body.Start = fmt.Sprintf("%d", time.Now().UnixMilli())
@@ -128,6 +133,8 @@ func (aliLog *AliLogMiddleware) setProveName(body *AliYunKaLogBody, rt request.R
 func (aliLog *AliLogMiddleware) setModuleName(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
 	body.ModuleName = api.GetModuleName()
 }
+
+// -table:yunka_system_api;-field:eng_name;
 func (aliLog *AliLogMiddleware) setActionType(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
 	body.ActionType = api.GetName()
 }
@@ -175,4 +182,10 @@ func (aliLog *AliLogMiddleware) setDeviceUUID(body *AliYunKaLogBody, rt request.
 		deviceUUID = ""
 	}
 	body.DeviceUuid = deviceUUID.(string)
+}
+func (aliLog *AliLogMiddleware) setReplaceOrgName(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	body.ReplaceOrgName = string(rt.GetRequestCtx().Request.Header.Peek(ReplaceOrgNameHeaderKey))
+}
+func (aliLog *AliLogMiddleware) setOrgName(body *AliYunKaLogBody, rt request.Runtime, api *meta.RuntimeApi) {
+	body.OrgName = string(rt.GetRequestCtx().Request.Header.Peek(OrgNameHeaderKey))
 }
