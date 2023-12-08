@@ -3,6 +3,7 @@ package middleware
 import (
 	"encoding/json"
 	sls "github.com/aliyun/aliyun-log-go-sdk"
+	"github.com/golang/protobuf/proto"
 )
 
 type AliYunKaLogBody struct {
@@ -29,11 +30,19 @@ type AliYunKaLogBody struct {
 	OrgName        string `json:"orgName" local:"操作人所属经销商"`
 }
 
-func (body AliYunKaLogBody) Body() map[string]string {
+func (body AliYunKaLogBody) Body() []*sls.LogContent {
 	var res = make(map[string]string)
 	bodyByte, _ := json.Marshal(body)
 	_ = json.Unmarshal(bodyByte, &res)
-	return res
+
+	var logs = make([]*sls.LogContent, 0)
+	for key, val := range res {
+		logs = append(logs, &sls.LogContent{
+			Key:   proto.String(key),
+			Value: proto.String(val),
+		})
+	}
+	return logs
 }
 
 func (body AliYunKaLogBody) Index() sls.Index {

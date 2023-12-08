@@ -159,13 +159,11 @@ func (wrt *WorkRuntime) SetSrvName(srvName string) {
 }
 
 func (wrt *WorkRuntime) Logger() logExt.Logger {
-	var traceId = wrt.GetRequestCtx().UserValue(define.TraceId)
-	if traceId, ok := traceId.(string); ok {
-		lg := logExt.Copy(wrt.logger)
-		switch lg.(type) {
-		case logExt.TraceLogger:
-			lg.(logExt.TraceLogger).Set(traceId)
-			return lg
+	switch wrt.logger.(type) {
+	case logExt.Trace:
+		var traceId = wrt.GetRequestCtx().UserValue(define.TraceId)
+		if traceId, ok := traceId.(string); ok {
+			wrt.logger.(logExt.Trace).Set(traceId)
 		}
 	}
 	return wrt.logger

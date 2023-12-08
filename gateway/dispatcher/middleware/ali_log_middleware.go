@@ -3,12 +3,13 @@ package middleware
 import (
 	"encoding/json"
 	"fmt"
+	sls "github.com/aliyun/aliyun-log-go-sdk"
+	"github.com/golang/protobuf/proto"
 	"net/http"
 	"time"
 	"yunka.io/framework/core/request"
 	"yunka.io/gateway/dispatcher/proxy"
 	"yunka.io/gateway/rpc/meta"
-	"yunka.io/pkg/aliLogStore"
 	"yunka.io/pkg/define"
 )
 
@@ -24,15 +25,18 @@ const (
 
 type AliLogMiddleware struct {
 	proxy.Next
-	log            *aliLogStore.Log
+	log            *sls.LogStore
+	topic, source  string
 	beforeHandle   []AliLogHandle
 	afterHandle    []AliLogHandle
 	whiteHandleMap map[string][]AliLogHandle
 }
 
-func NewAliLogMiddleware(log *aliLogStore.Log, whiteHandleMap map[string][]AliLogHandle) *AliLogMiddleware {
+func NewAliLogMiddleware(log *sls.LogStore, topic, source string, whiteHandleMap map[string][]AliLogHandle) *AliLogMiddleware {
 	var m = &AliLogMiddleware{
 		log:            log,
+		topic:          topic,
+		source:         source,
 		whiteHandleMap: whiteHandleMap,
 	}
 
@@ -99,7 +103,16 @@ func (aliLog *AliLogMiddleware) Do(authStatus bool, rt request.Runtime, api *met
 			}
 		}
 
-		err := aliLog.log.Put(body)
+		err := aliLog.log.PutLogs(&sls.LogGroup{
+			Logs: []*sls.Log{
+				{
+					Time:     proto.Uint32(uint32(time.Now().Unix())),
+					Contents: body.Body(),
+				},
+			},
+			Topic:  proto.String(aliLog.topic),
+			Source: proto.String(aliLog.source),
+		})
 		if err != nil {
 			rt.Logger().Error(err)
 		}
