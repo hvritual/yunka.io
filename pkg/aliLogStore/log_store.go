@@ -27,7 +27,7 @@ func WithSourceOption(source string) WithWriteOption {
 	}
 }
 
-func NewLogStoreWrite(store *sls.LogStore, ops ...WithWriteOption) (io.Writer, error) {
+func NewLogStoreWrite(store *sls.LogStore, ops ...WithWriteOption) io.Writer {
 	var w = &logStoreWrite{
 		l:      store,
 		topic:  "default",
@@ -38,7 +38,7 @@ func NewLogStoreWrite(store *sls.LogStore, ops ...WithWriteOption) (io.Writer, e
 		ops[i](w)
 	}
 
-	return w, nil
+	return w
 }
 
 func (w *logStoreWrite) Write(body []byte) (int, error) {
