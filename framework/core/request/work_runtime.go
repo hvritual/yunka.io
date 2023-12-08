@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 	"yunka.io/framework/infras/transaction"
+	"yunka.io/pkg/define"
 	"yunka.io/pkg/logExt"
 	"yunka.io/pkg/memstore"
 	"yunka.io/pkg/response"
@@ -158,6 +159,13 @@ func (wrt *WorkRuntime) SetSrvName(srvName string) {
 }
 
 func (wrt *WorkRuntime) Logger() logExt.Logger {
+	switch wrt.logger.(type) {
+	case logExt.Trace:
+		var traceId = wrt.GetRequestCtx().UserValue(define.TraceId)
+		if traceId, ok := traceId.(string); ok {
+			wrt.logger.(logExt.Trace).Set(traceId)
+		}
+	}
 	return wrt.logger
 }
 

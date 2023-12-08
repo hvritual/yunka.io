@@ -2,6 +2,8 @@ package stringsExt
 
 import (
 	"reflect"
+	"regexp"
+	"strings"
 	"unsafe"
 )
 
@@ -27,4 +29,15 @@ func StringToSlice(s string) (b []byte) {
 	pbytes.Len = pstring.Len
 	pbytes.Cap = pstring.Len
 	return
+}
+
+var (
+	regChar = regexp.MustCompile(`[\W|_]{1,}`)
+)
+
+func StringStrip(val string) string {
+	if val == `` {
+		return val
+	}
+	return regChar.ReplaceAllString(strings.TrimSpace(val), ``)
 }

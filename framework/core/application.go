@@ -112,7 +112,7 @@ func (app *App) Run(run func()) {
 		i(app)
 	}
 	app.rhTree.Walk(func(s string, v Handle) bool {
-		Log().Debug(s)
+		//Log().Debug(s)
 		return false
 	})
 	run()
