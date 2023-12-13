@@ -43,10 +43,6 @@ func NewAliLogMiddleware(log *sls.LogStore, topic, source string, whiteHandleMap
 	m.beforeHandle = []AliLogHandle{
 		m.setTraceId,
 		m.setStart,
-		m.setOrgUUID,
-		m.setProveUuid,
-		m.setProveName,
-		m.setModuleName,
 		m.setActionType,
 		m.setActionDesc,
 		m.setCustomerUuid,
@@ -63,6 +59,10 @@ func NewAliLogMiddleware(log *sls.LogStore, topic, source string, whiteHandleMap
 		m.setEnd,
 		m.setActionResult,
 		m.setResponseBody,
+		m.setOrgUUID,
+		m.setProveUuid,
+		m.setProveName,
+		m.setModuleName,
 	}
 
 	return m
