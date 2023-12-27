@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"github.com/valyala/fasthttp"
+	"net"
 	"sync"
 	"yunka.io/framework/core/request"
 	"yunka.io/gateway/dispatcher/router"
@@ -53,6 +54,16 @@ func (p *Proxy) UriTree() *router.Tree {
 func (p *Proxy) Run(address string) {
 	p.logFn().Debugf("start server:%s", address)
 	err := fasthttp.ListenAndServe(address, p.serverHttp)
+	if err != nil {
+		p.logFn().Errorf("start serve error, err:%v", err)
+	}
+}
+
+func (p *Proxy) RunLn(ln net.Listener) {
+	s := &fasthttp.Server{
+		Handler: p.serverHttp,
+	}
+	err := s.Serve(ln)
 	if err != nil {
 		p.logFn().Errorf("start serve error, err:%v", err)
 	}

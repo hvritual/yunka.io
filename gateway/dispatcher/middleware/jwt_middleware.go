@@ -41,13 +41,9 @@ func init() {
 }
 
 func NewJwtMiddleware() *JwtMiddleware {
-	secretKey := ``
 
-	iKey := core.GetConf(jwtKeyName)
-	if iKey == nil {
-		panic("jwt not found key")
-	}
-	secretKey = iKey.(string)
+	secretKey := core.GetConfV2(jwtKeyName, ``)
+
 	if secretKey == `` {
 		panic("jwt not found key")
 	}

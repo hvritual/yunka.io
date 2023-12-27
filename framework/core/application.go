@@ -104,6 +104,7 @@ func (app *App) GetHandleTree() *RouterHandleTree {
 
 // Run app
 func (app *App) Run(run func()) {
+
 	for _, i := range prepares {
 		i(globalConf)
 	}

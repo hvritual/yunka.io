@@ -38,6 +38,7 @@ func Println(v ...interface{}) {
 }
 
 func Fatal(v ...interface{}) {
+	panic(v)
 	defaultLog.Fatal(v...)
 }
 

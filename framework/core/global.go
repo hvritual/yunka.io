@@ -21,6 +21,8 @@ var (
 	globalAppOnce sync.Once
 	app           *App
 	globalConf    = make(conf.Map)
+	store         = make(map[string]any)
+	storeLock     sync.Mutex
 	initiators    []Initiator
 	prepares      []Prepare
 )
@@ -30,13 +32,34 @@ func RegisterConfType(name string, dType interface{}) {
 	globalConf.RegisterType(name, dType)
 }
 
-// get conf
-func GetConf(name string) interface{} {
-	v, ok := globalConf[name]
-	if ok {
-		return v.Value
+func SetItem[T any](key string, v T) {
+	storeLock.Lock()
+	defer storeLock.Unlock()
+	store[key] = v
+}
+
+func GetItem[T any](key string, dt T) T {
+	storeLock.Lock()
+	defer storeLock.Unlock()
+	v, ok := store[key]
+	if !ok {
+		return dt
 	}
-	return nil
+	return v.(T)
+}
+
+const dbSyncKey = `DBSync`
+
+func SetDbSync(v bool) {
+	SetItem[bool](dbSyncKey, v)
+}
+
+func IsDbSync() bool {
+	return GetItem[bool](dbSyncKey, false)
+}
+
+func GetConfV2[T any](name string, dt T) T {
+	return conf.GetConf[T](globalConf, name, dt)
 }
 
 // get logger

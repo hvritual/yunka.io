@@ -35,3 +35,11 @@ func (m Map) RegisterType(name string, val interface{}) {
 		Value: reflect.New(reflect.TypeOf(val)).Interface(),
 	}
 }
+
+func GetConf[T any](m Map, name string, dt T) T {
+	v, ok := m[name]
+	if ok {
+		return v.Value.(T)
+	}
+	return dt
+}
