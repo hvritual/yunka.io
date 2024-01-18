@@ -25,6 +25,7 @@ type (
 
 func (mod *module) register(srv core.Service, f interface{}) error {
 	_, ok := mod.srvContainer[srv.GetName()]
+
 	if ok {
 		return errors.New(fmt.Sprintf("service :%s exist", srv.GetName()))
 	}

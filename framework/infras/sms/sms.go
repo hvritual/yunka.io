@@ -28,13 +28,32 @@ var (
 )
 
 type (
+	Handler interface {
+		SendTTLTryBest(e *Environment, ttl int, phone string, keys ...string) error
+
+		SendTTL(e *Environment, ttl int, phone string, keys ...string) error
+
+		GetCacheSms(phone string, keys ...string) ([]byte, error)
+
+		GetEnvironment() *Environment
+
+		CheckCode(phone, code string, keys ...string) (bool, error)
+
+		CheckCodeForce(checkE *Environment, phone, code string, keys ...string) (bool, error)
+
+		ForgetCode(phone string, keys ...string) error
+	}
+
 	Sms struct {
 		cache      redis.Cmdable
 		smsSenders []Sender
 		pool       *sync.Pool
 		sendLen    int
+		cf         CodeFunc
 		lock       sync.Locker
 	}
+
+	CodeFunc func() string
 )
 
 type Sender interface {
@@ -46,7 +65,7 @@ func init() {
 	rand.Seed(time.Now().Unix())
 }
 
-func NewSms(cache redis.Cmdable, senders ...Sender) (*Sms, error) {
+func NewSms(cache redis.Cmdable, cf CodeFunc, senders ...Sender) (*Sms, error) {
 	smsLen := len(senders)
 	if smsLen == 0 {
 		return nil, errors.New("not allow empty send")
@@ -55,6 +74,7 @@ func NewSms(cache redis.Cmdable, senders ...Sender) (*Sms, error) {
 		cache:      cache,
 		smsSenders: senders,
 		sendLen:    smsLen,
+		cf:         cf,
 		lock:       &sync.Mutex{},
 		pool: &sync.Pool{
 			New: func() interface{} {
@@ -83,7 +103,7 @@ func (s *Sms) getKey(phone string, keys []string) string {
 	return bys.String()
 }
 
-func (*Sms) getCheckCode() string {
+func GetCheckCode() string {
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	return fmt.Sprintf("%06v", rnd.Int31n(1000000))
 }
@@ -101,7 +121,7 @@ func (s *Sms) SendTTL(e *Environment, ttl int, phone string, keys ...string) err
 	if err == nil {
 		return ErrPhoneHasSendCode
 	}
-	code := s.getCheckCode()
+	code := s.GetCheckCode()
 	e.Code = code
 	bys, err := util.EncodeMsg(e)
 	if err != nil {
@@ -125,7 +145,7 @@ func (s *Sms) SendTTLTryBest(e *Environment, ttl int, phone string, keys ...stri
 	if err == nil {
 		return ErrPhoneHasSendCode
 	}
-	code := s.getCheckCode()
+	code := s.GetCheckCode()
 	e.Code = code
 	bys, err := util.EncodeMsg(e)
 	if err != nil {
@@ -136,6 +156,7 @@ func (s *Sms) SendTTLTryBest(e *Environment, ttl int, phone string, keys ...stri
 	sends := s.random()
 	for i := 0; i < s.sendLen; i++ {
 		err = (sends[i]).SendSms(phone, code)
+		fmt.Println(code)
 		if err == nil {
 			break
 		}
@@ -207,4 +228,8 @@ func (s *Sms) CheckCodeForce(checkE *Environment, phone, code string, keys ...st
 
 func (s *Sms) ForgetCode(phone string, keys ...string) error {
 	return s.cache.Del(s.getKey(phone, keys)).Err()
+}
+
+func (s *Sms) GetCheckCode() string {
+	return s.cf()
 }
