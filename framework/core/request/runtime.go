@@ -41,6 +41,8 @@ type (
 
 		ResponseByte(bys []byte) ([]byte, error)
 
+		ResponseHtml(html string) ([]byte, error)
+
 		ResponseError(err error) ([]byte, error)
 
 		GetServiceName() string

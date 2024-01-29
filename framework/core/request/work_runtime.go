@@ -152,6 +152,11 @@ func (wrt *WorkRuntime) Write(bys []byte) error {
 
 func (wrt *WorkRuntime) ResponseByte(bys []byte) ([]byte, error) {
 	return wrt.WriteBys(response.SysSuccess, bys)
+
+}
+func (wrt *WorkRuntime) ResponseHtml(html string) ([]byte, error) {
+	wrt.ctx.SetContentType("text/html; charset=utf-8")
+	return []byte(html), nil
 }
 
 func (wrt *WorkRuntime) SetSrvName(srvName string) {
