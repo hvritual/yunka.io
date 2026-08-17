@@ -16,10 +16,9 @@ import (
 	"time"
 	"yunka.io/pkg/registry"
 
-	"github.com/coreos/etcd/clientv3"
-
-	"github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes"
 	hash "github.com/mitchellh/hashstructure"
+	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 var (
@@ -50,11 +49,15 @@ func configure(e *etcdv3Registry, opts ...registry.Option) error {
 	if e.options.Secure || e.options.TLSConfig != nil {
 		tlsConfig := e.options.TLSConfig
 		if tlsConfig == nil {
-			tlsConfig = &tls.Config{
-				InsecureSkipVerify: true,
-			}
+			return errors.New("secure etcd connection requires an explicit TLS configuration")
 		}
-
+		if tlsConfig.InsecureSkipVerify {
+			return errors.New("etcd TLS certificate verification cannot be disabled")
+		}
+		tlsConfig = tlsConfig.Clone()
+		if tlsConfig.MinVersion == 0 {
+			tlsConfig.MinVersion = tls.VersionTLS12
+		}
 		config.TLS = tlsConfig
 	}
 
@@ -79,6 +82,7 @@ func configure(e *etcdv3Registry, opts ...registry.Option) error {
 	if len(cAddrs) > 0 {
 		config.Endpoints = cAddrs
 	}
+	config.DialTimeout = e.options.Timeout
 
 	cli, err := clientv3.New(config)
 	if err != nil {
@@ -95,7 +99,9 @@ func encode(s *registry.Service) string {
 
 func decode(ds []byte) *registry.Service {
 	var s *registry.Service
-	json.Unmarshal(ds, &s)
+	if err := json.Unmarshal(ds, &s); err != nil {
+		return nil
+	}
 	return s
 }
 

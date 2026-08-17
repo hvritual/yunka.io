@@ -5,6 +5,7 @@ import (
 	"yunka.io/gateway/dispatcher/intercept"
 	"yunka.io/gateway/dispatcher/intercept/role/db"
 	"yunka.io/gateway/dispatcher/router"
+	"yunka.io/gateway/internal/resp"
 	"yunka.io/gateway/rpc/meta"
 	"yunka.io/gateway/rpc/server"
 	"yunka.io/pkg/invoke"
@@ -29,6 +30,14 @@ type RoleIntercept struct {
 }
 
 func (r *RoleIntercept) VerifyRoleApiRight(apiUUID, orgUUID string, RoleUUID []string) ([]byte, bool) {
+	ok, err := r.db.VerifyRoleAPIRight(apiUUID, orgUUID, RoleUUID)
+	if err != nil {
+		logExt.Error(err)
+		return resp.SysNotRightBys, false
+	}
+	if !ok {
+		return resp.SysRoleNotMatchBys, false
+	}
 	return nil, true
 }
 
@@ -74,7 +83,7 @@ func (r *RoleIntercept) OperateRoleAPI(ctx context.Context,
 func NewRoleIntercept(rt *router.Tree, srv invoke.RpcServer) (intercept.Intercept, error) {
 	db, err := db.NewStore("build", "gateway.db")
 	if err != nil {
-		logExt.Error(err)
+		return nil, err
 	}
 
 	ri := &RoleIntercept{

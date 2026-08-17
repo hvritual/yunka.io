@@ -8,6 +8,7 @@ package router
 import (
 	"sort"
 	"strings"
+	"sync"
 	"yunka.io/gateway/rpc/meta"
 )
 
@@ -114,6 +115,7 @@ func (e edges) Sort() {
 type Tree struct {
 	root *node
 	size int
+	mu   sync.RWMutex
 }
 
 // New returns an empty Tree
@@ -133,6 +135,8 @@ func NewFromMap(m map[string]Handle) *Tree {
 
 // Len is used to return the number of elements in the tree
 func (t *Tree) Len() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	return t.size
 }
 
@@ -155,6 +159,8 @@ func longestPrefix(k1, k2 string) int {
 // Insert is used to add a newentry or update
 // an existing entry. Returns if updated.
 func (t *Tree) Insert(s string, v Handle) (Handle, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	var parent *node
 	n := t.root
 	search := s
@@ -247,6 +253,8 @@ func (t *Tree) Insert(s string, v Handle) (Handle, bool) {
 // Delete is used to delete a key, returning the previous
 // value and if it was deleted
 func (t *Tree) Delete(s string) (Handle, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	var parent *node
 	var label byte
 	n := t.root
@@ -305,6 +313,8 @@ DELETE:
 // Returns how many nodes were deleted
 // Use this to delete large subtrees efficiently
 func (t *Tree) DeletePrefix(s string) int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	return t.deletePrefix(nil, t.root, s)
 }
 
@@ -359,6 +369,8 @@ func (n *node) mergeChild() {
 // Get is used to lookup a specific key, returning
 // the value and if it was found
 func (t *Tree) Get(s string) (Handle, bool) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	n := t.root
 	search := s
 	for {

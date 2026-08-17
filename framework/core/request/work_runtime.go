@@ -1,7 +1,9 @@
 package request
 
 import (
+	"context"
 	"encoding/json"
+	stderrors "errors"
 	"github.com/buger/jsonparser"
 	"github.com/pkg/errors"
 	"github.com/valyala/fasthttp"
@@ -38,6 +40,7 @@ var (
 
 type WorkRuntime struct {
 	ctx   *RequestCtx
+	base  context.Context
 	store *memstore.Store
 	lock  sync.Locker
 	// 运行handle 对应的服务module名称
@@ -58,32 +61,36 @@ func (wrt *WorkRuntime) TransactionPrepare(hook transaction.Transaction) {
 }
 
 func (wrt *WorkRuntime) Transaction(param interface{}, f func() error) (err error) {
-	for _, t := range wrt.transactions {
-		if err := t.Begin(param); err != nil {
-			return err
+	started := make([]transaction.Transaction, 0, len(wrt.transactions))
+	for _, tx := range wrt.transactions {
+		if beginErr := tx.Begin(param); beginErr != nil {
+			for i := len(started) - 1; i >= 0; i-- {
+				beginErr = stderrors.Join(beginErr, started[i].Rollback())
+			}
+			return beginErr
 		}
+		started = append(started, tx)
 	}
 	defer func() {
 		v := recover()
 		if v != nil {
-			for _, t := range wrt.transactions {
-				if err := t.Rollback(); err != nil {
-					wrt.Logger().Error(err)
-				}
+			for i := len(started) - 1; i >= 0; i-- {
+				err = stderrors.Join(err, started[i].Rollback())
 			}
-			wrt.Logger().Error(string(debug.Stack()))
-			err = errors.New("system error")
+			if wrt.logger != nil {
+				wrt.Logger().Error(v, string(debug.Stack()))
+			}
+			err = stderrors.Join(errors.New("system error"), err)
+			return
 		}
 		if err != nil {
-			for _, t := range wrt.transactions {
-				if err := t.Rollback(); err != nil {
-					wrt.Logger().Error(err)
-				}
+			for i := len(started) - 1; i >= 0; i-- {
+				err = stderrors.Join(err, started[i].Rollback())
 			}
 		} else {
-			for _, t := range wrt.transactions {
-				if err := t.Commit(); err != nil {
-					wrt.Logger().Error(err)
+			for _, tx := range started {
+				if commitErr := tx.Commit(); commitErr != nil {
+					err = stderrors.Join(err, commitErr)
 				}
 			}
 		}
@@ -98,9 +105,7 @@ func (wrt *WorkRuntime) BindFinishHook(hook FinishHook) {
 
 func (wrt *WorkRuntime) FinishRequest(err error) error {
 	for _, hook := range wrt.hooks {
-		if _err := hook(err); err != nil && _err != nil {
-			wrt.Logger().Error(_err)
-		}
+		err = stderrors.Join(err, hook(err))
 	}
 	wrt.hooks = nil
 	wrt.transactions = nil
@@ -201,19 +206,27 @@ func (wrt *WorkRuntime) JSONWrite(data interface{}) (int, error) {
 
 func (wrt *WorkRuntime) SetRequestCtx(ctx *fasthttp.RequestCtx) {
 	wrt.ctx.RequestCtx = ctx
+	wrt.base = context.Background()
+}
+
+func (wrt *WorkRuntime) SetContext(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	wrt.base = ctx
 }
 
 // implement context.Context interface
 func (wrt *WorkRuntime) Deadline() (deadline time.Time, ok bool) {
-	return
+	return wrt.baseContext().Deadline()
 }
 
 func (wrt *WorkRuntime) Done() <-chan struct{} {
-	return nil
+	return wrt.baseContext().Done()
 }
 
 func (wrt *WorkRuntime) Err() error {
-	return nil
+	return wrt.baseContext().Err()
 }
 
 func (wrt *WorkRuntime) Value(key interface{}) interface{} {
@@ -221,9 +234,19 @@ func (wrt *WorkRuntime) Value(key interface{}) interface{} {
 		return &(wrt.ctx.Request).Header
 	}
 	if keyAsString, ok := key.(string); ok {
+		if value := wrt.baseContext().Value(key); value != nil {
+			return value
+		}
 		return stringsExt.SliceToString(wrt.ctx.Request.Header.Peek(keyAsString))
 	}
-	return nil
+	return wrt.baseContext().Value(key)
+}
+
+func (wrt *WorkRuntime) baseContext() context.Context {
+	if wrt.base == nil {
+		return context.Background()
+	}
+	return wrt.base
 }
 
 func (wrt *WorkRuntime) Set(key, val string) {
@@ -247,6 +270,7 @@ func (wrt *WorkRuntime) ForeachKey(handler func(key, val string) error) error {
 func NewWorkRuntime() *WorkRuntime {
 	return &WorkRuntime{
 		IsDirect: true,
+		base:     context.Background(),
 		store:    &memstore.Store{},
 		ctx:      &RequestCtx{},
 		lock:     &sync.Mutex{},

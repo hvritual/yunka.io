@@ -4,6 +4,7 @@ import (
 	"yunka.io/framework/core/request"
 	"yunka.io/gateway/dispatcher/intercept"
 	"yunka.io/gateway/dispatcher/proxy"
+	"yunka.io/gateway/internal/resp"
 	"yunka.io/gateway/rpc/meta"
 )
 
@@ -37,15 +38,16 @@ func (erm *EnterpriseRoleMiddleware) Do(authStatus bool, rt request.Runtime, api
 		ctx := rt.GetRequestCtx()
 		orgUUID := ctx.GetOrgUUID()
 		roleUUID := ctx.GetRoleUUID()
-		if len(roleUUID) != 0 {
-			if bys, ok := erm.intercept.VerifyRoleApiRight(api.Uuid, orgUUID, roleUUID); !ok {
-				ctx.Write(bys)
-				return
-			}
-			authStatus = true
+		if orgUUID == "" || len(roleUUID) == 0 || erm.intercept == nil {
+			ctx.Write(resp.SysNotRightBys)
+			return
 		}
+		if bys, ok := erm.intercept.VerifyRoleApiRight(api.Uuid, orgUUID, roleUUID); !ok {
+			ctx.Write(bys)
+			return
+		}
+		authStatus = true
 	}
-
 
 	erm.Next.Do(authStatus, rt, api)
 

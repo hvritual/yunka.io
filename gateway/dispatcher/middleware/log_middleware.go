@@ -69,7 +69,7 @@ func (base *LogMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.Run
 		latency,
 		clientIP,
 		methodColor, method, resetColor,
-		rt.GetRequestCtx().Request.URI().String(),
+		string(rt.GetRequestCtx().Request.URI().Path()),
 		"",
 	)
 }

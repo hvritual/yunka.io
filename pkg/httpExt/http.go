@@ -2,16 +2,12 @@ package httpExt
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"github.com/buger/jsonparser"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
-	"reflect"
-	"time"
 	"yunka.io/pkg/stringsExt"
 )
 
@@ -33,34 +29,6 @@ const (
 	//dnsServerAddress = "8.8.8.8:53"
 )
 
-func dnsPatch() {
-	http.DefaultTransport = &http.Transport{
-		//DialContext: (&net.Dialer{
-		//	Timeout:   10 * time.Second,
-		//	KeepAlive: 10 * time.Second,
-		//	DualStack: true,
-		//	Resolver: &net.Resolver{
-		//		PreferGo: true,
-		//		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-		//			d := net.Dialer{}
-		//			return d.DialContext(ctx, "udp", dnsServerAddress)
-		//		},
-		//	},
-		//}).DialContext,
-		MaxIdleConns:          10,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-	}
-}
-
-func init() {
-	dnsPatch()
-}
-
 type HttpBaseMsg struct {
 	Code string      `json:"code"`
 	Msg  string      `json:"msg"`
@@ -73,22 +41,22 @@ func GetJSON(path string, params map[string]string, response interface{}) error 
 		p.Add(key, val)
 	}
 
-	if params != nil {
+	if len(params) > 0 {
 		path = path + `?` + p.Encode()
 	}
 
-	req, _ := http.NewRequest("GET", path, nil)
+	req, err := http.NewRequest("GET", path, nil)
+	if err != nil {
+		return err
+	}
 
 	req.Header.Add("accept", "application/json")
 	req.Header.Add("content-type", "application/json")
 
-	res, err := http.DefaultClient.Do(req)
+	body, err := do(req)
 	if err != nil {
-		return errors.New("network is unreachable")
+		return err
 	}
-
-	defer res.Body.Close()
-	body, _ := ioutil.ReadAll(res.Body)
 
 	strValue, _ := jsonparser.GetString(body, BasicJsonCode)
 	if strValue != `0` {
@@ -97,18 +65,22 @@ func GetJSON(path string, params map[string]string, response interface{}) error 
 	}
 
 	value, dataType, _, err := jsonparser.Get(body, BasicJsonData)
-	switch dataType {
-	case jsonparser.String:
-
-		d := reflect.ValueOf(response).Elem() // d refers to the variable x
-		val := d.Addr().Interface().(*string)
-		*val = stringsExt.SliceToString(value)
-		return nil
+	if err != nil {
+		return err
 	}
 	if response == nil {
 		return nil
 	}
-	err = json.Unmarshal(value, &response)
+	switch dataType {
+	case jsonparser.String:
+		val, ok := response.(*string)
+		if !ok {
+			return errors.New("string response requires *string destination")
+		}
+		*val = stringsExt.SliceToString(value)
+		return nil
+	}
+	err = json.Unmarshal(value, response)
 	if err != nil {
 		return err
 	}
@@ -120,11 +92,14 @@ func GetID(path string, params map[string]string, headers map[string]string) (st
 		p.Add(key, val)
 	}
 
-	if params != nil {
+	if len(params) > 0 {
 		path = path + `?` + p.Encode()
 	}
 
-	req, _ := http.NewRequest("GET", path, nil)
+	req, err := http.NewRequest("GET", path, nil)
+	if err != nil {
+		return "", err
+	}
 
 	req.Header.Add("accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
@@ -132,13 +107,10 @@ func GetID(path string, params map[string]string, headers map[string]string) (st
 		req.Header.Set(key, value)
 	}
 
-	res, err := http.DefaultClient.Do(req)
+	body, err := do(req)
 	if err != nil {
-		return ``, errors.New("network is unreachable")
+		return ``, err
 	}
-
-	defer res.Body.Close()
-	body, _ := ioutil.ReadAll(res.Body)
 
 	strValue, _ := jsonparser.GetString(body, BasicJsonCode)
 	if strValue != `0` {
@@ -160,23 +132,24 @@ func GetDirect(path string, params map[string]string, data interface{}) error {
 		p.Add(key, val)
 	}
 
-	if params != nil {
+	if len(params) > 0 {
 		path = path + `?` + p.Encode()
 	}
 
-	req, _ := http.NewRequest("GET", path, nil)
+	req, err := http.NewRequest("GET", path, nil)
+	if err != nil {
+		return err
+	}
 
 	req.Header.Add("accept", "application/json")
 	req.Header.Add("content-type", "application/json")
 
-	res, err := http.DefaultClient.Do(req)
+	body, err := do(req)
 	if err != nil {
-		return errors.New("network is unreachable")
+		return err
 	}
 
-	defer res.Body.Close()
-
-	return json.NewDecoder(res.Body).Decode(data)
+	return json.Unmarshal(body, data)
 }
 
 func Get(path string, params map[string]string) ([]byte, error) {
@@ -185,22 +158,22 @@ func Get(path string, params map[string]string) ([]byte, error) {
 		p.Add(key, val)
 	}
 
-	if params != nil {
+	if len(params) > 0 {
 		path = path + `?` + p.Encode()
 	}
 
-	req, _ := http.NewRequest("GET", path, nil)
+	req, err := http.NewRequest("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	req.Header.Add("accept", "application/json")
 	req.Header.Add("content-type", "application/json")
 
-	res, err := http.DefaultClient.Do(req)
+	body, err := do(req)
 	if err != nil {
-		return nil, errors.New("network is unreachable")
+		return nil, err
 	}
-
-	defer res.Body.Close()
-	body, _ := ioutil.ReadAll(res.Body)
 
 	strValue, _ := jsonparser.GetString(body, BasicJsonCode)
 	if strValue != `0` {
@@ -218,7 +191,10 @@ func PostJSON(path string, headers, params map[string]string, data interface{}) 
 		return nil, err
 	}
 
-	body, _ := PostJSONDirect(path, headers, params, bys)
+	body, err := PostJSONDirect(path, headers, params, bys)
+	if err != nil {
+		return nil, err
+	}
 
 	strValue, _ := jsonparser.GetString(body, BasicJsonCode)
 	if strValue != `0` {
@@ -236,7 +212,7 @@ func PostJSONDirect(path string, headers, params map[string]string, bys []byte) 
 		p.Add(key, val)
 	}
 
-	if params != nil {
+	if len(params) > 0 {
 		path = path + `?` + p.Encode()
 	}
 	var buf io.Reader
@@ -244,21 +220,16 @@ func PostJSONDirect(path string, headers, params map[string]string, bys []byte) 
 		buf = bytes.NewBuffer(bys)
 	}
 
-	req, _ := http.NewRequest(http.MethodPost, path, buf)
+	req, err := http.NewRequest(http.MethodPost, path, buf)
+	if err != nil {
+		return nil, err
+	}
 	req.Header.Add("content-type", "application/json")
 	req.Header.Add("accept", "application/json")
 	for key, value := range headers {
 		req.Header.Add(key, value)
 	}
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, errors.New("network is unreachable")
-	}
-
-	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
-
-	return body, err
+	return do(req)
 }
 
 func Put(path string, params map[string]string) ([]byte, error) {
@@ -267,22 +238,19 @@ func Put(path string, params map[string]string) ([]byte, error) {
 		p.Add(key, val)
 	}
 
-	if params != nil {
+	if len(params) > 0 {
 		path = path + `?` + p.Encode()
 	}
 
-	req, _ := http.NewRequest(http.MethodPut, path, nil)
+	req, err := http.NewRequest(http.MethodPut, path, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	req.Header.Add("accept", "application/json")
 	req.Header.Add("content-type", "application/json")
 
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, errors.New("network is unreachable")
-	}
-
-	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -306,7 +274,7 @@ func PostJSONObject(path string, params map[string]string, obj interface{}) ([]b
 		p.Add(key, val)
 	}
 
-	if params != nil {
+	if len(params) > 0 {
 		path = path + `?` + p.Encode()
 	}
 	var buf io.Reader
@@ -318,18 +286,18 @@ func PostJSONObject(path string, params map[string]string, obj interface{}) ([]b
 		buf = bytes.NewBuffer(bys)
 	}
 
-	req, _ := http.NewRequest(http.MethodPost, path, buf)
+	req, err := http.NewRequest(http.MethodPost, path, buf)
+	if err != nil {
+		return nil, err
+	}
 
 	req.Header.Add("accept", "application/json")
 	req.Header.Add("content-type", "application/json")
 
-	res, err := http.DefaultClient.Do(req)
+	body, err := do(req)
 	if err != nil {
-		return nil, errors.New("network is unreachable")
+		return nil, err
 	}
-
-	defer res.Body.Close()
-	body, _ := ioutil.ReadAll(res.Body)
 
 	strValue, _ := jsonparser.GetString(body, BasicJsonCode)
 	if strValue != `0` {

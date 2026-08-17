@@ -1,0 +1,15 @@
+go 1.25.0
+
+toolchain go1.25.13
+
+use (
+	./app
+	./app/cmd/rpc
+	./framework
+	./gateway
+	./pkg
+)
+
+// Prevent legacy dependencies from selecting the pre-split genproto module,
+// which overlaps with the modern googleapis/api and googleapis/rpc modules.
+replace google.golang.org/genproto => google.golang.org/genproto v0.0.0-20260414002931-afd174a4e478

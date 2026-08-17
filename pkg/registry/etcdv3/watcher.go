@@ -3,7 +3,7 @@ package etcdv3
 import (
 	"context"
 	"errors"
-	"github.com/coreos/etcd/clientv3"
+	clientv3 "go.etcd.io/etcd/client/v3"
 	"time"
 	"yunka.io/pkg/registry"
 )

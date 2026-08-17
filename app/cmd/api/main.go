@@ -88,6 +88,7 @@ type Arg struct {
 	Print            bool
 	AutoCreateButton bool
 	Force            bool
+	APIKey           string
 }
 
 func Main(arg Arg) {
@@ -99,8 +100,11 @@ func Main(arg Arg) {
 	//
 	var apis = api(arg.Path, arg.FrameName, ``, arg.Print)
 
+	if len(arg.APIKey) != 32 {
+		log.Fatal("api key must be supplied as a 32-byte value")
+	}
 	code, err := cryptoExt.BaseAesEncrypt([]byte(fmt.Sprintf(`{"authBit": 16, ts:%d}`, time.Now().Unix())),
-		[]byte(`s189zLq9nlsQ4yfQuSShar7xS67BH9rY`))
+		[]byte(arg.APIKey))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -147,7 +151,7 @@ func Main(arg Arg) {
 		}
 
 		err = ioutil.WriteFile(fmt.Sprintf("./script/button_%d.json",
-			time.Now().Unix()/(24*3600)), bys, 0777)
+			time.Now().Unix()/(24*3600)), bys, 0600)
 		if err != nil {
 			log.Fatal(" WriteFile ", err)
 		}
@@ -210,6 +214,9 @@ func Main(arg Arg) {
 		`api`:   apis,
 		`force`: arg.Force,
 	})
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.Debug(string(bys))
 
 }

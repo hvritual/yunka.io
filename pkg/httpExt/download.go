@@ -1,6 +1,7 @@
 package httpExt
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 )
@@ -19,11 +20,14 @@ import (
 type IOFunc func(reader io.ReadCloser, size int64) error
 
 func HttpDownloadIO(url string, fn IOFunc) error {
-	resp, err := http.Get(url)
+	resp, err := client.Get(url)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("unexpected HTTP status %s", resp.Status)
+	}
 
-	return fn(resp.Body, resp.ContentLength)
+	return fn(io.NopCloser(io.LimitReader(resp.Body, maxResponseBytes)), resp.ContentLength)
 }

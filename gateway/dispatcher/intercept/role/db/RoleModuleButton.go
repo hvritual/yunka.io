@@ -18,7 +18,7 @@ const (
 
 // RoleModuleButton is role_module_button domain
 type RoleModuleButton struct {
-	OrgUUID          string `gorm:"column:org_uuid;type:varchar(32);index;"`
+	OrgUUID          string `gorm:"column:org_uuid;type:varchar(32);uniqueIndex:org_role_button"`
 	RoleUUID         string `gorm:"column:role_uuid;type:varchar(32);uniqueIndex:org_role_button"`
 	ModuleButtonUUID string `gorm:"column:module_button_uuid;type:varchar(32);uniqueIndex:org_role_button"`
 }

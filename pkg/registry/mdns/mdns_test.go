@@ -1,9 +1,11 @@
 package mdns
 
 import (
-	"yunka.io/pkg/registry"
+	"errors"
+	"syscall"
 	"testing"
 	"time"
+	"yunka.io/pkg/registry"
 )
 
 func TestMDNS(t *testing.T) {
@@ -55,6 +57,9 @@ func TestMDNS(t *testing.T) {
 	for _, service := range testData {
 		// register service
 		if err := r.Register(service); err != nil {
+			if errors.Is(err, syscall.EPERM) {
+				t.Skipf("multicast networking is unavailable: %v", err)
+			}
 			t.Fatal(err)
 		}
 

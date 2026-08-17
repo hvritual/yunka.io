@@ -54,7 +54,9 @@ func Generate(moduleName string) error {
 	}
 
 	for _, path := range paths {
-		os.MkdirAll(filepath.Join(`modules`, moduleName, path), 0777)
+		if err := os.MkdirAll(filepath.Join(`modules`, moduleName, path), 0750); err != nil {
+			return err
+		}
 	}
 	file, err := os.Create(filepath.Join(`modules`, moduleName, `domain/services/main.go`))
 	if err != nil {
@@ -80,7 +82,7 @@ import (
 `
 	err := ioutil.WriteFile(filepath.Join(`modules`, moduleName, `domain/services/main.go`),
 		stringsExt.StringToSlice(fmt.Sprintf(stm, camelModuleName)),
-		0777)
+		0640)
 	return err
 }
 
@@ -96,7 +98,7 @@ type %sConf struct {
 
 	err := ioutil.WriteFile(filepath.Join(`modules`, moduleName, `conf/conf.go`),
 		stringsExt.StringToSlice(fmt.Sprintf(confTmpl, camelModuleName)),
-		0777)
+		0640)
 	if err != nil {
 		return err
 	}
@@ -132,5 +134,5 @@ func Init(fn core.ModuleInit) {
 
 	return ioutil.WriteFile(filepath.Join(`modules`, moduleName, `main.go`),
 		stringsExt.StringToSlice(fmt.Sprintf(tmpl, moduleName, moduleName, moduleName, camelModuleName)),
-		0777)
+		0640)
 }

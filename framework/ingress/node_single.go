@@ -28,7 +28,8 @@ type Single struct {
 }
 
 func (s *Single) IsExist(uri string) (core.Handle, bool) {
-	return s.app.GetHandleTree().Get(uri)
+	handle, _, ok := s.app.GetHandleTree().Get(uri)
+	return handle, ok
 }
 
 func NewSingleNode(app *core.App) *Single {
@@ -43,7 +44,7 @@ func (s *Single) Do(modName, srvName string, rt request.Runtime, handle core.Han
 	mod := s.app.GetModule(modName)
 	if mod == nil {
 		rt.Logger().Debug("GetModule() empty:", modName)
-		return nil, response.SysNodeNotExistErr
+		return nil, response.ErrSysError
 	}
 	srv, err := mod.GetService(srvName, rt)
 	if err != nil {
@@ -52,7 +53,7 @@ func (s *Single) Do(modName, srvName string, rt request.Runtime, handle core.Han
 	}
 	if srv == nil {
 		rt.Logger().Debug("service empty:", srvName)
-		return nil, response.SysNodeNotExistErr
+		return nil, response.ErrSysError
 	}
 
 	srv.SetRuntime(rt)

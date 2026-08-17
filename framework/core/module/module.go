@@ -63,7 +63,9 @@ type module struct {
 }
 
 func (mod *module) Stop() {
-	panic("implement me")
+	// Pooled module resources are request-scoped and do not own a process-wide
+	// lifecycle. Concrete infrastructures remain responsible for closing any
+	// external resources they create.
 }
 
 func (mod *module) Init(f core.ModuleInit) {

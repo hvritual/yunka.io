@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"strings"
 	"time"
 	"yunka.io/framework/core"
 	"yunka.io/framework/core/request"
@@ -8,15 +9,18 @@ import (
 	"yunka.io/gateway/internal/resp"
 	"yunka.io/gateway/rpc/meta"
 	"yunka.io/pkg/cryptoExt"
+	"yunka.io/pkg/define"
 	"yunka.io/pkg/response"
 	"yunka.io/pkg/stringsExt"
 )
 
 const (
-	DefaultRefreshTime = 30 * 60
+	DefaultRefreshTime = 30 * time.Minute
 	TokenLifeCycle     = 7 * 24 * time.Hour
 	jwtName            = `jwt`
 	jwtKeyName         = `jwt`
+	jwtIssuerName      = `jwtIssuer`
+	jwtAudienceName    = `jwtAudience`
 	userToken          = `token`
 )
 
@@ -32,23 +36,34 @@ type TokenHook interface {
 
 type JwtMiddleware struct {
 	secretKey []byte
+	issuer    string
+	audience  string
 	hooks     []TokenHook
 	proxy.Next
 }
 
 func init() {
 	core.RegisterConfType(jwtKeyName, ``)
+	core.RegisterConfType(jwtIssuerName, ``)
+	core.RegisterConfType(jwtAudienceName, ``)
 }
 
 func NewJwtMiddleware() *JwtMiddleware {
 
 	secretKey := core.GetConfV2(jwtKeyName, ``)
+	issuer := core.GetConfV2(jwtIssuerName, ``)
+	audience := core.GetConfV2(jwtAudienceName, ``)
 
-	if secretKey == `` {
-		panic("jwt not found key")
+	if len(secretKey) < 32 {
+		panic("jwt key must contain at least 32 bytes")
+	}
+	if issuer == `` || audience == `` {
+		panic("jwt issuer and audience are required")
 	}
 	return &JwtMiddleware{
 		secretKey: []byte(secretKey),
+		issuer:    issuer,
+		audience:  audience,
 	}
 }
 
@@ -59,12 +74,20 @@ func (jwt *JwtMiddleware) Name() string {
 func (jwt *JwtMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.RuntimeApi) {
 	reqCtx := rt.GetRequestCtx()
 	args := (&(reqCtx.Request)).URI().QueryArgs()
-	// 清除Token 减少网络传输数据
-	token := stringsExt.SliceToString(args.Peek(userToken))
+	// Identity is derived from the validated token only. Remove client supplied
+	// identity and legacy query-string tokens before forwarding the request.
+	args.Del(userToken)
+	args.Del(define.OrgUUID)
+	args.Del(define.UserUUID)
+	args.Del(define.RoleUUID)
+
+	authorization := strings.TrimSpace(stringsExt.SliceToString(reqCtx.Request.Header.Peek(strAuthorization)))
+	token := ""
+	if len(authorization) > len("Bearer ") && strings.EqualFold(authorization[:len("Bearer ")], "Bearer ") {
+		token = strings.TrimSpace(authorization[len("Bearer "):])
+	}
 	if token != `` {
-		//ok, body := cryptoExt.ParseTokenBody(jwt.secretKey, token)
-		// FIXME  后期需要收敛应用token 时间问题
-		ok, body := cryptoExt.ParseTokenBodyNotValidation(jwt.secretKey, token)
+		ok, body := cryptoExt.ParseTokenBodyWithValidation(jwt.secretKey, token, jwt.issuer, jwt.audience)
 		if !ok {
 			if api.Auth&meta.AuthBit_AuthToken != 0 {
 				rt.Logger().Debug("not right not ok")
@@ -77,33 +100,35 @@ func (jwt *JwtMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.Runt
 			}
 		}
 
-		// 需要强制检查Token
+		// APIs marked with AuthTimeLimit require server-side token hooks on every
+		// request, not only when the token is close to expiry.
 		if api.Auth&meta.AuthBit_AuthTimeLimit != 0 {
-			if !body.VerifyExpiresAt(time.Now().Unix()+DefaultRefreshTime, true) {
-				newToken := cryptoExt.ProduceJwtTokenTime(jwt.secretKey, body, TokenLifeCycle)
-				for _, hook := range jwt.hooks {
-					if !hook.CheckToken(rt, api, token) {
-						reqCtx.Write(resp.SysNotRightBys)
-						return
-					}
-					if err := hook.ResetToken(token, newToken); err != nil {
-						reqCtx.Write(response.ErrSysError)
-						return
-					}
-				}
-				token = newToken
-			} else {
-				for _, hook := range jwt.hooks {
-					if !hook.CheckToken(rt, api, token) {
-						reqCtx.Write(resp.SysNotRightBys)
-						return
-					}
+			for _, hook := range jwt.hooks {
+				if !hook.CheckToken(rt, api, token) {
+					reqCtx.Write(resp.SysNotRightBys)
+					return
 				}
 			}
-		} else {
-			if !body.VerifyExpiresAt(time.Now().Unix()+DefaultRefreshTime, true) {
-				token = cryptoExt.ProduceJwtTokenTime(jwt.secretKey, body, TokenLifeCycle)
+		}
+
+		expiresAt, err := body.GetExpirationTime()
+		if err != nil || expiresAt == nil {
+			reqCtx.Write(resp.SysNotRightBys)
+			return
+		}
+		if time.Until(expiresAt.Time) <= DefaultRefreshTime {
+			newToken := cryptoExt.ProduceJwtTokenTime(jwt.secretKey, body, TokenLifeCycle)
+			if newToken == "" {
+				reqCtx.Write(response.ErrSysError)
+				return
 			}
+			for _, hook := range jwt.hooks {
+				if err := hook.ResetToken(token, newToken); err != nil {
+					reqCtx.Write(response.ErrSysError)
+					return
+				}
+			}
+			token = newToken
 		}
 
 		for key, v := range body {
@@ -113,7 +138,6 @@ func (jwt *JwtMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.Runt
 			}
 		}
 
-		args.Del(userToken)
 		// 更新uri 防止网关、模块一体化时导致uri 没有更新
 		(&(reqCtx.Request)).URI().SetQueryString(args.String())
 		authStatus = true

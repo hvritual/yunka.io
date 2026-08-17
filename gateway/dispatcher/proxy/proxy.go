@@ -26,6 +26,8 @@ type Proxy struct {
 	ctxPool *sync.Pool
 	logFn   func() logExt.Logger
 	middles Next
+	server  *fasthttp.Server
+	mu      sync.Mutex
 }
 
 func NewProxy(logFn func() logExt.Logger, fn func(rt *router.Tree)) *Proxy {
@@ -53,7 +55,9 @@ func (p *Proxy) UriTree() *router.Tree {
 
 func (p *Proxy) Run(address string) {
 	p.logFn().Debugf("start server:%s", address)
-	err := fasthttp.ListenAndServe(address, p.serverHttp)
+	server := &fasthttp.Server{Handler: p.serverHttp}
+	p.setServer(server)
+	err := server.ListenAndServe(address)
 	if err != nil {
 		p.logFn().Errorf("start serve error, err:%v", err)
 	}
@@ -63,6 +67,7 @@ func (p *Proxy) RunLn(ln net.Listener) {
 	s := &fasthttp.Server{
 		Handler: p.serverHttp,
 	}
+	p.setServer(s)
 	err := s.Serve(ln)
 	if err != nil {
 		p.logFn().Errorf("start serve error, err:%v", err)
@@ -70,5 +75,19 @@ func (p *Proxy) RunLn(ln net.Listener) {
 }
 
 func (p *Proxy) Stop() {
-	// TODO graceful stop
+	p.mu.Lock()
+	server := p.server
+	p.server = nil
+	p.mu.Unlock()
+	if server != nil {
+		if err := server.Shutdown(); err != nil {
+			p.logFn().Errorf("stop serve error, err:%v", err)
+		}
+	}
+}
+
+func (p *Proxy) setServer(server *fasthttp.Server) {
+	p.mu.Lock()
+	p.server = server
+	p.mu.Unlock()
 }

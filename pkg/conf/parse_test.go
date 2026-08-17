@@ -289,7 +289,7 @@ partition=0
 [influx]
 server="http://127.0.0.1:8086"
 admin="root"
-password="super@admin&milan1023"
+password="test-password"
 
 
 

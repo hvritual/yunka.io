@@ -59,6 +59,9 @@ type ClientPool struct {
 type connect func(target string) (*grpc.ClientConn, error)
 
 func NewClient(target string, connect connect, option *ClientOption) *ClientPool {
+	if option == nil {
+		option = NewDefaultClientOption()
+	}
 	if option.ClientPoolSize <= 0 {
 		option.ClientPoolSize = defaultClientPoolCap
 	}
@@ -80,6 +83,9 @@ func (cc *ClientPool) init() {
 }
 
 func (cc *ClientPool) checkState(conn *grpc.ClientConn) error {
+	if conn == nil {
+		return ErrConnShutdown
+	}
 	state := conn.GetState()
 	switch state {
 	case connectivity.TransientFailure, connectivity.Shutdown:
@@ -131,7 +137,10 @@ type ClientConn struct {
 }
 
 func (c *ClientConn) Close() error {
-	return nil
+	if c == nil || c.ClientConn == nil {
+		return nil
+	}
+	return c.ClientConn.Close()
 }
 
 func (c *ClientConn) GetConn() *grpc.ClientConn {

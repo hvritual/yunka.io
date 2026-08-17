@@ -20,16 +20,16 @@ const (
 	strACAllowOrigin     = `*`
 
 	strACAllowCredentialsHead = `Access-Control-Allow-Credentials`
-	strACAllowCredentials     = `true`
+	strACAllowCredentials     = `false`
 
-	strACAllowMethodHead = `Access-Control-Allow-Method`
-	strACAllowMethod     = `*`
+	strACAllowMethodHead = `Access-Control-Allow-Methods`
+	strACAllowMethod     = `GET, POST, PUT, PATCH, DELETE, OPTIONS`
 
 	strACAllowHeadersHead = `Access-Control-Allow-Headers`
-	strACAllowHeaders     = `Origin, X-Requested-With, Content-Type, Accept, version`
+	strACAllowHeaders     = `Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Code, version`
 
 	strAcExposeHeaderHead = `Access-Control-Expose-Headers`
-	strAcExposeHeader     = `*`
+	strAcExposeHeader     = `Authorization, X-Trace-Id`
 
 	strXForwardFor = `X-Forwarded-For`
 	baseName       = `base`

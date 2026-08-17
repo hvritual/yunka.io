@@ -5,13 +5,12 @@ import (
 	"log"
 	"os"
 	"sort"
-	"yunka.io/framework/cmd/api"
-	"yunka.io/framework/cmd/controller"
-	"yunka.io/framework/cmd/doc"
-	"yunka.io/framework/cmd/module"
-	"yunka.io/framework/cmd/po"
+	"yunka.io/app/cmd/api"
+	"yunka.io/app/cmd/controller"
+	"yunka.io/app/cmd/doc"
+	"yunka.io/app/cmd/module"
+	"yunka.io/app/cmd/po"
 )
-
 
 func main() {
 	app := cli.NewApp()
@@ -19,10 +18,9 @@ func main() {
 	app.Version = "0.0.1"
 	app.Commands = []cli.Command{
 		{
-			Name:  po.AppName,
-			Usage: "scan package po",
-			Subcommands: []cli.Command{
-			},
+			Name:        po.AppName,
+			Usage:       "scan package po",
+			Subcommands: []cli.Command{},
 
 			Flags: []cli.Flag{
 				cli.StringFlag{
@@ -102,6 +100,11 @@ func main() {
 					Usage: `upload url`,
 					Value: "http://localhost:16666",
 				},
+				cli.StringFlag{
+					Name:   "api-key",
+					Usage:  `32-byte API authentication key`,
+					EnvVar: "YUNKA_API_KEY",
+				},
 				cli.BoolFlag{
 					Name:  "button,b",
 					Usage: `create module button`,
@@ -133,13 +136,14 @@ func main() {
 			Action: func(c *cli.Context) error {
 				api.ConfigFastModule(c.Bool("fast"))
 				api.Main(api.Arg{
-					FrameName: c.String("frame"),
-					Host:      c.String("url"),
-					Path:      c.String("path"),
-					Info:      !(c.Bool("debug") || c.Bool("print")),
-					Print:     c.Bool("print"),
+					FrameName:        c.String("frame"),
+					Host:             c.String("url"),
+					Path:             c.String("path"),
+					Info:             !(c.Bool("debug") || c.Bool("print")),
+					Print:            c.Bool("print"),
 					AutoCreateButton: c.Bool("button"),
-					Force: c.Bool("force"),
+					Force:            c.Bool("force"),
+					APIKey:           c.String("api-key"),
 				})
 				return nil
 			},
@@ -175,7 +179,6 @@ func main() {
 					Name:  "print,p",
 					Usage: `output print info`,
 				},
-
 
 				cli.BoolFlag{
 					Name:  "fast,fa",

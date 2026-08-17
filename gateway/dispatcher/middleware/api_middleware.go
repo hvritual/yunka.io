@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto/subtle"
 	"yunka.io/framework/core/request"
 	"yunka.io/gateway/dispatcher/proxy"
 	"yunka.io/gateway/rpc/meta"
@@ -35,8 +36,8 @@ func (erm *APIMiddleware) Name() string {
 func (erm *APIMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.RuntimeApi) {
 	if api.Auth > 0 && (api.Auth&meta.AuthBit_AuthApi != 0) {
 		code := stringsExt.SliceToString(rt.GetRequestCtx().Request.Header.Peek(xCode))
-		if code != `` {
-			// FIXME: 改成算法
+		if len(erm.key) >= 32 && len(code) == len(erm.key) &&
+			subtle.ConstantTimeCompare([]byte(code), []byte(erm.key)) == 1 {
 			authStatus = true
 		}
 	}

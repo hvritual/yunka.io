@@ -1,9 +1,10 @@
 package proxy
 
 import (
-	"fmt"
+	"reflect"
 	"testing"
 	"yunka.io/framework/core/request"
+	"yunka.io/gateway/dispatcher/router"
 	"yunka.io/gateway/rpc/meta"
 )
 
@@ -30,6 +31,7 @@ var (
 type TestHandle struct {
 	HandlerName string
 	m           MiddleWare
+	calls       *[]string
 }
 
 func (t *TestHandle) Name() string {
@@ -41,12 +43,10 @@ func (t *TestHandle) Use(middle MiddleWare) MiddleWare {
 	return t.m
 }
 
-func (t *TestHandle) Do(c request.Runtime, api *meta.RuntimeApi) {
-	fmt.Println(t.HandlerName, " is call")
+func (t *TestHandle) Do(auth bool, c request.Runtime, api *meta.RuntimeApi) {
+	*t.calls = append(*t.calls, t.HandlerName)
 	if t.m != nil {
-		fmt.Println(t.HandlerName, "next is call pre")
-		t.m.Do(c, api)
-		fmt.Println(t.HandlerName, "next is call post")
+		t.m.Do(auth, c, api)
 		return
 	}
 	return
@@ -68,10 +68,8 @@ type Test4IntHandle struct {
 	TestHandle
 }
 
-func (t Test4IntHandle) Do(c request.Runtime, api *meta.RuntimeApi) error {
-	fmt.Println(t.HandlerName, " interrupt call")
-
-	return nil
+func (t Test4IntHandle) Do(_ bool, _ request.Runtime, _ *meta.RuntimeApi) {
+	*t.calls = append(*t.calls, t.HandlerName)
 }
 
 type Test4Handle struct {
@@ -83,22 +81,31 @@ type Test5Handle struct {
 }
 
 func TestProxy_Use(t *testing.T) {
-	p := NewProxy(nil)
+	p := NewProxy(nil, func(*router.Tree) {})
+	calls := make([]string, 0, 5)
 
-	p.Use(&Test1Handle{TestHandle{HandlerName: "1"}}).
-		Use(&Test2Handle{TestHandle{HandlerName: "2"}}).
-		Use(&Test3Handle{TestHandle{HandlerName: "3"}}).
-		Use(&Test4Handle{TestHandle{HandlerName: "4"}}).
-		Use(&Test5Handle{TestHandle{HandlerName: "5"}})
+	p.Use(&Test1Handle{TestHandle{HandlerName: "1", calls: &calls}}).
+		Use(&Test2Handle{TestHandle{HandlerName: "2", calls: &calls}}).
+		Use(&Test3Handle{TestHandle{HandlerName: "3", calls: &calls}}).
+		Use(&Test4Handle{TestHandle{HandlerName: "4", calls: &calls}}).
+		Use(&Test5Handle{TestHandle{HandlerName: "5", calls: &calls}})
 
-	p.middles.Do(nil, nil)
+	p.middles.Do(false, nil, nil)
+	if want := []string{"1", "2", "3", "4", "5"}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("calls=%v want=%v", calls, want)
+	}
 
-	p.Use(&Test1Handle{TestHandle{HandlerName: "1"}}).
-		Use(&Test2Handle{TestHandle{HandlerName: "2"}}).
-		Use(&Test3Handle{TestHandle{HandlerName: "3"}}).
-		Use(&Test4IntHandle{TestHandle{HandlerName: "4"}}).
-		Use(&Test5Handle{TestHandle{HandlerName: "5"}})
+	calls = calls[:0]
+	p = NewProxy(nil, func(*router.Tree) {})
+	p.Use(&Test1Handle{TestHandle{HandlerName: "1", calls: &calls}}).
+		Use(&Test2Handle{TestHandle{HandlerName: "2", calls: &calls}}).
+		Use(&Test3Handle{TestHandle{HandlerName: "3", calls: &calls}}).
+		Use(&Test4IntHandle{TestHandle{HandlerName: "4", calls: &calls}}).
+		Use(&Test5Handle{TestHandle{HandlerName: "5", calls: &calls}})
 
-	p.middles.Do(nil, nil)
+	p.middles.Do(false, nil, nil)
+	if want := []string{"1", "2", "3", "4"}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("interrupt calls=%v want=%v", calls, want)
+	}
 
 }

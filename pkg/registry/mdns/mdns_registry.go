@@ -78,7 +78,7 @@ func (m *mdnsRegistry) Register(service *registry.Service, opts ...registry.Regi
 			return err
 		}
 
-		srv, err := mdns.NewServer(&mdns.Config{Zone: &mdns.DNSSDService{s}})
+		srv, err := mdns.NewServer(&mdns.Config{Zone: &mdns.DNSSDService{MDNSService: s}})
 		if err != nil {
 			return err
 		}
@@ -213,7 +213,9 @@ func (m *mdnsRegistry) GetService(service string) ([]*registry.Service, error) {
 
 	p := mdns.DefaultParams(service)
 	// set context with timeout
-	p.Context, _ = context.WithTimeout(context.Background(), m.opts.Timeout)
+	var cancel context.CancelFunc
+	p.Context, cancel = context.WithTimeout(context.Background(), m.opts.Timeout)
+	defer cancel()
 	// set entries channel
 	p.Entries = entries
 
@@ -287,7 +289,9 @@ func (m *mdnsRegistry) ListServices() ([]*registry.Service, error) {
 
 	p := mdns.DefaultParams("_services")
 	// set context with timeout
-	p.Context, _ = context.WithTimeout(context.Background(), m.opts.Timeout)
+	var cancel context.CancelFunc
+	p.Context, cancel = context.WithTimeout(context.Background(), m.opts.Timeout)
+	defer cancel()
 	// set entries channel
 	p.Entries = entries
 

@@ -62,13 +62,12 @@ const (
 )
 
 func makeDir(modulePath, moduleName, apiDocVersion string) error {
-	return os.MkdirAll(fmt.Sprintf("%s/%s/auto/doc/%s", modulePath, moduleName, apiDocVersion), 0777)
+	return os.MkdirAll(fmt.Sprintf("%s/%s/auto/doc/%s", modulePath, moduleName, apiDocVersion), 0750)
 }
 
 func makeCtlDoc(modulePath, moduleName, ctlName, apiDocVersion string) (*os.File, error) {
-	os.Remove(fmt.Sprintf("%s/%s/auto/doc/%s/%s.go", modulePath, moduleName, apiDocVersion, ctlName))
 	return os.OpenFile(fmt.Sprintf("%s/%s/auto/doc/%s/%s.go", modulePath, moduleName, apiDocVersion, ctlName),
-		os.O_RDWR|os.O_CREATE, 0777)
+		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0640)
 }
 
 func writerResponse(typeStr, parentName string, f *os.File, items []APIItem) {

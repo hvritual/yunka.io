@@ -2,13 +2,11 @@ package cryptoExt
 
 import (
 	"encoding/json"
-	"fmt"
 	"reflect"
 	"strconv"
-
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func ProduceJwtToken(secretKey []byte, uid int64) string {
@@ -43,12 +41,11 @@ func ProduceRefreshTokenBodyTime(secretKey []byte, body jwt.MapClaims, time time
 }
 
 func ProduceToken(secretKey []byte, claims jwt.MapClaims) string {
-	token := jwt.New(jwt.SigningMethodHS256)
-	token.Claims = claims
-
-	// Sign and get the complete encoded token as a string using the secret
-	tokenString, _ := token.SignedString(secretKey)
-
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(secretKey)
+	if err != nil {
+		return ""
+	}
 	return tokenString
 }
 
@@ -134,42 +131,41 @@ func ParseTokenBodyValue(claims jwt.MapClaims, key string, kind reflect.Kind) in
 }
 
 func ParseTokenBody(secretKey []byte, tokenString string) (bool, jwt.MapClaims) {
-	if len(tokenString) == 0 {
-		return false, nil
-	}
-
-	parser := new(jwt.Parser)
-	parser.UseJSONNumber = true
-	parseToken, parseErr := parser.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
-		}
-		return secretKey, nil
-	})
-	if parseErr != nil {
-		return false, nil
-	}
-	return parseToken.Valid, parseToken.Claims.(jwt.MapClaims)
+	return ParseTokenBodyWithValidation(secretKey, tokenString, "", "")
 }
 
-func ParseTokenBodyNotValidation(secretKey []byte, tokenString string) (bool, jwt.MapClaims) {
+// ParseTokenBodyWithValidation validates the signature, expiration and optional
+// issuer/audience constraints. Only HS256 tokens are accepted.
+func ParseTokenBodyWithValidation(secretKey []byte, tokenString, issuer, audience string) (bool, jwt.MapClaims) {
 	if len(tokenString) == 0 {
 		return false, nil
 	}
 
-	parser := new(jwt.Parser)
-	parser.UseJSONNumber = true
-	parser.SkipClaimsValidation = true
-	parseToken, parseErr := parser.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+	options := []jwt.ParserOption{
+		jwt.WithJSONNumber(),
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithExpirationRequired(),
+		jwt.WithIssuedAt(),
+	}
+	if issuer != "" {
+		options = append(options, jwt.WithIssuer(issuer))
+	}
+	if audience != "" {
+		options = append(options, jwt.WithAudience(audience))
+	}
 
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
-		}
+	parseToken, parseErr := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return secretKey, nil
-	})
+	}, options...)
 	if parseErr != nil {
 		return false, nil
 	}
-	return parseToken.Valid, parseToken.Claims.(jwt.MapClaims)
+	claims, ok := parseToken.Claims.(jwt.MapClaims)
+	return parseToken.Valid && ok, claims
+}
+
+// ParseTokenBodyNotValidation is retained for source compatibility. It no
+// longer skips claims validation; callers cannot opt out of security checks.
+func ParseTokenBodyNotValidation(secretKey []byte, tokenString string) (bool, jwt.MapClaims) {
+	return ParseTokenBody(secretKey, tokenString)
 }

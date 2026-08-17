@@ -63,7 +63,7 @@ func (mod *module) buildService(srvC *serviceContainer) interface{} {
 				Type: fType,
 				Ptr:  fieldValue,
 			})
-			mod.PutInfra(fType, infra)
+			mod.PutInfra(fType, infra.obj)
 			return
 		} else {
 			// 配置资源

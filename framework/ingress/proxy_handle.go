@@ -43,7 +43,7 @@ func (p *Proxy) serverHttp(ctx *fasthttp.RequestCtx) {
 	}
 	uris := strings.Split(path, `/`)
 
-	if len(uris) < 2 {
+	if len(uris) < 4 {
 		core.Log().Warn("[gateway]", path, " not found")
 		ctx.Response.BodyWriter().Write(response.IllegalParamError(errors.New("不规范api")))
 		return

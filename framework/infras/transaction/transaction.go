@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"errors"
+	"fmt"
 )
 
 /**
@@ -29,33 +30,35 @@ func OpenTransaction(param interface{}, fn func() error, t ...interface{}) (err 
 		if !ok {
 			return errors.New("assert Transaction error")
 		}
-		trans = append(trans, t)
 		err := t.Begin(param)
 		if err != nil {
+			for i := len(trans) - 1; i >= 0; i-- {
+				err = errors.Join(err, trans[i].Rollback())
+			}
 			return err
 		}
+		trans = append(trans, t)
 	}
 
 	defer func() {
-		_err := recover()
-		if _err != nil {
-			for _, t := range trans {
-				err = t.Rollback()
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("transaction panic: %v", recovered)
+			for i := len(trans) - 1; i >= 0; i-- {
+				err = errors.Join(err, trans[i].Rollback())
 			}
+			return
+		}
+		if err != nil {
+			for i := len(trans) - 1; i >= 0; i-- {
+				err = errors.Join(err, trans[i].Rollback())
+			}
+			return
+		}
+		for _, t := range trans {
+			err = errors.Join(err, t.Commit())
 		}
 	}()
 
-	err = fn()
-	if err != nil {
-		for _, t := range trans {
-			t.Rollback()
-		}
-	} else {
-		for _, t := range trans {
-			t.Commit()
-
-		}
-	}
-	return err
+	return fn()
 
 }

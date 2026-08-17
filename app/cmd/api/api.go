@@ -371,7 +371,6 @@ func parseCommon(uri, value, tag, dataName string) []APIItem {
 }
 
 func exitError(val string) {
-	panic(val)
 	log.Fatal("response body data format error, it's  \n"+
 		"@a_ mean data is array \n"+
 		"@s_ mean data is string \n"+

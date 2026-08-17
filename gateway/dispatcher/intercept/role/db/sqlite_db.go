@@ -22,7 +22,11 @@ var (
 func (s *Store) DeleteApi(uuid string) error {
 
 	modBtnUUID := []string(nil)
-	s.Table(ApiModuleButtonTableName).Find(&modBtnUUID, "api_uuid=?", uuid)
+	if err := s.Table(ApiModuleButtonTableName).
+		Where("api_uuid = ?", uuid).
+		Pluck("module_button_uuid", &modBtnUUID).Error; err != nil {
+		return err
+	}
 
 	return s.Transaction(func(tx *gorm.DB) error {
 		result := tx.Exec(deleteApiSQL, uuid)
@@ -34,9 +38,22 @@ func (s *Store) DeleteApi(uuid string) error {
 			return nil
 		}
 
-		result = tx.Where(`module_uuid in ?`, modBtnUUID).Delete(&RoleModuleButton{})
+		result = tx.Where(`module_button_uuid in ?`, modBtnUUID).Delete(&RoleModuleButton{})
 		return result.Error
 	})
+}
+
+func (s *Store) VerifyRoleAPIRight(apiUUID, orgUUID string, roleUUID []string) (bool, error) {
+	if apiUUID == "" || orgUUID == "" || len(roleUUID) == 0 {
+		return false, nil
+	}
+
+	var count int64
+	err := s.Table(RoleModuleButtonTableName+" AS role_button").
+		Joins("JOIN "+ApiModuleButtonTableName+" AS api_button ON api_button.module_button_uuid = role_button.module_button_uuid").
+		Where("api_button.api_uuid = ? AND role_button.org_uuid = ? AND role_button.role_uuid IN ?", apiUUID, orgUUID, roleUUID).
+		Count(&count).Error
+	return count > 0, err
 }
 
 func (s *Store) BatchCreate(btns []ApiModuleButton) error {
@@ -91,7 +108,9 @@ func (s *Store) OperateRole(orgUUID string, roleUUID string, modBtnUUID []string
 }
 
 func NewStore(dirName, dbName string) (*Store, error) {
-	os.MkdirAll(dirName, 0777)
+	if err := os.MkdirAll(dirName, 0750); err != nil {
+		return nil, err
+	}
 
 	db, err := gorm.Open(sqlite.Open(filepath.Join(dirName, dbName)), &gorm.Config{})
 	if err != nil {

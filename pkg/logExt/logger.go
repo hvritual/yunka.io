@@ -38,7 +38,6 @@ func Println(v ...interface{}) {
 }
 
 func Fatal(v ...interface{}) {
-	panic(v)
 	defaultLog.Fatal(v...)
 }
 
@@ -55,7 +54,7 @@ func Errorf(format string, args ...interface{}) {
 }
 
 func Warn(v ...interface{}) {
-	defaultLog.Fatal(v...)
+	defaultLog.Warn(v...)
 }
 
 func Warnf(format string, args ...interface{}) {
@@ -63,7 +62,7 @@ func Warnf(format string, args ...interface{}) {
 }
 
 func Info(v ...interface{}) {
-	defaultLog.Fatal(v...)
+	defaultLog.Info(v...)
 }
 
 func Infof(format string, args ...interface{}) {

@@ -71,19 +71,23 @@ func Test_module_BindInfra(t *testing.T) {
 
 	iType := reflect.TypeOf(&TestInfra{})
 	wg := sync.WaitGroup{}
+	errCh := make(chan error, 1000)
 	for i := 0; i < 1000; i++ {
 		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			repository, ok := module.getInfra(iType)
 			if ok {
-				t.Log("ok")
 				module.PutInfra(iType, repository.obj)
 			} else {
-				t.Fatal("not ok", repository)
+				errCh <- fmt.Errorf("not ok: %v", repository)
 			}
-			wg.Done()
 		}()
 	}
 
 	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Error(err)
+	}
 }

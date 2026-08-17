@@ -55,20 +55,20 @@ func (app *App) RegisterLogger(lg logExt.Logger) {
 // 接收应用信号进行调试模式处理
 func (app *App) Debug() {
 	go func() {
-		c := make(chan os.Signal)
+		c := make(chan os.Signal, 1)
 		//监听指定信号 ctrl+c kill
 		signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM,
 			syscall.SIGQUIT, syscall.SIGUSR1, syscall.SIGUSR2)
-		for {
-			for s := range c {
-				switch s {
-				case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
-					return
-				case syscall.SIGUSR1:
+		defer signal.Stop(c)
+		for s := range c {
+			switch s {
+			case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
+				app.Stop()
+				return
+			case syscall.SIGUSR1:
 
-				case syscall.SIGUSR2:
-				default:
-				}
+			case syscall.SIGUSR2:
+			default:
 			}
 		}
 	}()

@@ -51,3 +51,11 @@ Use the configured local `git` commands for fetch, merge, commit, and push. The 
 ## Connection boundary
 
 GitHub connector authorization and local Git authorization are separate. The connector remains available for repository collaboration operations, while local Git uses the environment-local credential described above.
+
+### 2026-08-17 — MVP stabilization baseline
+
+- The repository is a Go 1.25.13 workspace rooted at `go.work`; `app` uses module path `yunka.io/app` while `framework` remains `yunka.io/framework`.
+- The supported verification gate is `make verify`: unit tests, race tests, `go vet`, `govulncheck`, and builds across all five modules.
+- Gateway authentication is fail-closed. JWT configuration requires a secret of at least 32 bytes plus issuer and audience; tokens are accepted only through `Authorization: Bearer`.
+- HTTP and etcd clients must verify TLS certificates. Disabling certificate verification is not an accepted runtime option.
+- Runtime authorization identities are derived from validated server-side credentials; query-supplied identity fields must not be trusted.

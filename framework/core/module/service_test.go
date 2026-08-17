@@ -76,28 +76,33 @@ func TestBaseService_GetInfras(t *testing.T) {
 	}
 
 	wg := sync.WaitGroup{}
+	errCh := make(chan error, 2000)
 	for i := 0; i < 1000; i++ {
 		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			srv, _ := mod.GetService("test_service", &request.WorkRuntime{
 				IsDirect: true,
 			})
 
 			if srv == nil {
-				t.Fatal("service is empty")
+				errCh <- fmt.Errorf("service is empty")
+				return
 			}
-			srv.(*TestService).Say("hello")
 
 			if srv.(*TestService).Test == nil {
-				t.Fatal("reject object fail, test is nil")
+				errCh <- fmt.Errorf("reject object fail, test is nil")
 			}
 
 			mod.PutService(srv)
-			wg.Done()
 		}()
 	}
 
 	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Error(err)
+	}
 
 	//if srv == nil {
 	//	t.Fatal("service is empty")
