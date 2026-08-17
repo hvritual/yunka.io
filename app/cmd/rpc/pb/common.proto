@@ -1,0 +1,12 @@
+syntax="proto3";
+
+message NotParamRequest {
+
+}
+
+message NotResponse{}
+
+enum Switch{
+    Close = 0;
+    Oopen = 1;
+}

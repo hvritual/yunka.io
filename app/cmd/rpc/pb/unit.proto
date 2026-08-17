@@ -1,0 +1,124 @@
+syntax = "proto3";
+
+
+import "common.proto";
+option go_package = "meta";
+
+enum ModuleCanUse {
+    All = 0;
+    Mobile = 1;
+    Web = 2;
+}
+
+enum ModuleCommonStatus {
+    AllCanUse = 0;
+    KolCanUse = 1;
+    ServiceCanUse = 2;
+    NotCommon = 3;
+}
+
+message BasicModule {
+    string uuid = 1;
+    string name = 2;
+    string icon = 3;
+    string color = 4;
+    string webRouterName = 5;
+    string mobilePage = 6;
+    ModuleCanUse canUse = 7;
+}
+
+message SimpleModule {
+    string uuid = 1;
+    string name = 2;
+    string icon = 3;
+    string color = 4;
+    string remark = 5;
+    uint32 basicFee = 6;
+    uint32 unitFee = 7;
+}
+
+
+message BasicModuleSort {
+    string uuid = 1;
+    string name = 2;
+    string icon = 3;
+    string color = 4;
+    repeated BasicModule modules = 5;
+}
+
+message FindBasicModuleSortByMoudleUUIDRequest {
+    repeated string moduleUUIDs = 1;
+}
+
+message FindBasicModuleSortByMoudleUUIDResponse {
+    repeated BasicModuleSort moduleSort = 1;
+}
+
+message FindModuleApiUuidRequest {
+    string uuid = 1;
+}
+
+message FindModuleApiUuidResponse {
+    repeated string uuid = 1;
+}
+
+
+message ModuleUUIDRequest {
+    repeated string uuid = 1;
+}
+
+message BaseModuleResponse {
+    repeated BasicModule modules = 1;
+}
+
+message FindModulesByModuleStatusRequest {
+    ModuleCommonStatus status = 1;
+}
+
+message SimpleModuleResponse {
+    repeated SimpleModule modules = 1;
+}
+
+message FindAllModuleSortResponse {
+    repeated SimpleModule modules = 1;
+    repeated BasicModuleSort moduleSortName = 2;
+}
+
+message FindModuleSimpleRequest {
+    string moduleSortUUID = 1;
+}
+
+message BusinessFreeModule {
+    string ModuleUuid = 1;
+    repeated string apiUuids = 2;
+}
+
+message ModulesApiResponse {
+    repeated BusinessFreeModule modules = 1;
+}
+
+message FindModulesByStatusRequest {
+    ModuleCommonStatus status = 1;
+}
+
+
+service UnitService {
+    rpc FindBaseModuleSortByModuleUUID (FindBasicModuleSortByMoudleUUIDRequest) returns (FindBasicModuleSortByMoudleUUIDResponse);
+
+    rpc FindModuleApiUuid (FindModuleApiUuidRequest) returns (FindModuleApiUuidResponse);
+
+    rpc FindFreeModule (NotParamRequest) returns (ModulesApiResponse);
+
+    rpc FindModulesByUUID (ModuleUUIDRequest) returns (BaseModuleResponse);
+
+    rpc FindModulesByModuleStatus (FindModulesByModuleStatusRequest) returns (BaseModuleResponse);
+
+    rpc FindSimpleModules (ModuleUUIDRequest) returns (SimpleModuleResponse);
+
+    rpc FindAllModuleSort (NotParamRequest) returns (FindAllModuleSortResponse);
+
+    rpc FindModuleSimpleByModuleSortUUID (FindModuleSimpleRequest) returns (SimpleModuleResponse);
+
+    rpc FindModulesApi (ModuleUUIDRequest) returns (ModulesApiResponse);
+
+}
