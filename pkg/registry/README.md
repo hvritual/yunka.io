@@ -1,0 +1,1 @@
+registry主要移植[github.com/micro/go-micro](https://github.com/micro/go-micro)

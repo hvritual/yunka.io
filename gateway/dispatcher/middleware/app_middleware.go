@@ -1,0 +1,38 @@
+package middleware
+
+import (
+	"yunka.io/framework/core/request"
+	"yunka.io/gateway/dispatcher/proxy"
+	"yunka.io/gateway/rpc/meta"
+)
+
+/**
+ * @BelongProject yunka
+ * @BelongPackage middleware
+ * @Description:
+ *
+ * @Copyright 2020 - Powered By 云咖
+ * @Author: fworld
+ * @Date:  2020/9/18 5:45 下午
+ * @Version V1.0
+ */
+
+const (
+	testName = `test`
+)
+
+type TestMiddleware struct {
+	proxy.Next
+}
+
+func (t TestMiddleware) Name() string {
+	return testName
+}
+
+func (t TestMiddleware) Do(b bool, rt request.Runtime, api *meta.RuntimeApi) {
+	t.Next.Do(true, rt, api)
+}
+
+func NewTestMiddleware() proxy.MiddleWare {
+	return &TestMiddleware{}
+}
