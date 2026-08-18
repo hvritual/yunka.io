@@ -45,10 +45,19 @@ func (mod *module) BindInfra(single bool, f interface{}) error {
 		if err != nil {
 			return err
 		}
-		_, ok := mod.singleInfras.Load(iType)
-		if ok {
+		mod.singleInfraMu.Lock()
+		if _, ok := mod.singleInfras.Load(iType); ok {
+			mod.singleInfraMu.Unlock()
 			return errors.New(fmt.Sprintf("infra :%v exist", iType))
 		}
+		for _, registeredType := range mod.singleInfraOrder {
+			if registeredType == iType {
+				mod.singleInfraMu.Unlock()
+				return errors.New(fmt.Sprintf("infra :%v exist", iType))
+			}
+		}
+		mod.singleInfraOrder = append(mod.singleInfraOrder, iType)
+		mod.singleInfraMu.Unlock()
 
 		core.RegisterInitiator(func(app *core.App) {
 			mod.singleInfras.Store(iType, buildInfra(f, iType))
