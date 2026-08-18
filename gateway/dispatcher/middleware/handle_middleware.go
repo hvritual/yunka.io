@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"yunka.io/framework/core/request"
+	"yunka.io/framework/core/runtimecontext"
 	"yunka.io/gateway/dispatcher/bridge"
 	"yunka.io/gateway/dispatcher/proxy"
 	"yunka.io/gateway/internal/resp"
@@ -89,6 +90,15 @@ func (hm *HandleMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.Ru
 			newRt := request.NewWorkRuntime()
 			newRt.CopyFrom(rt.GetRequestCtx())
 			newRt.SetLogger(rt.Logger())
+			// Composed calls inherit trusted identity, trace and deadlines from the
+			// parent context while deriving operation metadata for the child call.
+			newRt.SetContext(rt)
+			metadata, _ := runtimecontext.MetadataFrom(rt)
+			metadata.Operation = item.Uri
+			metadata.Route = item.Uri
+			metadata.Service = item.SrvName
+			metadata.Module = item.ModuleName
+			newRt.SetMetadata(metadata)
 
 			if args.Len() != 0 {
 				var builder strings.Builder

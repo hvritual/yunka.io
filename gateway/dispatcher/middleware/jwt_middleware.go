@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 	"yunka.io/framework/core"
+	"yunka.io/framework/core/identity"
 	"yunka.io/framework/core/request"
 	"yunka.io/gateway/dispatcher/proxy"
 	"yunka.io/gateway/internal/resp"
@@ -71,6 +72,67 @@ func (jwt *JwtMiddleware) Name() string {
 	return jwtName
 }
 
+func claimString(claims map[string]interface{}, key string) string {
+	value, ok := claims[key]
+	if !ok || value == nil {
+		return ""
+	}
+	if text, ok := value.(string); ok {
+		return strings.TrimSpace(text)
+	}
+	if stringer, ok := value.(interface{ String() string }); ok {
+		return strings.TrimSpace(stringer.String())
+	}
+	return ""
+}
+
+func claimRoles(claims map[string]interface{}) []string {
+	value, ok := claims[define.RoleUUID]
+	if !ok || value == nil {
+		return nil
+	}
+	var roles []string
+	switch typed := value.(type) {
+	case string:
+		roles = strings.Split(typed, define.RoleContactFLag)
+	case []string:
+		roles = append(roles, typed...)
+	case []interface{}:
+		for _, item := range typed {
+			if role, ok := item.(string); ok {
+				roles = append(roles, role)
+			}
+		}
+	}
+	result := roles[:0]
+	for _, role := range roles {
+		role = strings.TrimSpace(role)
+		if role != "" {
+			result = append(result, role)
+		}
+	}
+	return append([]string(nil), result...)
+}
+
+func principalFromClaims(claims map[string]interface{}) identity.Principal {
+	userID := claimString(claims, define.UserUUID)
+	subject := claimString(claims, "sub")
+	if userID == "" {
+		userID = subject
+	}
+	if subject == "" {
+		subject = userID
+	}
+	return identity.Principal{
+		Subject:       subject,
+		TenantID:      claimString(claims, define.OrgUUID),
+		UserID:        userID,
+		Roles:         claimRoles(claims),
+		AuthMethod:    identity.AuthMethodJWT,
+		Authenticated: true,
+	}
+}
+
 func (jwt *JwtMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.RuntimeApi) {
 	reqCtx := rt.GetRequestCtx()
 	args := (&(reqCtx.Request)).URI().QueryArgs()
@@ -94,7 +156,6 @@ func (jwt *JwtMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.Runt
 				reqCtx.Write(resp.SysNotRightBys)
 				return
 			} else {
-				authStatus = false
 				jwt.Next.Do(authStatus, rt, api)
 				return
 			}
@@ -131,6 +192,10 @@ func (jwt *JwtMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.Runt
 			token = newToken
 		}
 
+		request.SetPrincipal(rt, principalFromClaims(map[string]interface{}(body)))
+
+		// Preserve validated string claims in the query only for source
+		// compatibility with legacy handlers. Authorization must use Principal.
 		for key, v := range body {
 			id, ok := v.(string)
 			if ok {
@@ -145,14 +210,11 @@ func (jwt *JwtMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.Runt
 		reqCtx.Response.Header.Set(strAuthorization, token)
 
 	} else {
-		if api.Auth > 0 {
-			if api.Auth&meta.AuthBit_AuthApi == 0 {
-				// API只满足token 授权
-				reqCtx.Write(resp.SysNotRightBys)
-				return
-			}
+		if api.Auth > 0 && api.Auth&meta.AuthBit_AuthApi == 0 && !authStatus {
+			// API只满足token 授权
+			reqCtx.Write(resp.SysNotRightBys)
+			return
 		}
-		authStatus = false
 		jwt.Next.Do(authStatus, rt, api)
 		return
 

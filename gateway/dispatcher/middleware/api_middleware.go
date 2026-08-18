@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"crypto/subtle"
+	"yunka.io/framework/core/identity"
 	"yunka.io/framework/core/request"
 	"yunka.io/gateway/dispatcher/proxy"
 	"yunka.io/gateway/rpc/meta"
@@ -39,6 +40,13 @@ func (erm *APIMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.Runt
 		if len(erm.key) >= 32 && len(code) == len(erm.key) &&
 			subtle.ConstantTimeCompare([]byte(code), []byte(erm.key)) == 1 {
 			authStatus = true
+			if principal, ok := request.PrincipalFromRuntime(rt); !ok || !principal.Authenticated {
+				request.SetPrincipal(rt, identity.Principal{
+					Subject:       "api-key",
+					AuthMethod:    identity.AuthMethodAPIKey,
+					Authenticated: true,
+				})
+			}
 		}
 	}
 

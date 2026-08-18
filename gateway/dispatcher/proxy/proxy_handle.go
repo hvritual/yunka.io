@@ -1,9 +1,11 @@
 package proxy
 
 import (
+	"context"
 	"github.com/valyala/fasthttp"
 	"net/http"
 	"runtime/debug"
+	"yunka.io/framework/core/runtimecontext"
 	"yunka.io/gateway/internal/resp"
 	"yunka.io/pkg/response"
 	"yunka.io/pkg/stringsExt"
@@ -42,6 +44,23 @@ func (p *Proxy) serverHttp(ctx *fasthttp.RequestCtx) {
 		return
 	}
 	rt.SetSrvName(api.SrvName)
-	p.middles.Do(false, rt, api)
+	rt.SetMetadata(runtimecontext.Metadata{
+		Transport: "http",
+		Protocol:  "http",
+		Operation: api.Uri,
+		Route:     path,
+		Service:   api.SrvName,
+		Module:    api.ModuleName,
+		Method:    stringsExt.SliceToString(ctx.Method()),
+	})
+
+	err := p.runtimeMiddles.Handle(rt, func(context.Context) error {
+		p.middles.Do(false, rt, api)
+		return nil
+	})
+	if err != nil {
+		rt.Logger().Error("runtime middleware error:", err)
+		ctx.Write(response.ErrSysError)
+	}
 	return
 }

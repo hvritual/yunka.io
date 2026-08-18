@@ -4,6 +4,7 @@ import (
 	"github.com/valyala/fasthttp"
 	"net"
 	"sync"
+	coremiddleware "yunka.io/framework/core/middleware"
 	"yunka.io/framework/core/request"
 	"yunka.io/gateway/dispatcher/router"
 	"yunka.io/pkg/logExt"
@@ -21,13 +22,14 @@ import (
  */
 
 type Proxy struct {
-	tree    *router.Tree
-	pool    *sync.Pool
-	ctxPool *sync.Pool
-	logFn   func() logExt.Logger
-	middles Next
-	server  *fasthttp.Server
-	mu      sync.Mutex
+	tree           *router.Tree
+	pool           *sync.Pool
+	ctxPool        *sync.Pool
+	logFn          func() logExt.Logger
+	middles        Next
+	runtimeMiddles coremiddleware.Chain
+	server         *fasthttp.Server
+	mu             sync.Mutex
 }
 
 func NewProxy(logFn func() logExt.Logger, fn func(rt *router.Tree)) *Proxy {
@@ -43,7 +45,8 @@ func NewProxy(logFn func() logExt.Logger, fn func(rt *router.Tree)) *Proxy {
 				return request.NewWorkRuntime()
 			},
 		},
-		logFn: logFn,
+		logFn:          logFn,
+		runtimeMiddles: coremiddleware.New(),
 	}
 	fn(p.tree)
 	return p

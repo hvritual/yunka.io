@@ -69,3 +69,27 @@ objects held in `sync.Pool` are intentionally excluded from process lifecycle ma
 `App.Health(ctx)` returns a structured `HealthReport` with application state, liveness,
 readiness, and module health checks. The report is intended to be exposed later by gateway
 health endpoints and diagnostics without coupling health semantics to a specific transport.
+
+## Runtime context, identity, and middleware
+
+W2 introduces a transport-neutral execution context without breaking the existing
+`request.Runtime` interface:
+
+- `core/identity.Principal` is the canonical trusted caller identity. `Authenticated` is set
+  only after server-side credential verification.
+- `core/runtimecontext.Metadata` carries transport, protocol, operation, route, service,
+  module, method, request, and trace metadata through `context.Context`.
+- `core/middleware.Chain` wraps `context.Context`, so the same middleware model can be used
+  by HTTP, RPC, events, and jobs.
+- `request.ContextRuntime` is an optional richer contract implemented by `WorkRuntime` for
+  Principal, metadata, and trace access while preserving existing custom Runtime implementations.
+- Gateway JWT and API-key authentication establish a trusted Principal. Role authorization
+  reads only that Principal and never trusts query-supplied `oid`, `uid`, or `rid` values.
+- Composite gateway calls inherit the parent identity, deadline, and trace context while
+  deriving child operation metadata.
+- RPC middleware is attached through `core/middleware.WrapRPCClient` or non-generated gRPC
+  interceptors; generated RPC files remain untouched.
+
+Remote RPC identity is intentionally not trusted merely because it arrived in metadata. A
+service-side credential verifier must establish an authenticated Principal at each trust
+boundary before authorization is performed.

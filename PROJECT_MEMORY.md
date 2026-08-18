@@ -67,3 +67,13 @@ GitHub connector authorization and local Git authorization are separate. The con
 - Only singleton infrastructures are process-lifecycle managed; request-scoped `sync.Pool` infrastructure and repositories are not enumerated or closed by application shutdown.
 - Singleton infrastructures start in binding order and shut down in reverse binding order.
 - Application health is transport-neutral and exposed as a structured `HealthReport`; gateway health endpoints and diagnostics should adapt this report rather than define separate health semantics.
+
+### 2026-08-18 — Runtime context and identity baseline
+
+- `core/identity.Principal` is the canonical trusted caller identity. `Authenticated` may only be set after server-side credential validation.
+- `core/runtimecontext.Metadata` is the transport-neutral operation metadata model; HTTP/RPC/event/job adapters derive child contexts rather than sharing mutable transport state.
+- `core/middleware.Chain` uses `context.Context` as its common boundary so the same middleware can run across HTTP, RPC, events, and jobs.
+- `request.Runtime` remains source-compatible. `request.ContextRuntime` is the optional richer contract implemented by `WorkRuntime` for Principal, metadata, trace ID, and base-context access.
+- Gateway JWT/API-key authentication establishes a Principal. Role authorization reads only that trusted Principal; query-supplied `oid`/`uid`/`rid` values are compatibility data and are not authorization inputs.
+- Generated RPC files remain immutable. RPC middleware must be attached through transport-neutral client wrappers or non-generated gRPC interceptors.
+- Remote RPC identity metadata is not automatically trusted; a downstream service must validate its own service/caller credentials before marking a Principal authenticated.

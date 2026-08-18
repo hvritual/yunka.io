@@ -26,7 +26,7 @@ func (erm *TraceIdMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.
 		traceId = uuid.New().String()
 	}
 
-	rt.GetRequestCtx().RequestCtx.SetUserValue(define.TraceId, traceId)
+	request.SetTraceID(rt, traceId)
 
 	erm.Next.Do(authStatus, rt, api)
 

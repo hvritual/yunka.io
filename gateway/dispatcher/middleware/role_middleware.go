@@ -35,15 +35,13 @@ func (erm *EnterpriseRoleMiddleware) Name() string {
 func (erm *EnterpriseRoleMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.RuntimeApi) {
 
 	if api.Auth > 0 && (api.Auth&meta.AuthBit_AuthRole != 0) {
-		ctx := rt.GetRequestCtx()
-		orgUUID := ctx.GetOrgUUID()
-		roleUUID := ctx.GetRoleUUID()
-		if orgUUID == "" || len(roleUUID) == 0 || erm.intercept == nil {
-			ctx.Write(resp.SysNotRightBys)
+		principal, ok := request.PrincipalFromRuntime(rt)
+		if !ok || !principal.Authenticated || principal.TenantID == "" || len(principal.Roles) == 0 || erm.intercept == nil {
+			rt.GetRequestCtx().Write(resp.SysNotRightBys)
 			return
 		}
-		if bys, ok := erm.intercept.VerifyRoleApiRight(api.Uuid, orgUUID, roleUUID); !ok {
-			ctx.Write(bys)
+		if bys, allowed := erm.intercept.VerifyRoleApiRight(api.Uuid, principal.TenantID, principal.Roles); !allowed {
+			rt.GetRequestCtx().Write(bys)
 			return
 		}
 		authStatus = true
