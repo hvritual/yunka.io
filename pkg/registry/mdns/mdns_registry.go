@@ -65,26 +65,7 @@ func (m *mdnsRegistry) Register(service *registry.Service, opts ...registry.Regi
 	m.Lock()
 	defer m.Unlock()
 
-	entries, ok := m.services[service.Name]
-	if !ok {
-		s, err := mdns.NewMDNSService(
-			service.Name,
-			"_services",
-			"",
-			"",
-			9999,
-			[]net.IP{net.ParseIP("0.0.0.0")},
-			nil,
-		)
-		if err != nil {
-			return err
-		}
-		srv, err := mdns.NewServer(&mdns.Config{Zone: &mdns.DNSSDService{MDNSService: s}})
-		if err != nil {
-			return err
-		}
-		entries = append(entries, &mdnsEntry{id: "*", node: srv})
-	}
+	entries := m.services[service.Name]
 
 	var registerErr error
 	for _, node := range service.Nodes {
@@ -197,10 +178,7 @@ func (m *mdnsRegistry) Deregister(service *registry.Service) error {
 		newEntries = append(newEntries, entry)
 	}
 
-	if len(newEntries) == 1 && newEntries[0].id == "*" {
-		if newEntries[0].node != nil {
-			_ = newEntries[0].node.Shutdown()
-		}
+	if len(newEntries) == 0 {
 		delete(m.services, service.Name)
 	} else {
 		m.services[service.Name] = newEntries
@@ -279,7 +257,7 @@ func serviceEntryAddress(entry *mdns.ServiceEntry) string {
 func (m *mdnsRegistry) ListServices() ([]*registry.Service, error) {
 	serviceMap := make(map[string]bool)
 	entries := make(chan *mdns.ServiceEntry, 128)
-	p := mdns.DefaultParams("_services")
+	p := mdns.DefaultParams("_services._dns-sd._udp")
 	p.Timeout = m.queryTimeout()
 	p.Entries = entries
 
@@ -291,9 +269,9 @@ func (m *mdnsRegistry) ListServices() ([]*registry.Service, error) {
 		if entry == nil {
 			continue
 		}
-		name := strings.TrimSuffix(entry.Name, "."+p.Service+"."+p.Domain+".")
-		if name != "" {
-			serviceMap[name] = true
+		txt, err := decode(entry.InfoFields)
+		if err == nil && txt.Service != "" {
+			serviceMap[txt.Service] = true
 		}
 	}
 
