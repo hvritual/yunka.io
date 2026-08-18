@@ -51,3 +51,21 @@ jwtAudience = "yunka-gateway"
 The API metadata CLI requires a separate 32-byte key through `--api-key` or
 `YUNKA_API_KEY`. See `.env.example` for the supported environment variable name; never
 commit a real key.
+
+## Application lifecycle and health
+
+The framework owns the lifecycle of process-scoped singleton infrastructures. A singleton
+infrastructure may implement any of the following optional interfaces from
+`yunka.io/framework/core`:
+
+- `Startable` for explicit startup work.
+- `Shutdowner` for context-aware graceful shutdown.
+- `HealthChecker` for dependency health checks.
+
+Modules start in registration order and shut down in reverse registration order. Singleton
+infrastructures follow their binding order and are shut down in reverse order. Request-scoped
+objects held in `sync.Pool` are intentionally excluded from process lifecycle management.
+
+`App.Health(ctx)` returns a structured `HealthReport` with application state, liveness,
+readiness, and module health checks. The report is intended to be exposed later by gateway
+health endpoints and diagnostics without coupling health semantics to a specific transport.
