@@ -1,16 +1,18 @@
 package core
 
 import (
+	"context"
 	"github.com/BurntSushi/toml"
 	"io/ioutil"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"yunka.io/framework/core/eventBus"
 	"yunka.io/pkg/invoke"
 	"yunka.io/pkg/logExt"
-	"yunka.io/pkg/threading"
 )
 
 /**
@@ -28,7 +30,14 @@ type App struct {
 	globalLogger logExt.Logger
 	rhTree       *RouterHandleTree
 	prepares     []func(Initiator)
-	modules      map[string]Module
+
+	moduleMu    sync.RWMutex
+	modules     map[string]Module
+	moduleOrder []string
+
+	lifecycleMu sync.Mutex
+	state       atomic.Uint32
+
 	// TODO 等待设计接口
 	eventBus eventBus.EventBus
 
@@ -40,6 +49,7 @@ func init() {
 	app = new(App)
 	app.modules = make(map[string]Module)
 	app.rhTree = NewHandleTree()
+	app.setState(AppStateNew)
 
 }
 
@@ -104,6 +114,7 @@ func (app *App) GetHandleTree() *RouterHandleTree {
 
 // Run app
 func (app *App) Run(run func()) {
+	app.setState(AppStateInitializing)
 
 	for _, i := range prepares {
 		i(globalConf)
@@ -116,10 +127,19 @@ func (app *App) Run(run func()) {
 		//Log().Debug(s)
 		return false
 	})
+
+	if err := app.Start(context.Background()); err != nil {
+		app.setState(AppStateFailed)
+		panic(err)
+	}
+	defer app.Stop()
+
 	run()
 }
 
 func (app *App) GetModule(modName string) Module {
+	app.moduleMu.RLock()
+	defer app.moduleMu.RUnlock()
 	return app.modules[modName]
 }
 
@@ -146,13 +166,25 @@ func GetClient() invoke.RpcClient {
 }
 
 func (app *App) RegisterModule(mod Module) {
-	app.modules[mod.Name()] = mod
+	if mod == nil {
+		return
+	}
+
+	app.moduleMu.Lock()
+	defer app.moduleMu.Unlock()
+
+	name := mod.Name()
+	if _, exists := app.modules[name]; !exists {
+		app.moduleOrder = append(app.moduleOrder, name)
+	}
+	app.modules[name] = mod
 }
 
 func (app *App) Stop() {
-	for _, mod := range app.modules {
-		threading.RunSafe(func() {
-			mod.Stop()
-		})
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultShutdownTimeout)
+	defer cancel()
+
+	if err := app.Shutdown(ctx); err != nil && app.globalLogger != nil {
+		app.globalLogger.Error("application shutdown: ", err)
 	}
 }
