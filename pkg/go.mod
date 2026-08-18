@@ -16,7 +16,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/golang/protobuf v1.5.4
 	github.com/google/uuid v1.6.0
-	github.com/micro/mdns v0.3.0
+	github.com/hashicorp/mdns v1.0.6
 	github.com/mitchellh/hashstructure v1.1.0
 	github.com/pkg/errors v0.9.1
 	github.com/rs/xid v1.2.1

@@ -22,5 +22,36 @@ jobs:
             framework/go.sum
             gateway/go.sum
             pkg/go.sum
+      - name: Dependency sync
+        id: dependency-sync
+        run: |
+          make tidy
+          git diff --exit-code -- \
+            go.work go.work.sum \
+            pkg/go.mod pkg/go.sum \
+            framework/go.mod framework/go.sum \
+            gateway/go.mod gateway/go.sum \
+            app/go.mod app/go.sum \
+            app/cmd/rpc/go.mod app/cmd/rpc/go.sum
+      - name: Upload dependency snapshot
+        if: failure() && steps.dependency-sync.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-sync-${{ github.sha }}
+          retention-days: 1
+          if-no-files-found: error
+          path: |
+            go.work
+            go.work.sum
+            pkg/go.mod
+            pkg/go.sum
+            framework/go.mod
+            framework/go.sum
+            gateway/go.mod
+            gateway/go.sum
+            app/go.mod
+            app/go.sum
+            app/cmd/rpc/go.mod
+            app/cmd/rpc/go.sum
       - name: Verify
         run: make verify
