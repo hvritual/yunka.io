@@ -93,3 +93,27 @@ W2 introduces a transport-neutral execution context without breaking the existin
 Remote RPC identity is intentionally not trusted merely because it arrived in metadata. A
 service-side credential verifier must establish an authenticated Principal at each trust
 boundary before authorization is performed.
+
+## Resilience policies
+
+W3 adds transport-neutral resilience middleware under `framework/core/resilience`:
+
+- `TimeoutBudget` derives child deadlines from the caller budget and can reserve time for
+  caller cleanup.
+- `Retry` is fail-safe: it retries only when the operation is explicitly idempotent and the
+  error is explicitly retryable.
+- `CircuitBreakerGroup`, `RateLimiterGroup`, and `LoadShedderGroup` isolate state by runtime
+  operation instead of sharing one global failure domain.
+- Load shedding combines a concurrency ceiling, minimum remaining deadline budget, and an
+  AIMD-style adaptive limit driven by observed latency/overload signals.
+- `RPCPolicy` composes outbound RPC governance in the order timeout budget → retry → rate
+  limit → load shed → circuit breaker → transport.
+
+All stateful policies expose snapshots for later diagnostics and SLS/OpenTelemetry metrics.
+No resilience policy is silently enabled for existing services; callers opt in through
+middleware or `RPCPolicy.Wrap`.
+
+Policy keys must remain low-cardinality (for example service/method or normalized route). Never
+key breaker/limiter state by request ID, user ID, raw URL, or other unbounded values. Gateway
+adapters translate policy rejections to HTTP semantics: 429 for rate limiting, 503 for
+circuit/load shedding, and 504 for timeout-budget/deadline exhaustion.

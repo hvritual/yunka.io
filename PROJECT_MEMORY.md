@@ -77,3 +77,14 @@ GitHub connector authorization and local Git authorization are separate. The con
 - Gateway JWT/API-key authentication establishes a Principal. Role authorization reads only that trusted Principal; query-supplied `oid`/`uid`/`rid` values are compatibility data and are not authorization inputs.
 - Generated RPC files remain immutable. RPC middleware must be attached through transport-neutral client wrappers or non-generated gRPC interceptors.
 - Remote RPC identity metadata is not automatically trusted; a downstream service must validate its own service/caller credentials before marking a Principal authenticated.
+
+### 2026-08-18 — Resilience baseline
+
+- Resilience policies are transport-neutral middleware and must not be embedded directly in business services.
+- Stateful policies are isolated by `runtimecontext.Metadata.Operation` (or an explicit key function); one failing RPC method must not open a global service-wide breaker by default.
+- Timeout budget is the outer call budget and all retries share that same parent budget.
+- Retries are fail-safe and require both explicit idempotency and explicit retryable-error classification; existing calls are never retried implicitly.
+- Outbound RPC policy order is timeout budget → retry → rate limit → load shed → circuit breaker → transport, so every retry attempt remains governed.
+- Load shedding uses concurrency admission plus minimum remaining deadline and adaptive latency feedback; policy snapshots are the stable seam for later SLS/OpenTelemetry observability.
+- Resilience policy keys must be low-cardinality operation identifiers; request IDs, user IDs, raw URLs, and other unbounded values are forbidden as breaker/limiter keys.
+- Gateway adapters map resilience rejections to transport semantics: rate limiting to HTTP 429, circuit/load shedding to 503, and timeout budget/deadline exhaustion to 504.

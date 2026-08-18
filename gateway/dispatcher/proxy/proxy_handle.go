@@ -60,6 +60,7 @@ func (p *Proxy) serverHttp(ctx *fasthttp.RequestCtx) {
 	})
 	if err != nil {
 		rt.Logger().Error("runtime middleware error:", err)
+		ctx.Response.SetStatusCode(runtimeMiddlewareStatus(err))
 		ctx.Write(response.ErrSysError)
 	}
 	return
