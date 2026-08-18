@@ -59,3 +59,11 @@ GitHub connector authorization and local Git authorization are separate. The con
 - Gateway authentication is fail-closed. JWT configuration requires a secret of at least 32 bytes plus issuer and audience; tokens are accepted only through `Authorization: Bearer`.
 - HTTP and etcd clients must verify TLS certificates. Disabling certificate verification is not an accepted runtime option.
 - Runtime authorization identities are derived from validated server-side credentials; query-supplied identity fields must not be trusted.
+
+### 2026-08-18 — Runtime lifecycle baseline
+
+- Application and process-scoped resources use explicit lifecycle contracts: `Startable`, `Shutdowner`, and `HealthChecker`.
+- Modules start in registration order and shut down in reverse registration order.
+- Only singleton infrastructures are process-lifecycle managed; request-scoped `sync.Pool` infrastructure and repositories are not enumerated or closed by application shutdown.
+- Singleton infrastructures start in binding order and shut down in reverse binding order.
+- Application health is transport-neutral and exposed as a structured `HealthReport`; gateway health endpoints and diagnostics should adapt this report rather than define separate health semantics.
