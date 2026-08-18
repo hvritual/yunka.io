@@ -99,3 +99,11 @@ GitHub connector authorization and local Git authorization are separate. The con
 - W3C Trace Context is propagated across gateway HTTP and gRPC boundaries. Legacy `X-Trace-Id` remains a compatibility response/header surface but the OpenTelemetry trace ID is canonical once an OTel span exists.
 - Telemetry identity attributes are disabled by default. Tenant/user/role identifiers require explicit `IncludeIdentity` opt-in and deployment-specific privacy/retention review.
 - SLS AccessKeys must not be committed or embedded in application config; use least-privilege RAM credentials in Collector/Prometheus deployment secrets.
+
+### 2026-08-18 — Dependency sync and verification baseline
+
+- Pull requests must run dependency synchronization before the full verification gate. `make tidy` plus `go work sync` must leave all `go.mod`, `go.sum`, `go.work`, and `go.work.sum` files clean.
+- Dependency drift is a blocking condition. Same-repository PRs may use the CI runner's local `git` to commit the exact generated dependency state; fork or non-writable runs must fail rather than silently continue.
+- The full release gate remains `make verify` after dependency synchronization: unit tests, race tests, `go vet`, `govulncheck`, and builds across all five modules.
+- The mDNS registry baseline uses maintained `github.com/hashicorp/mdns v1.0.6`; the old `github.com/micro/mdns v0.3.0` implementation is retired because its probe/shutdown path fails the race gate.
+- mDNS watching uses bounded polling plus snapshot diff semantics instead of the legacy TTL/listen callback path; create, update, and delete results remain the registry watcher contract.
