@@ -54,18 +54,17 @@ func NewModule(name string, appHook func(mod core.Module)) *module {
 }
 
 type module struct {
-	name         string
-	srvContainer map[string]*serviceContainer
-	infras       map[reflect.Type]*sync.Pool
-	singleInfras *sync.Map
-	repos        map[reflect.Type]*sync.Pool
-	inits        []core.ModuleInit
-}
-
-func (mod *module) Stop() {
-	// Pooled module resources are request-scoped and do not own a process-wide
-	// lifecycle. Concrete infrastructures remain responsible for closing any
-	// external resources they create.
+	name             string
+	srvContainer     map[string]*serviceContainer
+	infras           map[reflect.Type]*sync.Pool
+	singleInfras     *sync.Map
+	repos            map[reflect.Type]*sync.Pool
+	inits            []core.ModuleInit
+	singleInfraMu    sync.RWMutex
+	singleInfraOrder []reflect.Type
+	lifecycleMu      sync.Mutex
+	started          bool
+	stopped          bool
 }
 
 func (mod *module) Init(f core.ModuleInit) {
