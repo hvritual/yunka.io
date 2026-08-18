@@ -88,3 +88,14 @@ GitHub connector authorization and local Git authorization are separate. The con
 - Load shedding uses concurrency admission plus minimum remaining deadline and adaptive latency feedback; policy snapshots are the stable seam for later SLS/OpenTelemetry observability.
 - Resilience policy keys must be low-cardinality operation identifiers; request IDs, user IDs, raw URLs, and other unbounded values are forbidden as breaker/limiter keys.
 - Gateway adapters map resilience rejections to transport semantics: rate limiting to HTTP 429, circuit/load shedding to 503, and timeout budget/deadline exhaustion to 504.
+
+### 2026-08-18 — SLS observability baseline
+
+- `framework/observability` is the canonical telemetry layer; application and domain code must not depend directly on Aliyun SLS SDKs.
+- Traces and metrics use OpenTelemetry standards and standard `OTEL_*` exporter configuration. The preferred production path is OTLP to an OpenTelemetry Collector that owns SLS credentials.
+- Framework/application logs use structured `log/slog` JSON output. LoongCollector is the preferred SLS log/event transport so application request latency is decoupled from SLS network writes.
+- Runtime events are represented once and fanned out to structured logs, span events, and event metrics; `signal=event` is the routing discriminator for SLS ingestion pipelines.
+- OpenTelemetry Go logs are not the default W4 log path because the Go log signal is still beta; the stable W4 default is `slog` JSON plus LoongCollector.
+- W3C Trace Context is propagated across gateway HTTP and gRPC boundaries. Legacy `X-Trace-Id` remains a compatibility response/header surface but the OpenTelemetry trace ID is canonical once an OTel span exists.
+- Telemetry identity attributes are disabled by default. Tenant/user/role identifiers require explicit `IncludeIdentity` opt-in and deployment-specific privacy/retention review.
+- SLS AccessKeys must not be committed or embedded in application config; use least-privilege RAM credentials in Collector/Prometheus deployment secrets.

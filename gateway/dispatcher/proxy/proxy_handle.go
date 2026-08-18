@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"runtime/debug"
 	"yunka.io/framework/core/runtimecontext"
+	"yunka.io/framework/observability"
 	"yunka.io/gateway/internal/resp"
 	"yunka.io/pkg/response"
 	"yunka.io/pkg/stringsExt"
@@ -34,7 +35,12 @@ func (p *Proxy) serverHttp(ctx *fasthttp.RequestCtx) {
 	}()
 
 	rt.SetRequestCtx(ctx)
-	rt.SetLogger(p.logFn())
+	rt.SetContext(observability.Extract(rt, fastHTTPHeaderCarrier{header: &ctx.Request.Header}))
+	if p.contextLogFn != nil {
+		rt.SetLogger(p.contextLogFn(rt))
+	} else {
+		rt.SetLogger(p.logFn())
+	}
 	path := stringsExt.SliceToString(ctx.Path())
 	api, ok := p.tree.Get(path)
 	if !ok {
@@ -54,7 +60,11 @@ func (p *Proxy) serverHttp(ctx *fasthttp.RequestCtx) {
 		Method:    stringsExt.SliceToString(ctx.Method()),
 	})
 
-	err := p.runtimeMiddles.Handle(rt, func(context.Context) error {
+	err := p.runtimeMiddles.Handle(rt, func(child context.Context) error {
+		// Runtime middleware derives deadlines, trace/span context, identity and
+		// operation metadata through context.Context. Bind the derived child to
+		// WorkRuntime before entering the legacy gateway chain.
+		rt.SetContext(child)
 		p.middles.Do(false, rt, api)
 		return nil
 	})

@@ -1,0 +1,32 @@
+# Template based on Aliyun SLS OpenTelemetry Collector exporter examples.
+# Replace ${...} placeholders in the deployment system. Do not commit secrets.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+      http:
+        endpoint: "0.0.0.0:4318"
+
+exporters:
+  alibabacloud_logservice/traces:
+    endpoint: "${SLS_ENDPOINT}"
+    project: "${SLS_PROJECT}"
+    logstore: "${SLS_TRACE_INSTANCE_ID}-traces"
+    access_key_id: "${SLS_ACCESS_KEY_ID}"
+    access_key_secret: "${SLS_ACCESS_KEY_SECRET}"
+  alibabacloud_logservice/metrics:
+    endpoint: "${SLS_ENDPOINT}"
+    project: "${SLS_PROJECT}"
+    logstore: "${SLS_TRACE_INSTANCE_ID}-metrics"
+    access_key_id: "${SLS_ACCESS_KEY_ID}"
+    access_key_secret: "${SLS_ACCESS_KEY_SECRET}"
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [alibabacloud_logservice/traces]
+    metrics:
+      receivers: [otlp]
+      exporters: [alibabacloud_logservice/metrics]

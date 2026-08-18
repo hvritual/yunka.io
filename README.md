@@ -117,3 +117,24 @@ Policy keys must remain low-cardinality (for example service/method or normalize
 key breaker/limiter state by request ID, user ID, raw URL, or other unbounded values. Gateway
 adapters translate policy rejections to HTTP semantics: 429 for rate limiting, 503 for
 circuit/load shedding, and 504 for timeout-budget/deadline exhaustion.
+
+## Aliyun SLS observability
+
+W4 adds a unified observability provider under `framework/observability` while keeping SLS behind
+standard telemetry protocols:
+
+- traces and metrics use OpenTelemetry Go and are configured through standard `OTEL_*` variables;
+- logs use `log/slog` JSON output so LoongCollector can batch, route, retry, and send without
+  coupling request latency to the SLS network;
+- runtime events are emitted as structured `signal=event` logs, OpenTelemetry span events, and a
+  runtime-event counter;
+- gateway and gRPC adapters propagate W3C trace context without modifying generated RPC files;
+- W3 resilience rejections are recorded as metrics and runtime events with low-cardinality policy
+  and operation attributes.
+
+The recommended production path is application -> OTLP Collector for traces/metrics and JSON
+stdout -> LoongCollector for logs/events. SLS AccessKeys remain in Collector/Prometheus deployment
+configuration rather than application configuration. See `deploy/observability/` for templates.
+
+Identity fields are not added to telemetry by default. `observability.Config.IncludeIdentity` is
+an explicit opt-in for deployments whose privacy and retention rules allow those identifiers.

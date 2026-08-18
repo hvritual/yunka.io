@@ -1,0 +1,19 @@
+# Prometheus alternative for SLS MetricStore.
+# Configure yunka with OTEL_METRICS_EXPORTER=prometheus; autoexport exposes :9464 by default.
+scrape_configs:
+  - job_name: yunka
+    static_configs:
+      - targets: ["yunka:9464"]
+
+remote_write:
+  - url: "https://${SLS_PROJECT}.${SLS_ENDPOINT}/prometheus/${SLS_PROJECT}/${SLS_METRICSTORE}/api/v1/write"
+    basic_auth:
+      username: "${SLS_ACCESS_KEY_ID}"
+      password: "${SLS_ACCESS_KEY_SECRET}"
+    queue_config:
+      batch_send_deadline: 20s
+      capacity: 20480
+      max_backoff: 5s
+      max_samples_per_send: 2048
+      min_backoff: 100ms
+      min_shards: 100

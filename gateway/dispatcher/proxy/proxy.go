@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"context"
+
 	"github.com/valyala/fasthttp"
 	"net"
 	"sync"
@@ -26,6 +28,7 @@ type Proxy struct {
 	pool           *sync.Pool
 	ctxPool        *sync.Pool
 	logFn          func() logExt.Logger
+	contextLogFn   func(context.Context) logExt.Logger
 	middles        Next
 	runtimeMiddles coremiddleware.Chain
 	server         *fasthttp.Server

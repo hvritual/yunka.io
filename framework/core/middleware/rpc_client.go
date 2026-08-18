@@ -43,6 +43,10 @@ func (client *rpcClient) invoke(ctx context.Context, method string, final Handle
 	metadata.Protocol = "rpc"
 	metadata.Operation = method
 	metadata.Method = method
+	if metadata.Attributes == nil {
+		metadata.Attributes = make(map[string]string)
+	}
+	metadata.Attributes["rpc.direction"] = "client"
 	ctx = runtimecontext.WithMetadata(ctx, metadata)
 	return client.chain.Handle(ctx, final)
 }

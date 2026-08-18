@@ -1,8 +1,9 @@
 package middleware
 
 import (
-	"github.com/google/uuid"
 	"strings"
+
+	"github.com/google/uuid"
 	"yunka.io/framework/core/request"
 	"yunka.io/gateway/dispatcher/proxy"
 	"yunka.io/gateway/rpc/meta"
@@ -18,17 +19,22 @@ func (erm *TraceIdMiddleware) Name() string {
 	return apiName
 }
 
+const xTraceIDHeader = "X-Trace-Id"
+
 func (erm *TraceIdMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.RuntimeApi) {
-
-	traceId := strings.TrimSpace(stringsExt.SliceToString(rt.GetRequestCtx().Request.Header.Peek(define.TraceId)))
-
+	// W4 span context is canonical when observability middleware is active.
+	// Keep the legacy trace_id request header only as a compatibility fallback.
+	traceId := strings.TrimSpace(request.TraceIDFromRuntime(rt))
+	if traceId == "" {
+		traceId = strings.TrimSpace(stringsExt.SliceToString(rt.GetRequestCtx().Request.Header.Peek(define.TraceId)))
+	}
 	if traceId == "" {
 		traceId = uuid.New().String()
 	}
 
 	request.SetTraceID(rt, traceId)
+	rt.GetRequestCtx().SetUserValue(define.TraceId, traceId)
+	rt.GetRequestCtx().Response.Header.Set(xTraceIDHeader, traceId)
 
 	erm.Next.Do(authStatus, rt, api)
-
-	return
 }
