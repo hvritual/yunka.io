@@ -6,13 +6,16 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version: 1.25.13
@@ -24,17 +27,23 @@ jobs:
             pkg/go.sum
       - name: Dependency sync
         id: dependency-sync
+        shell: bash
         run: |
+          set -euo pipefail
           make tidy
-          git diff --exit-code -- \
+          if git diff --quiet -- \
             go.work go.work.sum \
             pkg/go.mod pkg/go.sum \
             framework/go.mod framework/go.sum \
             gateway/go.mod gateway/go.sum \
             app/go.mod app/go.sum \
-            app/cmd/rpc/go.mod app/cmd/rpc/go.sum
+            app/cmd/rpc/go.mod app/cmd/rpc/go.sum; then
+            echo "dirty=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "dirty=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Upload dependency snapshot
-        if: failure() && steps.dependency-sync.outcome == 'failure'
+        if: steps.dependency-sync.outputs.dirty == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: dependency-sync-${{ github.sha }}
@@ -53,5 +62,32 @@ jobs:
             app/go.sum
             app/cmd/rpc/go.mod
             app/cmd/rpc/go.sum
+      - name: Commit dependency sync
+        if: >-
+          steps.dependency-sync.outputs.dirty == 'true' &&
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- \
+            go.work go.work.sum \
+            pkg/go.mod pkg/go.sum \
+            framework/go.mod framework/go.sum \
+            gateway/go.mod gateway/go.sum \
+            app/go.mod app/go.sum \
+            app/cmd/rpc/go.mod app/cmd/rpc/go.sum
+          git commit -m "chore: sync workspace dependencies"
+          git push origin "HEAD:${HEAD_REF}"
+      - name: Reject unsynced dependencies
+        if: >-
+          steps.dependency-sync.outputs.dirty == 'true' &&
+          !(github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository)
+        run: exit 1
       - name: Verify
         run: make verify
