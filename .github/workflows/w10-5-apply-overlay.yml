@@ -53,30 +53,37 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/w10-5
-          {
-            cat .github/w10_5_overlay/part00.b64
-            cat .github/w10_5_overlay/part01.b64
-            cat .github/w10_5_overlay/part02.b64
-            cat .github/w10_5_overlay/part03.b64
-            cat .github/w10_5_overlay/part04.b64
-            cat .github/w10_5_overlay/part05.b64
-            cat .github/w10_5_overlay/p06_0.b64
-            cat .github/w10_5_overlay/p06_1.b64
-            cat .github/w10_5_overlay/r06_2.b64
-            cat .github/w10_5_overlay/p07_0.b64
-            cat .github/w10_5_overlay/p07_1.b64
-            cat .github/w10_5_overlay/p07_2.b64
-            cat .github/w10_5_overlay/p08_0.b64
-            cat .github/w10_5_overlay/p08_1.b64
-            cat .github/w10_5_overlay/p08_2.b64
-            cat .github/w10_5_overlay/part09.b64
-            cat .github/w10_5_overlay/part10.b64
-            cat .github/w10_5_overlay/p11_0.b64
-            cat .github/w10_5_overlay/r11_1x0.b64
-            cat .github/w10_5_overlay/r11_1x1.b64
-            cat .github/w10_5_overlay/r11_1x2.b64
-          } | tr -d '\r\n' | base64 -d > /tmp/w10-5/overlay.tar.gz
-          echo "8db9884a2dca9e5cdd5ddde9b24cf5857e2c0e502041deb1fc296080ff08a4be  /tmp/w10-5/overlay.tar.gz" | sha256sum -c -
+          python3 - <<'PY'
+          import base64, hashlib, pathlib, re
+          names = [
+              'part00.b64','part01.b64','part02.b64','part03.b64','part04.b64','part05.b64',
+              'p06_0.b64','p06_1.b64','r06_2.b64',
+              'p07_0.b64','p07_1.b64','p07_2.b64',
+              'p08_0.b64','p08_1.b64','p08_2.b64',
+              'part09.b64','part10.b64','p11_0.b64','r11_1x0.b64','r11_1x1.b64','r11_1x2.b64',
+          ]
+          root = pathlib.Path('.github/w10_5_overlay')
+          chunks = []
+          allowed = re.compile(r'^[A-Za-z0-9+/=]*$')
+          for name in names:
+              raw = (root / name).read_text(encoding='utf-8')
+              clean = raw.replace('\r', '').replace('\n', '')
+              if not allowed.fullmatch(clean):
+                  bad = [(i, repr(ch)) for i, ch in enumerate(clean) if ch not in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='][:10]
+                  raise SystemExit(f'{name}: invalid base64 characters: {bad}')
+              print(f'{name}: raw={len(raw)} clean={len(clean)}')
+              chunks.append(clean)
+          encoded = ''.join(chunks)
+          if len(encoded) != 103604:
+              raise SystemExit(f'overlay base64 length={len(encoded)}, want 103604')
+          decoded = base64.b64decode(encoded, validate=True)
+          digest = hashlib.sha256(decoded).hexdigest()
+          want = '8db9884a2dca9e5cdd5ddde9b24cf5857e2c0e502041deb1fc296080ff08a4be'
+          if digest != want:
+              raise SystemExit(f'overlay sha256={digest}, want {want}')
+          pathlib.Path('/tmp/w10-5/overlay.tar.gz').write_bytes(decoded)
+          print(f'overlay bytes={len(decoded)} sha256={digest}')
+          PY
           tar -xzf /tmp/w10-5/overlay.tar.gz -C /tmp/w10-5
       - name: Apply overlay to exact MVP base
         shell: bash
