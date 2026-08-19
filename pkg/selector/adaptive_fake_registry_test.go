@@ -4,7 +4,15 @@ import (
 	"errors"
 
 	"yunka.io/pkg/registry"
+	registrycache "yunka.io/pkg/registry/cache"
 )
+
+// The fake registry below does not implement a live watcher. Disable the
+// registry cache for selector tests so direct fixture mutations are observed
+// deterministically instead of waiting for the production cache TTL.
+func init() {
+	registrycache.DefaultTTL = 0
+}
 
 // Complete the registry.Registry contract for the W05 test double. Keeping
 // these methods in a separate test file avoids coupling the adaptive selector
