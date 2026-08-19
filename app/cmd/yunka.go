@@ -8,7 +8,9 @@ import (
 	"yunka.io/app/cmd/api"
 	"yunka.io/app/cmd/contract"
 	"yunka.io/app/cmd/controller"
+	"yunka.io/app/cmd/dev"
 	"yunka.io/app/cmd/doc"
+	"yunka.io/app/cmd/doctor"
 	"yunka.io/app/cmd/graph"
 	"yunka.io/app/cmd/inspect"
 	"yunka.io/app/cmd/module"
@@ -21,6 +23,8 @@ func main() {
 	app.Version = "0.0.1"
 	app.Commands = []cli.Command{
 		contract.Command(),
+		dev.Command(),
+		doctor.Command(),
 		graph.Command(),
 		inspect.Command(),
 		{
