@@ -86,15 +86,12 @@ jobs:
           while IFS= read -r path; do [ -z "$path" ] || rm -f -- "$path"; done < /tmp/w10-5/yunka-w10.5-convergence/DELETE_FILES.txt
           python3 - <<'PY'
           from pathlib import Path
-          # Keep selector cache control scoped to the one reconciliation test.
           path=Path('pkg/selector/adaptive_test.go'); value=path.read_text()
           old='''func TestRegistryReconcilePrunesRemovedNodes(t *testing.T) {\n\tfake := registryForTest(t, testServices())\n\tselector := NewAdaptiveSelector(Registry(fake), WithAdaptiveConfig(AdaptiveOptions{Enabled: true, Seed: 15})).(*registrySelector)\n'''
           new='''func TestRegistryReconcilePrunesRemovedNodes(t *testing.T) {\n\tfake := registryForTest(t, testServices())\n\tselectorContext := context.WithValue(context.Background(), "selector_ttl", time.Duration(0))\n\tselector := NewAdaptiveSelector(\n\t\tRegistry(fake),\n\t\tfunc(options *Options) { options.Context = selectorContext },\n\t\tWithAdaptiveConfig(AdaptiveOptions{Enabled: true, Seed: 15}),\n\t).(*registrySelector)\n'''
           if value.count(old)!=1: raise SystemExit('selector reconcile test preimage mismatch')
           path.write_text(value.replace(old,new))
 
-          # Narrow MySQL locking reads so concurrent SKIP LOCKED workers do not
-          # contend on the broad pending-or-expired range.
           path=Path('framework/event/outbox/gorm_store.go'); value=path.read_text()
           old='''\t\tvar candidates []gormRecord\n\t\tlocking := clause.Locking{Strength: "UPDATE"}\n\t\tif store.skipLocked {\n\t\t\tlocking.Options = "SKIP LOCKED"\n\t\t}\n\t\tquery := tx.Table(store.table).\n\t\t\tClauses(locking).\n\t\t\tWhere("(status = ? AND next_attempt_at <= ?) OR (status = ? AND lease_until IS NOT NULL AND lease_until <= ?)", StatusPending, options.Now, StatusInFlight, options.Now).\n\t\t\tOrder("next_attempt_at ASC").Order("created_at ASC").Order("id ASC").Limit(options.Limit).\n\t\t\tFind(&candidates)\n\t\tif query.Error != nil {\n\t\t\treturn query.Error\n\t\t}\n'''
           new='''\t\tvar candidates []gormRecord\n\t\tlocking := clause.Locking{Strength: "UPDATE"}\n\t\tif store.skipLocked {\n\t\t\tlocking.Options = "SKIP LOCKED"\n\t\t}\n\n\t\t// Keep lease reclamation and pending delivery as separate locking reads.\n\t\t// A single OR range can make InnoDB lock/skip a much wider range than the\n\t\t// returned LIMIT, which defeats concurrent SKIP LOCKED consumers. Expired\n\t\t// leases are reclaimed first so crashed-worker records cannot starve.\n\t\tvar expired []gormRecord\n\t\tquery := tx.Table(store.table).\n\t\t\tClauses(locking).\n\t\t\tWhere("status = ? AND lease_until IS NOT NULL AND lease_until <= ?", StatusInFlight, options.Now).\n\t\t\tOrder("lease_until ASC").Order("created_at ASC").Order("id ASC").Limit(options.Limit).\n\t\t\tFind(&expired)\n\t\tif query.Error != nil {\n\t\t\treturn query.Error\n\t\t}\n\t\tcandidates = append(candidates, expired...)\n\n\t\tremaining := options.Limit - len(candidates)\n\t\tif remaining > 0 {\n\t\t\tvar pending []gormRecord\n\t\t\tquery = tx.Table(store.table).\n\t\t\t\tClauses(locking).\n\t\t\t\tWhere("status = ? AND next_attempt_at <= ?", StatusPending, options.Now).\n\t\t\t\tOrder("next_attempt_at ASC").Order("created_at ASC").Order("id ASC").Limit(remaining).\n\t\t\t\tFind(&pending)\n\t\t\tif query.Error != nil {\n\t\t\t\treturn query.Error\n\t\t\t}\n\t\t\tcandidates = append(candidates, pending...)\n\t\t}\n'''
@@ -104,7 +101,6 @@ jobs:
           value=value.replace('LeaseUntil    *time.Time `gorm:"column:lease_until;index"`','LeaseUntil    *time.Time `gorm:"column:lease_until;index:idx_yunka_outbox_lease,priority:2"`')
           value=value.replace('CreatedAt     time.Time  `gorm:"column:created_at;not null"`','CreatedAt     time.Time  `gorm:"column:created_at;not null;index:idx_yunka_outbox_ready,priority:3;index:idx_yunka_outbox_lease,priority:3"`')
           path.write_text(value)
-
           path=Path('deploy/outbox/mysql.sql'); value=path.read_text()
           value=value.replace('KEY `idx_yunka_outbox_ready` (`status`, `next_attempt_at`),','KEY `idx_yunka_outbox_ready` (`status`, `next_attempt_at`, `created_at`),')
           value=value.replace('KEY `idx_yunka_outbox_lease_until` (`lease_until`),','KEY `idx_yunka_outbox_lease` (`status`, `lease_until`, `created_at`),')
@@ -135,8 +131,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
+          curl -fL --retry 5 --retry-delay 2 \
+            -o /tmp/protoc.zip \
+            https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-x86_64.zip
+          rm -rf /tmp/protoc
+          mkdir -p /tmp/protoc
+          unzip -q /tmp/protoc.zip -d /tmp/protoc
+          echo "/tmp/protoc/bin" >> "$GITHUB_PATH"
+          /tmp/protoc/bin/protoc --version
       - name: Contract convergence gate
         run: make contract-check contract-audit
       - name: Verify core
