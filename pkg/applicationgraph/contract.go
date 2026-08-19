@@ -93,27 +93,32 @@ func AddContract(builder *Builder, manifest contract.Manifest) error {
 }
 
 func cloneManifest(manifest contract.Manifest) contract.Manifest {
-	result := manifest
-	result.Files = append([]contract.File(nil), manifest.Files...)
-	result.Messages = append([]contract.Message(nil), manifest.Messages...)
-	result.Enums = append([]contract.Enum(nil), manifest.Enums...)
-	result.Services = append([]contract.Service(nil), manifest.Services...)
-	for i := range result.Messages {
-		result.Messages[i].Fields = append([]contract.Field(nil), manifest.Messages[i].Fields...)
+	clone := manifest
+	clone.Files = append([]contract.File(nil), manifest.Files...)
+	clone.Messages = make([]contract.Message, len(manifest.Messages))
+	for i, message := range manifest.Messages {
+		clone.Messages[i] = message
+		clone.Messages[i].Fields = append([]contract.Field(nil), message.Fields...)
 	}
-	for i := range result.Enums {
-		result.Enums[i].Values = append([]contract.EnumValue(nil), manifest.Enums[i].Values...)
+	clone.Enums = make([]contract.Enum, len(manifest.Enums))
+	for i, enum := range manifest.Enums {
+		clone.Enums[i] = enum
+		clone.Enums[i].Values = append([]contract.EnumValue(nil), enum.Values...)
 	}
-	for i := range result.Services {
-		result.Services[i].Methods = append([]contract.Method(nil), manifest.Services[i].Methods...)
-		for j := range result.Services[i].Methods {
-			result.Services[i].Methods[j].HTTP = append([]contract.HTTPBinding(nil), manifest.Services[i].Methods[j].HTTP...)
-			if manifest.Services[i].Methods[j].Directives != nil {
-			result.Services[i].Methods[j].Directives = make(map[string]string, len(manifest.Services[i].Methods[j].Directives))
-			for key, value := range manifest.Services[i].Methods[j].Directives {
-				result.Services[i].Methods[j].Directives[key] = value
+	clone.Services = make([]contract.Service, len(manifest.Services))
+	for i, service := range manifest.Services {
+		clone.Services[i] = service
+		clone.Services[i].Methods = make([]contract.Method, len(service.Methods))
+		for j, method := range service.Methods {
+			clone.Services[i].Methods[j] = method
+			clone.Services[i].Methods[j].HTTP = append([]contract.HTTPBinding(nil), method.HTTP...)
+			if method.Directives != nil {
+				clone.Services[i].Methods[j].Directives = make(map[string]string, len(method.Directives))
+				for key, value := range method.Directives {
+					clone.Services[i].Methods[j].Directives[key] = value
+				}
 			}
 		}
 	}
-	return result
+	return clone
 }
