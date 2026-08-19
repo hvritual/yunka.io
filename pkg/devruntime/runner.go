@@ -111,7 +111,7 @@ func inheritedEnvironment(base, names []string) []string {
 
 type prefixWriter struct {
 	prefix    string
-	writer   io.Writer
+	writer    io.Writer
 	mu        sync.Mutex
 	lineStart bool
 }
@@ -143,7 +143,7 @@ func (current *prefixWriter) Write(value []byte) (int, error) {
 			return written, err
 		}
 		current.lineStart = false
-		value = value[index+1:*]
+		value = value[index+1:]
 	}
 	return written, nil
 }
