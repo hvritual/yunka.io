@@ -155,3 +155,13 @@ GitHub connector authorization and local Git authorization are separate. The con
 - W06 protobuf contract contributes service/operation/message/explicit-HTTP edges; W07 core diagnostics contributes application/module/runtime-route inventory; W05 selector and W03 resilience contribute optional read-only runtime sources through `framework/applicationgraph`.
 - `yunka graph build|inspect|find|impact` is the developer-facing graph surface. Dynamic graph artifacts are local/runtime products and are not committed as source-of-truth files by default.
 - Impact analysis is directional: outbound traversal answers dependencies and inbound traversal answers dependents. It operates only on graph evidence already present and does not create new inferred edges during a query.
+
+### 2026-08-19 — Developer runtime and TestKit baseline
+
+- `yunka doctor` is read-only. It may inspect tool versions, workspace files, contract/graph consistency, Git status, and optional dev configuration, but it must never run dependency sync, generators, migrations, cleanup, or other mutating repair commands automatically.
+- `yunka dev` runs only explicitly declared process manifests. Commands are argv arrays and are never executed through a shell; working directories must remain under the repository root and process dependency cycles/missing dependencies fail before startup.
+- W10 process manifests may reference W09 graph node IDs for validation, but the graph never invents process startup commands. Local orchestration configuration remains an explicit developer decision.
+- Child-process environment inheritance is explicit/allow-listable. Secrets are never copied into graph artifacts or diagnostic output merely because `yunka dev` inherits them for a process.
+- `pkg/testkit` is the leaf-safe deterministic Clock/Registry layer; `framework/testkit` re-exports those helpers and adds the W08 Broker fake. Registry implements the complete current `registry.Registry` contract including watch events, so leaf packages no longer need partial interface fakes.
+- TestKit is test-only infrastructure, not a runtime fallback. Production verification still requires real integration tests for databases, brokers, registries, and transports.
+- Process readiness is not inferred from fixed sleeps. Future readiness orchestration must consume W01 Health/Diagnostics contracts; W10 baseline only guarantees that the configured OS process was launched.
