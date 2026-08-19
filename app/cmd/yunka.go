@@ -9,6 +9,7 @@ import (
 	"yunka.io/app/cmd/contract"
 	"yunka.io/app/cmd/controller"
 	"yunka.io/app/cmd/doc"
+	"yunka.io/app/cmd/graph"
 	"yunka.io/app/cmd/inspect"
 	"yunka.io/app/cmd/module"
 	"yunka.io/app/cmd/po"
@@ -20,6 +21,7 @@ func main() {
 	app.Version = "0.0.1"
 	app.Commands = []cli.Command{
 		contract.Command(),
+		graph.Command(),
 		inspect.Command(),
 		{
 			Name:        po.AppName,
