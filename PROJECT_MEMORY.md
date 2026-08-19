@@ -65,7 +65,7 @@ GitHub connector authorization and local Git authorization are separate. The con
 - Application and process-scoped resources use explicit lifecycle contracts: `Startable`, `Shutdowner`, and `HealthChecker`.
 - Modules start in registration order and shut down in reverse registration order.
 - Only singleton infrastructures are process-lifecycle managed; request-scoped `sync.Pool` infrastructure and repositories are not enumerated or closed by application shutdown.
-- Singleton infrastructures start in binding order and shut down in reverse binding order.
+- Singleton infrastructures start in binding order and shut down in reverse order.
 - Application health is transport-neutral and exposed as a structured `HealthReport`; gateway health endpoints and diagnostics should adapt this report rather than define separate health semantics.
 
 ### 2026-08-18 — Runtime context and identity baseline
@@ -135,3 +135,14 @@ GitHub connector authorization and local Git authorization are separate. The con
 - Selector and resilience diagnostic scopes are explicit service names and low-cardinality operation keys; diagnostics must not introduce request/user/raw-URL cardinality.
 - The diagnostics HTTP handler is opt-in, GET-only, no-store, and loopback-only by default. Remote exposure requires an explicit Bearer token; yunka never starts a public diagnostics listener automatically.
 - `yunka inspect runtime` performs read-only HTTP inspection and `yunka inspect contract` reads the committed W06 manifest. Distributed call-edge inference is intentionally deferred to the Application Graph wave.
+
+### 2026-08-19 — Event broker and transactional outbox baseline
+
+- `framework/event.Envelope` is the canonical business-event transport contract. Event IDs remain stable across retries and are the consumer idempotency key; payload/metadata are cloned at transport boundaries, while topic/type and metadata size are bounded to protect routing/telemetry cardinality.
+- `event.Broker` is transport-neutral. The W08 `LocalBroker` adapts the existing trie EventBus for process-local delivery only and must never be described as durable messaging.
+- Event handling starts a new trust context. Trace propagation may cross the event boundary, but authenticated `Principal` identity is never inherited implicitly; remote consumers must re-establish trusted identity when authorization is required.
+- Transactional-outbox atomicity exists only when the business write and outbox row use the exact same database transaction. The GORM adapter uses `ORM.TransactionDB()`/`EnqueueTx`; `MemoryStore` intentionally does not implement the transactional-store contract.
+- Outbox delivery is at-least-once. Broker success followed by a failed `MarkPublished` may cause redelivery after lease expiry, so consumers with non-idempotent effects must deduplicate by `Envelope.ID`.
+- Dispatcher claims are lease-based, bounded-concurrency, and validated so the lease covers the worst-case claimed batch publish window. Retry uses bounded exponential backoff; exhausted records become dead-letter and are never auto-replayed.
+- Published-event retention is explicit through `RetentionStore`; the dispatcher does not silently purge published history. Generic diagnostics expose aggregate counts/age only and never event payload, metadata, ID, or error body.
+- W4 trace/metrics/log integration is adapter-based and SLS remains observability only. External Kafka/RabbitMQ/Pulsar adapters are deployment choices and are not dependencies of the W08 framework baseline.
