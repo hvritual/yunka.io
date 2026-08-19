@@ -9,7 +9,7 @@ permissions:
 
 concurrency:
   group: w10-5-apply-overlay
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   apply:
