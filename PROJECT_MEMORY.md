@@ -146,3 +146,12 @@ GitHub connector authorization and local Git authorization are separate. The con
 - Dispatcher claims are lease-based, bounded-concurrency, and validated so the lease covers the worst-case claimed batch publish window. Retry uses bounded exponential backoff; exhausted records become dead-letter and are never auto-replayed.
 - Published-event retention is explicit through `RetentionStore`; the dispatcher does not silently purge published history. Generic diagnostics expose aggregate counts/age only and never event payload, metadata, ID, or error body.
 - W4 trace/metrics/log integration is adapter-based and SLS remains observability only. External Kafka/RabbitMQ/Pulsar adapters are deployment choices and are not dependencies of the W08 framework baseline.
+
+### 2026-08-19 — Application graph baseline
+
+- `pkg/applicationgraph` is the canonical W09 graph schema and query layer. Node/edge IDs are deterministic and every relationship carries explicit evidence instead of relying on hidden naming assumptions.
+- Graph evidence is classified as `declared`, `observed`, or `inferred`, with an explicit confidence level. Contract/configuration facts are declared, runtime/selector/resilience snapshots are observed, and any future inference must remain visibly labeled.
+- W09 never invents module-to-service or cross-service call edges from grep, package names, or naming conventions. Absence of evidence is represented by absence of an edge.
+- W06 protobuf contract contributes service/operation/message/explicit-HTTP edges; W07 core diagnostics contributes application/module/runtime-route inventory; W05 selector and W03 resilience contribute optional read-only runtime sources through `framework/applicationgraph`.
+- `yunka graph build|inspect|find|impact` is the developer-facing graph surface. Dynamic graph artifacts are local/runtime products and are not committed as source-of-truth files by default.
+- Impact analysis is directional: outbound traversal answers dependencies and inbound traversal answers dependents. It operates only on graph evidence already present and does not create new inferred edges during a query.
