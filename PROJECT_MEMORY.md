@@ -65,7 +65,7 @@ GitHub connector authorization and local Git authorization are separate. The con
 - Application and process-scoped resources use explicit lifecycle contracts: `Startable`, `Shutdowner`, and `HealthChecker`.
 - Modules start in registration order and shut down in reverse registration order.
 - Only singleton infrastructures are process-lifecycle managed; request-scoped `sync.Pool` infrastructure and repositories are not enumerated or closed by application shutdown.
-- Singleton infrastructures start in binding order and shut down in reverse order.
+- Singleton infrastructures start in binding order and shut down in reverse binding order.
 - Application health is transport-neutral and exposed as a structured `HealthReport`; gateway health endpoints and diagnostics should adapt this report rather than define separate health semantics.
 
 ### 2026-08-18 — Runtime context and identity baseline
