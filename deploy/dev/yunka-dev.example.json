@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "processes": [
+    {
+      "name": "api",
+      "command": ["go", "run", "./cmd/api"],
+      "workingDir": "example-service",
+      "dependsOn": [],
+      "graphNode": "service:example.ApiService",
+      "inheritEnv": ["OTEL_EXPORTER_OTLP_ENDPOINT", "YUNKA_DIAGNOSTICS_TOKEN"]
+    }
+  ]
+}
