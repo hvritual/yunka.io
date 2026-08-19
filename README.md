@@ -165,3 +165,24 @@ enum, streaming, and HTTP-binding changes.
 
 See `contracts/README.md` and `docs/waves/W06-contract-pipeline.md` for the contract model and
 compatibility rules.
+
+## Diagnostics and `yunka inspect`
+
+W07 adds a read-only diagnostic control plane. `core.App.Diagnostics(ctx)` reports application
+state, health, modules, registered routes, and RPC/event-bus inventory without exposing config
+values, credentials, or request identity. `framework/diagnostics.Collector` composes additional
+contract, resilience, and selector snapshots through the stable W03/W05/W06 snapshot seams.
+
+The HTTP handler is opt-in and should be mounted on a dedicated loopback admin listener. Remote
+access is rejected unless a Bearer token is explicitly configured. No diagnostics listener is
+started automatically.
+
+```bash
+yunka inspect runtime --url http://127.0.0.1:16667/_yunka/diagnostics
+yunka inspect runtime --format json
+yunka inspect contract --manifest contracts/generated/manifest.json
+```
+
+Resilience inspection uses `RPCPolicy.PeekSnapshot`, which never allocates policy state. Selector
+inspection calls `Snapshot(service)` and never performs a pick. See
+`docs/waves/W07-diagnostics.md` for the security boundary and source model.

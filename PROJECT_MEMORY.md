@@ -126,3 +126,12 @@ GitHub connector authorization and local Git authorization are separate. The con
 - Contract Guard treats service/method removal, request/response or streaming changes, protobuf field removal/renumber/type/cardinality/presence/JSON-name changes, enum removals/renumbering, and existing HTTP binding removal/change as breaking changes.
 - W06 extends the release gate so `make verify` includes contract drift checking. Pull-request CI additionally compares the base commit manifest when one exists and blocks breaking changes.
 - The legacy RPC generator remains operational and generated RPC files remain immutable. W06 establishes a parallel contract pipeline first; generator convergence is a later step after the new pipeline is stable.
+
+### 2026-08-19 — Diagnostics baseline
+
+- W07 diagnostics are read-only by design. `core.App.Diagnostics` exposes application state, health, module/route inventory, and RPC/event-bus presence but never configuration values, credentials, request payloads, or caller identity.
+- `framework/diagnostics.Collector` composes optional Contract, Resilience, Selector, and future sources without making `framework/core` depend on W3/W5/W6 packages; source failure/panic is isolated to that component.
+- Diagnostics consume stable public snapshot seams only. W3 adds `RPCPolicy.PeekSnapshot` because the legacy `Snapshot` path may materialize policy state; observation must not create breaker/limiter/load-shedder state.
+- Selector and resilience diagnostic scopes are explicit service names and low-cardinality operation keys; diagnostics must not introduce request/user/raw-URL cardinality.
+- The diagnostics HTTP handler is opt-in, GET-only, no-store, and loopback-only by default. Remote exposure requires an explicit Bearer token; yunka never starts a public diagnostics listener automatically.
+- `yunka inspect runtime` performs read-only HTTP inspection and `yunka inspect contract` reads the committed W06 manifest. Distributed call-edge inference is intentionally deferred to the Application Graph wave.
