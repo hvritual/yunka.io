@@ -1,6 +1,7 @@
 package dev
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -61,7 +62,7 @@ func runCommand() cli.Command {
 			if err != nil {
 				return err
 			}
-			ctx, stop := signal.NotifyContext(c.Context, os.Interrupt, syscall.SIGTERM)
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			return devruntime.Run(ctx, plan, devruntime.RunOptions{Root: c.String("root")})
 		},
