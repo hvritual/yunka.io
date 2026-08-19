@@ -63,67 +63,39 @@ jobs:
               'part09.b64','part10.b64','p11_0.b64','r11_1x0.b64','r11_1x1.b64','r11_1x2.b64',
           ]
           expected_git_blob = {
-              'part00.b64':'609fb8dc21f9b108763ba354e871dad9bb29d3ba',
-              'part01.b64':'d23c8df055fbc966a2386c0f0facc587109b83ea',
-              'part02.b64':'387846452411bbc634db0241fe4d50b5a1cb062c',
-              'part03.b64':'cfb338c6525d918bc70015e6ab828e6f34318762',
-              'part04.b64':'411bf528b5425db1c4d013855ac698d8f20e79f4',
-              'part05.b64':'b8f543b97b4db9bfe7ca2bf21fd58eae85ad3c2d',
-              'p06_0.b64':'d41467343885d0fc62867024b68e738f11e8d223',
-              'p06_1.b64':'01215605bc8b3f671a9e2b9a0d4c2a60502298f9',
-              'r06_2.b64':'c904cbf76a2b720078571b902c4e474a8fd788f6',
-              'p07_0.b64':'0e4fe0ad1d283a2e45380a74bc7f7755d74c565f',
-              'p07_1.b64':'407e05e4f76a43b955bb7245b00d8076b195e178',
-              'p07_2.b64':'c6cee47cfc81e40bcd3cd1df841e62d7350cf77d',
-              'p08_0.b64':'97b17d80af808af80df05b08d1b2f7bacf820144',
-              'p08_1.b64':'8f5a212d6a7cd8806ed12bb1bd4c830d35c9537f',
-              'p08_2.b64':'8b1c246c65b9efb5791066e832bb748e44f2a460',
-              'part09.b64':'507acaa78e76c9f8890b130ab246d1dcd37c58f0',
-              'part10.b64':'00429a677f09e46875a7cda43dcee8b9ac5508bd',
-              'p11_0.b64':'d3cf04353b08401696e30976bfcfc8ba5ce4a327',
-              'r11_1x0.b64':'a6135b8228821e7b8179415e95e413525c157f33',
-              'r11_1x1.b64':'c3ecb62b616bb2819bcef513c9bbfb46d837b440',
-              'r11_1x2.b64':'707b7f3dd6af02a8c56c197ad799c502c99ddc79',
+              'part00.b64':'609fb8dc21f9b108763ba354e871dad9bb29d3ba','part01.b64':'d23c8df055fbc966a2386c0f0facc587109b83ea',
+              'part02.b64':'387846452411bbc634db0241fe4d50b5a1cb062c','part03.b64':'cfb338c6525d918bc70015e6ab828e6f34318762',
+              'part04.b64':'411bf528b5425db1c4d013855ac698d8f20e79f4','part05.b64':'b8f543b97b4db9bfe7ca2bf21fd58eae85ad3c2d',
+              'p06_0.b64':'d41467343885d0fc62867024b68e738f11e8d223','p06_1.b64':'01215605bc8b3f671a9e2b9a0d4c2a60502298f9','r06_2.b64':'c904cbf76a2b720078571b902c4e474a8fd788f6',
+              'p07_0.b64':'0e4fe0ad1d283a2e45380a74bc7f7755d74c565f','p07_1.b64':'407e05e4f76a43b955bb7245b00d8076b195e178','p07_2.b64':'c6cee47cfc81e40bcd3cd1df841e62d7350cf77d',
+              'p08_0.b64':'97b17d80af808af80df05b08d1b2f7bacf820144','p08_1.b64':'8f5a212d6a7cd8806ed12bb1bd4c830d35c9537f','p08_2.b64':'8b1c246c65b9efb5791066e832bb748e44f2a460',
+              'part09.b64':'507acaa78e76c9f8890b130ab246d1dcd37c58f0','part10.b64':'00429a677f09e46875a7cda43dcee8b9ac5508bd',
+              'p11_0.b64':'d3cf04353b08401696e30976bfcfc8ba5ce4a327','r11_1x0.b64':'a6135b8228821e7b8179415e95e413525c157f33',
+              'r11_1x1.b64':'c3ecb62b616bb2819bcef513c9bbfb46d837b440','r11_1x2.b64':'707b7f3dd6af02a8c56c197ad799c502c99ddc79',
           }
           def git_blob_sha(text):
-              data = text.encode()
-              return hashlib.sha1(f'blob {len(data)}\0'.encode() + data).hexdigest()
-          root = pathlib.Path('.github/w10_5_overlay')
-          chunks = []
-          allowed = re.compile(r'^[A-Za-z0-9+/=]*$')
+              data=text.encode(); return hashlib.sha1(f'blob {len(data)}\0'.encode()+data).hexdigest()
+          root=pathlib.Path('.github/w10_5_overlay'); chunks=[]; allowed=re.compile(r'^[A-Za-z0-9+/=]*$')
           for name in names:
-              raw = (root / name).read_text(encoding='utf-8')
-              clean = raw.replace('\r', '').replace('\n', '')
-              if not allowed.fullmatch(clean):
-                  bad = [(i, repr(ch)) for i, ch in enumerate(clean) if ch not in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='][:10]
-                  raise SystemExit(f'{name}: invalid base64 characters: {bad}')
-              want_blob = expected_git_blob[name]
-              actual_blob = git_blob_sha(clean)
-              if actual_blob != want_blob:
+              raw=(root/name).read_text(encoding='utf-8'); clean=raw.replace('\r','').replace('\n','')
+              if not allowed.fullmatch(clean): raise SystemExit(f'{name}: invalid base64 characters')
+              want=expected_git_blob[name]; actual=git_blob_sha(clean)
+              if actual != want:
                   if name == 'part04.b64' and len(clean) == 9001:
-                      matches = []
+                      matches=[]
                       for i in range(len(clean)):
-                          candidate = clean[:i] + clean[i+1:]
-                          if git_blob_sha(candidate) == want_blob:
-                              matches.append((i, candidate))
-                      if len(matches) != 1:
-                          raise SystemExit(f'{name}: expected unique single-byte repair, matches={len(matches)}')
-                      index, clean = matches[0]
-                      print(f'{name}: repaired one transport byte at offset {index}')
-                  else:
-                      raise SystemExit(f'{name}: git blob={actual_blob}, want={want_blob}')
-              if git_blob_sha(clean) != want_blob:
-                  raise SystemExit(f'{name}: repaired blob still mismatched')
-              print(f'{name}: clean={len(clean)} blob={want_blob}')
+                          candidate=clean[:i]+clean[i+1:]
+                          if git_blob_sha(candidate)==want: matches.append((i,candidate))
+                      if len(matches)!=1: raise SystemExit(f'{name}: repair matches={len(matches)}')
+                      index,clean=matches[0]; print(f'{name}: repaired transport byte at {index}')
+                  else: raise SystemExit(f'{name}: git blob mismatch')
+              if git_blob_sha(clean)!=want: raise SystemExit(f'{name}: repaired blob mismatch')
               chunks.append(clean)
-          encoded = ''.join(chunks)
-          if len(encoded) != 103604:
-              raise SystemExit(f'overlay base64 length={len(encoded)}, want 103604')
-          decoded = base64.b64decode(encoded, validate=True)
-          digest = hashlib.sha256(decoded).hexdigest()
-          want = '8db9884a2dca9e5cdd5ddde9b24cf5857e2c0e502041deb1fc296080ff08a4be'
-          if digest != want:
-              raise SystemExit(f'overlay sha256={digest}, want {want}')
+          encoded=''.join(chunks)
+          if len(encoded)!=103604: raise SystemExit(f'overlay b64 length={len(encoded)}')
+          decoded=base64.b64decode(encoded,validate=True); digest=hashlib.sha256(decoded).hexdigest()
+          want='8db9884a2dca9e5cdd5ddde9b24cf5857e2c0e502041deb1fc296080ff08a4be'
+          if digest!=want: raise SystemExit(f'overlay sha={digest}')
           pathlib.Path('/tmp/w10-5/overlay.tar.gz').write_bytes(decoded)
           print(f'overlay bytes={len(decoded)} sha256={digest}')
           PY
@@ -135,30 +107,24 @@ jobs:
           expected=2dead88ff55ac6c879f21f00bcd1a23cafec4b7f
           git fetch origin agent/mvp-stabilization
           actual="$(git rev-parse origin/agent/mvp-stabilization)"
-          if [ "$actual" != "$expected" ]; then
-            echo "MVP moved: expected $expected, got $actual"
-            exit 1
-          fi
+          test "$actual" = "$expected"
           git checkout --detach "$expected"
           cp -a /tmp/w10-5/yunka-w10.5-convergence/repo/. .
-          while IFS= read -r path; do
-            [ -z "$path" ] || rm -f -- "$path"
-          done < /tmp/w10-5/yunka-w10.5-convergence/DELETE_FILES.txt
+          while IFS= read -r path; do [ -z "$path" ] || rm -f -- "$path"; done < /tmp/w10-5/yunka-w10.5-convergence/DELETE_FILES.txt
+          echo '--- W10.5 name-status ---'
+          git diff --name-status
+          echo '--- W10.5 status ---'
+          git status --short
           git diff --check
           changed="$(git diff --name-only | wc -l | tr -d ' ')"
+          echo "W10.5 changed paths=${changed}"
           test "$changed" = "58"
       - name: Dependency sync gate
         shell: bash
         run: |
           set -euo pipefail
           make tidy
-          git diff --quiet -- \
-            go.work go.work.sum \
-            pkg/go.mod pkg/go.sum \
-            framework/go.mod framework/go.sum \
-            gateway/go.mod gateway/go.sum \
-            app/go.mod app/go.sum \
-            app/cmd/rpc/go.mod app/cmd/rpc/go.sum
+          git diff --quiet -- go.work go.work.sum pkg/go.mod pkg/go.sum framework/go.mod framework/go.sum gateway/go.mod gateway/go.sum app/go.mod app/go.sum app/cmd/rpc/go.mod app/cmd/rpc/go.sum
       - name: Install protoc
         shell: bash
         run: |
@@ -181,7 +147,5 @@ jobs:
           git add -A
           git commit -m "feat: converge mvp production gate"
           final_sha="$(git rev-parse HEAD)"
-          git push \
-            --force-with-lease="refs/heads/${HEAD_REF}:${SOURCE_SHA}" \
-            origin "HEAD:refs/heads/${HEAD_REF}"
+          git push --force-with-lease="refs/heads/${HEAD_REF}:${SOURCE_SHA}" origin "HEAD:refs/heads/${HEAD_REF}"
           echo "Published W10.5 commit: ${final_sha}"
