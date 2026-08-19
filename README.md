@@ -205,3 +205,24 @@ yunka graph impact --id operation:ApiService.FindAllRuntimeAPI --depth 3
 Without a W07 diagnostics export, `graph build` still produces a deterministic W06 contract graph.
 Runtime selector/resilience sources are available through `framework/applicationgraph`. See
 `docs/waves/W09-application-graph.md` for the evidence and impact model.
+
+## Developer Runtime and TestKit
+
+W10 adds a read-only environment doctor, explicit local process planning, and shared deterministic
+test infrastructure.
+
+```bash
+yunka doctor
+yunka doctor --strict
+yunka dev plan --target api
+yunka dev run --target api
+```
+
+`yunka doctor` never repairs the workspace automatically. `yunka dev` consumes `.yunka/dev.json`;
+commands are argv arrays, working directories must remain below the repository root, dependency
+cycles fail before startup, and optional `graphNode` values are validated against the W09 graph.
+See `deploy/dev/yunka-dev.example.json` for the manifest shape.
+
+`pkg/testkit` provides the leaf-safe deterministic Clock and Registry. `framework/testkit`
+re-exports those helpers and adds a W08 Broker fake. TestKit is for deterministic tests only and is
+not a production fallback. See `docs/waves/W10-dev-runtime-testkit.md` for the full boundary.
