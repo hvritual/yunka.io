@@ -1,6 +1,7 @@
 package doctor
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -22,7 +23,7 @@ func Command() cli.Command {
 			cli.BoolFlag{Name: "strict", Usage: "treat warnings as failures"},
 		},
 		Action: func(c *cli.Context) error {
-			report := devruntime.Doctor(c.Context, devruntime.DoctorOptions{Root: c.String("root")})
+			report := devruntime.Doctor(context.Background(), devruntime.DoctorOptions{Root: c.String("root")})
 			if strings.EqualFold(c.String("format"), "json") {
 				encoder := json.NewEncoder(os.Stdout)
 				encoder.SetIndent("", "  ")
