@@ -6,6 +6,7 @@ the gateway, command-line tooling, and the RPC generator.
 ## Requirements
 
 - Go 1.25.13
+- `protoc` 3.21+ for W06 contract generation and verification
 - GCC when running race tests or the SQLite-backed gateway tests
 
 ## Repository layout
@@ -138,3 +139,29 @@ configuration rather than application configuration. See `deploy/observability/`
 
 Identity fields are not added to telemetry by default. `observability.Config.IncludeIdentity` is
 an explicit opt-in for deployments whose privacy and retention rules allow those identifiers.
+
+## Contract pipeline
+
+W06 makes protobuf the contract source of truth and adds deterministic contract artifacts and
+compatibility checks without replacing the legacy RPC generator.
+
+```bash
+yunka contract lint
+yunka contract generate
+yunka contract inspect
+yunka contract check
+```
+
+The initial source root is `app/cmd/rpc/pb/`; committed outputs live in `contracts/generated/`.
+`manifest.json` is the normalized compatibility model, `openapi.json` is OpenAPI 3.1, and
+`client.ts` is a transport-neutral TypeScript RPC client. `make contract` regenerates the
+artifacts and `make contract-check` rejects drift. W06 extends `make verify` with this drift gate.
+
+Only explicit HTTP bindings are emitted into OpenAPI `paths`. Standard `google.api.http` is
+preferred; `@yunka.http` comments are supported only as a migration bridge. Legacy RPC methods
+without an HTTP binding remain visible under `x-yunka-rpc-methods` rather than receiving invented
+routes. Pull-request CI compares the base manifest and rejects breaking service, method, field,
+enum, streaming, and HTTP-binding changes.
+
+See `contracts/README.md` and `docs/waves/W06-contract-pipeline.md` for the contract model and
+compatibility rules.

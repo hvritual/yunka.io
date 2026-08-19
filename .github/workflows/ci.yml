@@ -89,5 +89,29 @@ jobs:
           !(github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository)
         run: exit 1
+      - name: Install protoc
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+      - name: Contract drift
+        run: make contract-check
+      - name: Contract compatibility
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          baseline=/tmp/yunka-contract-baseline.json
+          if git cat-file -e "${BASE_SHA}:contracts/generated/manifest.json" 2>/dev/null; then
+            git show "${BASE_SHA}:contracts/generated/manifest.json" > "${baseline}"
+            (cd app && go run ./cmd contract diff \
+              --baseline "${baseline}" \
+              --current ../contracts/generated/manifest.json)
+          else
+            echo "No contract baseline in base commit; compatibility guard starts after W06 lands."
+          fi
       - name: Verify
         run: make verify

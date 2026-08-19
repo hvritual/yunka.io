@@ -1,8 +1,11 @@
 GO ?= go
+PROTOC ?= protoc
+CONTRACT_PROTO_DIR ?= $(CURDIR)/app/cmd/rpc/pb
+CONTRACT_OUT ?= $(CURDIR)/contracts/generated
 VULNCHECK ?= $(GO) run golang.org/x/vuln/cmd/govulncheck@v1.7.0
 MODULES := pkg framework gateway app app/cmd/rpc
 
-.PHONY: test race vet vuln tidy build verify
+.PHONY: test race vet vuln tidy build contract contract-check verify
 
 test:
 	@set -eu; for module in $(MODULES); do \
@@ -35,10 +38,18 @@ tidy:
 	done
 	$(GO) work sync
 
+contract:
+	@cd app && PROTOC="$(PROTOC)" $(GO) run ./cmd contract generate \
+		--proto-dir "$(CONTRACT_PROTO_DIR)" --out "$(CONTRACT_OUT)" --title "yunka API" --version "1.0.0"
+
+contract-check:
+	@cd app && PROTOC="$(PROTOC)" $(GO) run ./cmd contract check \
+		--proto-dir "$(CONTRACT_PROTO_DIR)" --out "$(CONTRACT_OUT)" --title "yunka API" --version "1.0.0"
+
 build:
 	@set -eu; for module in $(MODULES); do \
 		echo "==> go build ./$$module/..."; \
 		(cd $$module && $(GO) build ./...); \
 	done
 
-verify: test race vet vuln build
+verify: contract-check test race vet vuln build

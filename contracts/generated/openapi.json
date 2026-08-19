@@ -1,0 +1,557 @@
+{
+  "components": {
+    "schemas": {
+      "Api": {
+        "properties": {
+          "isCheck": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "uuid": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "Api"
+      },
+      "AuthStatus": {
+        "enum": [
+          "AuthReserve",
+          "NotAuth",
+          "NeedAuth"
+        ],
+        "type": "string",
+        "x-yunka-proto-full-name": "AuthStatus"
+      },
+      "BaseModuleResponse": {
+        "properties": {
+          "modules": {
+            "items": {
+              "$ref": "#/components/schemas/BasicModule"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "BaseModuleResponse"
+      },
+      "BasicModule": {
+        "properties": {
+          "canUse": {
+            "$ref": "#/components/schemas/ModuleCanUse"
+          },
+          "color": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "mobilePage": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "uuid": {
+            "type": "string"
+          },
+          "webRouterName": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "BasicModule"
+      },
+      "BasicModuleSort": {
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "modules": {
+            "items": {
+              "$ref": "#/components/schemas/BasicModule"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "uuid": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "BasicModuleSort"
+      },
+      "BusinessFreeModule": {
+        "properties": {
+          "ModuleUuid": {
+            "type": "string"
+          },
+          "apiUuids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "BusinessFreeModule"
+      },
+      "CallType": {
+        "enum": [
+          "CallReserve",
+          "HttpCall",
+          "RpcCall"
+        ],
+        "type": "string",
+        "x-yunka-proto-full-name": "CallType"
+      },
+      "CircuitCfg": {
+        "properties": {
+          "CheckPeriod": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "CloseTime": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "HalfClose": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "HalfOpen": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "LimitPercent": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "CircuitCfg"
+      },
+      "FindAllModuleSortResponse": {
+        "properties": {
+          "moduleSortName": {
+            "items": {
+              "$ref": "#/components/schemas/BasicModuleSort"
+            },
+            "type": "array"
+          },
+          "modules": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleModule"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "FindAllModuleSortResponse"
+      },
+      "FindAllRuntimeAPIRequest": {
+        "properties": {},
+        "type": "object",
+        "x-yunka-proto-full-name": "FindAllRuntimeAPIRequest"
+      },
+      "FindAllRuntimeAPIResponse": {
+        "properties": {
+          "apis": {
+            "items": {
+              "$ref": "#/components/schemas/RuntimeApi"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "FindAllRuntimeAPIResponse"
+      },
+      "FindBasicModuleSortByMoudleUUIDRequest": {
+        "properties": {
+          "moduleUUIDs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "FindBasicModuleSortByMoudleUUIDRequest"
+      },
+      "FindBasicModuleSortByMoudleUUIDResponse": {
+        "properties": {
+          "moduleSort": {
+            "items": {
+              "$ref": "#/components/schemas/BasicModuleSort"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "FindBasicModuleSortByMoudleUUIDResponse"
+      },
+      "FindModuleApiUuidRequest": {
+        "properties": {
+          "uuid": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "FindModuleApiUuidRequest"
+      },
+      "FindModuleApiUuidResponse": {
+        "properties": {
+          "uuid": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "FindModuleApiUuidResponse"
+      },
+      "FindModuleSimpleRequest": {
+        "properties": {
+          "moduleSortUUID": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "FindModuleSimpleRequest"
+      },
+      "FindModulesByModuleStatusRequest": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/ModuleCommonStatus"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "FindModulesByModuleStatusRequest"
+      },
+      "FindModulesByStatusRequest": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/ModuleCommonStatus"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "FindModulesByStatusRequest"
+      },
+      "ForceCheckStatus": {
+        "enum": [
+          "ForceReserve",
+          "NotForceCheck",
+          "NeedForceCheck"
+        ],
+        "type": "string",
+        "x-yunka-proto-full-name": "ForceCheckStatus"
+      },
+      "GetApiReponse": {
+        "properties": {
+          "apis": {
+            "items": {
+              "$ref": "#/components/schemas/Api"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "GetApiReponse"
+      },
+      "GetApiRequest": {
+        "properties": {
+          "uuids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "GetApiRequest"
+      },
+      "IsCommon": {
+        "enum": [
+          "Common",
+          "PrivateCheck"
+        ],
+        "type": "string",
+        "x-yunka-proto-full-name": "IsCommon"
+      },
+      "IsCompose": {
+        "enum": [
+          "IsComposeReserve",
+          "OneRequest",
+          "Compose"
+        ],
+        "type": "string",
+        "x-yunka-proto-full-name": "IsCompose"
+      },
+      "ModuleCanUse": {
+        "enum": [
+          "All",
+          "Mobile",
+          "Web"
+        ],
+        "type": "string",
+        "x-yunka-proto-full-name": "ModuleCanUse"
+      },
+      "ModuleCommonStatus": {
+        "enum": [
+          "AllCanUse",
+          "KolCanUse",
+          "ServiceCanUse",
+          "NotCommon"
+        ],
+        "type": "string",
+        "x-yunka-proto-full-name": "ModuleCommonStatus"
+      },
+      "ModuleUUIDRequest": {
+        "properties": {
+          "uuid": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "ModuleUUIDRequest"
+      },
+      "ModulesApiResponse": {
+        "properties": {
+          "modules": {
+            "items": {
+              "$ref": "#/components/schemas/BusinessFreeModule"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "ModulesApiResponse"
+      },
+      "NotParamRequest": {
+        "properties": {},
+        "type": "object",
+        "x-yunka-proto-full-name": "NotParamRequest"
+      },
+      "NotResponse": {
+        "properties": {},
+        "type": "object",
+        "x-yunka-proto-full-name": "NotResponse"
+      },
+      "RuntimeApi": {
+        "properties": {
+          "callType": {
+            "$ref": "#/components/schemas/CallType"
+          },
+          "composes": {
+            "items": {
+              "$ref": "#/components/schemas/RuntimeApi"
+            },
+            "type": "array"
+          },
+          "engName": {
+            "type": "string"
+          },
+          "isAuth": {
+            "$ref": "#/components/schemas/AuthStatus"
+          },
+          "isCommon": {
+            "$ref": "#/components/schemas/IsCommon"
+          },
+          "isCompose": {
+            "$ref": "#/components/schemas/IsCompose"
+          },
+          "isForceCheck": {
+            "$ref": "#/components/schemas/ForceCheckStatus"
+          },
+          "name": {
+            "type": "string"
+          },
+          "serverName": {
+            "type": "string"
+          },
+          "serverUuid": {
+            "type": "string"
+          },
+          "uri": {
+            "type": "string"
+          },
+          "uuid": {
+            "type": "string"
+          },
+          "viewRoleLevel": {
+            "$ref": "#/components/schemas/ViewRoleLevel"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "RuntimeApi"
+      },
+      "ServerNode": {
+        "properties": {
+          "Circuit": {
+            "$ref": "#/components/schemas/CircuitCfg"
+          },
+          "ipPort": {
+            "type": "string"
+          },
+          "qps": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "uuid": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "ServerNode"
+      },
+      "SimpleModule": {
+        "properties": {
+          "basicFee": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "color": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "remark": {
+            "type": "string"
+          },
+          "unitFee": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "uuid": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "SimpleModule"
+      },
+      "SimpleModuleResponse": {
+        "properties": {
+          "modules": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleModule"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "SimpleModuleResponse"
+      },
+      "Switch": {
+        "enum": [
+          "Close",
+          "Oopen"
+        ],
+        "type": "string",
+        "x-yunka-proto-full-name": "Switch"
+      },
+      "ViewRoleLevel": {
+        "enum": [
+          "GOD",
+          "Developer",
+          "Operater",
+          "Entrepreneur",
+          "User",
+          "Visitor",
+          "Employee"
+        ],
+        "type": "string",
+        "x-yunka-proto-full-name": "ViewRoleLevel"
+      }
+    }
+  },
+  "info": {
+    "title": "yunka API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {},
+  "x-yunka-contract-version": 1,
+  "x-yunka-rpc-methods": [
+    {
+      "operationId": "ApiService.FindAllRuntimeAPI",
+      "request": "FindAllRuntimeAPIRequest",
+      "response": "FindAllRuntimeAPIResponse",
+      "rpcPath": "/ApiService/FindAllRuntimeAPI"
+    },
+    {
+      "operationId": "ApiService.GetApiByUUID",
+      "request": "GetApiRequest",
+      "response": "GetApiReponse",
+      "rpcPath": "/ApiService/GetApiByUUID"
+    },
+    {
+      "operationId": "UnitService.FindAllModuleSort",
+      "request": "NotParamRequest",
+      "response": "FindAllModuleSortResponse",
+      "rpcPath": "/UnitService/FindAllModuleSort"
+    },
+    {
+      "operationId": "UnitService.FindBaseModuleSortByModuleUUID",
+      "request": "FindBasicModuleSortByMoudleUUIDRequest",
+      "response": "FindBasicModuleSortByMoudleUUIDResponse",
+      "rpcPath": "/UnitService/FindBaseModuleSortByModuleUUID"
+    },
+    {
+      "operationId": "UnitService.FindFreeModule",
+      "request": "NotParamRequest",
+      "response": "ModulesApiResponse",
+      "rpcPath": "/UnitService/FindFreeModule"
+    },
+    {
+      "operationId": "UnitService.FindModuleApiUuid",
+      "request": "FindModuleApiUuidRequest",
+      "response": "FindModuleApiUuidResponse",
+      "rpcPath": "/UnitService/FindModuleApiUuid"
+    },
+    {
+      "operationId": "UnitService.FindModuleSimpleByModuleSortUUID",
+      "request": "FindModuleSimpleRequest",
+      "response": "SimpleModuleResponse",
+      "rpcPath": "/UnitService/FindModuleSimpleByModuleSortUUID"
+    },
+    {
+      "operationId": "UnitService.FindModulesApi",
+      "request": "ModuleUUIDRequest",
+      "response": "ModulesApiResponse",
+      "rpcPath": "/UnitService/FindModulesApi"
+    },
+    {
+      "operationId": "UnitService.FindModulesByModuleStatus",
+      "request": "FindModulesByModuleStatusRequest",
+      "response": "BaseModuleResponse",
+      "rpcPath": "/UnitService/FindModulesByModuleStatus"
+    },
+    {
+      "operationId": "UnitService.FindModulesByUUID",
+      "request": "ModuleUUIDRequest",
+      "response": "BaseModuleResponse",
+      "rpcPath": "/UnitService/FindModulesByUUID"
+    },
+    {
+      "operationId": "UnitService.FindSimpleModules",
+      "request": "ModuleUUIDRequest",
+      "response": "SimpleModuleResponse",
+      "rpcPath": "/UnitService/FindSimpleModules"
+    }
+  ]
+}

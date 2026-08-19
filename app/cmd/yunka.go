@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"yunka.io/app/cmd/api"
+	"yunka.io/app/cmd/contract"
 	"yunka.io/app/cmd/controller"
 	"yunka.io/app/cmd/doc"
 	"yunka.io/app/cmd/module"
@@ -17,6 +18,7 @@ func main() {
 	app.Name = `yunka`
 	app.Version = "0.0.1"
 	app.Commands = []cli.Command{
+		contract.Command(),
 		{
 			Name:        po.AppName,
 			Usage:       "scan package po",

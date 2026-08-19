@@ -1,0 +1,884 @@
+{
+  "schemaVersion": 1,
+  "files": [
+    {
+      "name": "api.proto",
+      "syntax": "proto3",
+      "goPackage": "meta"
+    },
+    {
+      "name": "api_common.proto",
+      "syntax": "proto3",
+      "goPackage": "meta"
+    },
+    {
+      "name": "common.proto",
+      "syntax": "proto3"
+    },
+    {
+      "name": "unit.proto",
+      "syntax": "proto3",
+      "goPackage": "meta"
+    }
+  ],
+  "messages": [
+    {
+      "name": "Api",
+      "fullName": "Api",
+      "fields": [
+        {
+          "name": "uuid",
+          "jsonName": "uuid",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "jsonName": "name",
+          "number": 2,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "isCheck",
+          "jsonName": "isCheck",
+          "number": 3,
+          "kind": "scalar",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "BaseModuleResponse",
+      "fullName": "BaseModuleResponse",
+      "fields": [
+        {
+          "name": "modules",
+          "jsonName": "modules",
+          "number": 1,
+          "kind": "message",
+          "type": "BasicModule",
+          "repeated": true
+        }
+      ]
+    },
+    {
+      "name": "BasicModule",
+      "fullName": "BasicModule",
+      "fields": [
+        {
+          "name": "uuid",
+          "jsonName": "uuid",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "jsonName": "name",
+          "number": 2,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "icon",
+          "jsonName": "icon",
+          "number": 3,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "color",
+          "jsonName": "color",
+          "number": 4,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "webRouterName",
+          "jsonName": "webRouterName",
+          "number": 5,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "mobilePage",
+          "jsonName": "mobilePage",
+          "number": 6,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "canUse",
+          "jsonName": "canUse",
+          "number": 7,
+          "kind": "enum",
+          "type": "ModuleCanUse"
+        }
+      ]
+    },
+    {
+      "name": "BasicModuleSort",
+      "fullName": "BasicModuleSort",
+      "fields": [
+        {
+          "name": "uuid",
+          "jsonName": "uuid",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "jsonName": "name",
+          "number": 2,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "icon",
+          "jsonName": "icon",
+          "number": 3,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "color",
+          "jsonName": "color",
+          "number": 4,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "modules",
+          "jsonName": "modules",
+          "number": 5,
+          "kind": "message",
+          "type": "BasicModule",
+          "repeated": true
+        }
+      ]
+    },
+    {
+      "name": "BusinessFreeModule",
+      "fullName": "BusinessFreeModule",
+      "fields": [
+        {
+          "name": "ModuleUuid",
+          "jsonName": "ModuleUuid",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "apiUuids",
+          "jsonName": "apiUuids",
+          "number": 2,
+          "kind": "scalar",
+          "type": "string",
+          "repeated": true
+        }
+      ]
+    },
+    {
+      "name": "CircuitCfg",
+      "fullName": "CircuitCfg",
+      "fields": [
+        {
+          "name": "CloseTime",
+          "jsonName": "CloseTime",
+          "number": 1,
+          "kind": "scalar",
+          "type": "int32"
+        },
+        {
+          "name": "CheckPeriod",
+          "jsonName": "CheckPeriod",
+          "number": 2,
+          "kind": "scalar",
+          "type": "int32"
+        },
+        {
+          "name": "LimitPercent",
+          "jsonName": "LimitPercent",
+          "number": 3,
+          "kind": "scalar",
+          "type": "int32"
+        },
+        {
+          "name": "HalfOpen",
+          "jsonName": "HalfOpen",
+          "number": 4,
+          "kind": "scalar",
+          "type": "int32"
+        },
+        {
+          "name": "HalfClose",
+          "jsonName": "HalfClose",
+          "number": 5,
+          "kind": "scalar",
+          "type": "int32"
+        }
+      ]
+    },
+    {
+      "name": "FindAllModuleSortResponse",
+      "fullName": "FindAllModuleSortResponse",
+      "fields": [
+        {
+          "name": "modules",
+          "jsonName": "modules",
+          "number": 1,
+          "kind": "message",
+          "type": "SimpleModule",
+          "repeated": true
+        },
+        {
+          "name": "moduleSortName",
+          "jsonName": "moduleSortName",
+          "number": 2,
+          "kind": "message",
+          "type": "BasicModuleSort",
+          "repeated": true
+        }
+      ]
+    },
+    {
+      "name": "FindAllRuntimeAPIRequest",
+      "fullName": "FindAllRuntimeAPIRequest",
+      "fields": null
+    },
+    {
+      "name": "FindAllRuntimeAPIResponse",
+      "fullName": "FindAllRuntimeAPIResponse",
+      "fields": [
+        {
+          "name": "apis",
+          "jsonName": "apis",
+          "number": 1,
+          "kind": "message",
+          "type": "RuntimeApi",
+          "repeated": true
+        }
+      ]
+    },
+    {
+      "name": "FindBasicModuleSortByMoudleUUIDRequest",
+      "fullName": "FindBasicModuleSortByMoudleUUIDRequest",
+      "fields": [
+        {
+          "name": "moduleUUIDs",
+          "jsonName": "moduleUUIDs",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string",
+          "repeated": true
+        }
+      ]
+    },
+    {
+      "name": "FindBasicModuleSortByMoudleUUIDResponse",
+      "fullName": "FindBasicModuleSortByMoudleUUIDResponse",
+      "fields": [
+        {
+          "name": "moduleSort",
+          "jsonName": "moduleSort",
+          "number": 1,
+          "kind": "message",
+          "type": "BasicModuleSort",
+          "repeated": true
+        }
+      ]
+    },
+    {
+      "name": "FindModuleApiUuidRequest",
+      "fullName": "FindModuleApiUuidRequest",
+      "fields": [
+        {
+          "name": "uuid",
+          "jsonName": "uuid",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "FindModuleApiUuidResponse",
+      "fullName": "FindModuleApiUuidResponse",
+      "fields": [
+        {
+          "name": "uuid",
+          "jsonName": "uuid",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string",
+          "repeated": true
+        }
+      ]
+    },
+    {
+      "name": "FindModuleSimpleRequest",
+      "fullName": "FindModuleSimpleRequest",
+      "fields": [
+        {
+          "name": "moduleSortUUID",
+          "jsonName": "moduleSortUUID",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "FindModulesByModuleStatusRequest",
+      "fullName": "FindModulesByModuleStatusRequest",
+      "fields": [
+        {
+          "name": "status",
+          "jsonName": "status",
+          "number": 1,
+          "kind": "enum",
+          "type": "ModuleCommonStatus"
+        }
+      ]
+    },
+    {
+      "name": "FindModulesByStatusRequest",
+      "fullName": "FindModulesByStatusRequest",
+      "fields": [
+        {
+          "name": "status",
+          "jsonName": "status",
+          "number": 1,
+          "kind": "enum",
+          "type": "ModuleCommonStatus"
+        }
+      ]
+    },
+    {
+      "name": "GetApiReponse",
+      "fullName": "GetApiReponse",
+      "fields": [
+        {
+          "name": "apis",
+          "jsonName": "apis",
+          "number": 1,
+          "kind": "message",
+          "type": "Api",
+          "repeated": true
+        }
+      ]
+    },
+    {
+      "name": "GetApiRequest",
+      "fullName": "GetApiRequest",
+      "fields": [
+        {
+          "name": "uuids",
+          "jsonName": "uuids",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string",
+          "repeated": true
+        }
+      ]
+    },
+    {
+      "name": "ModuleUUIDRequest",
+      "fullName": "ModuleUUIDRequest",
+      "fields": [
+        {
+          "name": "uuid",
+          "jsonName": "uuid",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string",
+          "repeated": true
+        }
+      ]
+    },
+    {
+      "name": "ModulesApiResponse",
+      "fullName": "ModulesApiResponse",
+      "fields": [
+        {
+          "name": "modules",
+          "jsonName": "modules",
+          "number": 1,
+          "kind": "message",
+          "type": "BusinessFreeModule",
+          "repeated": true
+        }
+      ]
+    },
+    {
+      "name": "NotParamRequest",
+      "fullName": "NotParamRequest",
+      "fields": null
+    },
+    {
+      "name": "NotResponse",
+      "fullName": "NotResponse",
+      "fields": null
+    },
+    {
+      "name": "RuntimeApi",
+      "fullName": "RuntimeApi",
+      "fields": [
+        {
+          "name": "uuid",
+          "jsonName": "uuid",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "serverUuid",
+          "jsonName": "serverUuid",
+          "number": 2,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "serverName",
+          "jsonName": "serverName",
+          "number": 3,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "uri",
+          "jsonName": "uri",
+          "number": 4,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "jsonName": "name",
+          "number": 5,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "engName",
+          "jsonName": "engName",
+          "number": 6,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "callType",
+          "jsonName": "callType",
+          "number": 7,
+          "kind": "enum",
+          "type": "CallType"
+        },
+        {
+          "name": "isAuth",
+          "jsonName": "isAuth",
+          "number": 8,
+          "kind": "enum",
+          "type": "AuthStatus"
+        },
+        {
+          "name": "isForceCheck",
+          "jsonName": "isForceCheck",
+          "number": 9,
+          "kind": "enum",
+          "type": "ForceCheckStatus"
+        },
+        {
+          "name": "viewRoleLevel",
+          "jsonName": "viewRoleLevel",
+          "number": 10,
+          "kind": "enum",
+          "type": "ViewRoleLevel"
+        },
+        {
+          "name": "isCompose",
+          "jsonName": "isCompose",
+          "number": 11,
+          "kind": "enum",
+          "type": "IsCompose"
+        },
+        {
+          "name": "isCommon",
+          "jsonName": "isCommon",
+          "number": 12,
+          "kind": "enum",
+          "type": "IsCommon"
+        },
+        {
+          "name": "composes",
+          "jsonName": "composes",
+          "number": 13,
+          "kind": "message",
+          "type": "RuntimeApi",
+          "repeated": true
+        }
+      ]
+    },
+    {
+      "name": "ServerNode",
+      "fullName": "ServerNode",
+      "fields": [
+        {
+          "name": "ipPort",
+          "jsonName": "ipPort",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "uuid",
+          "jsonName": "uuid",
+          "number": 2,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "qps",
+          "jsonName": "qps",
+          "number": 3,
+          "kind": "scalar",
+          "type": "int32"
+        },
+        {
+          "name": "Circuit",
+          "jsonName": "Circuit",
+          "number": 4,
+          "kind": "message",
+          "type": "CircuitCfg"
+        }
+      ]
+    },
+    {
+      "name": "SimpleModule",
+      "fullName": "SimpleModule",
+      "fields": [
+        {
+          "name": "uuid",
+          "jsonName": "uuid",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "jsonName": "name",
+          "number": 2,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "icon",
+          "jsonName": "icon",
+          "number": 3,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "color",
+          "jsonName": "color",
+          "number": 4,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "remark",
+          "jsonName": "remark",
+          "number": 5,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "basicFee",
+          "jsonName": "basicFee",
+          "number": 6,
+          "kind": "scalar",
+          "type": "uint32"
+        },
+        {
+          "name": "unitFee",
+          "jsonName": "unitFee",
+          "number": 7,
+          "kind": "scalar",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "SimpleModuleResponse",
+      "fullName": "SimpleModuleResponse",
+      "fields": [
+        {
+          "name": "modules",
+          "jsonName": "modules",
+          "number": 1,
+          "kind": "message",
+          "type": "SimpleModule",
+          "repeated": true
+        }
+      ]
+    }
+  ],
+  "enums": [
+    {
+      "name": "AuthStatus",
+      "fullName": "AuthStatus",
+      "values": [
+        {
+          "name": "AuthReserve",
+          "number": 0
+        },
+        {
+          "name": "NotAuth",
+          "number": 1
+        },
+        {
+          "name": "NeedAuth",
+          "number": 2
+        }
+      ]
+    },
+    {
+      "name": "CallType",
+      "fullName": "CallType",
+      "values": [
+        {
+          "name": "CallReserve",
+          "number": 0
+        },
+        {
+          "name": "HttpCall",
+          "number": 1
+        },
+        {
+          "name": "RpcCall",
+          "number": 2
+        }
+      ]
+    },
+    {
+      "name": "ForceCheckStatus",
+      "fullName": "ForceCheckStatus",
+      "values": [
+        {
+          "name": "ForceReserve",
+          "number": 0
+        },
+        {
+          "name": "NotForceCheck",
+          "number": 1
+        },
+        {
+          "name": "NeedForceCheck",
+          "number": 2
+        }
+      ]
+    },
+    {
+      "name": "IsCommon",
+      "fullName": "IsCommon",
+      "values": [
+        {
+          "name": "Common",
+          "number": 0
+        },
+        {
+          "name": "PrivateCheck",
+          "number": 1
+        }
+      ]
+    },
+    {
+      "name": "IsCompose",
+      "fullName": "IsCompose",
+      "values": [
+        {
+          "name": "IsComposeReserve",
+          "number": 0
+        },
+        {
+          "name": "OneRequest",
+          "number": 1
+        },
+        {
+          "name": "Compose",
+          "number": 2
+        }
+      ]
+    },
+    {
+      "name": "ModuleCanUse",
+      "fullName": "ModuleCanUse",
+      "values": [
+        {
+          "name": "All",
+          "number": 0
+        },
+        {
+          "name": "Mobile",
+          "number": 1
+        },
+        {
+          "name": "Web",
+          "number": 2
+        }
+      ]
+    },
+    {
+      "name": "ModuleCommonStatus",
+      "fullName": "ModuleCommonStatus",
+      "values": [
+        {
+          "name": "AllCanUse",
+          "number": 0
+        },
+        {
+          "name": "KolCanUse",
+          "number": 1
+        },
+        {
+          "name": "ServiceCanUse",
+          "number": 2
+        },
+        {
+          "name": "NotCommon",
+          "number": 3
+        }
+      ]
+    },
+    {
+      "name": "Switch",
+      "fullName": "Switch",
+      "values": [
+        {
+          "name": "Close",
+          "number": 0
+        },
+        {
+          "name": "Oopen",
+          "number": 1
+        }
+      ]
+    },
+    {
+      "name": "ViewRoleLevel",
+      "fullName": "ViewRoleLevel",
+      "values": [
+        {
+          "name": "GOD",
+          "number": 0
+        },
+        {
+          "name": "Developer",
+          "number": 1
+        },
+        {
+          "name": "Operater",
+          "number": 3
+        },
+        {
+          "name": "Entrepreneur",
+          "number": 5
+        },
+        {
+          "name": "User",
+          "number": 9
+        },
+        {
+          "name": "Visitor",
+          "number": 11
+        },
+        {
+          "name": "Employee",
+          "number": 67
+        }
+      ]
+    }
+  ],
+  "services": [
+    {
+      "name": "ApiService",
+      "fullName": "ApiService",
+      "methods": [
+        {
+          "name": "FindAllRuntimeAPI",
+          "fullName": "ApiService.FindAllRuntimeAPI",
+          "request": "FindAllRuntimeAPIRequest",
+          "response": "FindAllRuntimeAPIResponse"
+        },
+        {
+          "name": "GetApiByUUID",
+          "fullName": "ApiService.GetApiByUUID",
+          "request": "GetApiRequest",
+          "response": "GetApiReponse"
+        }
+      ]
+    },
+    {
+      "name": "UnitService",
+      "fullName": "UnitService",
+      "methods": [
+        {
+          "name": "FindAllModuleSort",
+          "fullName": "UnitService.FindAllModuleSort",
+          "request": "NotParamRequest",
+          "response": "FindAllModuleSortResponse"
+        },
+        {
+          "name": "FindBaseModuleSortByModuleUUID",
+          "fullName": "UnitService.FindBaseModuleSortByModuleUUID",
+          "request": "FindBasicModuleSortByMoudleUUIDRequest",
+          "response": "FindBasicModuleSortByMoudleUUIDResponse"
+        },
+        {
+          "name": "FindFreeModule",
+          "fullName": "UnitService.FindFreeModule",
+          "request": "NotParamRequest",
+          "response": "ModulesApiResponse"
+        },
+        {
+          "name": "FindModuleApiUuid",
+          "fullName": "UnitService.FindModuleApiUuid",
+          "request": "FindModuleApiUuidRequest",
+          "response": "FindModuleApiUuidResponse"
+        },
+        {
+          "name": "FindModuleSimpleByModuleSortUUID",
+          "fullName": "UnitService.FindModuleSimpleByModuleSortUUID",
+          "request": "FindModuleSimpleRequest",
+          "response": "SimpleModuleResponse"
+        },
+        {
+          "name": "FindModulesApi",
+          "fullName": "UnitService.FindModulesApi",
+          "request": "ModuleUUIDRequest",
+          "response": "ModulesApiResponse"
+        },
+        {
+          "name": "FindModulesByModuleStatus",
+          "fullName": "UnitService.FindModulesByModuleStatus",
+          "request": "FindModulesByModuleStatusRequest",
+          "response": "BaseModuleResponse"
+        },
+        {
+          "name": "FindModulesByUUID",
+          "fullName": "UnitService.FindModulesByUUID",
+          "request": "ModuleUUIDRequest",
+          "response": "BaseModuleResponse"
+        },
+        {
+          "name": "FindSimpleModules",
+          "fullName": "UnitService.FindSimpleModules",
+          "request": "ModuleUUIDRequest",
+          "response": "SimpleModuleResponse"
+        }
+      ]
+    }
+  ]
+}

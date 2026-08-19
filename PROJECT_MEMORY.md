@@ -116,3 +116,13 @@ GitHub connector authorization and local Git authorization are separate. The con
 - Passive outlier detection uses consecutive failures, bounded exponential ejection time, a maximum ejection percentage, single-node protection, and fail-open zero-value behavior; fail-closed operation must be explicit.
 - W3 resilience must wrap W5 selection (`RPCPolicy.WrapSelected`) so every retry attempt performs a fresh node pick while rate-limit/load-shed/circuit rejections occur before selection and never poison a node's passive-health score.
 - Selector snapshots are the stable diagnostics/observability seam and expose EWMA, score, in-flight requests, ejection state, and cumulative selection/outcome counters without coupling `pkg/selector` to the framework observability package.
+
+### 2026-08-19 — Contract pipeline baseline
+
+- Protobuf is the W06 API contract source of truth. Existing legacy gateway/HTTP metadata remains compatibility state until explicitly migrated into protobuf; the contract generator must never invent HTTP routes for unbound RPC methods.
+- `pkg/contract` compiles protobuf through `protoc` `FileDescriptorSet` and normalizes it into a vendor-neutral deterministic manifest without adding a new protobuf runtime dependency to the shared package.
+- Committed contract artifacts are `contracts/generated/manifest.json`, `openapi.json`, and `client.ts`; generated files are never hand-edited and `make contract-check` blocks drift.
+- Standard `google.api.http` is the preferred HTTP binding. `@yunka.http` source comments are a migration bridge only; other `@yunka.*` method directives are preserved as contract metadata for later auth/resilience/graph integration.
+- Contract Guard treats service/method removal, request/response or streaming changes, protobuf field removal/renumber/type/cardinality/presence/JSON-name changes, enum removals/renumbering, and existing HTTP binding removal/change as breaking changes.
+- W06 extends the release gate so `make verify` includes contract drift checking. Pull-request CI additionally compares the base commit manifest when one exists and blocks breaking changes.
+- The legacy RPC generator remains operational and generated RPC files remain immutable. W06 establishes a parallel contract pipeline first; generator convergence is a later step after the new pipeline is stable.
