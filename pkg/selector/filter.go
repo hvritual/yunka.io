@@ -71,3 +71,14 @@ func FilterVersion(version string) Filter {
 		return services
 	}
 }
+
+const (
+	MetadataRegion = "region"
+	MetadataZone   = "zone"
+)
+
+// FilterRegion is a convenience filter for standard node locality metadata.
+func FilterRegion(region string) Filter { return FilterLabel(MetadataRegion, region) }
+
+// FilterZone is a convenience filter for standard node locality metadata.
+func FilterZone(zone string) Filter { return FilterLabel(MetadataZone, zone) }

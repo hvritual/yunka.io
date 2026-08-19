@@ -107,3 +107,12 @@ GitHub connector authorization and local Git authorization are separate. The con
 - The full release gate remains `make verify` after dependency synchronization: unit tests, race tests, `go vet`, `govulncheck`, and builds across all five modules.
 - The mDNS registry baseline uses maintained `github.com/hashicorp/mdns v1.0.6`; the old `github.com/micro/mdns v0.3.0` implementation is retired because its probe/shutdown path fails the race gate.
 - mDNS watching uses bounded polling plus snapshot diff semantics instead of the legacy TTL/listen callback path; create, update, and delete results remain the registry watcher contract.
+
+### 2026-08-19 — Selector 2.0 baseline
+
+- The legacy `selector.Selector` contract remains source-compatible and `NewSelector()` keeps the historical Random default; adaptive routing is opt-in through `NewAdaptiveSelector()` or `EnableAdaptive`.
+- `Picker.Pick` plus idempotent `Selection.Done` is the canonical W5 feedback lifecycle. It records in-flight requests, measured latency, success/failure outcome, and passive node health without changing generated RPC code.
+- Adaptive selection supports P2C, EWMA, and LeastRequest. Selection state is scoped to service/version/node identity and reconciled against registry membership so removed nodes do not leak state.
+- Passive outlier detection uses consecutive failures, bounded exponential ejection time, a maximum ejection percentage, single-node protection, and fail-open zero-value behavior; fail-closed operation must be explicit.
+- W3 resilience must wrap W5 selection (`RPCPolicy.WrapSelected`) so every retry attempt performs a fresh node pick while rate-limit/load-shed/circuit rejections occur before selection and never poison a node's passive-health score.
+- Selector snapshots are the stable diagnostics/observability seam and expose EWMA, score, in-flight requests, ejection state, and cumulative selection/outcome counters without coupling `pkg/selector` to the framework observability package.
