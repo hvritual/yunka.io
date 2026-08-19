@@ -93,9 +93,18 @@ jobs:
           path.write_text(value.replace(old,new))
 
           path=Path('framework/event/outbox/gorm_store.go'); value=path.read_text()
+          value=value.replace('import (\n\t"context"', 'import (\n\t"context"\n\t"database/sql"', 1)
           old='''\t\tvar candidates []gormRecord\n\t\tlocking := clause.Locking{Strength: "UPDATE"}\n\t\tif store.skipLocked {\n\t\t\tlocking.Options = "SKIP LOCKED"\n\t\t}\n\t\tquery := tx.Table(store.table).\n\t\t\tClauses(locking).\n\t\t\tWhere("(status = ? AND next_attempt_at <= ?) OR (status = ? AND lease_until IS NOT NULL AND lease_until <= ?)", StatusPending, options.Now, StatusInFlight, options.Now).\n\t\t\tOrder("next_attempt_at ASC").Order("created_at ASC").Order("id ASC").Limit(options.Limit).\n\t\t\tFind(&candidates)\n\t\tif query.Error != nil {\n\t\t\treturn query.Error\n\t\t}\n'''
           new='''\t\tvar candidates []gormRecord\n\t\tlocking := clause.Locking{Strength: "UPDATE"}\n\t\tif store.skipLocked {\n\t\t\tlocking.Options = "SKIP LOCKED"\n\t\t}\n\n\t\t// Keep lease reclamation and pending delivery as separate locking reads.\n\t\t// A single OR range can make InnoDB lock/skip a much wider range than the\n\t\t// returned LIMIT, which defeats concurrent SKIP LOCKED consumers. Expired\n\t\t// leases are reclaimed first so crashed-worker records cannot starve.\n\t\tvar expired []gormRecord\n\t\tquery := tx.Table(store.table).\n\t\t\tClauses(locking).\n\t\t\tWhere("status = ? AND lease_until IS NOT NULL AND lease_until <= ?", StatusInFlight, options.Now).\n\t\t\tOrder("lease_until ASC").Order("created_at ASC").Order("id ASC").Limit(options.Limit).\n\t\t\tFind(&expired)\n\t\tif query.Error != nil {\n\t\t\treturn query.Error\n\t\t}\n\t\tcandidates = append(candidates, expired...)\n\n\t\tremaining := options.Limit - len(candidates)\n\t\tif remaining > 0 {\n\t\t\tvar pending []gormRecord\n\t\t\tquery = tx.Table(store.table).\n\t\t\t\tClauses(locking).\n\t\t\t\tWhere("status = ? AND next_attempt_at <= ?", StatusPending, options.Now).\n\t\t\t\tOrder("next_attempt_at ASC").Order("created_at ASC").Order("id ASC").Limit(remaining).\n\t\t\t\tFind(&pending)\n\t\t\tif query.Error != nil {\n\t\t\t\treturn query.Error\n\t\t\t}\n\t\t\tcandidates = append(candidates, pending...)\n\t\t}\n'''
           if value.count(old)!=1: raise SystemExit('gorm claim preimage mismatch')
+          value=value.replace(old,new)
+          old='''\tvar claimed []gormRecord\n\terr := store.db.WithContext(nonNilContext(ctx)).Transaction(func(tx *gorm.DB) error {\n'''
+          new='''\tvar claimed []gormRecord\n\ttxOptions := &sql.TxOptions{}\n\tif store.skipLocked {\n\t\ttxOptions.Isolation = sql.LevelReadCommitted\n\t}\n\terr := store.db.WithContext(nonNilContext(ctx)).Transaction(func(tx *gorm.DB) error {\n'''
+          if value.count(old)!=1: raise SystemExit('gorm transaction preimage mismatch')
+          value=value.replace(old,new)
+          old='''\t\treturn nil\n\t})\n\tif err != nil {\n'''
+          new='''\t\treturn nil\n\t}, txOptions)\n\tif err != nil {\n'''
+          if value.count(old)!=1: raise SystemExit('gorm transaction close preimage mismatch')
           value=value.replace(old,new)
           value=value.replace('Status        Status     `gorm:"column:status;size:32;not null;index:idx_yunka_outbox_ready,priority:1"`','Status        Status     `gorm:"column:status;size:32;not null;index:idx_yunka_outbox_ready,priority:1;index:idx_yunka_outbox_lease,priority:1"`')
           value=value.replace('LeaseUntil    *time.Time `gorm:"column:lease_until;index"`','LeaseUntil    *time.Time `gorm:"column:lease_until;index:idx_yunka_outbox_lease,priority:2"`')
@@ -131,11 +140,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fL --retry 5 --retry-delay 2 \
-            -o /tmp/protoc.zip \
-            https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-x86_64.zip
-          rm -rf /tmp/protoc
-          mkdir -p /tmp/protoc
+          curl -fL --retry 5 --retry-delay 2 -o /tmp/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-x86_64.zip
+          rm -rf /tmp/protoc && mkdir -p /tmp/protoc
           unzip -q /tmp/protoc.zip -d /tmp/protoc
           echo "/tmp/protoc/bin" >> "$GITHUB_PATH"
           /tmp/protoc/bin/protoc --version
