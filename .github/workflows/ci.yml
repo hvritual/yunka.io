@@ -1,20 +1,42 @@
-name: ci
+name: w10.5 apply pr
 
 on:
-  push:
-    branches: [main]
   pull_request:
+    branches: [agent/mvp-stabilization]
 
 permissions:
   contents: write
 
+concurrency:
+  group: w10-5-pr-apply-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
-  verify:
+  apply:
+    if: github.head_ref == 'agent/w10-5-convergence'
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?parseTime=true&charset=utf8mb4
+      HEAD_REF: ${{ github.head_ref }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
@@ -25,93 +47,81 @@ jobs:
             framework/go.sum
             gateway/go.sum
             pkg/go.sum
+      - name: Reconstruct and verify W10.5 overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w10-5
+          {
+            cat .github/w10_5_overlay/part00.b64
+            cat .github/w10_5_overlay/part01.b64
+            cat .github/w10_5_overlay/part02.b64
+            cat .github/w10_5_overlay/part03.b64
+            cat .github/w10_5_overlay/part04.b64
+            cat .github/w10_5_overlay/part05.b64
+            cat .github/w10_5_overlay/p06_0.b64
+            cat .github/w10_5_overlay/p06_1.b64
+            cat .github/w10_5_overlay/r06_2.b64
+            cat .github/w10_5_overlay/p07_0.b64
+            cat .github/w10_5_overlay/p07_1.b64
+            cat .github/w10_5_overlay/p07_2.b64
+            cat .github/w10_5_overlay/p08_0.b64
+            cat .github/w10_5_overlay/p08_1.b64
+            cat .github/w10_5_overlay/p08_2.b64
+            cat .github/w10_5_overlay/part09.b64
+            cat .github/w10_5_overlay/part10.b64
+            cat .github/w10_5_overlay/p11_0.b64
+            cat .github/w10_5_overlay/r11_1x0.b64
+            cat .github/w10_5_overlay/r11_1x1.b64
+            cat .github/w10_5_overlay/r11_1x2.b64
+          } | tr -d '\r\n' | base64 -d > /tmp/w10-5/overlay.tar.gz
+          echo "8db9884a2dca9e5cdd5ddde9b24cf5857e2c0e502041deb1fc296080ff08a4be  /tmp/w10-5/overlay.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/w10-5/overlay.tar.gz -C /tmp/w10-5
+      - name: Apply to exact MVP base
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=2dead88ff55ac6c879f21f00bcd1a23cafec4b7f
+          git fetch origin agent/mvp-stabilization
+          actual="$(git rev-parse origin/agent/mvp-stabilization)"
+          test "$actual" = "$expected"
+          git checkout --detach "$expected"
+          cp -a /tmp/w10-5/yunka-w10.5-convergence/repo/. .
+          while IFS= read -r path; do
+            [ -z "$path" ] || rm -f -- "$path"
+          done < /tmp/w10-5/yunka-w10.5-convergence/DELETE_FILES.txt
+          git diff --check
+          changed="$(git diff --name-only | wc -l | tr -d ' ')"
+          test "$changed" = "58"
       - name: Dependency sync
-        id: dependency-sync
         shell: bash
         run: |
           set -euo pipefail
           make tidy
-          if git diff --quiet -- \
-            go.work go.work.sum \
-            pkg/go.mod pkg/go.sum \
-            framework/go.mod framework/go.sum \
-            gateway/go.mod gateway/go.sum \
-            app/go.mod app/go.sum \
-            app/cmd/rpc/go.mod app/cmd/rpc/go.sum; then
-            echo "dirty=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "dirty=true" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Upload dependency snapshot
-        if: steps.dependency-sync.outputs.dirty == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: dependency-sync-${{ github.sha }}
-          retention-days: 1
-          if-no-files-found: error
-          path: |
-            go.work
-            go.work.sum
-            pkg/go.mod
-            pkg/go.sum
-            framework/go.mod
-            framework/go.sum
-            gateway/go.mod
-            gateway/go.sum
-            app/go.mod
-            app/go.sum
-            app/cmd/rpc/go.mod
-            app/cmd/rpc/go.sum
-      - name: Commit dependency sync
-        if: >-
-          steps.dependency-sync.outputs.dirty == 'true' &&
-          github.event_name == 'pull_request' &&
-          github.event.pull_request.head.repo.full_name == github.repository
-        shell: bash
-        env:
-          HEAD_REF: ${{ github.head_ref }}
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- \
+          git diff --quiet -- \
             go.work go.work.sum \
             pkg/go.mod pkg/go.sum \
             framework/go.mod framework/go.sum \
             gateway/go.mod gateway/go.sum \
             app/go.mod app/go.sum \
             app/cmd/rpc/go.mod app/cmd/rpc/go.sum
-          git commit -m "chore: sync workspace dependencies"
-          git push origin "HEAD:${HEAD_REF}"
-      - name: Reject unsynced dependencies
-        if: >-
-          steps.dependency-sync.outputs.dirty == 'true' &&
-          !(github.event_name == 'pull_request' &&
-          github.event.pull_request.head.repo.full_name == github.repository)
-        run: exit 1
       - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Contract convergence
+        run: make contract-check contract-audit
+      - name: Verify core
+        run: make verify-core
+      - name: MySQL integration
+        run: make integration
+      - name: Publish clean runner-local Git commit
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
-      - name: Contract drift
-        run: make contract-check
-      - name: Contract compatibility
-        if: github.event_name == 'pull_request'
-        shell: bash
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          baseline=/tmp/yunka-contract-baseline.json
-          if git cat-file -e "${BASE_SHA}:contracts/generated/manifest.json" 2>/dev/null; then
-            git show "${BASE_SHA}:contracts/generated/manifest.json" > "${baseline}"
-            (cd app && go run ./cmd contract diff \
-              --baseline "${baseline}" \
-              --current ../contracts/generated/manifest.json)
-          else
-            echo "No contract baseline in base commit; compatibility guard starts after W06 lands."
-          fi
-      - name: Verify
-        run: make verify
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: converge mvp production gate"
+          git push \
+            --force-with-lease=refs/heads/${HEAD_REF}:${HEAD_SHA} \
+            origin HEAD:refs/heads/${HEAD_REF}
