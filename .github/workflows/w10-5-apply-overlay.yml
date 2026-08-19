@@ -3,6 +3,8 @@ name: w10.5 apply overlay
 on:
   push:
     branches: [agent/w10-5-convergence]
+  pull_request:
+    branches: [agent/mvp-stabilization]
 
 permissions:
   contents: write
@@ -15,6 +17,10 @@ jobs:
   apply:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      HEAD_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || 'agent/w10-5-convergence' }}
+      YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?parseTime=true&charset=utf8mb4
     services:
       mysql:
         image: mysql:8.4
@@ -28,11 +34,10 @@ jobs:
           --health-interval=5s
           --health-timeout=5s
           --health-retries=20
-    env:
-      YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?parseTime=true&charset=utf8mb4
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
@@ -127,6 +132,6 @@ jobs:
           git commit -m "feat: converge mvp production gate"
           final_sha="$(git rev-parse HEAD)"
           git push \
-            --force-with-lease=refs/heads/agent/w10-5-convergence:${GITHUB_SHA} \
-            origin HEAD:refs/heads/agent/w10-5-convergence
+            --force-with-lease="refs/heads/${HEAD_REF}:${SOURCE_SHA}" \
+            origin "HEAD:refs/heads/${HEAD_REF}"
           echo "Published W10.5 commit: ${final_sha}"
