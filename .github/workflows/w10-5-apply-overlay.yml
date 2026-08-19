@@ -27,8 +27,7 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: yunka_test
-        ports:
-          - 3306:3306
+        ports: ["3306:3306"]
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
           --health-interval=5s
@@ -61,23 +60,18 @@ jobs:
               d=s.encode(); return hashlib.sha1(f'blob {len(d)}\0'.encode()+d).hexdigest()
           root=pathlib.Path('.github/w10_5_overlay'); chunks=[]; allowed=re.compile(r'^[A-Za-z0-9+/=]*$')
           for name in names:
-              clean=(root/name).read_text().replace('\r','').replace('\n','')
+              clean=(root/name).read_text().replace('\r','').replace('\n',''); want=expected[name]
               if not allowed.fullmatch(clean): raise SystemExit(f'{name}: invalid base64 chars')
-              want=expected[name]
               if blob(clean)!=want:
                   if name!='part04.b64' or len(clean)!=9001: raise SystemExit(f'{name}: blob mismatch')
                   matches=[clean[:i]+clean[i+1:] for i in range(len(clean)) if blob(clean[:i]+clean[i+1:])==want]
                   if len(matches)!=1: raise SystemExit(f'{name}: repair matches={len(matches)}')
                   clean=matches[0]
-              if blob(clean)!=want: raise SystemExit(f'{name}: final blob mismatch')
               chunks.append(clean)
-          encoded=''.join(chunks)
-          if len(encoded)!=103604: raise SystemExit(f'base64 length={len(encoded)}')
-          decoded=base64.b64decode(encoded,validate=True)
+          encoded=''.join(chunks); decoded=base64.b64decode(encoded,validate=True)
           digest=hashlib.sha256(decoded).hexdigest(); want='8db9884a2dca9e5cdd5ddde9b24cf5857e2c0e502041deb1fc296080ff08a4be'
-          if digest!=want: raise SystemExit(f'overlay sha={digest}')
+          if len(encoded)!=103604 or digest!=want: raise SystemExit(f'overlay validation failed len={len(encoded)} sha={digest}')
           pathlib.Path('/tmp/w10-5/overlay.tar.gz').write_bytes(decoded)
-          print(f'overlay bytes={len(decoded)} sha256={digest}')
           PY
           tar -xzf /tmp/w10-5/overlay.tar.gz -C /tmp/w10-5
       - name: Apply overlay to exact MVP base
@@ -86,23 +80,26 @@ jobs:
           set -euo pipefail
           expected=2dead88ff55ac6c879f21f00bcd1a23cafec4b7f
           git fetch origin agent/mvp-stabilization
-          actual="$(git rev-parse origin/agent/mvp-stabilization)"
-          test "$actual" = "$expected"
+          test "$(git rev-parse origin/agent/mvp-stabilization)" = "$expected"
           git checkout --detach "$expected"
           cp -a /tmp/w10-5/yunka-w10.5-convergence/repo/. .
           while IFS= read -r path; do [ -z "$path" ] || rm -f -- "$path"; done < /tmp/w10-5/yunka-w10.5-convergence/DELETE_FILES.txt
           git diff --check
           { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u > /tmp/w10-5/changed-paths.txt
-          changed="$(wc -l < /tmp/w10-5/changed-paths.txt | tr -d ' ')"
-          echo "W10.5 changed paths=${changed}"
-          cat /tmp/w10-5/changed-paths.txt
-          test "$changed" = "58"
+          test "$(wc -l < /tmp/w10-5/changed-paths.txt | tr -d ' ')" = "58"
       - name: Dependency sync gate
         shell: bash
         run: |
           set -euo pipefail
           make tidy
-          git diff --quiet -- go.work go.work.sum pkg/go.mod pkg/go.sum framework/go.mod framework/go.sum gateway/go.mod gateway/go.sum app/go.mod app/go.sum app/cmd/rpc/go.mod app/cmd/rpc/go.sum
+          dependency_paths=(go.work go.work.sum pkg/go.mod pkg/go.sum framework/go.mod framework/go.sum gateway/go.mod gateway/go.sum app/go.mod app/go.sum app/cmd/rpc/go.mod app/cmd/rpc/go.sum)
+          if ! git diff --quiet -- "${dependency_paths[@]}"; then
+            echo '--- dependency sync diff stat ---'
+            git diff --stat -- "${dependency_paths[@]}"
+            echo '--- dependency sync diff ---'
+            git diff -- "${dependency_paths[@]}"
+            exit 1
+          fi
       - name: Install protoc
         shell: bash
         run: |
@@ -124,6 +121,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "feat: converge mvp production gate"
-          final_sha="$(git rev-parse HEAD)"
           git push --force-with-lease="refs/heads/${HEAD_REF}:${SOURCE_SHA}" origin "HEAD:refs/heads/${HEAD_REF}"
-          echo "Published W10.5 commit: ${final_sha}"
