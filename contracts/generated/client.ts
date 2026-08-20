@@ -37,6 +37,12 @@ export type Switch = "Close" | "Oopen";
 
 export type ViewRoleLevel = "GOD" | "Developer" | "Operater" | "Entrepreneur" | "User" | "Visitor" | "Employee";
 
+export type Io_Yunka_Gateway_Rpc_AuthBit = "AuthNot" | "AuthToken" | "AuthRole" | "AuthTimeLimit" | "AuthApi";
+
+export type Io_Yunka_Gateway_Rpc_CallType = "CallReserve" | "HttpCall" | "RpcCall";
+
+export type Io_Yunka_Gateway_Rpc_ResponseCode = "Not" | "Response";
+
 export interface Api {
   uuid?: string;
   name?: string;
@@ -177,6 +183,78 @@ export interface SimpleModuleResponse {
   modules?: readonly SimpleModule[];
 }
 
+export interface Io_Yunka_Gateway_Rpc_BatchRuntimeApiRequest {
+  apis?: readonly Io_Yunka_Gateway_Rpc_RuntimeApi[];
+  buttons?: readonly Io_Yunka_Gateway_Rpc_RuntimeApiModuleButton[];
+}
+
+export interface Io_Yunka_Gateway_Rpc_CircuitCfg {
+  CloseTime?: number;
+  CheckPeriod?: number;
+  LimitPercent?: number;
+  HalfOpen?: number;
+  HalfClose?: number;
+}
+
+export interface Io_Yunka_Gateway_Rpc_DeleteRuntimeApiRequest {
+  uuid?: string;
+  uri?: string;
+}
+
+export interface Io_Yunka_Gateway_Rpc_LockEnterpriseRequest {
+  enterpriseUUID?: string;
+}
+
+export interface Io_Yunka_Gateway_Rpc_NotParamRequest {
+}
+
+export interface Io_Yunka_Gateway_Rpc_NotResponse {
+  code?: Io_Yunka_Gateway_Rpc_ResponseCode;
+}
+
+export interface Io_Yunka_Gateway_Rpc_OperateRoleResponse {
+  code?: Io_Yunka_Gateway_Rpc_ResponseCode;
+  msg?: string;
+}
+
+export interface Io_Yunka_Gateway_Rpc_OperateRuntimeApiResponse {
+  code?: Io_Yunka_Gateway_Rpc_ResponseCode;
+  msg?: string;
+}
+
+export interface Io_Yunka_Gateway_Rpc_RoleModuleBtn {
+  orgUUID?: string;
+  roleUUID?: string;
+  moduleBtnUUID?: readonly string[];
+  deleteModuleBtnUUID?: readonly string[];
+}
+
+export interface Io_Yunka_Gateway_Rpc_RuntimeApi {
+  uuid?: string;
+  srvName?: string;
+  moduleName?: string;
+  uri?: string;
+  name?: string;
+  callType?: Io_Yunka_Gateway_Rpc_CallType;
+  auth?: Io_Yunka_Gateway_Rpc_AuthBit;
+  srvApi?: string;
+  isRedirect?: boolean;
+  composes?: readonly Io_Yunka_Gateway_Rpc_RuntimeApi[];
+}
+
+export interface Io_Yunka_Gateway_Rpc_RuntimeApiModuleButton {
+  apiUUID?: string;
+  moduleBtnUUID?: string;
+}
+
+export interface Io_Yunka_Gateway_Rpc_ServerNode {
+  ipPort?: string;
+  uuid?: string;
+  qps?: number;
+  srvName?: string;
+  Circuit?: Io_Yunka_Gateway_Rpc_CircuitCfg;
+}
+
 export const operations = {
   "ApiService.FindAllRuntimeAPI": {
     fullName: "ApiService.FindAllRuntimeAPI",
@@ -244,6 +322,24 @@ export const operations = {
     requestType: "ModuleUUIDRequest",
     responseType: "SimpleModuleResponse"
   },
+  "io.yunka.gateway.rpc.GatewayService.BatchAddRuntimeApi": {
+    fullName: "io.yunka.gateway.rpc.GatewayService.BatchAddRuntimeApi",
+    rpcPath: "/io.yunka.gateway.rpc.GatewayService/BatchAddRuntimeApi",
+    requestType: "io.yunka.gateway.rpc.BatchRuntimeApiRequest",
+    responseType: "io.yunka.gateway.rpc.OperateRuntimeApiResponse"
+  },
+  "io.yunka.gateway.rpc.GatewayService.DeleteRuntimeApi": {
+    fullName: "io.yunka.gateway.rpc.GatewayService.DeleteRuntimeApi",
+    rpcPath: "/io.yunka.gateway.rpc.GatewayService/DeleteRuntimeApi",
+    requestType: "io.yunka.gateway.rpc.DeleteRuntimeApiRequest",
+    responseType: "io.yunka.gateway.rpc.OperateRuntimeApiResponse"
+  },
+  "io.yunka.gateway.rpc.GatewayService.OperateRoleAPI": {
+    fullName: "io.yunka.gateway.rpc.GatewayService.OperateRoleAPI",
+    rpcPath: "/io.yunka.gateway.rpc.GatewayService/OperateRoleAPI",
+    requestType: "io.yunka.gateway.rpc.RoleModuleBtn",
+    responseType: "io.yunka.gateway.rpc.OperateRoleResponse"
+  },
 } as const satisfies Record<string, RpcOperation>;
 
 export class ApiServiceClient {
@@ -296,6 +392,23 @@ export class UnitServiceClient {
 
   findSimpleModules(request: ModuleUUIDRequest): Promise<SimpleModuleResponse> {
     return this.transport.call<ModuleUUIDRequest, SimpleModuleResponse>(operations["UnitService.FindSimpleModules"], request);
+  }
+
+}
+
+export class Io_Yunka_Gateway_Rpc_GatewayServiceClient {
+  constructor(private readonly transport: RpcTransport) {}
+
+  batchAddRuntimeApi(request: Io_Yunka_Gateway_Rpc_BatchRuntimeApiRequest): Promise<Io_Yunka_Gateway_Rpc_OperateRuntimeApiResponse> {
+    return this.transport.call<Io_Yunka_Gateway_Rpc_BatchRuntimeApiRequest, Io_Yunka_Gateway_Rpc_OperateRuntimeApiResponse>(operations["io.yunka.gateway.rpc.GatewayService.BatchAddRuntimeApi"], request);
+  }
+
+  deleteRuntimeApi(request: Io_Yunka_Gateway_Rpc_DeleteRuntimeApiRequest): Promise<Io_Yunka_Gateway_Rpc_OperateRuntimeApiResponse> {
+    return this.transport.call<Io_Yunka_Gateway_Rpc_DeleteRuntimeApiRequest, Io_Yunka_Gateway_Rpc_OperateRuntimeApiResponse>(operations["io.yunka.gateway.rpc.GatewayService.DeleteRuntimeApi"], request);
+  }
+
+  operateRoleAPI(request: Io_Yunka_Gateway_Rpc_RoleModuleBtn): Promise<Io_Yunka_Gateway_Rpc_OperateRoleResponse> {
+    return this.transport.call<Io_Yunka_Gateway_Rpc_RoleModuleBtn, Io_Yunka_Gateway_Rpc_OperateRoleResponse>(operations["io.yunka.gateway.rpc.GatewayService.OperateRoleAPI"], request);
   }
 
 }

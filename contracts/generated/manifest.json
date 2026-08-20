@@ -2,21 +2,38 @@
   "schemaVersion": 1,
   "files": [
     {
-      "name": "api.proto",
+      "name": "app/cmd/rpc/pb/api.proto",
       "syntax": "proto3",
       "goPackage": "meta"
     },
     {
-      "name": "api_common.proto",
+      "name": "app/cmd/rpc/pb/api_common.proto",
       "syntax": "proto3",
       "goPackage": "meta"
     },
     {
-      "name": "common.proto",
+      "name": "app/cmd/rpc/pb/common.proto",
       "syntax": "proto3"
     },
     {
-      "name": "unit.proto",
+      "name": "app/cmd/rpc/pb/unit.proto",
+      "syntax": "proto3",
+      "goPackage": "meta"
+    },
+    {
+      "name": "gateway/rpc/pb/api_common.proto",
+      "package": "io.yunka.gateway.rpc",
+      "syntax": "proto3",
+      "goPackage": "meta"
+    },
+    {
+      "name": "gateway/rpc/pb/common.proto",
+      "package": "io.yunka.gateway.rpc",
+      "syntax": "proto3"
+    },
+    {
+      "name": "gateway/rpc/pb/gateway.proto",
+      "package": "io.yunka.gateway.rpc",
       "syntax": "proto3",
       "goPackage": "meta"
     }
@@ -623,6 +640,334 @@
           "repeated": true
         }
       ]
+    },
+    {
+      "name": "BatchRuntimeApiRequest",
+      "fullName": "io.yunka.gateway.rpc.BatchRuntimeApiRequest",
+      "fields": [
+        {
+          "name": "apis",
+          "jsonName": "apis",
+          "number": 1,
+          "kind": "message",
+          "type": "io.yunka.gateway.rpc.RuntimeApi",
+          "repeated": true
+        },
+        {
+          "name": "buttons",
+          "jsonName": "buttons",
+          "number": 2,
+          "kind": "message",
+          "type": "io.yunka.gateway.rpc.RuntimeApiModuleButton",
+          "repeated": true
+        }
+      ]
+    },
+    {
+      "name": "CircuitCfg",
+      "fullName": "io.yunka.gateway.rpc.CircuitCfg",
+      "fields": [
+        {
+          "name": "CloseTime",
+          "jsonName": "CloseTime",
+          "number": 1,
+          "kind": "scalar",
+          "type": "int32"
+        },
+        {
+          "name": "CheckPeriod",
+          "jsonName": "CheckPeriod",
+          "number": 2,
+          "kind": "scalar",
+          "type": "int32"
+        },
+        {
+          "name": "LimitPercent",
+          "jsonName": "LimitPercent",
+          "number": 3,
+          "kind": "scalar",
+          "type": "int32"
+        },
+        {
+          "name": "HalfOpen",
+          "jsonName": "HalfOpen",
+          "number": 4,
+          "kind": "scalar",
+          "type": "int32"
+        },
+        {
+          "name": "HalfClose",
+          "jsonName": "HalfClose",
+          "number": 5,
+          "kind": "scalar",
+          "type": "int32"
+        }
+      ]
+    },
+    {
+      "name": "DeleteRuntimeApiRequest",
+      "fullName": "io.yunka.gateway.rpc.DeleteRuntimeApiRequest",
+      "fields": [
+        {
+          "name": "uuid",
+          "jsonName": "uuid",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "uri",
+          "jsonName": "uri",
+          "number": 2,
+          "kind": "scalar",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "LockEnterpriseRequest",
+      "fullName": "io.yunka.gateway.rpc.LockEnterpriseRequest",
+      "fields": [
+        {
+          "name": "enterpriseUUID",
+          "jsonName": "enterpriseUUID",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "NotParamRequest",
+      "fullName": "io.yunka.gateway.rpc.NotParamRequest",
+      "fields": null
+    },
+    {
+      "name": "NotResponse",
+      "fullName": "io.yunka.gateway.rpc.NotResponse",
+      "fields": [
+        {
+          "name": "code",
+          "jsonName": "code",
+          "number": 1,
+          "kind": "enum",
+          "type": "io.yunka.gateway.rpc.ResponseCode"
+        }
+      ]
+    },
+    {
+      "name": "OperateRoleResponse",
+      "fullName": "io.yunka.gateway.rpc.OperateRoleResponse",
+      "fields": [
+        {
+          "name": "code",
+          "jsonName": "code",
+          "number": 1,
+          "kind": "enum",
+          "type": "io.yunka.gateway.rpc.ResponseCode"
+        },
+        {
+          "name": "msg",
+          "jsonName": "msg",
+          "number": 2,
+          "kind": "scalar",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "OperateRuntimeApiResponse",
+      "fullName": "io.yunka.gateway.rpc.OperateRuntimeApiResponse",
+      "fields": [
+        {
+          "name": "code",
+          "jsonName": "code",
+          "number": 1,
+          "kind": "enum",
+          "type": "io.yunka.gateway.rpc.ResponseCode"
+        },
+        {
+          "name": "msg",
+          "jsonName": "msg",
+          "number": 2,
+          "kind": "scalar",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "RoleModuleBtn",
+      "fullName": "io.yunka.gateway.rpc.RoleModuleBtn",
+      "fields": [
+        {
+          "name": "orgUUID",
+          "jsonName": "orgUUID",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "roleUUID",
+          "jsonName": "roleUUID",
+          "number": 2,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "moduleBtnUUID",
+          "jsonName": "moduleBtnUUID",
+          "number": 3,
+          "kind": "scalar",
+          "type": "string",
+          "repeated": true
+        },
+        {
+          "name": "deleteModuleBtnUUID",
+          "jsonName": "deleteModuleBtnUUID",
+          "number": 4,
+          "kind": "scalar",
+          "type": "string",
+          "repeated": true
+        }
+      ]
+    },
+    {
+      "name": "RuntimeApi",
+      "fullName": "io.yunka.gateway.rpc.RuntimeApi",
+      "fields": [
+        {
+          "name": "uuid",
+          "jsonName": "uuid",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "srvName",
+          "jsonName": "srvName",
+          "number": 2,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "moduleName",
+          "jsonName": "moduleName",
+          "number": 3,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "uri",
+          "jsonName": "uri",
+          "number": 4,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "jsonName": "name",
+          "number": 5,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "callType",
+          "jsonName": "callType",
+          "number": 6,
+          "kind": "enum",
+          "type": "io.yunka.gateway.rpc.CallType"
+        },
+        {
+          "name": "auth",
+          "jsonName": "auth",
+          "number": 7,
+          "kind": "enum",
+          "type": "io.yunka.gateway.rpc.AuthBit"
+        },
+        {
+          "name": "srvApi",
+          "jsonName": "srvApi",
+          "number": 8,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "isRedirect",
+          "jsonName": "isRedirect",
+          "number": 9,
+          "kind": "scalar",
+          "type": "bool"
+        },
+        {
+          "name": "composes",
+          "jsonName": "composes",
+          "number": 10,
+          "kind": "message",
+          "type": "io.yunka.gateway.rpc.RuntimeApi",
+          "repeated": true
+        }
+      ]
+    },
+    {
+      "name": "RuntimeApiModuleButton",
+      "fullName": "io.yunka.gateway.rpc.RuntimeApiModuleButton",
+      "fields": [
+        {
+          "name": "apiUUID",
+          "jsonName": "apiUUID",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "moduleBtnUUID",
+          "jsonName": "moduleBtnUUID",
+          "number": 2,
+          "kind": "scalar",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "ServerNode",
+      "fullName": "io.yunka.gateway.rpc.ServerNode",
+      "fields": [
+        {
+          "name": "ipPort",
+          "jsonName": "ipPort",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "uuid",
+          "jsonName": "uuid",
+          "number": 2,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "qps",
+          "jsonName": "qps",
+          "number": 3,
+          "kind": "scalar",
+          "type": "int32"
+        },
+        {
+          "name": "srvName",
+          "jsonName": "srvName",
+          "number": 4,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "Circuit",
+          "jsonName": "Circuit",
+          "number": 5,
+          "kind": "message",
+          "type": "io.yunka.gateway.rpc.CircuitCfg"
+        }
+      ]
     }
   ],
   "enums": [
@@ -799,6 +1144,64 @@
           "number": 67
         }
       ]
+    },
+    {
+      "name": "AuthBit",
+      "fullName": "io.yunka.gateway.rpc.AuthBit",
+      "values": [
+        {
+          "name": "AuthNot",
+          "number": 0
+        },
+        {
+          "name": "AuthToken",
+          "number": 2
+        },
+        {
+          "name": "AuthRole",
+          "number": 4
+        },
+        {
+          "name": "AuthTimeLimit",
+          "number": 8
+        },
+        {
+          "name": "AuthApi",
+          "number": 16
+        }
+      ]
+    },
+    {
+      "name": "CallType",
+      "fullName": "io.yunka.gateway.rpc.CallType",
+      "values": [
+        {
+          "name": "CallReserve",
+          "number": 0
+        },
+        {
+          "name": "HttpCall",
+          "number": 1
+        },
+        {
+          "name": "RpcCall",
+          "number": 2
+        }
+      ]
+    },
+    {
+      "name": "ResponseCode",
+      "fullName": "io.yunka.gateway.rpc.ResponseCode",
+      "values": [
+        {
+          "name": "Not",
+          "number": 0
+        },
+        {
+          "name": "Response",
+          "number": 1
+        }
+      ]
     }
   ],
   "services": [
@@ -877,6 +1280,30 @@
           "fullName": "UnitService.FindSimpleModules",
           "request": "ModuleUUIDRequest",
           "response": "SimpleModuleResponse"
+        }
+      ]
+    },
+    {
+      "name": "GatewayService",
+      "fullName": "io.yunka.gateway.rpc.GatewayService",
+      "methods": [
+        {
+          "name": "BatchAddRuntimeApi",
+          "fullName": "io.yunka.gateway.rpc.GatewayService.BatchAddRuntimeApi",
+          "request": "io.yunka.gateway.rpc.BatchRuntimeApiRequest",
+          "response": "io.yunka.gateway.rpc.OperateRuntimeApiResponse"
+        },
+        {
+          "name": "DeleteRuntimeApi",
+          "fullName": "io.yunka.gateway.rpc.GatewayService.DeleteRuntimeApi",
+          "request": "io.yunka.gateway.rpc.DeleteRuntimeApiRequest",
+          "response": "io.yunka.gateway.rpc.OperateRuntimeApiResponse"
+        },
+        {
+          "name": "OperateRoleAPI",
+          "fullName": "io.yunka.gateway.rpc.GatewayService.OperateRoleAPI",
+          "request": "io.yunka.gateway.rpc.RoleModuleBtn",
+          "response": "io.yunka.gateway.rpc.OperateRoleResponse"
         }
       ]
     }

@@ -30,9 +30,11 @@ func Command() cli.Command {
 
 func sourceFlags() []cli.Flag {
 	return []cli.Flag{
-		cli.StringFlag{Name: "proto-dir", Value: "./app/cmd/rpc/pb", Usage: "root directory containing contract .proto files"},
-		cli.StringSliceFlag{Name: "proto-path", Usage: "additional protoc import path; may be repeated"},
-		cli.StringSliceFlag{Name: "file", Usage: "specific proto file relative to --proto-dir; may be repeated"},
+		cli.StringFlag{Name: "sources", Usage: "canonical contract source inventory; when set, source sets are compiled independently"},
+		cli.StringFlag{Name: "repo-root", Value: ".", Usage: "repository root used to resolve --sources entries"},
+		cli.StringFlag{Name: "proto-dir", Value: "./app/cmd/rpc/pb", Usage: "legacy single root containing contract .proto files"},
+		cli.StringSliceFlag{Name: "proto-path", Usage: "additional protoc import path for legacy single-root mode; may be repeated"},
+		cli.StringSliceFlag{Name: "file", Usage: "specific proto file relative to --proto-dir in legacy single-root mode; may be repeated"},
 		cli.StringFlag{Name: "protoc", EnvVar: "PROTOC", Usage: "protoc binary; defaults to PATH"},
 	}
 }
@@ -195,6 +197,13 @@ func inspectCommand() cli.Command {
 func compile(c *cli.Context) (contractcore.CompileResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
+	if inventory := strings.TrimSpace(c.String("sources")); inventory != "" {
+		return contractcore.CompileInventory(ctx, contractcore.InventoryCompileOptions{
+			RepositoryRoot: c.String("repo-root"),
+			InventoryPath:  inventory,
+			Protoc:         c.String("protoc"),
+		})
+	}
 	return contractcore.Compile(ctx, contractcore.CompileOptions{
 		Dir:        c.String("proto-dir"),
 		ProtoPaths: c.StringSlice("proto-path"),

@@ -3,12 +3,12 @@ include $(TOOLCHAIN_LOCK)
 
 GO ?= go
 PROTOC ?= protoc
-CONTRACT_PROTO_DIR ?= $(CURDIR)/app/cmd/rpc/pb
+CONTRACT_SOURCES ?= $(CURDIR)/contracts/sources.json
 CONTRACT_OUT ?= $(CURDIR)/contracts/generated
 VULNCHECK ?= $(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
 MODULES := pkg framework gateway app app/cmd/rpc
 
-.PHONY: toolchain-check test race vet vuln tidy build contract contract-check integration verify verify-production
+.PHONY: toolchain-check test race vet vuln tidy build contract rpc-contract-check contract-check integration verify verify-production
 
 toolchain-check:
 	@set -eu; \
@@ -55,11 +55,17 @@ tidy:
 
 contract: toolchain-check
 	@cd app && PROTOC="$(PROTOC)" $(GO) run ./cmd contract generate \
-		--proto-dir "$(CONTRACT_PROTO_DIR)" --out "$(CONTRACT_OUT)" --title "yunka API" --version "1.0.0"
+		--sources "$(CONTRACT_SOURCES)" --repo-root "$(CURDIR)" \
+		--out "$(CONTRACT_OUT)" --title "yunka API" --version "1.0.0"
 
-contract-check: toolchain-check
+rpc-contract-check: toolchain-check
+	@cd gateway && PROTOC="$(PROTOC)" YUNKA_REPOSITORY_ROOT="$(CURDIR)" \
+		$(GO) test -count=1 -tags=contractsync ./rpc/meta
+
+contract-check: toolchain-check rpc-contract-check
 	@cd app && PROTOC="$(PROTOC)" $(GO) run ./cmd contract check \
-		--proto-dir "$(CONTRACT_PROTO_DIR)" --out "$(CONTRACT_OUT)" --title "yunka API" --version "1.0.0"
+		--sources "$(CONTRACT_SOURCES)" --repo-root "$(CURDIR)" \
+		--out "$(CONTRACT_OUT)" --title "yunka API" --version "1.0.0"
 
 build:
 	@set -eu; for module in $(MODULES); do \

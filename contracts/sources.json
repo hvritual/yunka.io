@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "sourceSets": [
+    {
+      "name": "gateway-runtime",
+      "root": "gateway/rpc/pb",
+      "files": [
+        "api_common.proto",
+        "common.proto",
+        "gateway.proto"
+      ]
+    },
+    {
+      "name": "legacy-api",
+      "root": "app/cmd/rpc/pb",
+      "files": [
+        "api.proto",
+        "api_common.proto",
+        "common.proto",
+        "unit.proto"
+      ]
+    }
+  ]
+}

@@ -181,3 +181,11 @@ GitHub connector authorization and local Git authorization are separate. The con
 - Third-party GitHub Actions used by CI are pinned to immutable commit SHAs. CI installs protoc from the locked release archive and verifies its SHA-256 before use; package-manager-selected protoc versions are not accepted for contract verification.
 - `make toolchain-check`, contract generation/checking, `make verify`, and `yunka doctor` enforce exact Go/protoc agreement with the lock. Newer compilers are intentionally rejected until the lock is deliberately updated and reviewed.
 - CI proves determinism twice: `make tidy` must leave workspace dependency metadata unchanged, contract regeneration must leave `contracts/generated` unchanged, and the final worktree must be clean. C2 changes tooling/governance only and does not start C3 contract-source convergence.
+
+### 2026-08-20 — C3 contract-convergence baseline
+
+- `contracts/sources.json` is the canonical service-contract inventory. Contract source sets are explicit and complete; C3 compiles the legacy API root and gateway runtime root independently before deterministic manifest merge so same-basename imports cannot cross roots.
+- Contract ownership fails closed: source roots/import paths must remain inside the repository, every `.proto` under an inventoried root must be listed, and duplicate canonical files or protobuf message/enum/service full names across source sets are rejected.
+- The C2 manifest remains schema v1 and C3 is additive: existing `ApiService`/`UnitService` stay intact while `io.yunka.gateway.rpc.GatewayService` and its namespaced types enter the canonical artifacts. C2 -> C3 compatibility must contain no breaking changes.
+- HTTP routes are never inferred from dynamic gateway metadata. Only committed explicit protobuf bindings may enter OpenAPI paths; otherwise RPC methods remain unbound under `x-yunka-rpc-methods`.
+- Committed legacy gateway generated RPC files remain immutable. `make rpc-contract-check` verifies their registered protobuf descriptors against `gateway/rpc/pb/`; `gateway/rpc/gender.sh` is not a deterministic production generation path and is not used by C3 verification.
