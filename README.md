@@ -30,7 +30,13 @@ make vuln
 make build
 ```
 
-Run `make tidy` only when dependency metadata is intentionally being updated.
+Run `make tidy` only when dependency metadata is intentionally being updated. The C1
+production gate additionally requires a real MySQL 8 instance:
+
+```bash
+export YUNKA_TEST_MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/yunka_test?parseTime=true&charset=utf8mb4'
+make verify-production
+```
 
 ## Security defaults
 
@@ -91,9 +97,15 @@ W2 introduces a transport-neutral execution context without breaking the existin
 - RPC middleware is attached through `core/middleware.WrapRPCClient` or non-generated gRPC
   interceptors; generated RPC files remain untouched.
 
-Remote RPC identity is intentionally not trusted merely because it arrived in metadata. A
-service-side credential verifier must establish an authenticated Principal at each trust
-boundary before authorization is performed.
+Remote RPC identity is never trusted merely because it arrived in metadata. C1 adds the
+non-generated `CredentialVerifier` boundary plus fail-closed unary and streaming server
+interceptors. `NewStaticServiceTokenVerifier` is the bootstrap adapter for deployments that do
+not yet have workload identity: it uses the dedicated
+`x-yunka-service-authorization` metadata key, supports overlapping tokens during rotation, and
+requires a transport with privacy and integrity by default. Outbound callers use
+`StaticServiceTokenCredentials` as standard gRPC per-RPC credentials. Caller-supplied tenant,
+user, and role metadata is never accepted as identity proof. See
+`docs/waves/C1-production-hardening.md`.
 
 ## Resilience policies
 
@@ -221,6 +233,11 @@ yunka dev run --target api
 `yunka doctor` never repairs the workspace automatically. `yunka dev` consumes `.yunka/dev.json`;
 commands are argv arrays, working directories must remain below the repository root, dependency
 cycles fail before startup, and optional `graphNode` values are validated against the W09 graph.
+C1 manifest schema v2 adds an optional HTTP readiness barrier. A dependent process starts only
+after its dependency returns the configured 2xx status and, when `diagnosticsReady=true`, reports
+`core.health.ready=true`. Probes are bounded, do not follow redirects, read tokens only from a
+named environment variable, allow plain HTTP only to literal loopback IP addresses, and require
+HTTPS for remote endpoints. Schema v1 remains supported but cannot silently enable readiness.
 See `deploy/dev/yunka-dev.example.json` for the manifest shape.
 
 `pkg/testkit` provides the leaf-safe deterministic Clock and Registry. `framework/testkit`

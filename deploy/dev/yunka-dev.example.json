@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "processes": [
     {
       "name": "api",
@@ -7,7 +7,15 @@
       "workingDir": "example-service",
       "dependsOn": [],
       "graphNode": "service:example.ApiService",
-      "inheritEnv": ["OTEL_EXPORTER_OTLP_ENDPOINT", "YUNKA_DIAGNOSTICS_TOKEN"]
+      "inheritEnv": ["OTEL_EXPORTER_OTLP_ENDPOINT", "YUNKA_DIAGNOSTICS_TOKEN"],
+      "readiness": {
+        "url": "http://127.0.0.1:16667/_yunka/diagnostics",
+        "timeout": "30s",
+        "interval": "250ms",
+        "expectedStatus": 200,
+        "diagnosticsReady": true,
+        "tokenEnv": "YUNKA_DIAGNOSTICS_TOKEN"
+      }
     }
   ]
 }

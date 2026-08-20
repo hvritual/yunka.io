@@ -5,7 +5,7 @@ CONTRACT_OUT ?= $(CURDIR)/contracts/generated
 VULNCHECK ?= $(GO) run golang.org/x/vuln/cmd/govulncheck@v1.7.0
 MODULES := pkg framework gateway app app/cmd/rpc
 
-.PHONY: test race vet vuln tidy build contract contract-check verify
+.PHONY: test race vet vuln tidy build contract contract-check integration verify verify-production
 
 test:
 	@set -eu; for module in $(MODULES); do \
@@ -52,4 +52,12 @@ build:
 		(cd $$module && $(GO) build ./...); \
 	done
 
+integration:
+	@set -eu; \
+	: "$${YUNKA_TEST_MYSQL_DSN:?YUNKA_TEST_MYSQL_DSN is required for MySQL integration tests}"; \
+	echo "==> MySQL 8 transactional outbox integration"; \
+	(cd framework && $(GO) test -timeout=5m -count=1 -tags=integration ./event/outbox)
+
 verify: contract-check test race vet vuln build
+
+verify-production: verify integration

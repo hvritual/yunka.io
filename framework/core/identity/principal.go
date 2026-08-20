@@ -3,8 +3,9 @@ package identity
 import "context"
 
 const (
-	AuthMethodJWT    = "jwt"
-	AuthMethodAPIKey = "api-key"
+	AuthMethodJWT          = "jwt"
+	AuthMethodAPIKey       = "api-key"
+	AuthMethodServiceToken = "service-token"
 )
 
 // Principal is the trusted caller identity attached to a runtime context.

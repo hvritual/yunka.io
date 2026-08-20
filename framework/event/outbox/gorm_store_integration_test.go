@@ -30,7 +30,8 @@ func integrationStore(t *testing.T, options ...GORMOption) *GORMStore {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sqlDB.SetMaxOpenConns(8)
+	sqlDB.SetMaxOpenConns(32)
+	sqlDB.SetMaxIdleConns(32)
 
 	table := fmt.Sprintf("yunka_outbox_it_%d", time.Now().UnixNano())
 	options = append([]GORMOption{WithTable(table)}, options...)
@@ -68,10 +69,20 @@ func integrationEnvelope(t *testing.T, id string) event.Envelope {
 }
 
 func TestGORMStoreConcurrentClaimIntegration(t *testing.T) {
+	assertConcurrentClaimPartition(t, 2, 6)
+}
+
+func TestGORMStoreConcurrentClaimStressIntegration(t *testing.T) {
+	assertConcurrentClaimPartition(t, 10, 10)
+}
+
+func assertConcurrentClaimPartition(t *testing.T, workers, recordsPerWorker int) {
+	t.Helper()
 	store := integrationStore(t, WithSkipLocked(true))
 	ctx := context.Background()
-	for index := 0; index < 12; index++ {
-		id := fmt.Sprintf("event-%02d", index)
+	total := workers * recordsPerWorker
+	for index := 0; index < total; index++ {
+		id := fmt.Sprintf("event-%04d", index)
 		if err := store.Enqueue(ctx, integrationEnvelope(t, id)); err != nil {
 			t.Fatal(err)
 		}
@@ -80,44 +91,59 @@ func TestGORMStoreConcurrentClaimIntegration(t *testing.T) {
 	now := time.Now().UTC().Add(time.Second)
 	start := make(chan struct{})
 	type claimResult struct {
+		owner   string
 		records []Record
 		err     error
 	}
-	results := make(chan claimResult, 2)
+	results := make(chan claimResult, workers)
 	var wg sync.WaitGroup
-	for _, owner := range []string{"worker-a", "worker-b"} {
-		owner := owner
+	for index := 0; index < workers; index++ {
+		owner := fmt.Sprintf("worker-%02d", index)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			<-start
 			records, err := store.Claim(ctx, ClaimOptions{
 				Owner: owner,
-				Limit: 6,
+				Limit: recordsPerWorker,
 				Lease: time.Minute,
 				Now:   now,
 			})
-			results <- claimResult{records: records, err: err}
+			results <- claimResult{owner: owner, records: records, err: err}
 		}()
 	}
 	close(start)
 	wg.Wait()
 	close(results)
 
-	seen := make(map[string]string)
+	seen := make(map[string]string, total)
 	for current := range results {
 		if current.err != nil {
-			t.Fatal(current.err)
+			t.Fatalf("%s claim: %v", current.owner, current.err)
+		}
+		if len(current.records) != recordsPerWorker {
+			t.Fatalf("%s claimed=%d want %d", current.owner, len(current.records), recordsPerWorker)
 		}
 		for _, record := range current.records {
 			if owner, exists := seen[record.ID]; exists {
-				t.Fatalf("event %s claimed twice; first owner=%s", record.ID, owner)
+				t.Fatalf("event %s claimed twice; first owner=%s second owner=%s", record.ID, owner, current.owner)
 			}
-			seen[record.ID] = record.LeaseOwner
+			if record.LeaseOwner != current.owner || record.Attempts != 1 || record.Status != StatusInFlight {
+				t.Fatalf("record=%+v worker=%s", record, current.owner)
+			}
+			seen[record.ID] = current.owner
 		}
 	}
-	if len(seen) != 12 {
-		t.Fatalf("claimed=%d want 12", len(seen))
+	if len(seen) != total {
+		t.Fatalf("claimed=%d want %d", len(seen), total)
+	}
+
+	snapshot, err := store.Snapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Pending != 0 || snapshot.InFlight != int64(total) {
+		t.Fatalf("snapshot=%+v want inFlight=%d", snapshot, total)
 	}
 }
 
