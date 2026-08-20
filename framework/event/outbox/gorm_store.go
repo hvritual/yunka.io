@@ -2,6 +2,7 @@ package outbox
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,8 +17,9 @@ import (
 const DefaultTable = "yunka_outbox"
 
 type GORMStore struct {
-	db    *gorm.DB
-	table string
+	db         *gorm.DB
+	table      string
+	skipLocked bool
 }
 
 type GORMOption func(*GORMStore) error
@@ -33,6 +35,15 @@ func WithTable(table string) GORMOption {
 	}
 }
 
+// WithSkipLocked enables SELECT ... FOR UPDATE SKIP LOCKED during claims.
+// Enable it only for database versions that support the clause, such as
+// MySQL 8+. The compatibility default remains plain FOR UPDATE.
+func WithSkipLocked(enabled bool) GORMOption {
+	return func(store *GORMStore) error {
+		store.skipLocked = enabled
+		return nil
+	}
+}
 func NewGORMStore(db *gorm.DB, options ...GORMOption) (*GORMStore, error) {
 	if db == nil {
 		return nil, errors.New("outbox: gorm database is required")
@@ -115,20 +126,70 @@ func (store *GORMStore) Claim(ctx context.Context, options ClaimOptions) ([]Reco
 	if options.Owner == "" {
 		return nil, ErrInvalidOwner
 	}
+
 	var claimed []gormRecord
+	txOptions := &sql.TxOptions{}
+	if store.skipLocked {
+		txOptions.Isolation = sql.LevelReadCommitted
+	}
 	err := store.db.WithContext(nonNilContext(ctx)).Transaction(func(tx *gorm.DB) error {
-		var candidates []gormRecord
+		locking := clause.Locking{Strength: "UPDATE"}
+		if store.skipLocked {
+			locking.Options = "SKIP LOCKED"
+		}
+
+		// Lock only queue IDs through covering indexes. Selecting full rows
+		// can force a filesort and make one worker lock every eligible row,
+		// preventing concurrent SKIP LOCKED workers from partitioning work.
+		var candidateIDs []string
+		var expiredIDs []string
 		query := tx.Table(store.table).
-			Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("(status = ? AND next_attempt_at <= ?) OR (status = ? AND lease_until IS NOT NULL AND lease_until <= ?)", StatusPending, options.Now, StatusInFlight, options.Now).
-			Order("next_attempt_at ASC").Order("created_at ASC").Order("id ASC").Limit(options.Limit).
-			Find(&candidates)
+			Clauses(locking).
+			Where("status = ? AND lease_until IS NOT NULL AND lease_until <= ?", StatusInFlight, options.Now).
+			Order("lease_until ASC").Order("created_at ASC").Order("id ASC").Limit(options.Limit).
+			Pluck("id", &expiredIDs)
 		if query.Error != nil {
 			return query.Error
 		}
+		candidateIDs = append(candidateIDs, expiredIDs...)
+
+		remaining := options.Limit - len(candidateIDs)
+		if remaining > 0 {
+			var pendingIDs []string
+			query = tx.Table(store.table).
+				Clauses(locking).
+				Where("status = ? AND next_attempt_at <= ?", StatusPending, options.Now).
+				Order("next_attempt_at ASC").Order("created_at ASC").Order("id ASC").Limit(remaining).
+				Pluck("id", &pendingIDs)
+			if query.Error != nil {
+				return query.Error
+			}
+			candidateIDs = append(candidateIDs, pendingIDs...)
+		}
+
+		var candidates []gormRecord
+		if len(candidateIDs) > 0 {
+			var loaded []gormRecord
+			if err := tx.Table(store.table).Where("id IN ?", candidateIDs).Find(&loaded).Error; err != nil {
+				return err
+			}
+			byID := make(map[string]gormRecord, len(loaded))
+			for _, row := range loaded {
+				byID[row.ID] = row
+			}
+			candidates = make([]gormRecord, 0, len(candidateIDs))
+			for _, id := range candidateIDs {
+				candidate, ok := byID[id]
+				if !ok {
+					return ErrLeaseLost
+				}
+				candidates = append(candidates, candidate)
+			}
+		}
+
 		for _, candidate := range candidates {
-			// Decode before mutating lease state. Corrupt event JSON therefore rolls
-			// back the entire claim transaction instead of producing poison leases.
+			// Decode before mutating lease state. Corrupt event JSON rolls
+			// back the entire claim transaction instead of creating a poison lease.
 			if _, err := decodeGORMRecord(candidate); err != nil {
 				return err
 			}
@@ -152,10 +213,11 @@ func (store *GORMStore) Claim(ctx context.Context, options ClaimOptions) ([]Reco
 			claimed = append(claimed, candidate)
 		}
 		return nil
-	})
+	}, txOptions)
 	if err != nil {
 		return nil, err
 	}
+
 	result := make([]Record, 0, len(claimed))
 	for _, row := range claimed {
 		record, err := decodeGORMRecord(row)
@@ -166,7 +228,6 @@ func (store *GORMStore) Claim(ctx context.Context, options ClaimOptions) ([]Reco
 	}
 	return result, nil
 }
-
 func (store *GORMStore) MarkPublished(ctx context.Context, id, owner string, at time.Time) error {
 	if at.IsZero() {
 		at = time.Now().UTC()
@@ -286,13 +347,13 @@ type gormRecord struct {
 	Topic         string     `gorm:"column:topic;size:255;not null;index:idx_yunka_outbox_topic"`
 	EventType     string     `gorm:"column:event_type;size:255;not null"`
 	EventJSON     []byte     `gorm:"column:event_json;type:longblob;not null"`
-	Status        Status     `gorm:"column:status;size:32;not null;index:idx_yunka_outbox_ready,priority:1"`
+	Status        Status     `gorm:"column:status;size:32;not null;index:idx_yunka_outbox_ready,priority:1;index:idx_yunka_outbox_lease,priority:1"`
 	Attempts      int        `gorm:"column:attempts;not null"`
 	NextAttemptAt time.Time  `gorm:"column:next_attempt_at;not null;index:idx_yunka_outbox_ready,priority:2"`
 	LeaseOwner    string     `gorm:"column:lease_owner;size:128"`
-	LeaseUntil    *time.Time `gorm:"column:lease_until;index"`
+	LeaseUntil    *time.Time `gorm:"column:lease_until;index:idx_yunka_outbox_lease,priority:2"`
 	LastError     string     `gorm:"column:last_error;type:text"`
 	PublishedAt   *time.Time `gorm:"column:published_at"`
-	CreatedAt     time.Time  `gorm:"column:created_at;not null"`
+	CreatedAt     time.Time  `gorm:"column:created_at;not null;index:idx_yunka_outbox_ready,priority:3;index:idx_yunka_outbox_lease,priority:3"`
 	UpdatedAt     time.Time  `gorm:"column:updated_at;not null"`
 }

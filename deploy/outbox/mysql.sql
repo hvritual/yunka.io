@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS `yunka_outbox` (
   `created_at` datetime NOT NULL,
   `updated_at` datetime NOT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx_yunka_outbox_ready` (`status`, `next_attempt_at`),
+  KEY `idx_yunka_outbox_ready` (`status`, `next_attempt_at`, `created_at`, `id`),
   KEY `idx_yunka_outbox_topic` (`topic`),
-  KEY `idx_yunka_outbox_lease_until` (`lease_until`),
+  KEY `idx_yunka_outbox_lease` (`status`, `lease_until`, `created_at`, `id`),
   KEY `idx_yunka_outbox_published_at` (`published_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
