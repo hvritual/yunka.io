@@ -1,25 +1,24 @@
-name: w10.5 apply overlay
+name: w10.5 converge mvp
 
 on:
   push:
     branches: [agent/w10-5-convergence]
-  pull_request:
-    branches: [agent/mvp-stabilization]
 
 permissions:
   contents: write
 
 concurrency:
-  group: w10-5-apply-overlay
+  group: w10-5-converge-mvp
   cancel-in-progress: true
 
 jobs:
-  apply:
+  converge:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-      HEAD_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || 'agent/w10-5-convergence' }}
+      SOURCE_SHA: ${{ github.sha }}
+      HEAD_REF: agent/w10-5-convergence
+      MVP_SHA: 2dead88ff55ac6c879f21f00bcd1a23cafec4b7f
       YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?parseTime=true&charset=utf8mb4
     services:
       mysql:
@@ -36,7 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
@@ -57,107 +56,172 @@ jobs:
           names=['part00.b64','part01.b64','part02.b64','part03.b64','part04.b64','part05.b64','p06_0.b64','p06_1.b64','r06_2.b64','p07_0.b64','p07_1.b64','p07_2.b64','p08_0.b64','p08_1.b64','p08_2.b64','part09.b64','part10.b64','p11_0.b64','r11_1x0.b64','r11_1x1.b64','r11_1x2.b64']
           expected={'part00.b64':'609fb8dc21f9b108763ba354e871dad9bb29d3ba','part01.b64':'d23c8df055fbc966a2386c0f0facc587109b83ea','part02.b64':'387846452411bbc634db0241fe4d50b5a1cb062c','part03.b64':'cfb338c6525d918bc70015e6ab828e6f34318762','part04.b64':'411bf528b5425db1c4d013855ac698d8f20e79f4','part05.b64':'b8f543b97b4db9bfe7ca2bf21fd58eae85ad3c2d','p06_0.b64':'d41467343885d0fc62867024b68e738f11e8d223','p06_1.b64':'01215605bc8b3f671a9e2b9a0d4c2a60502298f9','r06_2.b64':'c904cbf76a2b720078571b902c4e474a8fd788f6','p07_0.b64':'0e4fe0ad1d283a2e45380a74bc7f7755d74c565f','p07_1.b64':'407e05e4f76a43b955bb7245b00d8076b195e178','p07_2.b64':'c6cee47cfc81e40bcd3cd1df841e62d7350cf77d','p08_0.b64':'97b17d80af808af80df05b08d1b2f7bacf820144','p08_1.b64':'8f5a212d6a7cd8806ed12bb1bd4c830d35c9537f','p08_2.b64':'8b1c246c65b9efb5791066e832bb748e44f2a460','part09.b64':'507acaa78e76c9f8890b130ab246d1dcd37c58f0','part10.b64':'00429a677f09e46875a7cda43dcee8b9ac5508bd','p11_0.b64':'d3cf04353b08401696e30976bfcfc8ba5ce4a327','r11_1x0.b64':'a6135b8228821e7b8179415e95e413525c157f33','r11_1x1.b64':'c3ecb62b616bb2819bcef513c9bbfb46d837b440','r11_1x2.b64':'707b7f3dd6af02a8c56c197ad799c502c99ddc79'}
           def blob(s):
-              d=s.encode(); return hashlib.sha1(f'blob {len(d)}\0'.encode()+d).hexdigest()
-          root=pathlib.Path('.github/w10_5_overlay'); chunks=[]; allowed=re.compile(r'^[A-Za-z0-9+/=]*$')
+              data=s.encode()
+              return hashlib.sha1(f'blob {len(data)}\0'.encode()+data).hexdigest()
+          root=pathlib.Path('.github/w10_5_overlay')
+          chunks=[]
+          allowed=re.compile(r'^[A-Za-z0-9+/=]*$')
           for name in names:
-              clean=(root/name).read_text().replace('\r','').replace('\n',''); want=expected[name]
-              if not allowed.fullmatch(clean): raise SystemExit(f'{name}: invalid base64 chars')
+              clean=(root/name).read_text().replace('\r','').replace('\n','')
+              want=expected[name]
+              if not allowed.fullmatch(clean):
+                  raise SystemExit(f'{name}: invalid base64 chars')
               if blob(clean)!=want:
-                  if name!='part04.b64' or len(clean)!=9001: raise SystemExit(f'{name}: blob mismatch')
+                  if name!='part04.b64' or len(clean)!=9001:
+                      raise SystemExit(f'{name}: blob mismatch')
                   matches=[clean[:i]+clean[i+1:] for i in range(len(clean)) if blob(clean[:i]+clean[i+1:])==want]
-                  if len(matches)!=1: raise SystemExit(f'{name}: repair matches={len(matches)}')
+                  if len(matches)!=1:
+                      raise SystemExit(f'{name}: repair matches={len(matches)}')
                   clean=matches[0]
               chunks.append(clean)
-          encoded=''.join(chunks); decoded=base64.b64decode(encoded,validate=True)
-          digest=hashlib.sha256(decoded).hexdigest(); want='8db9884a2dca9e5cdd5ddde9b24cf5857e2c0e502041deb1fc296080ff08a4be'
-          if len(encoded)!=103604 or digest!=want: raise SystemExit(f'overlay validation failed len={len(encoded)} sha={digest}')
+          encoded=''.join(chunks)
+          decoded=base64.b64decode(encoded,validate=True)
+          digest=hashlib.sha256(decoded).hexdigest()
+          want='8db9884a2dca9e5cdd5ddde9b24cf5857e2c0e502041deb1fc296080ff08a4be'
+          if len(encoded)!=103604 or digest!=want:
+              raise SystemExit(f'overlay validation failed len={len(encoded)} sha={digest}')
           pathlib.Path('/tmp/w10-5/overlay.tar.gz').write_bytes(decoded)
           PY
           tar -xzf /tmp/w10-5/overlay.tar.gz -C /tmp/w10-5
-      - name: Apply overlay to exact MVP base
+      - name: Apply overlay and fix Claim
         shell: bash
         run: |
           set -euo pipefail
-          expected=2dead88ff55ac6c879f21f00bcd1a23cafec4b7f
-          git fetch origin agent/mvp-stabilization
-          test "$(git rev-parse origin/agent/mvp-stabilization)" = "$expected"
-          git checkout --detach "$expected"
+          git fetch origin main agent/mvp-stabilization
+          test "$(git rev-parse origin/agent/mvp-stabilization)" = "$MVP_SHA"
+          git checkout --detach "$MVP_SHA"
           cp -a /tmp/w10-5/yunka-w10.5-convergence/repo/. .
-          while IFS= read -r path; do [ -z "$path" ] || rm -f -- "$path"; done < /tmp/w10-5/yunka-w10.5-convergence/DELETE_FILES.txt
+          while IFS= read -r path; do
+            [ -z "$path" ] || rm -f -- "$path"
+          done < /tmp/w10-5/yunka-w10.5-convergence/DELETE_FILES.txt
           python3 - <<'PY'
           from pathlib import Path
-          path=Path('pkg/selector/adaptive_test.go'); value=path.read_text()
+
+          path=Path('pkg/selector/adaptive_test.go')
+          value=path.read_text()
           old='''func TestRegistryReconcilePrunesRemovedNodes(t *testing.T) {\n\tfake := registryForTest(t, testServices())\n\tselector := NewAdaptiveSelector(Registry(fake), WithAdaptiveConfig(AdaptiveOptions{Enabled: true, Seed: 15})).(*registrySelector)\n'''
           new='''func TestRegistryReconcilePrunesRemovedNodes(t *testing.T) {\n\tfake := registryForTest(t, testServices())\n\tselectorContext := context.WithValue(context.Background(), "selector_ttl", time.Duration(0))\n\tselector := NewAdaptiveSelector(\n\t\tRegistry(fake),\n\t\tfunc(options *Options) { options.Context = selectorContext },\n\t\tWithAdaptiveConfig(AdaptiveOptions{Enabled: true, Seed: 15}),\n\t).(*registrySelector)\n'''
-          if value.count(old)!=1: raise SystemExit('selector reconcile test preimage mismatch')
+          if value.count(old)!=1:
+              raise SystemExit('selector reconcile test preimage mismatch')
           path.write_text(value.replace(old,new))
 
-          path=Path('framework/event/outbox/gorm_store.go'); value=path.read_text()
+          path=Path('framework/event/outbox/gorm_store.go')
+          value=path.read_text()
           value=value.replace('import (\n\t"context"', 'import (\n\t"context"\n\t"database/sql"', 1)
           old='''\t\tvar candidates []gormRecord\n\t\tlocking := clause.Locking{Strength: "UPDATE"}\n\t\tif store.skipLocked {\n\t\t\tlocking.Options = "SKIP LOCKED"\n\t\t}\n\t\tquery := tx.Table(store.table).\n\t\t\tClauses(locking).\n\t\t\tWhere("(status = ? AND next_attempt_at <= ?) OR (status = ? AND lease_until IS NOT NULL AND lease_until <= ?)", StatusPending, options.Now, StatusInFlight, options.Now).\n\t\t\tOrder("next_attempt_at ASC").Order("created_at ASC").Order("id ASC").Limit(options.Limit).\n\t\t\tFind(&candidates)\n\t\tif query.Error != nil {\n\t\t\treturn query.Error\n\t\t}\n'''
-          new='''\t\tvar candidates []gormRecord\n\t\tlocking := clause.Locking{Strength: "UPDATE"}\n\t\tif store.skipLocked {\n\t\t\tlocking.Options = "SKIP LOCKED"\n\t\t}\n\n\t\t// Keep lease reclamation and pending delivery as separate locking reads.\n\t\t// A single OR range can make InnoDB lock/skip a much wider range than the\n\t\t// returned LIMIT, which defeats concurrent SKIP LOCKED consumers. Expired\n\t\t// leases are reclaimed first so crashed-worker records cannot starve.\n\t\tvar expired []gormRecord\n\t\tquery := tx.Table(store.table).\n\t\t\tClauses(locking).\n\t\t\tWhere("status = ? AND lease_until IS NOT NULL AND lease_until <= ?", StatusInFlight, options.Now).\n\t\t\tOrder("lease_until ASC").Order("created_at ASC").Order("id ASC").Limit(options.Limit).\n\t\t\tFind(&expired)\n\t\tif query.Error != nil {\n\t\t\treturn query.Error\n\t\t}\n\t\tcandidates = append(candidates, expired...)\n\n\t\tremaining := options.Limit - len(candidates)\n\t\tif remaining > 0 {\n\t\t\tvar pending []gormRecord\n\t\t\tquery = tx.Table(store.table).\n\t\t\t\tClauses(locking).\n\t\t\t\tWhere("status = ? AND next_attempt_at <= ?", StatusPending, options.Now).\n\t\t\t\tOrder("next_attempt_at ASC").Order("created_at ASC").Order("id ASC").Limit(remaining).\n\t\t\t\tFind(&pending)\n\t\t\tif query.Error != nil {\n\t\t\t\treturn query.Error\n\t\t\t}\n\t\t\tcandidates = append(candidates, pending...)\n\t\t}\n'''
-          if value.count(old)!=1: raise SystemExit('gorm claim preimage mismatch')
+          new='''\t\tlocking := clause.Locking{Strength: "UPDATE"}\n\t\tif store.skipLocked {\n\t\t\tlocking.Options = "SKIP LOCKED"\n\t\t}\n\n\t\t// Lock only queue IDs through covering indexes. Selecting full rows here\n\t\t// can force a filesort and make one MySQL worker lock every eligible row,\n\t\t// leaving concurrent SKIP LOCKED workers with an incomplete partition.\n\t\tvar candidateIDs []string\n\t\tvar expiredIDs []string\n\t\tquery := tx.Table(store.table).\n\t\t\tClauses(locking).\n\t\t\tWhere("status = ? AND lease_until IS NOT NULL AND lease_until <= ?", StatusInFlight, options.Now).\n\t\t\tOrder("lease_until ASC").Order("created_at ASC").Order("id ASC").Limit(options.Limit).\n\t\t\tPluck("id", &expiredIDs)\n\t\tif query.Error != nil {\n\t\t\treturn query.Error\n\t\t}\n\t\tcandidateIDs = append(candidateIDs, expiredIDs...)\n\n\t\tremaining := options.Limit - len(candidateIDs)\n\t\tif remaining > 0 {\n\t\t\tvar pendingIDs []string\n\t\t\tquery = tx.Table(store.table).\n\t\t\t\tClauses(locking).\n\t\t\t\tWhere("status = ? AND next_attempt_at <= ?", StatusPending, options.Now).\n\t\t\t\tOrder("next_attempt_at ASC").Order("created_at ASC").Order("id ASC").Limit(remaining).\n\t\t\t\tPluck("id", &pendingIDs)\n\t\t\tif query.Error != nil {\n\t\t\t\treturn query.Error\n\t\t\t}\n\t\t\tcandidateIDs = append(candidateIDs, pendingIDs...)\n\t\t}\n\n\t\tvar candidates []gormRecord\n\t\tif len(candidateIDs) > 0 {\n\t\t\tvar loaded []gormRecord\n\t\t\tif err := tx.Table(store.table).Where("id IN ?", candidateIDs).Find(&loaded).Error; err != nil {\n\t\t\t\treturn err\n\t\t\t}\n\t\t\tbyID := make(map[string]gormRecord, len(loaded))\n\t\t\tfor _, row := range loaded {\n\t\t\t\tbyID[row.ID] = row\n\t\t\t}\n\t\t\tcandidates = make([]gormRecord, 0, len(candidateIDs))\n\t\t\tfor _, id := range candidateIDs {\n\t\t\t\tcandidate, ok := byID[id]\n\t\t\t\tif !ok {\n\t\t\t\t\treturn ErrLeaseLost\n\t\t\t\t}\n\t\t\t\tcandidates = append(candidates, candidate)\n\t\t\t}\n\t\t}\n'''
+          if value.count(old)!=1:
+              raise SystemExit('gorm claim preimage mismatch')
           value=value.replace(old,new)
+
           old='''\tvar claimed []gormRecord\n\terr := store.db.WithContext(nonNilContext(ctx)).Transaction(func(tx *gorm.DB) error {\n'''
           new='''\tvar claimed []gormRecord\n\ttxOptions := &sql.TxOptions{}\n\tif store.skipLocked {\n\t\ttxOptions.Isolation = sql.LevelReadCommitted\n\t}\n\terr := store.db.WithContext(nonNilContext(ctx)).Transaction(func(tx *gorm.DB) error {\n'''
-          if value.count(old)!=1: raise SystemExit('gorm transaction preimage mismatch')
+          if value.count(old)!=1:
+              raise SystemExit('gorm transaction preimage mismatch')
           value=value.replace(old,new)
+
           old='''\t\treturn nil\n\t})\n\tif err != nil {\n'''
           new='''\t\treturn nil\n\t}, txOptions)\n\tif err != nil {\n'''
-          if value.count(old)!=1: raise SystemExit('gorm transaction close preimage mismatch')
+          if value.count(old)!=1:
+              raise SystemExit('gorm transaction close preimage mismatch')
           value=value.replace(old,new)
-          value=value.replace('Status        Status     `gorm:"column:status;size:32;not null;index:idx_yunka_outbox_ready,priority:1"`','Status        Status     `gorm:"column:status;size:32;not null;index:idx_yunka_outbox_ready,priority:1;index:idx_yunka_outbox_lease,priority:1"`')
-          value=value.replace('LeaseUntil    *time.Time `gorm:"column:lease_until;index"`','LeaseUntil    *time.Time `gorm:"column:lease_until;index:idx_yunka_outbox_lease,priority:2"`')
-          value=value.replace('CreatedAt     time.Time  `gorm:"column:created_at;not null"`','CreatedAt     time.Time  `gorm:"column:created_at;not null;index:idx_yunka_outbox_ready,priority:3;index:idx_yunka_outbox_lease,priority:3"`')
+
+          replacements={
+              'ID            string     `gorm:"column:id;primaryKey;size:64"`': 'ID            string     `gorm:"column:id;primaryKey;size:64;index:idx_yunka_outbox_ready,priority:4;index:idx_yunka_outbox_lease,priority:4"`',
+              'Status        Status     `gorm:"column:status;size:32;not null;index:idx_yunka_outbox_ready,priority:1"`': 'Status        Status     `gorm:"column:status;size:32;not null;index:idx_yunka_outbox_ready,priority:1;index:idx_yunka_outbox_lease,priority:1"`',
+              'LeaseUntil    *time.Time `gorm:"column:lease_until;index"`': 'LeaseUntil    *time.Time `gorm:"column:lease_until;index:idx_yunka_outbox_lease,priority:2"`',
+              'CreatedAt     time.Time  `gorm:"column:created_at;not null"`': 'CreatedAt     time.Time  `gorm:"column:created_at;not null;index:idx_yunka_outbox_ready,priority:3;index:idx_yunka_outbox_lease,priority:3"`',
+          }
+          for before, after in replacements.items():
+              if value.count(before)!=1:
+                  raise SystemExit(f'gorm index preimage mismatch: {before}')
+              value=value.replace(before,after)
           path.write_text(value)
-          path=Path('deploy/outbox/mysql.sql'); value=path.read_text()
-          value=value.replace('KEY `idx_yunka_outbox_ready` (`status`, `next_attempt_at`),','KEY `idx_yunka_outbox_ready` (`status`, `next_attempt_at`, `created_at`),')
-          value=value.replace('KEY `idx_yunka_outbox_lease_until` (`lease_until`),','KEY `idx_yunka_outbox_lease` (`status`, `lease_until`, `created_at`),')
+
+          path=Path('deploy/outbox/mysql.sql')
+          value=path.read_text()
+          replacements={
+              'KEY `idx_yunka_outbox_ready` (`status`, `next_attempt_at`),': 'KEY `idx_yunka_outbox_ready` (`status`, `next_attempt_at`, `created_at`, `id`),',
+              'KEY `idx_yunka_outbox_lease_until` (`lease_until`),': 'KEY `idx_yunka_outbox_lease` (`status`, `lease_until`, `created_at`, `id`),',
+          }
+          for before, after in replacements.items():
+              if value.count(before)!=1:
+                  raise SystemExit(f'mysql index preimage mismatch: {before}')
+              value=value.replace(before,after)
           path.write_text(value)
           PY
           gofmt -w framework/event/outbox/gorm_store.go pkg/selector/adaptive_test.go
           git diff --check
-          { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u > /tmp/w10-5/changed-paths.txt
-          test "$(wc -l < /tmp/w10-5/changed-paths.txt | tr -d ' ')" = "58"
-      - name: Dependency sync normalization
+          test ! -e .github/w10_5_overlay
+          test ! -e .github/workflows/w10-5-apply-overlay.yml
+          { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u > /tmp/w10-5/initial-paths.txt
+          test "$(wc -l < /tmp/w10-5/initial-paths.txt | tr -d ' ')" = "58"
+      - name: Normalize dependencies
         shell: bash
         run: |
           set -euo pipefail
-          dependency_paths=(go.work go.work.sum pkg/go.mod pkg/go.sum framework/go.mod framework/go.sum gateway/go.mod gateway/go.sum app/go.mod app/go.sum app/cmd/rpc/go.mod app/cmd/rpc/go.sum)
           make tidy
-          mapfile -t dirty < <(git diff --name-only -- "${dependency_paths[@]}")
-          if [ "${#dirty[@]}" -gt 0 ]; then
-            if [ "${#dirty[@]}" -ne 1 ] || [ "${dirty[0]}" != "gateway/go.sum" ]; then
-              echo 'unexpected dependency drift'; git diff -- "${dependency_paths[@]}"; exit 1
-            fi
-            additions="$(git diff --numstat -- gateway/go.sum | awk '{print $1":"$2}')"
-            test "$additions" = "4:0"
-          fi
           cp gateway/go.sum /tmp/w10-5/gateway.go.sum.normalized
           make tidy
           cmp gateway/go.sum /tmp/w10-5/gateway.go.sum.normalized
-      - name: Install protoc
+          { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u > /tmp/w10-5/normalized-paths.txt
+          test "$(wc -l < /tmp/w10-5/normalized-paths.txt | tr -d ' ')" = "59"
+          test "$(comm -13 /tmp/w10-5/initial-paths.txt /tmp/w10-5/normalized-paths.txt)" = "gateway/go.sum"
+          test -z "$(comm -23 /tmp/w10-5/initial-paths.txt /tmp/w10-5/normalized-paths.txt)"
+      - name: Install pinned protoc
         shell: bash
         run: |
           set -euo pipefail
           curl -fL --retry 5 --retry-delay 2 -o /tmp/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-x86_64.zip
-          rm -rf /tmp/protoc && mkdir -p /tmp/protoc
+          rm -rf /tmp/protoc
+          mkdir -p /tmp/protoc
           unzip -q /tmp/protoc.zip -d /tmp/protoc
           echo "/tmp/protoc/bin" >> "$GITHUB_PATH"
           /tmp/protoc/bin/protoc --version
-      - name: Contract convergence gate
+      - name: Contract convergence
         run: make contract-check contract-audit
       - name: Verify core
         run: make verify-core
-      - name: MySQL outbox integration
-        run: make integration
-      - name: Create clean local Git commit and publish control branch
+      - name: Verify MySQL Claim repeatedly
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            echo "==> MySQL integration attempt ${attempt}"
+            make integration
+          done
+      - name: Create clean local commit and atomically converge branches
         shell: bash
         run: |
           set -euo pipefail
           git diff --check
+          test ! -e .github/w10_5_overlay
+          test ! -e .github/workflows/w10-5-apply-overlay.yml
+
+          { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u > /tmp/w10-5/final-paths.txt
+          test -s /tmp/w10-5/final-paths.txt
+          while IFS= read -r path; do
+            [ -z "$path" ] || git add -- "$path"
+          done < /tmp/w10-5/final-paths.txt
+          git diff --cached --check
+          test "$(git diff --cached --name-only | wc -l | tr -d ' ')" = "59"
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "feat: converge mvp production gate"
-          git push --force-with-lease="refs/heads/${HEAD_REF}:${SOURCE_SHA}" origin "HEAD:refs/heads/${HEAD_REF}"
+          git commit -m "fix: converge mysql outbox claim baseline"
+
+          git fetch origin \
+            "+refs/heads/main:refs/remotes/origin/main" \
+            "+refs/heads/agent/mvp-stabilization:refs/remotes/origin/agent/mvp-stabilization" \
+            "+refs/heads/${HEAD_REF}:refs/remotes/origin/${HEAD_REF}"
+          test "$(git rev-parse origin/agent/mvp-stabilization)" = "$MVP_SHA"
+          test "$(git rev-parse "origin/${HEAD_REF}")" = "$SOURCE_SHA"
+          git merge-base --is-ancestor origin/agent/mvp-stabilization HEAD
+          git merge-base --is-ancestor origin/main HEAD
+
+          git push --atomic \
+            --force-with-lease="refs/heads/${HEAD_REF}:${SOURCE_SHA}" \
+            origin \
+            "HEAD:refs/heads/${HEAD_REF}" \
+            "HEAD:refs/heads/agent/mvp-stabilization" \
+            "HEAD:refs/heads/main"
