@@ -1,11 +1,26 @@
+TOOLCHAIN_LOCK ?= $(CURDIR)/tools/toolchain.env
+include $(TOOLCHAIN_LOCK)
+
 GO ?= go
 PROTOC ?= protoc
 CONTRACT_PROTO_DIR ?= $(CURDIR)/app/cmd/rpc/pb
 CONTRACT_OUT ?= $(CURDIR)/contracts/generated
-VULNCHECK ?= $(GO) run golang.org/x/vuln/cmd/govulncheck@v1.7.0
+VULNCHECK ?= $(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
 MODULES := pkg framework gateway app app/cmd/rpc
 
-.PHONY: test race vet vuln tidy build contract contract-check integration verify verify-production
+.PHONY: toolchain-check test race vet vuln tidy build contract contract-check integration verify verify-production
+
+toolchain-check:
+	@set -eu; \
+	required_go="$$(awk '$$1 == "toolchain" { sub(/^go/, "", $$2); print $$2; exit }' go.work)"; \
+	actual_go="$$($(GO) version | awk '{print $$3}' | sed 's/^go//')"; \
+	actual_protoc="$$($(PROTOC) --version | awk '{print $$2}')"; \
+	test -n "$$required_go" || { echo "toolchain-check: go.work has no toolchain directive" >&2; exit 1; }; \
+	test "$$required_go" = "$(GO_VERSION)" || { echo "toolchain-check: go.work=$$required_go lock=$(GO_VERSION)" >&2; exit 1; }; \
+	test "$$actual_go" = "$(GO_VERSION)" || { echo "toolchain-check: go=$$actual_go want $(GO_VERSION)" >&2; exit 1; }; \
+	test "$$actual_protoc" = "$(PROTOC_VERSION)" || { echo "toolchain-check: protoc=$$actual_protoc want $(PROTOC_VERSION)" >&2; exit 1; }; \
+	echo "toolchain-check: go=$(GO_VERSION) protoc=$(PROTOC_VERSION) govulncheck=$(GOVULNCHECK_VERSION)"
+
 
 test:
 	@set -eu; for module in $(MODULES); do \
@@ -38,11 +53,11 @@ tidy:
 	done
 	$(GO) work sync
 
-contract:
+contract: toolchain-check
 	@cd app && PROTOC="$(PROTOC)" $(GO) run ./cmd contract generate \
 		--proto-dir "$(CONTRACT_PROTO_DIR)" --out "$(CONTRACT_OUT)" --title "yunka API" --version "1.0.0"
 
-contract-check:
+contract-check: toolchain-check
 	@cd app && PROTOC="$(PROTOC)" $(GO) run ./cmd contract check \
 		--proto-dir "$(CONTRACT_PROTO_DIR)" --out "$(CONTRACT_OUT)" --title "yunka API" --version "1.0.0"
 
@@ -58,6 +73,6 @@ integration:
 	echo "==> MySQL 8 transactional outbox integration"; \
 	(cd framework && $(GO) test -timeout=5m -count=1 -tags=integration ./event/outbox)
 
-verify: contract-check test race vet vuln build
+verify: toolchain-check contract-check test race vet vuln build
 
 verify-production: verify integration

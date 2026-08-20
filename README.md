@@ -6,8 +6,10 @@ the gateway, command-line tooling, and the RPC generator.
 ## Requirements
 
 - Go 1.25.13
-- `protoc` 3.21+ for W06 contract generation and verification
+- `protoc` 3.21.12 (protobuf release 21.12) for contract generation and verification
 - GCC when running race tests or the SQLite-backed gateway tests
+
+Exact tool versions are locked in `tools/toolchain.env`; local and CI verification must use that lock rather than accepting arbitrary newer compilers.
 
 ## Repository layout
 
@@ -23,12 +25,15 @@ path `yunka.io/app`; `framework` remains `yunka.io/framework`.
 ## Verification
 
 ```bash
+make toolchain-check
 make test
 make race
 make vet
 make vuln
 make build
 ```
+
+`make toolchain-check` requires the exact Go/protoc versions in `tools/toolchain.env`. Normal CI is read-only: it runs `make tidy` and contract regeneration only to prove zero drift, and never commits or pushes repairs.
 
 Run `make tidy` only when dependency metadata is intentionally being updated. The C1
 production gate additionally requires a real MySQL 8 instance:
@@ -37,6 +42,10 @@ production gate additionally requires a real MySQL 8 instance:
 export YUNKA_TEST_MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/yunka_test?parseTime=true&charset=utf8mb4'
 make verify-production
 ```
+
+## Toolchain determinism
+
+C2 makes `tools/toolchain.env` the canonical tool lock for Go, protoc, and govulncheck. CI downloads `protoc-21.12-linux-x86_64.zip`, verifies its locked SHA-256 before extraction, and pins third-party GitHub Actions to immutable commit SHAs. Dependency or generated-contract drift is a hard failure; CI has only `contents: read` and cannot auto-commit changes. See `docs/waves/C2-toolchain-determinism.md`.
 
 ## Security defaults
 

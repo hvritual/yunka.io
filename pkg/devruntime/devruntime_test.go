@@ -139,6 +139,13 @@ func TestDoctorReadOnlyChecks(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "go.work"), []byte("go 1.25.0\ntoolchain go1.25.13\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll(filepath.Join(root, "tools"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	toolchain := "GO_VERSION=1.25.13\nPROTOC_RELEASE=21.12\nPROTOC_VERSION=3.21.12\nPROTOC_LINUX_X86_64_SHA256=3a4c1e5f2516c639d3079b1586e703fc7bcfa2136d58bda24d1d54f949c315e8\nGOVULNCHECK_VERSION=v1.7.0\n"
+	if err := os.WriteFile(filepath.Join(root, "tools", "toolchain.env"), []byte(toolchain), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.MkdirAll(filepath.Join(root, "contracts", "generated"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -391,4 +398,98 @@ func TestDevruntimeHelperProcess(t *testing.T) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	<-ctx.Done()
+}
+
+func TestDoctorRejectsExactToolchainVersionDrift(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.work"), []byte("go 1.25.0\ntoolchain go1.25.13\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "tools"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	toolchain := "GO_VERSION=1.25.13\nPROTOC_RELEASE=21.12\nPROTOC_VERSION=3.21.12\nPROTOC_LINUX_X86_64_SHA256=3a4c1e5f2516c639d3079b1586e703fc7bcfa2136d58bda24d1d54f949c315e8\nGOVULNCHECK_VERSION=v1.7.0\n"
+	if err := os.WriteFile(filepath.Join(root, "tools", "toolchain.env"), []byte(toolchain), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "contracts", "generated"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "contracts", "generated", "manifest.json"), []byte(`{"schemaVersion":1,"files":[],"messages":[],"enums":[],"services":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lookPath := func(name string) (string, error) { return "/tools/" + name, nil }
+	run := func(_ context.Context, name string, args ...string) (string, error) {
+		switch filepath.Base(name) {
+		case "go":
+			return "go version go1.25.13 linux/amd64", nil
+		case "protoc":
+			return "libprotoc 3.22.0", nil
+		case "gcc":
+			return "gcc (GCC) 13.2.0", nil
+		case "git":
+			if len(args) > 0 && args[0] == "--version" {
+				return "git version 2.45.0", nil
+			}
+			return "", nil
+		}
+		return "", nil
+	}
+	report := Doctor(context.Background(), DoctorOptions{Root: root, LookPath: lookPath, Run: run})
+	if !report.Failed(false) {
+		t.Fatalf("expected exact-version failure: %+v", report.Checks)
+	}
+	for _, check := range report.Checks {
+		if check.Name == "tool.protoc" {
+			if check.Status != CheckFail || !strings.Contains(check.Action, "3.21.12") {
+				t.Fatalf("unexpected protoc check: %+v", check)
+			}
+			return
+		}
+	}
+	t.Fatal("tool.protoc check not found")
+}
+
+func TestDoctorRejectsToolchainLockGoWorkMismatch(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.work"), []byte("go 1.25.0\ntoolchain go1.25.13\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "tools"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	toolchain := "GO_VERSION=1.25.12\nPROTOC_RELEASE=21.12\nPROTOC_VERSION=3.21.12\nPROTOC_LINUX_X86_64_SHA256=3a4c1e5f2516c639d3079b1586e703fc7bcfa2136d58bda24d1d54f949c315e8\nGOVULNCHECK_VERSION=v1.7.0\n"
+	if err := os.WriteFile(filepath.Join(root, "tools", "toolchain.env"), []byte(toolchain), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lookPath := func(name string) (string, error) { return "/tools/" + name, nil }
+	run := func(_ context.Context, name string, args ...string) (string, error) {
+		switch filepath.Base(name) {
+		case "go":
+			return "go version go1.25.12 linux/amd64", nil
+		case "protoc":
+			return "libprotoc 3.21.12", nil
+		case "gcc":
+			return "gcc (GCC) 13.2.0", nil
+		case "git":
+			if len(args) > 0 && args[0] == "--version" {
+				return "git version 2.45.0", nil
+			}
+			return "", nil
+		}
+		return "", nil
+	}
+	report := Doctor(context.Background(), DoctorOptions{Root: root, LookPath: lookPath, Run: run})
+	if !report.Failed(false) {
+		t.Fatalf("expected lock mismatch failure: %+v", report.Checks)
+	}
+	for _, check := range report.Checks {
+		if check.Name == "toolchain.lock" {
+			if check.Status != CheckFail || !strings.Contains(check.Detail, "go.work=go1.25.13") {
+				t.Fatalf("unexpected lock check: %+v", check)
+			}
+			return
+		}
+	}
+	t.Fatal("toolchain.lock check not found")
 }

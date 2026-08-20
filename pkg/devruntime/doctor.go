@@ -1,6 +1,7 @@
 package devruntime
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -89,7 +90,17 @@ func Doctor(ctx context.Context, options DoctorOptions) DoctorReport {
 		add(Check{Name: "workspace.go_work", Status: CheckPass, Detail: "toolchain " + requiredGo})
 	}
 
-	checkTool := func(name, versionArg, minimum, action string) {
+	lockPath := filepath.Join(root, "tools", "toolchain.env")
+	lock, lockErr := loadToolchainLock(lockPath)
+	if lockErr != nil {
+		add(Check{Name: "toolchain.lock", Status: CheckFail, Detail: lockErr.Error(), Action: "restore tools/toolchain.env from the repository"})
+	} else if requiredGo != "" && strings.TrimPrefix(requiredGo, "go") != lock.GoVersion {
+		add(Check{Name: "toolchain.lock", Status: CheckFail, Detail: fmt.Sprintf("go.work=%s lock=go%s", requiredGo, lock.GoVersion), Action: "make go.work and tools/toolchain.env agree exactly"})
+	} else {
+		add(Check{Name: "toolchain.lock", Status: CheckPass, Detail: fmt.Sprintf("go=%s protoc=%s govulncheck=%s", lock.GoVersion, lock.ProtocVersion, lock.GovulncheckVersion)})
+	}
+
+	checkTool := func(name, versionArg, expected, action string) {
 		path, pathErr := lookPath(name)
 		if pathErr != nil {
 			add(Check{Name: "tool." + name, Status: CheckFail, Detail: "not found", Action: action})
@@ -100,22 +111,27 @@ func Doctor(ctx context.Context, options DoctorOptions) DoctorReport {
 			add(Check{Name: "tool." + name, Status: CheckFail, Detail: runErr.Error(), Action: action})
 			return
 		}
-		if minimum != "" {
+		if expected != "" {
 			current := extractVersion(output)
-			if current == "" || compareVersion(current, minimum) < 0 {
-				add(Check{Name: "tool." + name, Status: CheckFail, Detail: output, Action: fmt.Sprintf("install %s >= %s", name, minimum)})
+			if current != expected {
+				add(Check{Name: "tool." + name, Status: CheckFail, Detail: firstLine(output), Action: fmt.Sprintf("install %s %s exactly", name, expected)})
 				return
 			}
 		}
 		add(Check{Name: "tool." + name, Status: CheckPass, Detail: firstLine(output)})
 	}
 
-	goMinimum := strings.TrimPrefix(requiredGo, "go")
-	if goMinimum == "" {
-		goMinimum = "1.25.13"
+	goExpected := strings.TrimPrefix(requiredGo, "go")
+	protocExpected := "3.21.12"
+	if lockErr == nil {
+		goExpected = lock.GoVersion
+		protocExpected = lock.ProtocVersion
 	}
-	checkTool("go", "version", goMinimum, "install the Go toolchain required by go.work")
-	checkTool("protoc", "--version", "3.21.0", "install protoc 3.21 or newer")
+	if goExpected == "" {
+		goExpected = "1.25.13"
+	}
+	checkTool("go", "version", goExpected, "install the exact Go toolchain locked by tools/toolchain.env")
+	checkTool("protoc", "--version", protocExpected, "install the exact protoc release locked by tools/toolchain.env")
 	checkTool("gcc", "--version", "", "install GCC for race/CGO verification")
 	checkTool("git", "--version", "", "install Git")
 
@@ -155,6 +171,61 @@ func Doctor(ctx context.Context, options DoctorOptions) DoctorReport {
 		add(Check{Name: "dev.manifest", Status: CheckWarn, Detail: "optional .yunka/dev.json not found", Action: "create it when yunka dev should manage local processes"})
 	}
 	return report
+}
+
+type toolchainLock struct {
+	GoVersion              string
+	ProtocRelease          string
+	ProtocVersion          string
+	ProtocLinuxX8664SHA256 string
+	GovulncheckVersion     string
+}
+
+func loadToolchainLock(path string) (toolchainLock, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return toolchainLock{}, err
+	}
+	defer file.Close()
+
+	var lock toolchainLock
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			return toolchainLock{}, fmt.Errorf("toolchain lock contains invalid line %q", line)
+		}
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		switch key {
+		case "GO_VERSION":
+			lock.GoVersion = value
+		case "PROTOC_RELEASE":
+			lock.ProtocRelease = value
+		case "PROTOC_VERSION":
+			lock.ProtocVersion = value
+		case "PROTOC_LINUX_X86_64_SHA256":
+			lock.ProtocLinuxX8664SHA256 = strings.ToLower(value)
+		case "GOVULNCHECK_VERSION":
+			lock.GovulncheckVersion = value
+		default:
+			return toolchainLock{}, fmt.Errorf("toolchain lock contains unknown key %q", key)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return toolchainLock{}, err
+	}
+	if lock.GoVersion == "" || lock.ProtocRelease == "" || lock.ProtocVersion == "" || lock.ProtocLinuxX8664SHA256 == "" || lock.GovulncheckVersion == "" {
+		return toolchainLock{}, fmt.Errorf("toolchain lock is incomplete")
+	}
+	if matched, _ := regexp.MatchString(`^[0-9a-f]{64}$`, lock.ProtocLinuxX8664SHA256); !matched {
+		return toolchainLock{}, fmt.Errorf("toolchain lock protoc sha256 is invalid")
+	}
+	return lock, nil
 }
 
 func requiredToolchain(path string) (string, error) {

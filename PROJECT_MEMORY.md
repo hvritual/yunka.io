@@ -103,7 +103,7 @@ GitHub connector authorization and local Git authorization are separate. The con
 ### 2026-08-18 — Dependency sync and verification baseline
 
 - Pull requests must run dependency synchronization before the full verification gate. `make tidy` plus `go work sync` must leave all `go.mod`, `go.sum`, `go.work`, and `go.work.sum` files clean.
-- Dependency drift is a blocking condition. Same-repository PRs may use the CI runner's local `git` to commit the exact generated dependency state; fork or non-writable runs must fail rather than silently continue.
+- Dependency drift is a blocking condition. Normal CI is read-only and must fail on drift; dependency metadata is repaired and committed through the ordinary local developer workflow, never by CI.
 - The full release gate remains `make verify` after dependency synchronization: unit tests, race tests, `go vet`, `govulncheck`, and builds across all five modules.
 - The mDNS registry baseline uses maintained `github.com/hashicorp/mdns v1.0.6`; the old `github.com/micro/mdns v0.3.0` implementation is retired because its probe/shutdown path fails the race gate.
 - mDNS watching uses bounded polling plus snapshot diff semantics instead of the legacy TTL/listen callback path; create, update, and delete results remain the registry watcher contract.
@@ -173,3 +173,11 @@ GitHub connector authorization and local Git authorization are separate. The con
 - `yunka dev` schema v2 supports explicit readiness barriers. Dependents wait for bounded, no-redirect HTTP probes and may require `core.health.ready=true`; plain HTTP is restricted to literal loopback IP addresses and remote probes require HTTPS. Optional probe tokens are loaded only from a named environment variable, and a child exit before readiness fails the run and cancels the process group.
 - The C0 MySQL Claim algorithm remains `READ COMMITTED` plus ID-only `FOR UPDATE SKIP LOCKED` queue reads and covering indexes. C1 real-MySQL regression covers 10 workers partitioning 100 records without overlap, in addition to lease reclaim.
 - C1 does not include CI permission changes, pinned `protoc`, contract-source migration, or legacy RPC-generator removal; those remain C2/C3 scope.
+
+### 2026-08-20 — C2 toolchain-determinism baseline
+
+- `tools/toolchain.env` is the canonical repository tool lock. C2 pins Go `1.25.13`, protobuf release `21.12` / `libprotoc 3.21.12`, the Linux x86_64 protoc archive SHA-256, and `govulncheck v1.7.0`.
+- Normal GitHub Actions CI is read-only (`contents: read`). It must never run `git commit`, `git push`, or auto-repair dependency/generated state; drift is a blocking signal for the ordinary local development workflow.
+- Third-party GitHub Actions used by CI are pinned to immutable commit SHAs. CI installs protoc from the locked release archive and verifies its SHA-256 before use; package-manager-selected protoc versions are not accepted for contract verification.
+- `make toolchain-check`, contract generation/checking, `make verify`, and `yunka doctor` enforce exact Go/protoc agreement with the lock. Newer compilers are intentionally rejected until the lock is deliberately updated and reviewed.
+- CI proves determinism twice: `make tidy` must leave workspace dependency metadata unchanged, contract regeneration must leave `contracts/generated` unchanged, and the final worktree must be clean. C2 changes tooling/governance only and does not start C3 contract-source convergence.
