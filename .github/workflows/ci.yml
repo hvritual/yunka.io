@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: w10-5-converge-mvp
@@ -130,7 +131,6 @@ jobs:
           value=value.replace(old,new)
 
           replacements={
-              'ID            string     `gorm:"column:id;primaryKey;size:64"`': 'ID            string     `gorm:"column:id;primaryKey;size:64;index:idx_yunka_outbox_ready,priority:4;index:idx_yunka_outbox_lease,priority:4"`',
               'Status        Status     `gorm:"column:status;size:32;not null;index:idx_yunka_outbox_ready,priority:1"`': 'Status        Status     `gorm:"column:status;size:32;not null;index:idx_yunka_outbox_ready,priority:1;index:idx_yunka_outbox_lease,priority:1"`',
               'LeaseUntil    *time.Time `gorm:"column:lease_until;index"`': 'LeaseUntil    *time.Time `gorm:"column:lease_until;index:idx_yunka_outbox_lease,priority:2"`',
               'CreatedAt     time.Time  `gorm:"column:created_at;not null"`': 'CreatedAt     time.Time  `gorm:"column:created_at;not null;index:idx_yunka_outbox_ready,priority:3;index:idx_yunka_outbox_lease,priority:3"`',
