@@ -49,6 +49,7 @@ jobs:
       - name: Reconstruct and verify overlay
         shell: bash
         run: |
+          echo "STAGE=reconstruct-overlay" >> "$GITHUB_ENV"
           set -euo pipefail
           mkdir -p /tmp/w10-5
           python3 - <<'PY'
@@ -86,6 +87,7 @@ jobs:
       - name: Apply overlay and fix Claim
         shell: bash
         run: |
+          echo "STAGE=apply-claim-fix" >> "$GITHUB_ENV"
           set -euo pipefail
           git fetch origin main agent/mvp-stabilization
           test "$(git rev-parse origin/agent/mvp-stabilization)" = "$MVP_SHA"
@@ -159,6 +161,7 @@ jobs:
       - name: Normalize dependencies
         shell: bash
         run: |
+          echo "STAGE=normalize-dependencies" >> "$GITHUB_ENV"
           set -euo pipefail
           make tidy
           cp gateway/go.sum /tmp/w10-5/gateway.go.sum.normalized
@@ -171,6 +174,7 @@ jobs:
       - name: Install pinned protoc
         shell: bash
         run: |
+          echo "STAGE=install-protoc" >> "$GITHUB_ENV"
           set -euo pipefail
           curl -fL --retry 5 --retry-delay 2 -o /tmp/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-x86_64.zip
           rm -rf /tmp/protoc
@@ -179,12 +183,17 @@ jobs:
           echo "/tmp/protoc/bin" >> "$GITHUB_PATH"
           /tmp/protoc/bin/protoc --version
       - name: Contract convergence
-        run: make contract-check contract-audit
+        run: |
+          echo "STAGE=contract-convergence" >> "$GITHUB_ENV"
+          make contract-check contract-audit
       - name: Verify core
-        run: make verify-core
+        run: |
+          echo "STAGE=verify-core" >> "$GITHUB_ENV"
+          make verify-core
       - name: Verify MySQL Claim repeatedly
         shell: bash
         run: |
+          echo "STAGE=mysql-claim-integration" >> "$GITHUB_ENV"
           set -euo pipefail
           for attempt in 1 2 3; do
             echo "==> MySQL integration attempt ${attempt}"
@@ -193,6 +202,7 @@ jobs:
       - name: Create clean local commit and atomically converge branches
         shell: bash
         run: |
+          echo "STAGE=publish-converged-branches" >> "$GITHUB_ENV"
           set -euo pipefail
           git diff --check
           test ! -e .github/w10_5_overlay
@@ -225,3 +235,13 @@ jobs:
             "HEAD:refs/heads/${HEAD_REF}" \
             "HEAD:refs/heads/agent/mvp-stabilization" \
             "HEAD:refs/heads/main"
+
+      - name: Report convergence failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/issues/5/comments" \
+            --method POST \
+            -f body="C0 convergence failed: stage=${STAGE:-unknown}, run_id=${GITHUB_RUN_ID}, source_sha=${GITHUB_SHA}. Inspect the exact Actions job log before changing scope."
