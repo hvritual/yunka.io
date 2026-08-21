@@ -16,8 +16,9 @@ import (
 )
 
 const (
-	LegacyDevSchemaVersion = 1
-	DevSchemaVersion       = 2
+	LegacyDevSchemaVersion      = 1
+	DevSchemaVersion            = 2
+	RuntimeClosureSchemaVersion = 3
 
 	DefaultReadinessTimeout  = 30 * time.Second
 	DefaultReadinessInterval = 250 * time.Millisecond
@@ -25,11 +26,29 @@ const (
 	MaxReadinessInterval     = 30 * time.Second
 	MaxReadinessTimeout      = 5 * time.Minute
 	MaxReadinessURLBytes     = 2048
+
+	DefaultRuntimeApplication      = "yunka"
+	DefaultRuntimeStatePath        = ".yunka/dev-runtime.json"
+	DefaultRuntimeGraphPath        = ".yunka/runtime-graph.json"
+	DefaultRuntimeContractManifest = "contracts/generated/manifest.json"
+	DefaultRuntimeShutdownTimeout  = 10 * time.Second
+	MinRuntimeShutdownTimeout      = 100 * time.Millisecond
+	MaxRuntimeShutdownTimeout      = 5 * time.Minute
 )
 
 type DevManifest struct {
-	SchemaVersion int       `json:"schemaVersion"`
-	Processes     []Process `json:"processes"`
+	SchemaVersion int            `json:"schemaVersion"`
+	Runtime       *RuntimeConfig `json:"runtime,omitempty"`
+	Processes     []Process      `json:"processes"`
+}
+
+type RuntimeConfig struct {
+	Application      string `json:"application,omitempty"`
+	StatePath        string `json:"statePath,omitempty"`
+	GraphPath        string `json:"graphPath,omitempty"`
+	ContractManifest string `json:"contractManifest,omitempty"`
+	ShutdownTimeout  string `json:"shutdownTimeout,omitempty"`
+	Closure          bool   `json:"closure,omitempty"`
 }
 
 type Process struct {
@@ -46,12 +65,13 @@ type Process struct {
 // started until the configured endpoint succeeds. DiagnosticsReady additionally
 // requires the W01/W07 response field core.health.ready to be true.
 type Readiness struct {
-	URL              string `json:"url"`
-	Timeout          string `json:"timeout,omitempty"`
-	Interval         string `json:"interval,omitempty"`
-	ExpectedStatus   int    `json:"expectedStatus,omitempty"`
-	DiagnosticsReady bool   `json:"diagnosticsReady,omitempty"`
-	TokenEnv         string `json:"tokenEnv,omitempty"`
+	URL                string `json:"url"`
+	Timeout            string `json:"timeout,omitempty"`
+	Interval           string `json:"interval,omitempty"`
+	ExpectedStatus     int    `json:"expectedStatus,omitempty"`
+	DiagnosticsReady   bool   `json:"diagnosticsReady,omitempty"`
+	CaptureDiagnostics bool   `json:"captureDiagnostics,omitempty"`
+	TokenEnv           string `json:"tokenEnv,omitempty"`
 }
 
 func LoadDevManifest(path string) (DevManifest, error) {
@@ -78,6 +98,29 @@ func (manifest DevManifest) Validate(root string, graph applicationgraph.Graph) 
 	}
 	if !supportedDevSchema(manifest.SchemaVersion) {
 		return fmt.Errorf("devruntime: unsupported manifest schema version %d", manifest.SchemaVersion)
+	}
+	if manifest.Runtime != nil && manifest.SchemaVersion < RuntimeClosureSchemaVersion {
+		return fmt.Errorf("devruntime: runtime closure configuration requires schemaVersion %d", RuntimeClosureSchemaVersion)
+	}
+	if manifest.SchemaVersion >= RuntimeClosureSchemaVersion {
+		runtime := normalizeRuntimeConfig(manifest.Runtime)
+		if _, err := runtimeShutdownDuration(runtime); err != nil {
+			return fmt.Errorf("devruntime: runtime shutdownTimeout: %w", err)
+		}
+		statePath, err := resolveArtifactPath(root, runtime.StatePath)
+		if err != nil {
+			return fmt.Errorf("devruntime: runtime statePath: %w", err)
+		}
+		graphPath, err := resolveArtifactPath(root, runtime.GraphPath)
+		if err != nil {
+			return fmt.Errorf("devruntime: runtime graphPath: %w", err)
+		}
+		if statePath == graphPath {
+			return errors.New("devruntime: runtime statePath and graphPath must differ")
+		}
+		if _, err := resolveArtifactPath(root, runtime.ContractManifest); err != nil {
+			return fmt.Errorf("devruntime: runtime contractManifest: %w", err)
+		}
 	}
 
 	names := make(map[string]Process, len(manifest.Processes))
@@ -120,6 +163,9 @@ func (manifest DevManifest) Validate(root string, graph applicationgraph.Graph) 
 		if process.Readiness != nil && manifest.SchemaVersion < DevSchemaVersion {
 			return fmt.Errorf("devruntime: process %q readiness requires schemaVersion %d", name, DevSchemaVersion)
 		}
+		if process.Readiness != nil && process.Readiness.CaptureDiagnostics && manifest.SchemaVersion < RuntimeClosureSchemaVersion {
+			return fmt.Errorf("devruntime: process %q captureDiagnostics requires schemaVersion %d", name, RuntimeClosureSchemaVersion)
+		}
 		if err := validateReadiness(process.Readiness); err != nil {
 			return fmt.Errorf("devruntime: process %q readiness: %w", name, err)
 		}
@@ -150,7 +196,47 @@ func (manifest DevManifest) Validate(root string, graph applicationgraph.Graph) 
 }
 
 func supportedDevSchema(version int) bool {
-	return version == LegacyDevSchemaVersion || version == DevSchemaVersion
+	return version == LegacyDevSchemaVersion || version == DevSchemaVersion || version == RuntimeClosureSchemaVersion
+}
+
+func normalizeRuntimeConfig(input *RuntimeConfig) RuntimeConfig {
+	var runtime RuntimeConfig
+	if input != nil {
+		runtime = *input
+	}
+	runtime.Application = strings.TrimSpace(runtime.Application)
+	if runtime.Application == "" {
+		runtime.Application = DefaultRuntimeApplication
+	}
+	runtime.StatePath = strings.TrimSpace(runtime.StatePath)
+	if runtime.StatePath == "" {
+		runtime.StatePath = DefaultRuntimeStatePath
+	}
+	runtime.GraphPath = strings.TrimSpace(runtime.GraphPath)
+	if runtime.GraphPath == "" {
+		runtime.GraphPath = DefaultRuntimeGraphPath
+	}
+	runtime.ContractManifest = strings.TrimSpace(runtime.ContractManifest)
+	if runtime.ContractManifest == "" {
+		runtime.ContractManifest = DefaultRuntimeContractManifest
+	}
+	runtime.ShutdownTimeout = strings.TrimSpace(runtime.ShutdownTimeout)
+	if runtime.ShutdownTimeout == "" {
+		runtime.ShutdownTimeout = DefaultRuntimeShutdownTimeout.String()
+	}
+	return runtime
+}
+
+func runtimeShutdownDuration(runtime RuntimeConfig) (time.Duration, error) {
+	value := strings.TrimSpace(runtime.ShutdownTimeout)
+	if value == "" {
+		return DefaultRuntimeShutdownTimeout, nil
+	}
+	duration, err := time.ParseDuration(value)
+	if err != nil || duration < MinRuntimeShutdownTimeout || duration > MaxRuntimeShutdownTimeout {
+		return 0, fmt.Errorf("must be between %s and %s", MinRuntimeShutdownTimeout, MaxRuntimeShutdownTimeout)
+	}
+	return duration, nil
 }
 
 func normalizeProcess(process Process) Process {

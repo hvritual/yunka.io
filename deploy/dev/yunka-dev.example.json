@@ -1,5 +1,13 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
+  "runtime": {
+    "application": "yunka-local",
+    "statePath": ".yunka/dev-runtime.json",
+    "graphPath": ".yunka/runtime-graph.json",
+    "contractManifest": "contracts/generated/manifest.json",
+    "shutdownTimeout": "15s",
+    "closure": true
+  },
   "processes": [
     {
       "name": "api",
@@ -14,6 +22,7 @@
         "interval": "250ms",
         "expectedStatus": 200,
         "diagnosticsReady": true,
+        "captureDiagnostics": true,
         "tokenEnv": "YUNKA_DIAGNOSTICS_TOKEN"
       }
     }

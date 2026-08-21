@@ -19,6 +19,7 @@ const (
 	maxReadinessResponseBytes = 1 << 20
 	maxReadinessErrorBytes    = 64 << 10
 	maxSingleProbeDuration    = 5 * time.Second
+	maxKillWaitDuration       = 2 * time.Second
 )
 
 type RunOptions struct {
@@ -27,11 +28,56 @@ type RunOptions struct {
 	Stderr     io.Writer
 	Environ    []string
 	HTTPClient *http.Client
+	Now        func() time.Time
 }
 
 type processExit struct {
 	name string
 	err  error
+}
+
+type processExitError struct {
+	name string
+	err  error
+}
+
+func (current *processExitError) Error() string {
+	if current.err == nil {
+		return fmt.Sprintf("devruntime: process %s exited unexpectedly", current.name)
+	}
+	return fmt.Sprintf("devruntime: process %s exited: %v", current.name, current.err)
+}
+
+func (current *processExitError) Unwrap() error { return current.err }
+
+type supervisedProcess struct {
+	process Process
+	command *exec.Cmd
+	exited  chan struct{}
+	mu      sync.Mutex
+	err     error
+}
+
+func (current *supervisedProcess) setResult(err error) {
+	current.mu.Lock()
+	current.err = err
+	current.mu.Unlock()
+	close(current.exited)
+}
+
+func (current *supervisedProcess) result() error {
+	current.mu.Lock()
+	defer current.mu.Unlock()
+	return current.err
+}
+
+func (current *supervisedProcess) done() bool {
+	select {
+	case <-current.exited:
+		return true
+	default:
+		return false
+	}
 }
 
 func Run(ctx context.Context, plan Plan, options RunOptions) error {
@@ -54,6 +100,9 @@ func Run(ctx context.Context, plan Plan, options RunOptions) error {
 	if options.HTTPClient == nil {
 		options.HTTPClient = &http.Client{}
 	}
+	if options.Now == nil {
+		options.Now = time.Now
+	}
 	if len(plan.Processes) == 0 {
 		return errors.New("devruntime: empty plan")
 	}
@@ -61,72 +110,222 @@ func Run(ctx context.Context, plan Plan, options RunOptions) error {
 		return err
 	}
 
-	runCtx, cancel := context.WithCancel(ctx)
+	recorder, err := newRuntimeRecorder(root, plan, options.Now)
+	if err != nil {
+		return err
+	}
 	exits := make(chan processExit, len(plan.Processes))
-	var wg sync.WaitGroup
-	defer func() {
-		cancel()
-		wg.Wait()
-	}()
+	handles := make([]*supervisedProcess, 0, len(plan.Processes))
+	var trigger error
 
 	for _, current := range plan.Processes {
 		process := normalizeProcess(current)
 		if exit, ok := pollProcessExit(exits); ok {
-			return unexpectedProcessExit(exit)
+			trigger = unexpectedProcessExit(exit)
+			_ = markProcessExit(recorder, exit)
+			break
+		}
+		if err := ctx.Err(); err != nil {
+			break
 		}
 		dir, err := resolveWorkingDir(root, process.WorkingDir)
 		if err != nil {
-			return fmt.Errorf("devruntime: process %s: %w", process.Name, err)
+			trigger = fmt.Errorf("devruntime: process %s: %w", process.Name, err)
+			break
 		}
 		if len(process.Command) == 0 || strings.TrimSpace(process.Command[0]) == "" {
-			return fmt.Errorf("devruntime: process %s has no command", process.Name)
+			trigger = fmt.Errorf("devruntime: process %s has no command", process.Name)
+			break
+		}
+		if err := recorder.transition(process.Name, ProcessStarting, nil, nil); err != nil {
+			trigger = err
+			break
 		}
 
-		command := exec.CommandContext(runCtx, process.Command[0], process.Command[1:]...)
+		command := exec.Command(process.Command[0], process.Command[1:]...)
 		command.Dir = dir
 		command.Env = inheritedEnvironment(options.Environ, process.InheritEnv)
 		command.Stdout = &prefixWriter{prefix: "[" + process.Name + "] ", writer: options.Stdout}
 		command.Stderr = &prefixWriter{prefix: "[" + process.Name + "] ", writer: options.Stderr}
 		if err := command.Start(); err != nil {
-			return fmt.Errorf("devruntime: start %s: %w", process.Name, err)
+			trigger = fmt.Errorf("devruntime: start %s: %w", process.Name, err)
+			_ = recorder.transition(process.Name, ProcessFailed, nil, trigger)
+			break
 		}
-		wg.Add(1)
-		go func(name string, command *exec.Cmd) {
-			defer wg.Done()
-			exits <- processExit{name: name, err: command.Wait()}
-		}(process.Name, command)
+		handle := &supervisedProcess{process: process, command: command, exited: make(chan struct{})}
+		handles = append(handles, handle)
+		go func(handle *supervisedProcess) {
+			err := handle.command.Wait()
+			handle.setResult(err)
+			exits <- processExit{name: handle.process.Name, err: err}
+		}(handle)
+		if err := recorder.transition(process.Name, ProcessRunning, nil, nil); err != nil {
+			trigger = err
+			break
+		}
 
 		if process.Readiness != nil {
-			if err := waitForReadiness(runCtx, process, options, exits); err != nil {
-				if ctx.Err() != nil {
-					return nil
+			summary, readyErr := waitForReadinessSnapshot(ctx, process, options, exits)
+			if readyErr != nil {
+				if ctx.Err() == nil {
+					trigger = readyErr
+					failedName := process.Name
+					var exitErr *processExitError
+					if errors.As(readyErr, &exitErr) {
+						failedName = exitErr.name
+					}
+					_ = recorder.transition(failedName, ProcessFailed, summary, readyErr)
 				}
-				return err
+				break
+			}
+			if err := recorder.transition(process.Name, ProcessReady, summary, nil); err != nil {
+				trigger = err
+				break
 			}
 		}
 	}
 
-	select {
-	case <-ctx.Done():
-		return nil
-	case exit := <-exits:
-		if ctx.Err() != nil {
-			return nil
+	if trigger == nil && ctx.Err() == nil && len(handles) == len(plan.Processes) {
+		if err := recorder.setState(RuntimeRunRunning, "", false); err != nil {
+			trigger = err
+		} else {
+			select {
+			case <-ctx.Done():
+			case exit := <-exits:
+				trigger = unexpectedProcessExit(exit)
+				_ = markProcessExit(recorder, exit)
+			}
 		}
-		return unexpectedProcessExit(exit)
 	}
+
+	if recorder != nil {
+		reason := ""
+		state := RuntimeRunStopping
+		if trigger != nil {
+			reason = trigger.Error()
+		} else if ctx.Err() != nil {
+			reason = ctx.Err().Error()
+		}
+		_ = recorder.setState(state, reason, false)
+	}
+
+	shutdownTimeout := DefaultRuntimeShutdownTimeout
+	if plan.Runtime != nil {
+		if configured, parseErr := runtimeShutdownDuration(*plan.Runtime); parseErr == nil {
+			shutdownTimeout = configured
+		} else if trigger == nil {
+			trigger = parseErr
+		}
+	}
+	shutdownErr := shutdownProcesses(handles, recorder, shutdownTimeout)
+
+	if recorder != nil {
+		if trigger != nil {
+			_ = recorder.setState(RuntimeRunFailed, trigger.Error(), true)
+		} else if shutdownErr != nil {
+			_ = recorder.setState(RuntimeRunFailed, shutdownErr.Error(), true)
+		} else {
+			_ = recorder.setState(RuntimeRunStopped, "", true)
+		}
+	}
+	if trigger != nil {
+		return errors.Join(trigger, shutdownErr)
+	}
+	return shutdownErr
+}
+
+func markProcessExit(recorder *runtimeRecorder, exit processExit) error {
+	if recorder == nil {
+		return nil
+	}
+	return recorder.transition(exit.name, ProcessFailed, nil, unexpectedProcessExit(exit))
+}
+
+func shutdownProcesses(handles []*supervisedProcess, recorder *runtimeRecorder, timeout time.Duration) error {
+	if len(handles) == 0 {
+		return nil
+	}
+	if timeout <= 0 {
+		timeout = DefaultRuntimeShutdownTimeout
+	}
+	deadline := time.Now().Add(timeout)
+	var failures []error
+	for index := len(handles) - 1; index >= 0; index-- {
+		handle := handles[index]
+		if handle == nil || handle.command == nil || handle.command.Process == nil {
+			continue
+		}
+		if handle.done() {
+			if recorder.processState(handle.process.Name) != ProcessFailed {
+				if err := recorder.transition(handle.process.Name, ProcessStopped, nil, nil); err != nil {
+					failures = append(failures, err)
+				}
+			}
+			continue
+		}
+		if recorder.processState(handle.process.Name) != ProcessFailed {
+			if err := recorder.transition(handle.process.Name, ProcessStopping, nil, nil); err != nil {
+				failures = append(failures, err)
+			}
+		}
+		if err := signalProcess(handle.command.Process); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			failures = append(failures, fmt.Errorf("devruntime: signal %s: %w", handle.process.Name, err))
+		}
+		remaining := time.Until(deadline)
+		if remaining > 0 {
+			timer := time.NewTimer(remaining)
+			select {
+			case <-handle.exited:
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+			case <-timer.C:
+			}
+		}
+		if !handle.done() {
+			if err := handle.command.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+				failures = append(failures, fmt.Errorf("devruntime: kill %s: %w", handle.process.Name, err))
+			}
+			timer := time.NewTimer(maxKillWaitDuration)
+			select {
+			case <-handle.exited:
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+			case <-timer.C:
+				failures = append(failures, fmt.Errorf("devruntime: process %s did not exit after kill", handle.process.Name))
+			}
+		}
+		if recorder.processState(handle.process.Name) != ProcessFailed {
+			if err := recorder.transition(handle.process.Name, ProcessStopped, nil, nil); err != nil {
+				failures = append(failures, err)
+			}
+		}
+	}
+	return errors.Join(failures...)
 }
 
 func waitForReadiness(ctx context.Context, process Process, options RunOptions, exits <-chan processExit) error {
+	_, err := waitForReadinessSnapshot(ctx, process, options, exits)
+	return err
+}
+
+func waitForReadinessSnapshot(ctx context.Context, process Process, options RunOptions, exits <-chan processExit) (*RuntimeCoreSummary, error) {
 	if process.Readiness == nil {
-		return nil
+		return nil, nil
 	}
 	if err := validateReadiness(process.Readiness); err != nil {
-		return fmt.Errorf("devruntime: process %s readiness: %w", process.Name, err)
+		return nil, fmt.Errorf("devruntime: process %s readiness: %w", process.Name, err)
 	}
 	timeout, interval, err := readinessDurations(process.Readiness)
 	if err != nil {
-		return fmt.Errorf("devruntime: process %s readiness: %w", process.Name, err)
+		return nil, fmt.Errorf("devruntime: process %s readiness: %w", process.Name, err)
 	}
 	readyCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -136,25 +335,27 @@ func waitForReadiness(ctx context.Context, process Process, options RunOptions, 
 		var ok bool
 		token, ok = environmentValue(options.Environ, process.Readiness.TokenEnv)
 		if !ok || strings.TrimSpace(token) == "" {
-			return fmt.Errorf("devruntime: process %s readiness token environment %s is not set", process.Name, process.Readiness.TokenEnv)
+			return nil, fmt.Errorf("devruntime: process %s readiness token environment %s is not set", process.Name, process.Readiness.TokenEnv)
 		}
 	}
 
 	var lastErr error
+	var lastSummary *RuntimeCoreSummary
 	for {
 		if exit, ok := pollProcessExit(exits); ok {
-			return unexpectedProcessExit(exit)
+			return lastSummary, unexpectedProcessExit(exit)
 		}
 
 		probeCtx, probeCancel := readinessProbeContext(readyCtx)
 		type probeResult struct {
-			ready bool
-			err   error
+			ready   bool
+			summary *RuntimeCoreSummary
+			err     error
 		}
 		probeResults := make(chan probeResult, 1)
 		go func() {
-			ready, err := probeReadiness(probeCtx, options.HTTPClient, process.Readiness, token)
-			probeResults <- probeResult{ready: ready, err: err}
+			ready, summary, err := probeReadinessSnapshot(probeCtx, options.HTTPClient, process.Readiness, token)
+			probeResults <- probeResult{ready: ready, summary: summary, err: err}
 		}()
 
 		var current probeResult
@@ -163,19 +364,22 @@ func waitForReadiness(ctx context.Context, process Process, options RunOptions, 
 			probeCancel()
 		case exit := <-exits:
 			probeCancel()
-			return unexpectedProcessExit(exit)
+			return lastSummary, unexpectedProcessExit(exit)
 		case <-readyCtx.Done():
 			probeCancel()
 			if ctx.Err() != nil {
-				return ctx.Err()
+				return lastSummary, ctx.Err()
 			}
 			if lastErr != nil {
-				return fmt.Errorf("devruntime: process %s readiness timed out after %s: %w", process.Name, timeout, lastErr)
+				return lastSummary, fmt.Errorf("devruntime: process %s readiness timed out after %s: %w", process.Name, timeout, lastErr)
 			}
-			return fmt.Errorf("devruntime: process %s readiness timed out after %s", process.Name, timeout)
+			return lastSummary, fmt.Errorf("devruntime: process %s readiness timed out after %s", process.Name, timeout)
+		}
+		if current.summary != nil {
+			lastSummary = current.summary
 		}
 		if current.ready {
-			return nil
+			return current.summary, nil
 		}
 		if current.err != nil {
 			lastErr = current.err
@@ -186,15 +390,15 @@ func waitForReadiness(ctx context.Context, process Process, options RunOptions, 
 		case <-readyCtx.Done():
 			timer.Stop()
 			if ctx.Err() != nil {
-				return ctx.Err()
+				return lastSummary, ctx.Err()
 			}
 			if lastErr != nil {
-				return fmt.Errorf("devruntime: process %s readiness timed out after %s: %w", process.Name, timeout, lastErr)
+				return lastSummary, fmt.Errorf("devruntime: process %s readiness timed out after %s: %w", process.Name, timeout, lastErr)
 			}
-			return fmt.Errorf("devruntime: process %s readiness timed out after %s", process.Name, timeout)
+			return lastSummary, fmt.Errorf("devruntime: process %s readiness timed out after %s", process.Name, timeout)
 		case exit := <-exits:
 			timer.Stop()
-			return unexpectedProcessExit(exit)
+			return lastSummary, unexpectedProcessExit(exit)
 		case <-timer.C:
 		}
 	}
@@ -216,12 +420,17 @@ func readinessProbeContext(parent context.Context) (context.Context, context.Can
 }
 
 func probeReadiness(ctx context.Context, client *http.Client, readiness *Readiness, token string) (bool, error) {
+	ready, _, err := probeReadinessSnapshot(ctx, client, readiness, token)
+	return ready, err
+}
+
+func probeReadinessSnapshot(ctx context.Context, client *http.Client, readiness *Readiness, token string) (bool, *RuntimeCoreSummary, error) {
 	if readiness == nil {
-		return true, nil
+		return true, nil, nil
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, readiness.URL, nil)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	request.Header.Set("Accept", "application/json")
 	if token != "" {
@@ -230,7 +439,7 @@ func probeReadiness(ctx context.Context, client *http.Client, readiness *Readine
 
 	response, err := doWithoutRedirect(client, request)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	defer response.Body.Close()
 
@@ -240,28 +449,45 @@ func probeReadiness(ctx context.Context, client *http.Client, readiness *Readine
 	}
 	if response.StatusCode != expected {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxReadinessErrorBytes))
-		return false, fmt.Errorf("readiness endpoint returned %s, expected %d", response.Status, expected)
+		return false, nil, fmt.Errorf("readiness endpoint returned %s, expected %d", response.Status, expected)
 	}
-	if !readiness.DiagnosticsReady {
+	if !readiness.DiagnosticsReady && !readiness.CaptureDiagnostics {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxReadinessErrorBytes))
-		return true, nil
+		return true, nil, nil
 	}
 
 	var report struct {
 		Core struct {
+			State  string `json:"state"`
 			Health struct {
-				Ready bool `json:"ready"`
+				State string `json:"state"`
+				Live  bool   `json:"live"`
+				Ready bool   `json:"ready"`
 			} `json:"health"`
+			Runtime struct {
+				RouteCount          int  `json:"routeCount"`
+				RPCClientConfigured bool `json:"rpcClientConfigured"`
+				RPCServerCount      int  `json:"rpcServerCount"`
+				EventBusConfigured  bool `json:"eventBusConfigured"`
+			} `json:"runtime"`
 		} `json:"core"`
 	}
 	decoder := json.NewDecoder(io.LimitReader(response.Body, maxReadinessResponseBytes))
 	if err := decoder.Decode(&report); err != nil {
-		return false, fmt.Errorf("decode diagnostics readiness: %w", err)
+		return false, nil, fmt.Errorf("decode diagnostics readiness: %w", err)
 	}
-	if !report.Core.Health.Ready {
-		return false, errors.New("diagnostics reports ready=false")
+	summary := &RuntimeCoreSummary{
+		State: report.Core.State, HealthState: report.Core.Health.State,
+		Live: report.Core.Health.Live, Ready: report.Core.Health.Ready,
+		RouteCount:          report.Core.Runtime.RouteCount,
+		RPCClientConfigured: report.Core.Runtime.RPCClientConfigured,
+		RPCServerCount:      report.Core.Runtime.RPCServerCount,
+		EventBusConfigured:  report.Core.Runtime.EventBusConfigured,
 	}
-	return true, nil
+	if readiness.DiagnosticsReady && !summary.Ready {
+		return false, summary, errors.New("diagnostics reports ready=false")
+	}
+	return true, summary, nil
 }
 
 func doWithoutRedirect(client *http.Client, request *http.Request) (*http.Response, error) {
@@ -283,10 +509,7 @@ func pollProcessExit(exits <-chan processExit) (processExit, bool) {
 }
 
 func unexpectedProcessExit(exit processExit) error {
-	if exit.err == nil {
-		return fmt.Errorf("devruntime: process %s exited unexpectedly", exit.name)
-	}
-	return fmt.Errorf("devruntime: process %s exited: %w", exit.name, exit.err)
+	return &processExitError{name: exit.name, err: exit.err}
 }
 
 func inheritedEnvironment(base, names []string) []string {

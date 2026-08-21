@@ -12,6 +12,7 @@ build/
 coverage/
 
 # Runtime state and local configuration
+.yunka/
 *.db
 *.local
 .env

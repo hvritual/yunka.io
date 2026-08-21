@@ -9,11 +9,22 @@ import (
 	applicationgraph "yunka.io/pkg/applicationgraph"
 )
 
+type PlanOptions struct {
+	Closure bool
+}
+
 type Plan struct {
-	Processes []Process `json:"processes"`
+	Processes []Process              `json:"processes"`
+	Runtime   *RuntimeConfig         `json:"runtime,omitempty"`
+	BaseGraph applicationgraph.Graph `json:"-"`
+	Closure   bool                   `json:"-"`
 }
 
 func BuildPlan(manifest DevManifest, root string, targets []string, graph applicationgraph.Graph) (Plan, error) {
+	return BuildPlanWithOptions(manifest, root, targets, graph, PlanOptions{})
+}
+
+func BuildPlanWithOptions(manifest DevManifest, root string, targets []string, graph applicationgraph.Graph, options PlanOptions) (Plan, error) {
 	if err := manifest.Validate(root, graph); err != nil {
 		return Plan{}, err
 	}
@@ -66,7 +77,39 @@ func BuildPlan(manifest DevManifest, root string, targets []string, graph applic
 	if len(ordered) == 0 {
 		return Plan{}, errors.New("devruntime: empty plan")
 	}
-	return Plan{Processes: ordered}, nil
+
+	runtimeEnabled := manifest.SchemaVersion >= RuntimeClosureSchemaVersion || options.Closure
+	closure := options.Closure
+	var runtime *RuntimeConfig
+	if runtimeEnabled {
+		value := normalizeRuntimeConfig(manifest.Runtime)
+		closure = closure || value.Closure
+		runtime = &value
+	}
+	if closure {
+		if len(graph.Nodes) == 0 {
+			return Plan{}, errors.New("devruntime: closure mode requires an application graph")
+		}
+		graphNodes := make(map[string]struct{}, len(graph.Nodes))
+		for _, node := range graph.Nodes {
+			graphNodes[node.ID] = struct{}{}
+		}
+		owners := make(map[string]string, len(ordered))
+		for _, process := range ordered {
+			if process.GraphNode == "" {
+				return Plan{}, fmt.Errorf("devruntime: closure mode requires process %q graphNode", process.Name)
+			}
+			if _, ok := graphNodes[process.GraphNode]; !ok {
+				return Plan{}, fmt.Errorf("devruntime: process %q graph node %q not found", process.Name, process.GraphNode)
+			}
+			if owner, exists := owners[process.GraphNode]; exists {
+				return Plan{}, fmt.Errorf("devruntime: graph node %q is owned by both %q and %q", process.GraphNode, owner, process.Name)
+			}
+			owners[process.GraphNode] = process.Name
+		}
+	}
+
+	return Plan{Processes: ordered, Runtime: runtime, BaseGraph: graph, Closure: closure}, nil
 }
 
 func (plan Plan) Names() []string {

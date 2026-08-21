@@ -199,3 +199,13 @@ GitHub connector authorization and local Git authorization are separate. The con
 - Legacy `github.com/golang/protobuf` remains temporarily permitted only where C3/legacy RPC compatibility requires it: the isolated RPC generator, committed gateway/SMS generated protobuf, and bounded `pkg` RPC compatibility code. Protobuf packages must not be used merely for pointer helpers.
 - The workspace now contains five product modules plus one compatibility module. `app/cmd/rpc` remains separate because its generator dependencies are an isolation boundary; module count is not optimized cosmetically.
 - C4 is dependency-graph convergence, not a broad upgrade sweep and not C5 runtime closure.
+
+
+### 2026-08-21 — C5 runtime-closure baseline
+
+- Dev manifest schema v3 closes the local runtime loop while schema v1/v2 remain compatible. Commands, working directories, dependencies, inherited environment-variable names, readiness endpoints, and graph ownership remain explicit configuration and are never inferred from code or naming.
+- Closure mode requires every selected process to own one existing unique Application Graph node before startup. The graph records declared application/process containment, process dependencies, and exact process-to-node `runs` ownership; observed runtime facts never alter the plan.
+- `yunka dev run` writes atomic mode-0600 local state and runtime-graph artifacts under repository-contained paths. Reports exclude commands, environment values, credentials, request identity, diagnostics component payloads, and child output; error text is redacted and bounded.
+- Readiness may retain only the safe W07 core summary: application/health state, liveness/readiness, route count, RPC inventory, and event-bus presence. The same bounded authenticated no-redirect probe remains the trust boundary.
+- Direct children shut down in reverse plan order under one bounded timeout. The runner sends a graceful platform signal first and kills only children that remain after the deadline; unexpected exit shuts down the remaining children and no restart policy is implied.
+- Runtime state and graph files are local evidence, not committed source of truth. C5 does not provide process-tree/container management, a public control server, remote multi-host orchestration, or production deployment management.

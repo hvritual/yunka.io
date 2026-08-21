@@ -121,3 +121,32 @@ func TestBuilderRejectsConflictingAttributesWithoutMutation(t *testing.T) {
 		t.Fatal("partial attribute update leaked after conflict")
 	}
 }
+
+func TestProcessGraphVocabularyIsAdditive(t *testing.T) {
+	builder := NewBuilder()
+	appID := ID(NodeApplication, "local")
+	processID := ID(NodeProcess, "api")
+	serviceID := ID(NodeService, "example.ApiService")
+	for _, node := range []Node{
+		{ID: appID, Kind: NodeApplication, Name: "local"},
+		{ID: processID, Kind: NodeProcess, Name: "api"},
+		{ID: serviceID, Kind: NodeService, Name: "example.ApiService"},
+	} {
+		if err := builder.AddNode(node); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := builder.AddEdge(Edge{From: appID, To: processID, Kind: EdgeContains, Evidence: []Evidence{Declared("dev.manifest", "process")}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := builder.AddEdge(Edge{From: processID, To: serviceID, Kind: EdgeRuns, Evidence: []Evidence{Declared("dev.manifest", "ownership")}}); err != nil {
+		t.Fatal(err)
+	}
+	graph, err := builder.Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(graph.Nodes) != 3 || len(graph.Edges) != 2 {
+		t.Fatalf("nodes=%d edges=%d", len(graph.Nodes), len(graph.Edges))
+	}
+}

@@ -256,6 +256,7 @@ yunka doctor
 yunka doctor --strict
 yunka dev plan --target api
 yunka dev run --target api
+yunka dev status --state .yunka/dev-runtime.json
 ```
 
 `yunka doctor` never repairs the workspace automatically. `yunka dev` consumes `.yunka/dev.json`;
@@ -266,7 +267,15 @@ after its dependency returns the configured 2xx status and, when `diagnosticsRea
 `core.health.ready=true`. Probes are bounded, do not follow redirects, read tokens only from a
 named environment variable, allow plain HTTP only to literal loopback IP addresses, and require
 HTTPS for remote endpoints. Schema v1 remains supported but cannot silently enable readiness.
-See `deploy/dev/yunka-dev.example.json` for the manifest shape.
+
+C5 schema v3 closes the local runtime lifecycle. The explicit manifest process DAG is added to the
+Application Graph as declared `process` nodes and `depends_on` / `runs` edges; commands are never
+inferred. `yunka dev run` writes secret-free atomic mode-0600 state and observed runtime-graph
+artifacts, optionally retains only the safe W07 core health/runtime summary from the readiness
+request, and supervises direct children with bounded reverse-order graceful shutdown plus kill
+fallback. Schema v1/v2 behavior remains compatible, while closure mode requires every selected
+process to own one existing unique graph node. See `deploy/dev/yunka-dev.example.json` and
+`docs/waves/C5-runtime-closure.md`.
 
 `pkg/testkit` provides the leaf-safe deterministic Clock and Registry. `framework/testkit`
 re-exports those helpers and adds a W08 Broker fake. TestKit is for deterministic tests only and is

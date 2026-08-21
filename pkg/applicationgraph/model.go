@@ -13,6 +13,7 @@ type NodeKind string
 
 const (
 	NodeApplication     NodeKind = "application"
+	NodeProcess         NodeKind = "process"
 	NodeModule          NodeKind = "module"
 	NodeService         NodeKind = "service"
 	NodeOperation       NodeKind = "operation"
@@ -39,6 +40,7 @@ const (
 	EdgePublishes  EdgeKind = "publishes"
 	EdgeConsumes   EdgeKind = "consumes"
 	EdgeDependsOn  EdgeKind = "depends_on"
+	EdgeRuns       EdgeKind = "runs"
 )
 
 type EvidenceType string

@@ -128,7 +128,7 @@ func TestLoadDevManifestDefaultsToLegacySchema(t *testing.T) {
 }
 
 func TestManifestRejectsUnsupportedSchema(t *testing.T) {
-	manifest := DevManifest{SchemaVersion: DevSchemaVersion + 1, Processes: []Process{{Name: "api", Command: []string{"api"}}}}
+	manifest := DevManifest{SchemaVersion: RuntimeClosureSchemaVersion + 1, Processes: []Process{{Name: "api", Command: []string{"api"}}}}
 	if err := manifest.Validate(t.TempDir(), applicationgraph.Graph{}); err == nil {
 		t.Fatal("unsupported schema accepted")
 	}
