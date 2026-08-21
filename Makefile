@@ -5,10 +5,11 @@ GO ?= go
 PROTOC ?= protoc
 CONTRACT_SOURCES ?= $(CURDIR)/contracts/sources.json
 CONTRACT_OUT ?= $(CURDIR)/contracts/generated
+DEPENDENCY_POLICY ?= $(CURDIR)/tools/dependency-policy.json
 VULNCHECK ?= $(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
-MODULES := pkg framework gateway app app/cmd/rpc
+MODULES := compat/go-kit-kit-log pkg framework gateway app app/cmd/rpc
 
-.PHONY: toolchain-check test race vet vuln tidy build contract rpc-contract-check contract-check integration verify verify-production
+.PHONY: toolchain-check dependency-check test race vet vuln tidy build contract rpc-contract-check contract-check integration verify verify-production
 
 toolchain-check:
 	@set -eu; \
@@ -21,6 +22,10 @@ toolchain-check:
 	test "$$actual_protoc" = "$(PROTOC_VERSION)" || { echo "toolchain-check: protoc=$$actual_protoc want $(PROTOC_VERSION)" >&2; exit 1; }; \
 	echo "toolchain-check: go=$(GO_VERSION) protoc=$(PROTOC_VERSION) govulncheck=$(GOVULNCHECK_VERSION)"
 
+
+dependency-check:
+	@cd app && $(GO) run ./cmd dependency check \
+		--repo-root "$(CURDIR)" --policy "$(DEPENDENCY_POLICY)" --go "$(GO)"
 
 test:
 	@set -eu; for module in $(MODULES); do \
@@ -79,6 +84,6 @@ integration:
 	echo "==> MySQL 8 transactional outbox integration"; \
 	(cd framework && $(GO) test -timeout=5m -count=1 -tags=integration ./event/outbox)
 
-verify: toolchain-check contract-check test race vet vuln build
+verify: toolchain-check dependency-check contract-check test race vet vuln build
 
 verify-production: verify integration

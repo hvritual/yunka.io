@@ -3,7 +3,6 @@ package logExt
 import (
 	"fmt"
 	sls "github.com/aliyun/aliyun-log-go-sdk"
-	"github.com/golang/protobuf/proto"
 	"os"
 	"time"
 )
@@ -90,9 +89,11 @@ func (l *aliLogStore) goPut(level Type, body map[string]string) {
 	var contents = make([]*sls.LogContent, 0)
 
 	for key, val := range body {
+		keyCopy := key
+		valueCopy := val
 		contents = append(contents, &sls.LogContent{
-			Key:   proto.String(key),
-			Value: proto.String(val),
+			Key:   &keyCopy,
+			Value: &valueCopy,
 		})
 	}
 
@@ -115,10 +116,11 @@ func (l *aliLogStore) goPut(level Type, body map[string]string) {
 		topic = "error"
 	}
 
+	source := l.source
 	err := l.l.PutLogs(&sls.LogGroup{
 		Logs:   []*sls.Log{log},
-		Topic:  proto.String(topic),
-		Source: proto.String(l.source),
+		Topic:  &topic,
+		Source: &source,
 	})
 	if err != nil {
 		fmt.Println(err)

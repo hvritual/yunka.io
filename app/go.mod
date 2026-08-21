@@ -4,7 +4,7 @@ go 1.25.0
 
 toolchain go1.25.13
 
-replace google.golang.org/genproto => google.golang.org/genproto v0.0.0-20260414002931-afd174a4e478
+replace github.com/go-kit/kit v0.10.0 => ../compat/go-kit-kit-log
 
 require (
 	github.com/kataras/golog v0.1.5

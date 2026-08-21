@@ -18,6 +18,7 @@ Exact tool versions are locked in `tools/toolchain.env`; local and CI verificati
 - `gateway/`: HTTP gateway, authorization middleware, routing, and RPC adapters
 - `app/`: the `yunka` command-line tool
 - `app/cmd/rpc/`: the legacy RPC code generator
+- `compat/go-kit-kit-log/`: repository-owned SLS logging compatibility module
 
 The modules are joined by the root `go.work`. `app` intentionally uses the distinct module
 path `yunka.io/app`; `framework` remains `yunka.io/framework`.
@@ -26,6 +27,7 @@ path `yunka.io/app`; `framework` remains `yunka.io/framework`.
 
 ```bash
 make toolchain-check
+make dependency-check
 make rpc-contract-check
 make test
 make race
@@ -47,6 +49,16 @@ make verify-production
 ## Toolchain determinism
 
 C2 makes `tools/toolchain.env` the canonical tool lock for Go, protoc, and govulncheck. CI downloads `protoc-21.12-linux-x86_64.zip`, verifies its locked SHA-256 before extraction, and pins third-party GitHub Actions to immutable commit SHAs. Dependency or generated-contract drift is a hard failure; CI has only `contents: read` and cannot auto-commit changes. See `docs/waves/C2-toolchain-determinism.md`.
+
+## Dependency convergence
+
+C4 removes the historical external `github.com/go-kit/kit v0.10.0` dependency graph and the workspace-wide genproto version replace. The pinned Aliyun SLS SDK still imports `github.com/go-kit/kit/log` and `github.com/go-kit/kit/log/level`, so the repository owns a narrow compatibility workspace module at `compat/go-kit-kit-log`. That module exposes only the logging surface required by the SDK and delegates to `github.com/go-kit/log v0.2.1`; it does not carry the monolithic kit module's historical etcd, gRPC, or genproto graph.
+
+Because `go mod tidy` operates on one module at a time, each product module that reaches the SLS SDK carries the same version-scoped local replacement for `github.com/go-kit/kit v0.10.0`, while root `go.work` keeps the compatibility module as a workspace main module. The target is always the reviewed repository directory; arbitrary external replacements remain forbidden.
+
+`tools/dependency-policy.json` is enforced by `yunka dependency check` / `make dependency-check`. The gate validates the repository-local compatibility module, rejects unsplit etcd, grpc-gateway v1, monolithic genproto, any external replacement, a reintroduced genproto replace, and new legacy protobuf imports outside approved compatibility islands. Existing generated gateway/SMS protobuf and the isolated legacy RPC generator remain compatibility artifacts; C4 does not rewrite them. See `docs/waves/C4-dependency-convergence.md`.
+
+The workspace contains five product modules plus the single compatibility module. `app/cmd/rpc` remains separate so legacy generator dependencies do not become normal application CLI dependencies.
 
 ## Security defaults
 

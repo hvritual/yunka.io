@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 3,
+  "moduleFiles": [
+    "go.work",
+    "compat/go-kit-kit-log/go.mod",
+    "pkg/go.mod",
+    "framework/go.mod",
+    "gateway/go.mod",
+    "app/go.mod",
+    "app/cmd/rpc/go.mod"
+  ],
+  "forbiddenModules": [
+    "github.com/grpc-ecosystem/grpc-gateway",
+    "go.etcd.io/etcd",
+    "google.golang.org/genproto"
+  ],
+  "requiredModules": [
+    {
+      "path": "github.com/aliyun/aliyun-log-go-sdk",
+      "version": "v0.1.127"
+    },
+    {
+      "path": "github.com/go-kit/log",
+      "version": "v0.2.1"
+    },
+    {
+      "path": "github.com/golang/protobuf",
+      "version": "v1.5.4"
+    },
+    {
+      "path": "google.golang.org/grpc",
+      "version": "v1.82.1"
+    },
+    {
+      "path": "google.golang.org/protobuf",
+      "version": "v1.36.11"
+    },
+    {
+      "path": "google.golang.org/genproto/googleapis/api",
+      "version": "v0.0.0-20260810153831-ec0a7760b754"
+    },
+    {
+      "path": "google.golang.org/genproto/googleapis/rpc",
+      "version": "v0.0.0-20260807164820-c8921c73eeea"
+    }
+  ],
+  "workspaceModules": [
+    {
+      "path": "github.com/go-kit/kit",
+      "directory": "compat/go-kit-kit-log"
+    }
+  ],
+  "forbidExternalReplaces": true,
+  "forbiddenReplaceModules": [
+    "google.golang.org/genproto"
+  ],
+  "requiredLocalReplacements": [
+    {
+      "path": "github.com/go-kit/kit",
+      "version": "v0.10.0",
+      "directory": "compat/go-kit-kit-log",
+      "files": [
+        "go.work",
+        "pkg/go.mod",
+        "framework/go.mod",
+        "gateway/go.mod",
+        "app/go.mod"
+      ]
+    }
+  ],
+  "legacyImports": [
+    {
+      "path": "github.com/go-kit/kit",
+      "allowedPrefixes": [
+        "compat/go-kit-kit-log/"
+      ]
+    },
+    {
+      "path": "github.com/aliyun/aliyun-log-go-sdk",
+      "allowedFiles": [
+        "gateway/dispatcher/middleware/ali_log_middleware.go",
+        "gateway/dispatcher/middleware/ali_log_middleware_body.go",
+        "pkg/logExt/ali_log.go",
+        "pkg/logExt/trace_ali_log.go"
+      ],
+      "allowedPrefixes": [
+        "pkg/aliLogStore/"
+      ]
+    },
+    {
+      "path": "github.com/golang/protobuf",
+      "allowedFiles": [
+        "framework/core/middleware/rpc_client.go",
+        "framework/core/resilience/policy_test.go",
+        "gateway/rpc/transport/grpc/auth_integration_test.go",
+        "gateway/rpc/transport/grpc/grpc_client.xr_g_srv.go",
+        "gateway/rpc/transport/memory/gateway.xr_m_srv.go",
+        "gateway/rpc/transport/memory/memory.xr_clt_invoke.go",
+        "pkg/selector/rpc_client.go",
+        "pkg/selector/rpc_client_test.go"
+      ],
+      "allowedPrefixes": [
+        "app/cmd/rpc/",
+        "framework/infras/sms/",
+        "gateway/rpc/meta/",
+        "pkg/invoke/",
+        "pkg/util/"
+      ]
+    },
+    {
+      "path": "github.com/gogo/protobuf",
+      "allowedPrefixes": [
+        "app/cmd/rpc/"
+      ]
+    }
+  ]
+}

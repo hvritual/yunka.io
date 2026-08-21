@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	sls "github.com/aliyun/aliyun-log-go-sdk"
-	"github.com/go-kit/kit/log"
+	"github.com/go-kit/log"
 	"io"
 	"yunka.io/pkg/resource"
 )

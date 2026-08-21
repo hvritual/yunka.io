@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	sls "github.com/aliyun/aliyun-log-go-sdk"
-	"github.com/gogo/protobuf/proto"
 	"io"
 	"time"
 )
@@ -48,21 +47,26 @@ func (w *logStoreWrite) Write(body []byte) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	var log = &sls.Log{
-		Time:     proto.Uint32(uint32(time.Now().Unix())),
+	now := uint32(time.Now().Unix())
+	log := &sls.Log{
+		Time:     &now,
 		Contents: make([]*sls.LogContent, 0),
 	}
 	for key, val := range model {
+		keyCopy := key
+		valueCopy := fmt.Sprintf("%v", val)
 		log.Contents = append(log.Contents, &sls.LogContent{
-			Key:   proto.String(key),
-			Value: proto.String(fmt.Sprintf("%v", val)),
+			Key:   &keyCopy,
+			Value: &valueCopy,
 		})
 	}
 
+	topic := w.topic
+	source := w.source
 	err = w.l.PutLogs(&sls.LogGroup{
 		Logs:   []*sls.Log{log},
-		Topic:  proto.String(w.topic),
-		Source: proto.String(w.source),
+		Topic:  &topic,
+		Source: &source,
 	})
 
 	if err != nil {

@@ -189,3 +189,13 @@ GitHub connector authorization and local Git authorization are separate. The con
 - The C2 manifest remains schema v1 and C3 is additive: existing `ApiService`/`UnitService` stay intact while `io.yunka.gateway.rpc.GatewayService` and its namespaced types enter the canonical artifacts. C2 -> C3 compatibility must contain no breaking changes.
 - HTTP routes are never inferred from dynamic gateway metadata. Only committed explicit protobuf bindings may enter OpenAPI paths; otherwise RPC methods remain unbound under `x-yunka-rpc-methods`.
 - Committed legacy gateway generated RPC files remain immutable. `make rpc-contract-check` verifies their registered protobuf descriptors against `gateway/rpc/pb/`; `gateway/rpc/gender.sh` is not a deterministic production generation path and is not used by C3 verification.
+
+### 2026-08-20 — C4 dependency-convergence baseline
+
+- Dependency convergence removes the historical external `github.com/go-kit/kit v0.10.0` graph and all `replace google.golang.org/genproto => ...` directives. The pinned Aliyun SLS SDK still imports the old logging package path, so `compat/go-kit-kit-log` is the sole repository-owned compatibility workspace module for that path and delegates to `github.com/go-kit/log v0.2.1`.
+- The compatibility module is an explicit isolation boundary, not a general-purpose dependency: it remains a workspace main module at the exact repository path, while identical version-scoped local replacements in the affected product modules make single-module `go mod tidy` deterministic. First-party production code uses the split `github.com/go-kit/log` import directly.
+- The converged build list must not select monolithic `google.golang.org/genproto`, legacy unsplit `go.etcd.io/etcd`, or legacy `github.com/grpc-ecosystem/grpc-gateway` v1. Split genproto api/rpc modules are the supported contract/runtime dependencies.
+- `tools/dependency-policy.json` plus `make dependency-check` is the durable graph guard. It validates the local compatibility module and prevents legacy protobuf imports from expanding beyond explicit compatibility islands.
+- Legacy `github.com/golang/protobuf` remains temporarily permitted only where C3/legacy RPC compatibility requires it: the isolated RPC generator, committed gateway/SMS generated protobuf, and bounded `pkg` RPC compatibility code. Protobuf packages must not be used merely for pointer helpers.
+- The workspace now contains five product modules plus one compatibility module. `app/cmd/rpc` remains separate because its generator dependencies are an isolation boundary; module count is not optimized cosmetically.
+- C4 is dependency-graph convergence, not a broad upgrade sweep and not C5 runtime closure.

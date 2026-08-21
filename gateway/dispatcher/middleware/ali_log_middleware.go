@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	sls "github.com/aliyun/aliyun-log-go-sdk"
-	"github.com/golang/protobuf/proto"
 	"net/http"
 	"time"
 	"yunka.io/framework/core/request"
@@ -100,15 +99,18 @@ func (aliLog *AliLogMiddleware) Do(authStatus bool, rt request.Runtime, api *met
 			}
 		}
 
+		now := uint32(time.Now().Unix())
+		topic := aliLog.topic
+		source := aliLog.source
 		err := aliLog.log.PutLogs(&sls.LogGroup{
 			Logs: []*sls.Log{
 				{
-					Time:     proto.Uint32(uint32(time.Now().Unix())),
+					Time:     &now,
 					Contents: body.Body(),
 				},
 			},
-			Topic:  proto.String(aliLog.topic),
-			Source: proto.String(aliLog.source),
+			Topic:  &topic,
+			Source: &source,
 		})
 		if err != nil {
 			rt.Logger().Error(err)
