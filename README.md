@@ -280,3 +280,15 @@ process to own one existing unique graph node. See `deploy/dev/yunka-dev.example
 `pkg/testkit` provides the leaf-safe deterministic Clock and Registry. `framework/testkit`
 re-exports those helpers and adds a W08 Broker fake. TestKit is for deterministic tests only and is
 not a production fallback. See `docs/waves/W10-dev-runtime-testkit.md` for the full boundary.
+
+### C6 RPC generation foundation
+
+C6 preserves existing Service business method signatures while replacing the historical RPC generator. `contracts/proto` is the canonical source root, and `make rpc-generate` is the only mutating standard protobuf/gRPC generation command. `make rpc-check` is read-only and blocks generated drift; `make rpc-compat-check` compares the current semantic contract against the C5 baseline. The temporary XR compatibility wrappers remain only until the typed bridge is complete and are not a second source of protobuf truth.
+
+### C6.2 typed compatibility bridge
+
+The C6 development branch preserves existing Service business code while moving execution to standard generated gRPC interfaces. `gateway/rpc/bridge` adapts the current per-request module Service lifetime through a typed provider; `gateway/rpc/client` preserves historical client methods over a standard typed client and an explicit target factory. New server composition uses typed registration, and transport tests use gRPC `bufconn`. These adapters are migration seams: the old XR generator, legacy invoke transport, and generated memory dispatcher are still scheduled for atomic deletion before C6 can merge.
+
+### C6 single RPC runtime
+
+RPC contracts now come only from `contracts/proto` and are generated only with pinned standard protobuf/gRPC plugins. Existing Service business method signatures and the `gateway/rpc/meta` import path remain stable, while standard grpc-go typed registration and clients replace the XR generator, custom memory dispatcher, string registries, message pools, and legacy invoke transport. `make rpc-legacy-check` blocks architectural regression and `make rpc-consumer-check` proves the real Gateway Service business methods remain unchanged.

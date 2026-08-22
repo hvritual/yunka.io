@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+option go_package = "yunka.io/pkg/rpcmeta/legacy;legacy";
+
+message NotParamRequest {}
+message NotResponse {}
+
+enum Switch {
+    Close = 0;
+    Oopen = 1;
+}

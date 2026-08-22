@@ -142,7 +142,7 @@ func TestDoctorReadOnlyChecks(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "tools"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	toolchain := "GO_VERSION=1.25.13\nPROTOC_RELEASE=21.12\nPROTOC_VERSION=3.21.12\nPROTOC_LINUX_X86_64_SHA256=3a4c1e5f2516c639d3079b1586e703fc7bcfa2136d58bda24d1d54f949c315e8\nGOVULNCHECK_VERSION=v1.7.0\n"
+	toolchain := "GO_VERSION=1.25.13\nPROTOC_RELEASE=21.12\nPROTOC_VERSION=3.21.12\nPROTOC_LINUX_X86_64_SHA256=3a4c1e5f2516c639d3079b1586e703fc7bcfa2136d58bda24d1d54f949c315e8\nGOVULNCHECK_VERSION=v1.7.0\nPROTOC_GEN_GO_VERSION=v1.36.11\nPROTOC_GEN_GO_GRPC_VERSION=v1.6.2\n"
 	if err := os.WriteFile(filepath.Join(root, "tools", "toolchain.env"), []byte(toolchain), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -159,6 +159,10 @@ func TestDoctorReadOnlyChecks(t *testing.T) {
 			return "go version go1.25.13 linux/amd64", nil
 		case "protoc":
 			return "libprotoc 3.21.12", nil
+		case "protoc-gen-go":
+			return "protoc-gen-go v1.36.11", nil
+		case "protoc-gen-go-grpc":
+			return "protoc-gen-go-grpc 1.6.2", nil
 		case "gcc":
 			return "gcc (GCC) 13.2.0", nil
 		case "git":
@@ -408,7 +412,7 @@ func TestDoctorRejectsExactToolchainVersionDrift(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "tools"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	toolchain := "GO_VERSION=1.25.13\nPROTOC_RELEASE=21.12\nPROTOC_VERSION=3.21.12\nPROTOC_LINUX_X86_64_SHA256=3a4c1e5f2516c639d3079b1586e703fc7bcfa2136d58bda24d1d54f949c315e8\nGOVULNCHECK_VERSION=v1.7.0\n"
+	toolchain := "GO_VERSION=1.25.13\nPROTOC_RELEASE=21.12\nPROTOC_VERSION=3.21.12\nPROTOC_LINUX_X86_64_SHA256=3a4c1e5f2516c639d3079b1586e703fc7bcfa2136d58bda24d1d54f949c315e8\nGOVULNCHECK_VERSION=v1.7.0\nPROTOC_GEN_GO_VERSION=v1.36.11\nPROTOC_GEN_GO_GRPC_VERSION=v1.6.2\n"
 	if err := os.WriteFile(filepath.Join(root, "tools", "toolchain.env"), []byte(toolchain), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -425,6 +429,10 @@ func TestDoctorRejectsExactToolchainVersionDrift(t *testing.T) {
 			return "go version go1.25.13 linux/amd64", nil
 		case "protoc":
 			return "libprotoc 3.22.0", nil
+		case "protoc-gen-go":
+			return "protoc-gen-go v1.36.11", nil
+		case "protoc-gen-go-grpc":
+			return "protoc-gen-go-grpc 1.6.2", nil
 		case "gcc":
 			return "gcc (GCC) 13.2.0", nil
 		case "git":
@@ -458,7 +466,7 @@ func TestDoctorRejectsToolchainLockGoWorkMismatch(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "tools"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	toolchain := "GO_VERSION=1.25.12\nPROTOC_RELEASE=21.12\nPROTOC_VERSION=3.21.12\nPROTOC_LINUX_X86_64_SHA256=3a4c1e5f2516c639d3079b1586e703fc7bcfa2136d58bda24d1d54f949c315e8\nGOVULNCHECK_VERSION=v1.7.0\n"
+	toolchain := "GO_VERSION=1.25.12\nPROTOC_RELEASE=21.12\nPROTOC_VERSION=3.21.12\nPROTOC_LINUX_X86_64_SHA256=3a4c1e5f2516c639d3079b1586e703fc7bcfa2136d58bda24d1d54f949c315e8\nGOVULNCHECK_VERSION=v1.7.0\nPROTOC_GEN_GO_VERSION=v1.36.11\nPROTOC_GEN_GO_GRPC_VERSION=v1.6.2\n"
 	if err := os.WriteFile(filepath.Join(root, "tools", "toolchain.env"), []byte(toolchain), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -469,6 +477,10 @@ func TestDoctorRejectsToolchainLockGoWorkMismatch(t *testing.T) {
 			return "go version go1.25.12 linux/amd64", nil
 		case "protoc":
 			return "libprotoc 3.21.12", nil
+		case "protoc-gen-go":
+			return "protoc-gen-go v1.36.11", nil
+		case "protoc-gen-go-grpc":
+			return "protoc-gen-go-grpc 1.6.2", nil
 		case "gcc":
 			return "gcc (GCC) 13.2.0", nil
 		case "git":

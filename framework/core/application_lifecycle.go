@@ -46,12 +46,6 @@ func (app *App) Start(ctx context.Context) error {
 	app.setState(AppStateStarting)
 	modules := app.moduleSnapshot()
 
-	if err := startResource(ctx, app.clt); err != nil {
-		cleanupErr := errors.Join(app.shutdownComponents(ctx, modules)...)
-		app.setState(AppStateFailed)
-		return errors.Join(fmt.Errorf("start rpc client: %w", err), cleanupErr)
-	}
-
 	for _, mod := range modules {
 		starter, ok := mod.(Startable)
 		if !ok {
@@ -63,14 +57,6 @@ func (app *App) Start(ctx context.Context) error {
 			cleanupErr := errors.Join(app.shutdownComponents(ctx, modules)...)
 			app.setState(AppStateFailed)
 			return errors.Join(fmt.Errorf("start module %s: %w", mod.Name(), err), cleanupErr)
-		}
-	}
-
-	for i, srv := range app.srvs {
-		if err := startResource(ctx, srv); err != nil {
-			cleanupErr := errors.Join(app.shutdownComponents(ctx, modules)...)
-			app.setState(AppStateFailed)
-			return errors.Join(fmt.Errorf("start rpc server %d: %w", i, err), cleanupErr)
 		}
 	}
 
@@ -100,12 +86,8 @@ func (app *App) Shutdown(ctx context.Context) error {
 func (app *App) shutdownComponents(ctx context.Context, modules []Module) []error {
 	var errs []error
 
-	// Stop ingress/RPC servers first so no new work reaches module resources.
-	for i := len(app.srvs) - 1; i >= 0; i-- {
-		if err := shutdownResource(ctx, app.srvs[i]); err != nil {
-			errs = append(errs, fmt.Errorf("shutdown rpc server %d: %w", i, err))
-		}
-	}
+	// Typed RPC clients and servers are explicitly owned by composition/ingress
+	// components. App closes only resources it directly owns.
 	if app.eventBus != nil {
 		if err := safeLifecycleCall("close event bus", app.eventBus.Close); err != nil {
 			errs = append(errs, err)
@@ -118,11 +100,6 @@ func (app *App) shutdownComponents(ctx context.Context, modules []Module) []erro
 		if err := shutdownModule(ctx, modules[i]); err != nil {
 			errs = append(errs, fmt.Errorf("shutdown module %s: %w", modules[i].Name(), err))
 		}
-	}
-
-	// Outbound clients remain available while modules are shutting down.
-	if err := shutdownResource(ctx, app.clt); err != nil {
-		errs = append(errs, fmt.Errorf("shutdown rpc client: %w", err))
 	}
 	return errs
 }
@@ -158,23 +135,6 @@ func (app *App) Health(ctx context.Context) HealthReport {
 			report.Ready = false
 		}
 		report.Checks = append(report.Checks, check)
-	}
-
-	if check, ok := healthCheckResource(ctx, "rpc.client", app.clt); ok {
-		report.Checks = append(report.Checks, check)
-		if check.Status != HealthStatusHealthy {
-			report.Ready = false
-		}
-	}
-	for i, srv := range app.srvs {
-		check, ok := healthCheckResource(ctx, fmt.Sprintf("rpc.server.%d", i), srv)
-		if !ok {
-			continue
-		}
-		report.Checks = append(report.Checks, check)
-		if check.Status != HealthStatusHealthy {
-			report.Ready = false
-		}
 	}
 
 	return report

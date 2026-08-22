@@ -2,22 +2,16 @@
   "schemaVersion": 1,
   "sourceSets": [
     {
-      "name": "gateway-runtime",
-      "root": "gateway/rpc/pb",
+      "name": "canonical-rpc",
+      "root": "contracts/proto",
       "files": [
-        "api_common.proto",
-        "common.proto",
-        "gateway.proto"
-      ]
-    },
-    {
-      "name": "legacy-api",
-      "root": "app/cmd/rpc/pb",
-      "files": [
-        "api.proto",
-        "api_common.proto",
-        "common.proto",
-        "unit.proto"
+        "gateway/api_common.proto",
+        "gateway/common.proto",
+        "gateway/gateway.proto",
+        "legacy/api.proto",
+        "legacy/api_common.proto",
+        "legacy/common.proto",
+        "legacy/unit.proto"
       ]
     }
   ]

@@ -3,50 +3,39 @@ package middleware
 import (
 	"context"
 
-	"github.com/golang/protobuf/proto"
+	grpcgo "google.golang.org/grpc"
 	"yunka.io/framework/core/runtimecontext"
-	"yunka.io/pkg/invoke"
 )
 
-type rpcClient struct {
-	next  invoke.RpcClient
-	chain Chain
-}
-
-// WrapRPCClient applies the same transport-neutral middleware chain around an
-// existing RPC client without changing generated RPC code.
-func WrapRPCClient(next invoke.RpcClient, middlewares ...Middleware) invoke.RpcClient {
-	if next == nil {
-		return nil
+// UnaryClientInterceptor adapts the transport-neutral middleware chain to the
+// single grpc-go unary client runtime. It does not own connections, selectors,
+// retries, or generated clients.
+func UnaryClientInterceptor(middlewares ...Middleware) grpcgo.UnaryClientInterceptor {
+	chain := New(middlewares...)
+	return func(
+		ctx context.Context,
+		method string,
+		request interface{},
+		reply interface{},
+		connection *grpcgo.ClientConn,
+		invoker grpcgo.UnaryInvoker,
+		options ...grpcgo.CallOption,
+	) error {
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		metadata, _ := runtimecontext.MetadataFrom(ctx)
+		metadata.Transport = "rpc"
+		metadata.Protocol = "grpc"
+		metadata.Operation = method
+		metadata.Method = method
+		if metadata.Attributes == nil {
+			metadata.Attributes = make(map[string]string)
+		}
+		metadata.Attributes["rpc.direction"] = "client"
+		ctx = runtimecontext.WithMetadata(ctx, metadata)
+		return chain.Handle(ctx, func(child context.Context) error {
+			return invoker(child, method, request, reply, connection, options...)
+		})
 	}
-	return &rpcClient{next: next, chain: New(middlewares...)}
-}
-
-func (client *rpcClient) Invoke(ctx context.Context, method string, args, reply proto.Message, param ...interface{}) error {
-	return client.invoke(ctx, method, func(child context.Context) error {
-		return client.next.Invoke(child, method, args, reply, param...)
-	})
-}
-
-func (client *rpcClient) InvokeNode(ctx context.Context, nodeID, method string, args, reply proto.Message, param ...interface{}) error {
-	return client.invoke(ctx, method, func(child context.Context) error {
-		return client.next.InvokeNode(child, nodeID, method, args, reply, param...)
-	})
-}
-
-func (client *rpcClient) invoke(ctx context.Context, method string, final Handler) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	metadata, _ := runtimecontext.MetadataFrom(ctx)
-	metadata.Transport = "rpc"
-	metadata.Protocol = "rpc"
-	metadata.Operation = method
-	metadata.Method = method
-	if metadata.Attributes == nil {
-		metadata.Attributes = make(map[string]string)
-	}
-	metadata.Attributes["rpc.direction"] = "client"
-	ctx = runtimecontext.WithMetadata(ctx, metadata)
-	return client.chain.Handle(ctx, final)
 }

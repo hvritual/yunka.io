@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+option go_package = "yunka.io/pkg/rpcmeta/legacy;legacy";
+
+/**
+* @Description: TODO
+* @date 2019-07-16
+* @version V1.0
+*/
+enum CallType {
+    CallReserve = 0;
+    HttpCall = 1;
+    RpcCall = 2;
+}
+
+enum AuthStatus {
+    AuthReserve = 0;
+    NotAuth = 1;
+    NeedAuth = 2;
+}
+
+enum ForceCheckStatus {
+    ForceReserve = 0;
+    NotForceCheck = 1;
+    NeedForceCheck = 2;
+}
+
+enum ViewRoleLevel {
+    GOD = 0;
+    Developer = 1;
+    Operater = 3;
+    Entrepreneur = 5;
+    Employee = 67;
+    User = 9;
+    Visitor = 11;
+}
+
+enum IsCompose {
+    IsComposeReserve = 0;
+    OneRequest = 1;
+    Compose = 2;
+}
+
+enum IsCommon {
+    Common = 0;
+    PrivateCheck = 1;
+}
+
+message RuntimeApi {
+    string uuid = 1;
+    string serverUuid = 2;
+    string serverName = 3;
+    string uri = 4;
+    string name = 5;
+    string engName = 6;
+    CallType callType = 7;
+    AuthStatus isAuth = 8;
+    ForceCheckStatus isForceCheck = 9;
+    ViewRoleLevel viewRoleLevel = 10;
+    IsCompose isCompose = 11;
+    IsCommon isCommon = 12;
+    repeated RuntimeApi composes = 13;
+}
+
+message CircuitCfg {
+    int32 CloseTime = 1;
+    int32 CheckPeriod = 2;
+    int32 LimitPercent = 3;
+    int32 HalfOpen = 4;
+    int32 HalfClose = 5;
+}
+
+message ServerNode {
+    string ipPort = 1;
+    string uuid = 2;
+    int32 qps = 3;
+    CircuitCfg Circuit = 4;
+}

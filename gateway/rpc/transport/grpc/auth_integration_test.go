@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/ptypes/empty"
 	stdgrpc "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpccredentials "google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
+	empty "google.golang.org/protobuf/types/known/emptypb"
 	"yunka.io/framework/core/identity"
 	coremiddleware "yunka.io/framework/core/middleware"
 )

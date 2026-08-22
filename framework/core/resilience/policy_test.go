@@ -6,45 +6,35 @@ import (
 	"testing"
 	"time"
 
+	grpcgo "google.golang.org/grpc"
 	"yunka.io/framework/core/middleware"
-
-	"github.com/golang/protobuf/proto"
 	"yunka.io/framework/core/runtimecontext"
 )
 
-type fakeRPCClient struct {
-	attempts int
-	err      error
-}
-
-func (client *fakeRPCClient) Invoke(ctx context.Context, method string, args, reply proto.Message, param ...interface{}) error {
-	client.attempts++
-	if client.attempts < 2 {
-		return client.err
-	}
-	return nil
-}
-
-func (client *fakeRPCClient) InvokeNode(ctx context.Context, nodeID, method string, args, reply proto.Message, param ...interface{}) error {
-	return client.Invoke(ctx, method, args, reply, param...)
-}
-
-func TestRPCPolicyRetriesIdempotentOperationAndKeepsKeyedState(t *testing.T) {
+func TestRPCPolicyRetriesIdempotentUnaryCallAndKeepsKeyedState(t *testing.T) {
 	transient := errors.New("transient")
-	client := &fakeRPCClient{err: transient}
+	attempts := 0
 	policy := NewRPCPolicy(RPCPolicyConfig{
 		Retry:     RetryConfig{MaxAttempts: 2, Idempotent: func(context.Context) bool { return true }, Retryable: func(err error) bool { return errors.Is(err, transient) }},
 		Circuit:   CircuitBreakerConfig{Enabled: true, FailureThreshold: 5},
 		RateLimit: RateLimitConfig{Enabled: true, Rate: 1000, Burst: 10},
 		LoadShed:  LoadShedConfig{Enabled: true, MinLimit: 1, MaxLimit: 10, InitialLimit: 10},
 	})
-	wrapped := policy.Wrap(client)
 	ctx := runtimecontext.WithMetadata(context.Background(), runtimecontext.Metadata{Operation: "/svc/Get"})
-	if err := wrapped.Invoke(ctx, "/svc/Get", nil, nil); err != nil {
+	err := policy.UnaryClientInterceptor()(ctx, "/svc/Get", nil, nil, nil,
+		func(context.Context, string, interface{}, interface{}, *grpcgo.ClientConn, ...grpcgo.CallOption) error {
+			attempts++
+			if attempts < 2 {
+				return transient
+			}
+			return nil
+		},
+	)
+	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if client.attempts != 2 {
-		t.Fatalf("attempts=%d", client.attempts)
+	if attempts != 2 {
+		t.Fatalf("attempts=%d", attempts)
 	}
 	snapshot := policy.Snapshot("/svc/Get")
 	if snapshot.Circuit.State != CircuitClosed || snapshot.Load.Limit == 0 {

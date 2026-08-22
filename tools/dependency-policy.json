@@ -6,8 +6,7 @@
     "pkg/go.mod",
     "framework/go.mod",
     "gateway/go.mod",
-    "app/go.mod",
-    "app/cmd/rpc/go.mod"
+    "app/go.mod"
   ],
   "forbiddenModules": [
     "github.com/grpc-ecosystem/grpc-gateway",
@@ -89,28 +88,9 @@
     },
     {
       "path": "github.com/golang/protobuf",
-      "allowedFiles": [
-        "framework/core/middleware/rpc_client.go",
-        "framework/core/resilience/policy_test.go",
-        "gateway/rpc/transport/grpc/auth_integration_test.go",
-        "gateway/rpc/transport/grpc/grpc_client.xr_g_srv.go",
-        "gateway/rpc/transport/memory/gateway.xr_m_srv.go",
-        "gateway/rpc/transport/memory/memory.xr_clt_invoke.go",
-        "pkg/selector/rpc_client.go",
-        "pkg/selector/rpc_client_test.go"
-      ],
       "allowedPrefixes": [
-        "app/cmd/rpc/",
         "framework/infras/sms/",
-        "gateway/rpc/meta/",
-        "pkg/invoke/",
         "pkg/util/"
-      ]
-    },
-    {
-      "path": "github.com/gogo/protobuf",
-      "allowedPrefixes": [
-        "app/cmd/rpc/"
       ]
     }
   ]

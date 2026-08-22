@@ -4,10 +4,6 @@ import "context"
 
 const DiagnosticsSchemaVersion = 1
 
-// DiagnosticsReport is the transport-neutral, read-only inventory owned by the
-// application core. Higher-level diagnostics packages may add contract,
-// resilience, selector, or other domain-specific snapshots without making core
-// depend on those packages.
 type DiagnosticsReport struct {
 	SchemaVersion int                `json:"schemaVersion"`
 	State         string             `json:"state"`
@@ -31,9 +27,6 @@ type RuntimeDiagnostic struct {
 	EventBusConfigured  bool `json:"eventBusConfigured"`
 }
 
-// Diagnostics returns a point-in-time, read-only view of application runtime
-// inventory. Configuration values, credentials, request identity, and other
-// secret-bearing state are intentionally excluded.
 func (app *App) Diagnostics(ctx context.Context) DiagnosticsReport {
 	if ctx == nil {
 		ctx = context.Background()
@@ -63,6 +56,7 @@ func (app *App) Diagnostics(ctx context.Context) DiagnosticsReport {
 			HealthChecked: healthChecked,
 		})
 	}
+	rpcClientConfigured, rpcServerCount := app.rpcInventory()
 
 	return DiagnosticsReport{
 		SchemaVersion: DiagnosticsSchemaVersion,
@@ -72,8 +66,8 @@ func (app *App) Diagnostics(ctx context.Context) DiagnosticsReport {
 		Routes:        routes,
 		Runtime: RuntimeDiagnostic{
 			RouteCount:          len(routes),
-			RPCClientConfigured: app.clt != nil,
-			RPCServerCount:      len(app.srvs),
+			RPCClientConfigured: rpcClientConfigured,
+			RPCServerCount:      rpcServerCount,
 			EventBusConfigured:  app.eventBus != nil,
 		},
 	}

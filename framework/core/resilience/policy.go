@@ -1,8 +1,8 @@
 package resilience
 
 import (
+	grpcgo "google.golang.org/grpc"
 	"yunka.io/framework/core/middleware"
-	"yunka.io/pkg/invoke"
 )
 
 // RPCPolicyConfig composes one outbound RPC governance policy. Stateful
@@ -69,11 +69,14 @@ func (policy *RPCPolicy) Middlewares() []middleware.Middleware {
 	return middlewares
 }
 
-func (policy *RPCPolicy) Wrap(next invoke.RpcClient) invoke.RpcClient {
+// UnaryClientInterceptor exposes the policy through the standard grpc-go
+// interceptor contract. Generated clients and connection ownership remain
+// outside the policy.
+func (policy *RPCPolicy) UnaryClientInterceptor() grpcgo.UnaryClientInterceptor {
 	if policy == nil {
-		return next
+		return middleware.UnaryClientInterceptor()
 	}
-	return middleware.WrapRPCClient(next, policy.Middlewares()...)
+	return middleware.UnaryClientInterceptor(policy.Middlewares()...)
 }
 
 func (policy *RPCPolicy) Snapshot(key string) PolicySnapshot {

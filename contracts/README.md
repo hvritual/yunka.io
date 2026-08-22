@@ -10,14 +10,7 @@ The canonical service-contract inventory is:
 contracts/sources.json
 ```
 
-C3 currently declares two independent source sets:
-
-```text
-legacy-api       -> app/cmd/rpc/pb/
-gateway-runtime  -> gateway/rpc/pb/
-```
-
-Each source set carries a complete explicit file list. The compiler verifies that every `.proto` file discovered under a configured root is listed, compiles each root with a separate `protoc` invocation, then merges the normalized manifests deterministically. Independent compilation prevents same-basename imports such as `common.proto` from resolving against the wrong source root.
+C6 declares one canonical source inventory rooted at `contracts/proto/`. Package and wire identities remain compatibility-controlled while physical source paths are unified.
 
 Internal protobuf files are not included merely because they exist in the repository. For example, `framework/infras/sms/environment.proto` is an internal data/configuration artifact rather than a service RPC contract and remains outside `contracts/sources.json`.
 
@@ -43,7 +36,7 @@ and verify drift with:
 make contract-check
 ```
 
-`make contract-check` also runs `make rpc-contract-check`, which verifies that the protobuf descriptors registered by the committed legacy gateway generated code still match `gateway/rpc/pb/`.
+`make contract-check` also runs `make rpc-contract-check`, which verifies the committed modern generated descriptors against the canonical `contracts/proto/` inventory.
 
 ## HTTP bindings
 
@@ -60,6 +53,6 @@ C3 does not infer routes from runtime gateway metadata. The historical `yunka ap
 
 Other `@yunka.<key> <value>` method directives are preserved in the manifest as metadata so later waves can map contract intent to auth, resilience, observability, and Application Graph policies without introducing sidecar configuration as another source of truth.
 
-## Legacy generated RPC code
+## C6 canonical RPC source root
 
-`gateway/rpc/meta/*.pb.go` and the custom `gateway/rpc/*/*.xr_*.go` files remain generated compatibility artifacts. C3 does not hand-edit or regenerate them. The historical `gateway/rpc/gender.sh` is not considered a deterministic C3 generation path; replacement or migration requires a separate proof that the legacy generator output can be reproduced safely.
+`contracts/proto` is the single inventoried protobuf root. Physical source paths may move, but protobuf package names, message/service full names, field and enum numbers, and RPC method names remain compatibility-controlled. Standard Go output is generated with exact pinned `protoc-gen-go` and `protoc-gen-go-grpc` versions. Existing gateway business code continues importing `yunka.io/gateway/rpc/meta`; the old XR generator, duplicate roots, and custom memory dispatcher have been removed.

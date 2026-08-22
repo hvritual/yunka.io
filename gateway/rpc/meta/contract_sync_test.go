@@ -3,17 +3,16 @@
 package meta
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
-	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 
-	legacyproto "github.com/golang/protobuf/proto"
-	descriptor "github.com/golang/protobuf/protoc-gen-go/descriptor"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protodesc"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/descriptorpb"
 	contractcore "yunka.io/pkg/contract"
 )
 
@@ -22,52 +21,41 @@ func TestCommittedGatewayDescriptorsMatchCanonicalProtoSource(t *testing.T) {
 	if repositoryRoot == "" {
 		t.Fatal("YUNKA_REPOSITORY_ROOT is required")
 	}
-	protoRoot := filepath.Join(repositoryRoot, "gateway", "rpc", "pb")
+	protoRoot := filepath.Join(repositoryRoot, "contracts", "proto")
+	roots := []string{"gateway/api_common.proto", "gateway/common.proto", "gateway/gateway.proto"}
 	compiled, err := contractcore.Compile(context.Background(), contractcore.CompileOptions{
-		Dir:    protoRoot,
-		Files:  []string{"api_common.proto", "common.proto", "gateway.proto"},
-		Protoc: os.Getenv("PROTOC"),
+		Dir: protoRoot, Files: roots, Protoc: os.Getenv("PROTOC"),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	generated := generatedGatewayManifest(t)
+	generated := generatedGatewayManifest(t, roots)
 	compiled.Manifest.Normalize()
 	generated.Normalize()
 	if !reflect.DeepEqual(generated, compiled.Manifest) {
 		diff := contractcore.Compare(generated, compiled.Manifest)
-		t.Fatalf("committed gateway generated descriptors diverge from gateway/rpc/pb: diff=%#v\ngenerated=%#v\ncompiled=%#v", diff, generated, compiled.Manifest)
+		t.Fatalf("committed gateway descriptors diverge from contracts/proto: diff=%#v", diff)
 	}
 }
 
-func generatedGatewayManifest(t *testing.T) contractcore.Manifest {
+func generatedGatewayManifest(t *testing.T, roots []string) contractcore.Manifest {
 	t.Helper()
-	roots := []string{"api_common.proto", "common.proto", "gateway.proto"}
-	set := &descriptor.FileDescriptorSet{}
+	descriptors := map[string]protoreflect.FileDescriptor{
+		"gateway/api_common.proto": File_gateway_api_common_proto,
+		"gateway/common.proto":     File_gateway_common_proto,
+		"gateway/gateway.proto":    File_gateway_gateway_proto,
+	}
+	set := &descriptorpb.FileDescriptorSet{}
 	for _, name := range roots {
-		compressed := legacyproto.FileDescriptor(name)
-		if len(compressed) == 0 {
-			t.Fatalf("generated descriptor %s is not registered", name)
+		descriptor := descriptors[name]
+		if descriptor == nil {
+			t.Fatalf("generated descriptor %s is nil", name)
 		}
-		reader, err := gzip.NewReader(bytes.NewReader(compressed))
-		if err != nil {
-			t.Fatalf("open generated descriptor %s: %v", name, err)
-		}
-		data, readErr := io.ReadAll(reader)
-		closeErr := reader.Close()
-		if readErr != nil {
-			t.Fatalf("read generated descriptor %s: %v", name, readErr)
-		}
-		if closeErr != nil {
-			t.Fatalf("close generated descriptor %s: %v", name, closeErr)
-		}
-		file := &descriptor.FileDescriptorProto{}
-		if err := legacyproto.Unmarshal(data, file); err != nil {
-			t.Fatalf("decode generated descriptor %s: %v", name, err)
-		}
+		file := protodesc.ToFileDescriptorProto(descriptor)
+		file.SourceCodeInfo = nil
 		set.File = append(set.File, file)
 	}
-	data, err := legacyproto.Marshal(set)
+	data, err := proto.MarshalOptions{Deterministic: true}.Marshal(set)
 	if err != nil {
 		t.Fatal(err)
 	}

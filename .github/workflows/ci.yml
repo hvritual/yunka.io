@@ -39,7 +39,6 @@ jobs:
           go-version: ${{ steps.toolchain.outputs.go_version }}
           cache-dependency-path: |
             app/go.sum
-            app/cmd/rpc/go.sum
             framework/go.sum
             gateway/go.sum
             pkg/go.sum
@@ -76,7 +75,6 @@ jobs:
             framework/go.mod framework/go.sum \
             gateway/go.mod gateway/go.sum \
             app/go.mod app/go.sum \
-            app/cmd/rpc/go.mod app/cmd/rpc/go.sum
 
       - name: Contract reproducibility
         shell: bash
@@ -118,7 +116,6 @@ jobs:
             framework/go.mod framework/go.sum \
             gateway/go.mod gateway/go.sum \
             app/go.mod app/go.sum \
-            app/cmd/rpc/go.mod app/cmd/rpc/go.sum
           make contract
           git diff --exit-code -- contracts/generated
           make contract-check

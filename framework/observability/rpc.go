@@ -1,34 +1,31 @@
 package observability
 
 import (
+	grpcgo "google.golang.org/grpc"
 	"yunka.io/framework/core/middleware"
 	"yunka.io/framework/core/resilience"
-	"yunka.io/pkg/invoke"
 )
 
-// WrapRPCClient instruments an existing RPC client without modifying generated
-// transport code.
-func (provider *Provider) WrapRPCClient(client invoke.RpcClient) invoke.RpcClient {
-	if provider == nil || client == nil {
-		return client
+// UnaryClientInterceptor instruments the single grpc-go unary client runtime.
+func (provider *Provider) UnaryClientInterceptor() grpcgo.UnaryClientInterceptor {
+	if provider == nil {
+		return middleware.UnaryClientInterceptor()
 	}
-	return middleware.WrapRPCClient(client, provider.Middleware())
+	return middleware.UnaryClientInterceptor(provider.Middleware())
 }
 
-// WrapGovernedRPCClient creates one logical RPC observability span around a W3
-// policy and records policy snapshots after the governed call. If individual
-// retry-attempt spans are also desired, instrument the transport client before
-// passing it to this method.
-func (provider *Provider) WrapGovernedRPCClient(client invoke.RpcClient, policy *resilience.RPCPolicy) invoke.RpcClient {
-	if client == nil {
-		return nil
+// GovernedUnaryClientInterceptor creates one logical RPC observability span
+// around W3 policy execution and records policy snapshots after the call.
+func (provider *Provider) GovernedUnaryClientInterceptor(policy *resilience.RPCPolicy) grpcgo.UnaryClientInterceptor {
+	middlewares := make([]middleware.Middleware, 0, 7)
+	if provider != nil {
+		middlewares = append(middlewares, provider.Middleware())
+		if policy != nil {
+			middlewares = append(middlewares, provider.ResilienceMiddleware(policy))
+		}
 	}
-	if policy == nil {
-		return provider.WrapRPCClient(client)
+	if policy != nil {
+		middlewares = append(middlewares, policy.Middlewares()...)
 	}
-	governed := policy.Wrap(client)
-	if provider == nil {
-		return governed
-	}
-	return middleware.WrapRPCClient(governed, provider.Middleware(), provider.ResilienceMiddleware(policy))
+	return middleware.UnaryClientInterceptor(middlewares...)
 }

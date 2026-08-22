@@ -1,0 +1,12 @@
+syntax = "proto3";
+package io.yunka.gateway.rpc;
+
+option go_package = "yunka.io/gateway/rpc/meta;meta";
+
+message NotParamRequest {}
+message NotResponse { ResponseCode code = 1; }
+
+enum ResponseCode {
+    Not = 0;
+    Response = 1;
+}

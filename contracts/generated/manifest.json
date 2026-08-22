@@ -2,40 +2,42 @@
   "schemaVersion": 1,
   "files": [
     {
-      "name": "app/cmd/rpc/pb/api.proto",
-      "syntax": "proto3",
-      "goPackage": "meta"
-    },
-    {
-      "name": "app/cmd/rpc/pb/api_common.proto",
-      "syntax": "proto3",
-      "goPackage": "meta"
-    },
-    {
-      "name": "app/cmd/rpc/pb/common.proto",
-      "syntax": "proto3"
-    },
-    {
-      "name": "app/cmd/rpc/pb/unit.proto",
-      "syntax": "proto3",
-      "goPackage": "meta"
-    },
-    {
-      "name": "gateway/rpc/pb/api_common.proto",
+      "name": "contracts/proto/gateway/api_common.proto",
       "package": "io.yunka.gateway.rpc",
       "syntax": "proto3",
-      "goPackage": "meta"
+      "goPackage": "yunka.io/gateway/rpc/meta;meta"
     },
     {
-      "name": "gateway/rpc/pb/common.proto",
-      "package": "io.yunka.gateway.rpc",
-      "syntax": "proto3"
-    },
-    {
-      "name": "gateway/rpc/pb/gateway.proto",
+      "name": "contracts/proto/gateway/common.proto",
       "package": "io.yunka.gateway.rpc",
       "syntax": "proto3",
-      "goPackage": "meta"
+      "goPackage": "yunka.io/gateway/rpc/meta;meta"
+    },
+    {
+      "name": "contracts/proto/gateway/gateway.proto",
+      "package": "io.yunka.gateway.rpc",
+      "syntax": "proto3",
+      "goPackage": "yunka.io/gateway/rpc/meta;meta"
+    },
+    {
+      "name": "contracts/proto/legacy/api.proto",
+      "syntax": "proto3",
+      "goPackage": "yunka.io/pkg/rpcmeta/legacy;legacy"
+    },
+    {
+      "name": "contracts/proto/legacy/api_common.proto",
+      "syntax": "proto3",
+      "goPackage": "yunka.io/pkg/rpcmeta/legacy;legacy"
+    },
+    {
+      "name": "contracts/proto/legacy/common.proto",
+      "syntax": "proto3",
+      "goPackage": "yunka.io/pkg/rpcmeta/legacy;legacy"
+    },
+    {
+      "name": "contracts/proto/legacy/unit.proto",
+      "syntax": "proto3",
+      "goPackage": "yunka.io/pkg/rpcmeta/legacy;legacy"
     }
   ],
   "messages": [

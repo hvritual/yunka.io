@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+import "legacy/api_common.proto";
+option go_package = "yunka.io/pkg/rpcmeta/legacy;legacy";
+
+message Api {
+    string uuid = 1;
+    string name = 2;
+    bool isCheck = 3;
+}
+
+message GetApiRequest {
+    repeated string uuids = 1;
+}
+
+message GetApiReponse {
+    repeated Api apis = 1;
+}
+
+message FindAllRuntimeAPIRequest {}
+
+message FindAllRuntimeAPIResponse {
+    repeated RuntimeApi apis = 1;
+}
+
+service ApiService {
+    rpc GetApiByUUID (GetApiRequest) returns (GetApiReponse);
+    rpc FindAllRuntimeAPI (FindAllRuntimeAPIRequest) returns (FindAllRuntimeAPIResponse);
+}

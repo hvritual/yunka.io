@@ -1,0 +1,14 @@
+{
+  "consumers": [
+    {
+      "methods": {
+        "BatchAddRuntimeApi": "e77057dae0e43a9d4e96b5cf9d4c891d294bd0a1255e42981c218786f79b0dfa",
+        "DeleteRuntimeApi": "94a13cc0dea15374539803410def451d6115d631712c59c6f39d2cdfd14e529c",
+        "OperateRoleAPI": "4d0e6f1ee44a6188b145a635f21aa0fde8334e4fb2ea369f3c0e9271bef55b22"
+      },
+      "path": "gateway/dispatcher/intercept/role/role_intercept.go",
+      "receiver": "RoleIntercept"
+    }
+  ],
+  "schemaVersion": 1
+}

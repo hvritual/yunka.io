@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -97,11 +98,23 @@ func Doctor(ctx context.Context, options DoctorOptions) DoctorReport {
 	} else if requiredGo != "" && strings.TrimPrefix(requiredGo, "go") != lock.GoVersion {
 		add(Check{Name: "toolchain.lock", Status: CheckFail, Detail: fmt.Sprintf("go.work=%s lock=go%s", requiredGo, lock.GoVersion), Action: "make go.work and tools/toolchain.env agree exactly"})
 	} else {
-		add(Check{Name: "toolchain.lock", Status: CheckPass, Detail: fmt.Sprintf("go=%s protoc=%s govulncheck=%s", lock.GoVersion, lock.ProtocVersion, lock.GovulncheckVersion)})
+		add(Check{Name: "toolchain.lock", Status: CheckPass, Detail: fmt.Sprintf("go=%s protoc=%s protoc-gen-go=%s protoc-gen-go-grpc=%s govulncheck=%s", lock.GoVersion, lock.ProtocVersion, lock.ProtocGenGoVersion, lock.ProtocGenGoGRPCVersion, lock.GovulncheckVersion)})
+	}
+
+	resolveTool := func(name string) (string, error) {
+		localName := name
+		if runtime.GOOS == "windows" {
+			localName += ".exe"
+		}
+		localPath := filepath.Join(root, ".yunka", "bin", localName)
+		if info, err := os.Stat(localPath); err == nil && !info.IsDir() {
+			return localPath, nil
+		}
+		return lookPath(name)
 	}
 
 	checkTool := func(name, versionArg, expected, action string) {
-		path, pathErr := lookPath(name)
+		path, pathErr := resolveTool(name)
 		if pathErr != nil {
 			add(Check{Name: "tool." + name, Status: CheckFail, Detail: "not found", Action: action})
 			return
@@ -132,6 +145,10 @@ func Doctor(ctx context.Context, options DoctorOptions) DoctorReport {
 	}
 	checkTool("go", "version", goExpected, "install the exact Go toolchain locked by tools/toolchain.env")
 	checkTool("protoc", "--version", protocExpected, "install the exact protoc release locked by tools/toolchain.env")
+	if lockErr == nil {
+		checkTool("protoc-gen-go", "--version", strings.TrimPrefix(lock.ProtocGenGoVersion, "v"), "run make rpc-tools to install the exact protoc-gen-go version")
+		checkTool("protoc-gen-go-grpc", "--version", strings.TrimPrefix(lock.ProtocGenGoGRPCVersion, "v"), "run make rpc-tools to install the exact protoc-gen-go-grpc version")
+	}
 	checkTool("gcc", "--version", "", "install GCC for race/CGO verification")
 	checkTool("git", "--version", "", "install Git")
 
@@ -179,6 +196,8 @@ type toolchainLock struct {
 	ProtocVersion          string
 	ProtocLinuxX8664SHA256 string
 	GovulncheckVersion     string
+	ProtocGenGoVersion     string
+	ProtocGenGoGRPCVersion string
 }
 
 func loadToolchainLock(path string) (toolchainLock, error) {
@@ -212,6 +231,10 @@ func loadToolchainLock(path string) (toolchainLock, error) {
 			lock.ProtocLinuxX8664SHA256 = strings.ToLower(value)
 		case "GOVULNCHECK_VERSION":
 			lock.GovulncheckVersion = value
+		case "PROTOC_GEN_GO_VERSION":
+			lock.ProtocGenGoVersion = value
+		case "PROTOC_GEN_GO_GRPC_VERSION":
+			lock.ProtocGenGoGRPCVersion = value
 		default:
 			return toolchainLock{}, fmt.Errorf("toolchain lock contains unknown key %q", key)
 		}
@@ -219,7 +242,7 @@ func loadToolchainLock(path string) (toolchainLock, error) {
 	if err := scanner.Err(); err != nil {
 		return toolchainLock{}, err
 	}
-	if lock.GoVersion == "" || lock.ProtocRelease == "" || lock.ProtocVersion == "" || lock.ProtocLinuxX8664SHA256 == "" || lock.GovulncheckVersion == "" {
+	if lock.GoVersion == "" || lock.ProtocRelease == "" || lock.ProtocVersion == "" || lock.ProtocLinuxX8664SHA256 == "" || lock.GovulncheckVersion == "" || lock.ProtocGenGoVersion == "" || lock.ProtocGenGoGRPCVersion == "" {
 		return toolchainLock{}, fmt.Errorf("toolchain lock is incomplete")
 	}
 	if matched, _ := regexp.MatchString(`^[0-9a-f]{64}$`, lock.ProtocLinuxX8664SHA256); !matched {

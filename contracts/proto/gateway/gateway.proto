@@ -1,0 +1,47 @@
+syntax = "proto3";
+package io.yunka.gateway.rpc;
+
+import "gateway/api_common.proto";
+import "gateway/common.proto";
+
+option go_package = "yunka.io/gateway/rpc/meta;meta";
+
+message OperateRuntimeApiResponse {
+    ResponseCode code = 1;
+    string msg = 2;
+}
+
+message DeleteRuntimeApiRequest {
+    string uuid = 1;
+    string uri = 2;
+}
+
+message OperateRoleResponse {
+    ResponseCode code = 1;
+    string msg = 2;
+}
+
+message RoleModuleBtn {
+    string orgUUID = 1;
+    string roleUUID = 2;
+    repeated string moduleBtnUUID = 3;
+    repeated string deleteModuleBtnUUID = 4;
+}
+
+message RuntimeApiModuleButton {
+    string apiUUID = 1;
+    string moduleBtnUUID = 2;
+}
+
+message BatchRuntimeApiRequest {
+    repeated RuntimeApi apis = 1;
+    repeated RuntimeApiModuleButton buttons = 2;
+}
+
+message LockEnterpriseRequest { string enterpriseUUID = 1; }
+
+service GatewayService {
+    rpc BatchAddRuntimeApi (BatchRuntimeApiRequest) returns (OperateRuntimeApiResponse);
+    rpc DeleteRuntimeApi (DeleteRuntimeApiRequest) returns (OperateRuntimeApiResponse);
+    rpc OperateRoleAPI (RoleModuleBtn) returns (OperateRoleResponse);
+}

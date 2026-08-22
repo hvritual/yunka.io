@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"github.com/BurntSushi/toml"
 	"io/ioutil"
 	"os"
 	"os/signal"
@@ -10,8 +9,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+
+	"github.com/BurntSushi/toml"
 	"yunka.io/framework/core/eventBus"
-	"yunka.io/pkg/invoke"
 	"yunka.io/pkg/logExt"
 )
 
@@ -41,8 +41,12 @@ type App struct {
 	// TODO 等待设计接口
 	eventBus eventBus.EventBus
 
-	srvs []invoke.RpcServer
-	clt  invoke.RpcClient
+	// C6 keeps only an opaque composition reference for source compatibility.
+	// The value must be a typed grpc client, ClientConnInterface, or typed
+	// factory. It owns no string dispatch, generated handler map, or transport.
+	rpcMu          sync.RWMutex
+	rpcClient      interface{}
+	rpcServerCount int
 }
 
 func init() {
@@ -50,7 +54,6 @@ func init() {
 	app.modules = make(map[string]Module)
 	app.rhTree = NewHandleTree()
 	app.setState(AppStateNew)
-
 }
 
 func GetApp() *App {
@@ -66,7 +69,6 @@ func (app *App) RegisterLogger(lg logExt.Logger) {
 func (app *App) Debug() {
 	go func() {
 		c := make(chan os.Signal, 1)
-		//监听指定信号 ctrl+c kill
 		signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM,
 			syscall.SIGQUIT, syscall.SIGUSR1, syscall.SIGUSR2)
 		defer signal.Stop(c)
@@ -76,7 +78,6 @@ func (app *App) Debug() {
 				app.Stop()
 				return
 			case syscall.SIGUSR1:
-
 			case syscall.SIGUSR2:
 			default:
 			}
@@ -84,12 +85,10 @@ func (app *App) Debug() {
 	}()
 }
 
-// Logger .
 func (app *App) Logger() logExt.Logger {
 	return app.globalLogger
 }
 
-// InitConfFile load conf by file
 func (app *App) InitConfFile(cfgPath string) error {
 	filePath, err := filepath.Abs(cfgPath)
 	if err != nil {
@@ -102,7 +101,6 @@ func (app *App) InitConfFile(cfgPath string) error {
 	return app.InitConfContent(string(bs))
 }
 
-// InitConfContent load conf by content
 func (app *App) InitConfContent(cfg string) error {
 	_, err := toml.Decode(cfg, &globalConf)
 	return err
@@ -112,28 +110,22 @@ func (app *App) GetHandleTree() *RouterHandleTree {
 	return app.rhTree
 }
 
-// Run app
 func (app *App) Run(run func()) {
 	app.setState(AppStateInitializing)
 
 	for _, i := range prepares {
 		i(globalConf)
 	}
-
 	for _, i := range initiators {
 		i(app)
 	}
-	app.rhTree.Walk(func(s string, v Handle) bool {
-		//Log().Debug(s)
-		return false
-	})
+	app.rhTree.Walk(func(string, Handle) bool { return false })
 
 	if err := app.Start(context.Background()); err != nil {
 		app.setState(AppStateFailed)
 		panic(err)
 	}
 	defer app.Stop()
-
 	run()
 }
 
@@ -143,33 +135,38 @@ func (app *App) GetModule(modName string) Module {
 	return app.modules[modName]
 }
 
-func RegisterServer(srvName string, service interface{}) error {
-	for _, srv := range app.srvs {
-		if err := srv.RegisterServer(srvName, service); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// AppRegisterRpc 注册api rpc相关信息
-func (app *App) AppRegisterRpc(client invoke.RpcClient, srvs ...invoke.RpcServer) *App {
+// AppRegisterRpc preserves the historical composition call while storing only
+// typed grpc-go objects. The old invoke client/server interfaces no longer
+// exist. C7 removes this global compatibility holder.
+func (app *App) AppRegisterRpc(client interface{}, servers ...interface{}) *App {
 	globalAppOnce.Do(func() {
-		app.clt = client
-		app.srvs = srvs
+		app.rpcMu.Lock()
+		defer app.rpcMu.Unlock()
+		app.rpcClient = client
+		app.rpcServerCount = len(servers)
 	})
 	return app
 }
 
-func GetClient() invoke.RpcClient {
-	return app.clt
+func GetClient() interface{} {
+	app.rpcMu.RLock()
+	defer app.rpcMu.RUnlock()
+	return app.rpcClient
+}
+
+func (app *App) rpcInventory() (bool, int) {
+	if app == nil {
+		return false, 0
+	}
+	app.rpcMu.RLock()
+	defer app.rpcMu.RUnlock()
+	return app.rpcClient != nil, app.rpcServerCount
 }
 
 func (app *App) RegisterModule(mod Module) {
 	if mod == nil {
 		return
 	}
-
 	app.moduleMu.Lock()
 	defer app.moduleMu.Unlock()
 

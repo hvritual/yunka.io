@@ -2,13 +2,12 @@ package role
 
 import (
 	"context"
+	"errors"
 	"yunka.io/gateway/dispatcher/intercept"
 	"yunka.io/gateway/dispatcher/intercept/role/db"
 	"yunka.io/gateway/dispatcher/router"
 	"yunka.io/gateway/internal/resp"
 	"yunka.io/gateway/rpc/meta"
-	"yunka.io/gateway/rpc/server"
-	"yunka.io/pkg/invoke"
 	"yunka.io/pkg/logExt"
 )
 
@@ -80,7 +79,13 @@ func (r *RoleIntercept) OperateRoleAPI(ctx context.Context,
 	return &meta.OperateRoleResponse{}, r.db.OperateRole(btn.OrgUUID, btn.RoleUUID, btn.ModuleBtnUUID, btn.DeleteModuleBtnUUID)
 }
 
-func NewRoleIntercept(rt *router.Tree, srv invoke.RpcServer) (intercept.Intercept, error) {
+type GatewayServiceRegistrar interface {
+	RegisterGatewayService(meta.GatewayServiceServer) error
+}
+
+var ErrGatewayServiceRegistrarUnavailable = errors.New("role intercept: typed GatewayService registrar is unavailable")
+
+func NewRoleIntercept(rt *router.Tree, registrar GatewayServiceRegistrar) (intercept.Intercept, error) {
 	db, err := db.NewStore("build", "gateway.db")
 	if err != nil {
 		return nil, err
@@ -90,5 +95,8 @@ func NewRoleIntercept(rt *router.Tree, srv invoke.RpcServer) (intercept.Intercep
 		apiTree: rt,
 		db:      db,
 	}
-	return ri, srv.RegisterServer(server.GatewayServiceName, (meta.GatewayServiceServer)(ri))
+	if registrar == nil {
+		return nil, ErrGatewayServiceRegistrarUnavailable
+	}
+	return ri, registrar.RegisterGatewayService(ri)
 }

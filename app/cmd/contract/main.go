@@ -32,7 +32,7 @@ func sourceFlags() []cli.Flag {
 	return []cli.Flag{
 		cli.StringFlag{Name: "sources", Usage: "canonical contract source inventory; when set, source sets are compiled independently"},
 		cli.StringFlag{Name: "repo-root", Value: ".", Usage: "repository root used to resolve --sources entries"},
-		cli.StringFlag{Name: "proto-dir", Value: "./app/cmd/rpc/pb", Usage: "legacy single root containing contract .proto files"},
+		cli.StringFlag{Name: "proto-dir", Value: "../contracts/proto", Usage: "canonical single root containing contract .proto files"},
 		cli.StringSliceFlag{Name: "proto-path", Usage: "additional protoc import path for legacy single-root mode; may be repeated"},
 		cli.StringSliceFlag{Name: "file", Usage: "specific proto file relative to --proto-dir in legacy single-root mode; may be repeated"},
 		cli.StringFlag{Name: "protoc", EnvVar: "PROTOC", Usage: "protoc binary; defaults to PATH"},

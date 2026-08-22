@@ -4,21 +4,19 @@ import (
 	"context"
 	"errors"
 
-	"yunka.io/pkg/invoke"
 	"yunka.io/pkg/selector"
 )
 
-// WrapSelected composes W3 resilience outside W5 adaptive selection. This
-// ordering is intentional: every Retry attempt performs a fresh Pick, while
-// rate-limit/load-shed/circuit rejections happen before a node is selected and
-// therefore cannot poison passive node health.
-func (policy *RPCPolicy) WrapSelected(next invoke.RpcClient, selected selector.Selector, opts ...selector.RPCOption) invoke.RpcClient {
-	return policy.Wrap(selector.WrapRPCClient(next, selected, opts...))
+// PickTarget delegates node selection to W5 without creating a second RPC
+// transport. The caller resolves the returned address through its grpc-go
+// connection factory and must report the final call result with Selection.Done.
+func (policy *RPCPolicy) PickTarget(selected selector.Selector, service string, options ...selector.SelectOption) (*selector.Selection, error) {
+	return selector.Pick(selected, service, options...)
 }
 
-// SelectorFeedback classifies resilience errors when a selector wrapper is
-// composed manually. Local policy rejections are not node failures; transport
-// and downstream errors remain passive-health failures.
+// SelectorFeedback classifies resilience errors when target selection is
+// composed around grpc-go. Local policy rejections are not node failures;
+// transport and downstream errors remain passive-health failures.
 func SelectorFeedback(err error) selector.Outcome {
 	switch {
 	case err == nil:

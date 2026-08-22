@@ -209,3 +209,29 @@ GitHub connector authorization and local Git authorization are separate. The con
 - Readiness may retain only the safe W07 core summary: application/health state, liveness/readiness, route count, RPC inventory, and event-bus presence. The same bounded authenticated no-redirect probe remains the trust boundary.
 - Direct children shut down in reverse plan order under one bounded timeout. The runner sends a graceful platform signal first and kills only children that remain after the deadline; unexpected exit shuts down the remaining children and no restart policy is implied.
 - Runtime state and graph files are local evidence, not committed source of truth. C5 does not provide process-tree/container management, a public control server, remote multi-host orchestration, or production deployment management.
+
+### 2026-08-22 — C6 RPC-unification implementation decision
+
+- C6 replaces the historical RPC generator through one canonical `contracts/proto` inventory, pinned standard Go protobuf/gRPC plugins, deterministic `rpc-generate`/`rpc-check`, and one grpc-go runtime.
+- Existing framework Service business code is a protected ABI: Service method bodies, `core.BaseService` embedding, request/response type names, and the existing gateway `meta` import path are not changed by C6.
+- Compatibility code may preserve source-level constructors and client methods, but it may not own protobuf messages/descriptors, network transports, dynamic service location, reflection injection, hidden `init` registration, or lifecycle-bearing object pools.
+- The old XR wrappers may exist only during predeclared C6 subwaves. Final C6 deletes `app/cmd/rpc`, `gender.sh`, `*.xr_*.go`, generated memory transport, string registries, message pools, and legacy protobuf RPC output; there is no fallback generator.
+- C7 remains responsible for removing the reflective module container, package globals, and lifecycle-bearing `sync.Pool`; C6 exposes typed seams so that C7 does not require business Service rewrites.
+
+### 2026-08-22 — C6.2 typed compatibility bridge decision
+
+- Existing framework Service business methods remain the protected ABI. C6.2 adapts them through a typed per-call provider and `request.Runtime` factory; it does not require Service struct, method-body, request/response, `core.BaseService`, or `GetName()` changes.
+- The standard generated `GatewayServiceServer` is the only typed server contract. The handwritten bridge acquires one Service per call, derives Runtime identity/metadata/trace state from the authenticated gRPC context, executes finish hooks, clears Runtime, and releases the current module-container object exactly once.
+- `gateway/rpc/client.GatewayServiceClient` is now a handwritten source-compatible facade over the standard generated typed client. `*Special(..., nodeIP)` resolves through an explicit target client factory; new composition must not create one connection per call.
+- The pre-C6 `invoke.RpcClient` constructor path is isolated behind one unary-only compatibility connection adapter until C6.3. It is not a second protobuf owner or a permitted new integration path.
+- Standard typed registration replaces the generated gRPC handler map. The deprecated string registration method delegates immediately to typed registration and must be deleted with the remaining XR bootstrap in C6.3.
+- `bufconn` is the transport-level test seam. The generated memory dispatcher is no longer used to prove C6.2 behavior and remains only for C6.3 deletion.
+
+### 2026-08-22 — C6.3/C6.4 single-runtime closure
+
+- `contracts/proto` is the only RPC source root. `protoc-gen-go` and `protoc-gen-go-grpc` are the only generators; `app/cmd/rpc`, `gateway/rpc/pb`, `gender.sh`, all `*.xr_*.go`, generated memory dispatch, string handler registries, and `pkg/invoke` are deleted.
+- grpc-go typed clients, typed service registration, standard full method names, and `bufconn` are the only RPC runtime and test transport.
+- Historical Gateway client method names and `*Special(..., target)` remain as handwritten facades over an explicit typed Factory. They own no descriptors, routing registry, connection pool, or fallback transport.
+- The real `RoleIntercept` business RPC method bodies are hash-frozen and compile directly as the standard generated server interface. C6.4 also runs an external-package consumer fixture through typed gRPC without changing the pre-C6 service shape.
+- W3 resilience and observability now compose through `grpc.UnaryClientInterceptor`; W5 selects targets but does not implement an RPC transport.
+- C7 remains responsible for replacing global composition holders, reflection DI, and lifecycle-bearing object pools. C6 does not reintroduce those concerns into RPC.

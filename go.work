@@ -4,7 +4,6 @@ toolchain go1.25.13
 
 use (
 	./app
-	./app/cmd/rpc
 	./compat/go-kit-kit-log
 	./framework
 	./gateway

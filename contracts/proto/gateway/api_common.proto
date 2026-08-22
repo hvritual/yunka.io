@@ -1,0 +1,47 @@
+syntax = "proto3";
+package io.yunka.gateway.rpc;
+
+option go_package = "yunka.io/gateway/rpc/meta;meta";
+
+enum CallType {
+    CallReserve = 0;
+    HttpCall = 1;
+    RpcCall = 2;
+}
+
+enum AuthBit {
+    AuthNot = 0;
+    AuthToken = 2;
+    AuthRole = 4;
+    AuthTimeLimit = 8;
+    AuthApi = 16;
+}
+
+message RuntimeApi {
+    string uuid = 1;
+    string srvName = 2;
+    string moduleName = 3;
+    string uri = 4;
+    string name = 5;
+    CallType callType = 6;
+    AuthBit auth = 7;
+    string srvApi = 8;
+    bool isRedirect = 9;
+    repeated RuntimeApi composes = 10;
+}
+
+message CircuitCfg {
+    int32 CloseTime = 1;
+    int32 CheckPeriod = 2;
+    int32 LimitPercent = 3;
+    int32 HalfOpen = 4;
+    int32 HalfClose = 5;
+}
+
+message ServerNode {
+    string ipPort = 1;
+    string uuid = 2;
+    int32 qps = 3;
+    string srvName = 4;
+    CircuitCfg Circuit = 5;
+}
