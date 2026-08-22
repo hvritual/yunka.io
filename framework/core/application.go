@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"io/ioutil"
 	"os"
 	"os/signal"
@@ -12,19 +13,9 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"yunka.io/framework/core/eventBus"
+	"yunka.io/framework/core/modulecatalog"
 	"yunka.io/pkg/logExt"
 )
-
-/**
- * @BelongProject yunka
- * @BelongPackage infras
- * @Description:
- *
- * @Copyright 2020 - Powered By 云咖
- * @Author: fworld
- * @Date:  2020/9/18 3:11 下午
- * @Version V1.0
- */
 
 type App struct {
 	globalLogger logExt.Logger
@@ -35,45 +26,46 @@ type App struct {
 	modules     map[string]Module
 	moduleOrder []string
 
+	compositionMu      sync.RWMutex
+	compositionModules []modulecatalog.Instance
+	compositionFactory modulecatalog.ContextFactory
+	legacyComposition  bool
+
 	lifecycleMu sync.Mutex
 	state       atomic.Uint32
 
-	// TODO 等待设计接口
 	eventBus eventBus.EventBus
 
 	// C6 keeps only an opaque composition reference for source compatibility.
 	// The value must be a typed grpc client, ClientConnInterface, or typed
 	// factory. It owns no string dispatch, generated handler map, or transport.
 	rpcMu          sync.RWMutex
+	rpcOnce        sync.Once
 	rpcClient      interface{}
 	rpcServerCount int
 }
 
 func init() {
-	app = new(App)
-	app.modules = make(map[string]Module)
-	app.rhTree = NewHandleTree()
-	app.setState(AppStateNew)
+	var err error
+	app, err = NewApp(AppOptions{})
+	if err != nil {
+		panic(err)
+	}
+	app.legacyComposition = true
 }
 
-func GetApp() *App {
-	return app
-}
+func GetApp() *App { return app }
 
-func (app *App) RegisterLogger(lg logExt.Logger) {
-	app.globalLogger = lg
-}
+func (app *App) RegisterLogger(logger logExt.Logger) { app.globalLogger = logger }
 
-// Debug
-// 接收应用信号进行调试模式处理
 func (app *App) Debug() {
 	go func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM,
+		channel := make(chan os.Signal, 1)
+		signal.Notify(channel, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM,
 			syscall.SIGQUIT, syscall.SIGUSR1, syscall.SIGUSR2)
-		defer signal.Stop(c)
-		for s := range c {
-			switch s {
+		defer signal.Stop(channel)
+		for current := range channel {
+			switch current {
 			case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
 				app.Stop()
 				return
@@ -85,42 +77,41 @@ func (app *App) Debug() {
 	}()
 }
 
-func (app *App) Logger() logExt.Logger {
-	return app.globalLogger
-}
+func (app *App) Logger() logExt.Logger { return app.globalLogger }
 
-func (app *App) InitConfFile(cfgPath string) error {
-	filePath, err := filepath.Abs(cfgPath)
+func (app *App) InitConfFile(configPath string) error {
+	filePath, err := filepath.Abs(configPath)
 	if err != nil {
 		return err
 	}
-	bs, err := ioutil.ReadFile(filePath)
+	content, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		return err
 	}
-	return app.InitConfContent(string(bs))
+	return app.InitConfContent(string(content))
 }
 
-func (app *App) InitConfContent(cfg string) error {
-	_, err := toml.Decode(cfg, &globalConf)
+func (app *App) InitConfContent(config string) error {
+	if app == nil || !app.legacyComposition {
+		return errors.New("core: legacy global configuration is available only on the default App")
+	}
+	_, err := toml.Decode(config, &globalConf)
 	return err
 }
 
-func (app *App) GetHandleTree() *RouterHandleTree {
-	return app.rhTree
-}
+func (app *App) GetHandleTree() *RouterHandleTree { return app.rhTree }
 
 func (app *App) Run(run func()) {
 	app.setState(AppStateInitializing)
-
-	for _, i := range prepares {
-		i(globalConf)
-	}
-	for _, i := range initiators {
-		i(app)
+	if app.legacyComposition {
+		for _, prepare := range prepares {
+			prepare(globalConf)
+		}
+		for _, initiator := range initiators {
+			initiator(app)
+		}
 	}
 	app.rhTree.Walk(func(string, Handle) bool { return false })
-
 	if err := app.Start(context.Background()); err != nil {
 		app.setState(AppStateFailed)
 		panic(err)
@@ -129,17 +120,16 @@ func (app *App) Run(run func()) {
 	run()
 }
 
-func (app *App) GetModule(modName string) Module {
+func (app *App) GetModule(moduleName string) Module {
 	app.moduleMu.RLock()
 	defer app.moduleMu.RUnlock()
-	return app.modules[modName]
+	return app.modules[moduleName]
 }
 
 // AppRegisterRpc preserves the historical composition call while storing only
-// typed grpc-go objects. The old invoke client/server interfaces no longer
-// exist. C7 removes this global compatibility holder.
+// typed grpc-go objects. C7 removes this global compatibility holder.
 func (app *App) AppRegisterRpc(client interface{}, servers ...interface{}) *App {
-	globalAppOnce.Do(func() {
+	app.rpcOnce.Do(func() {
 		app.rpcMu.Lock()
 		defer app.rpcMu.Unlock()
 		app.rpcClient = client
@@ -163,24 +153,22 @@ func (app *App) rpcInventory() (bool, int) {
 	return app.rpcClient != nil, app.rpcServerCount
 }
 
-func (app *App) RegisterModule(mod Module) {
-	if mod == nil {
+func (app *App) RegisterModule(module Module) {
+	if module == nil {
 		return
 	}
 	app.moduleMu.Lock()
 	defer app.moduleMu.Unlock()
-
-	name := mod.Name()
+	name := module.Name()
 	if _, exists := app.modules[name]; !exists {
 		app.moduleOrder = append(app.moduleOrder, name)
 	}
-	app.modules[name] = mod
+	app.modules[name] = module
 }
 
 func (app *App) Stop() {
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultShutdownTimeout)
 	defer cancel()
-
 	if err := app.Shutdown(ctx); err != nil && app.globalLogger != nil {
 		app.globalLogger.Error("application shutdown: ", err)
 	}

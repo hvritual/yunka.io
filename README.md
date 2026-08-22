@@ -17,7 +17,7 @@ Exact tool versions are locked in `tools/toolchain.env`; local and CI verificati
 - `framework/`: application, module, request, ingress, and infrastructure abstractions
 - `gateway/`: HTTP gateway, authorization middleware, routing, and RPC adapters
 - `app/`: the `yunka` command-line tool
-- `app/cmd/rpc/`: the legacy RPC code generator
+- `contracts/proto/`: the single canonical RPC protobuf source tree
 - `compat/go-kit-kit-log/`: repository-owned SLS logging compatibility module
 
 The modules are joined by the root `go.work`. `app` intentionally uses the distinct module
@@ -28,6 +28,7 @@ path `yunka.io/app`; `framework` remains `yunka.io/framework`.
 ```bash
 make toolchain-check
 make dependency-check
+make architecture-check
 make rpc-contract-check
 make test
 make race
@@ -58,7 +59,15 @@ Because `go mod tidy` operates on one module at a time, each product module that
 
 `tools/dependency-policy.json` is enforced by `yunka dependency check` / `make dependency-check`. The gate validates the repository-local compatibility module, rejects unsplit etcd, grpc-gateway v1, monolithic genproto, any external replacement, a reintroduced genproto replace, and new legacy protobuf imports outside approved compatibility islands. Existing generated gateway/SMS protobuf and the isolated legacy RPC generator remain compatibility artifacts; C4 does not rewrite them. See `docs/waves/C4-dependency-convergence.md`.
 
-The workspace contains five product modules plus the single compatibility module. `app/cmd/rpc` remains separate so legacy generator dependencies do not become normal application CLI dependencies.
+The workspace contains four product modules plus the single logging compatibility module. C6 removed the isolated legacy RPC generator module.
+
+## Static module catalog and typed bootstrap
+
+C7.1 preserves one-line module enablement through blank imports while replacing hidden runtime composition. An autoload package may only register an immutable `modulecatalog.Descriptor`; it cannot read configuration, perform I/O, create DB/RPC clients, start goroutines, construct services, or mutate an App. Modules declare typed config and platform requirements, and ordinary generated Go wiring receives shared capabilities from the framework.
+
+`modulecatalog.Catalog` rejects duplicate modules, missing dependencies, cycles, and late registration, then resolves a deterministic topological order independent of import order. `core.NewApp(AppOptions)` and `framework/kernel.New` aggregate requirements before any module build, prepare named shared capabilities once, restrict each module to its declared config/logger/database/event/RPC view, and build isolated App instances from a supplied or process-default descriptor catalog. The default catalog stores descriptors only and is not a service locator.
+
+The reflective module container and global App/config/store remain temporary migration debt during C7.1 and may not receive new call sites. C7.2 migrates real modules and request scopes; C7.3 deletes the old container, reflection injection, lifecycle pools, and legacy global APIs. See `docs/waves/C7.1-static-module-catalog.md`.
 
 ## Security defaults
 

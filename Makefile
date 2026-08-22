@@ -16,7 +16,7 @@ PYTHON ?= python3
 VULNCHECK ?= $(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
 MODULES := compat/go-kit-kit-log pkg framework gateway app
 
-.PHONY: toolchain-check rpc-tools rpc-toolchain-check rpc-generate rpc-check rpc-compat-check rpc-legacy-check rpc-consumer-check rpc-bridge-check dependency-check test race vet vuln tidy build contract rpc-contract-check contract-check integration verify verify-production
+.PHONY: toolchain-check rpc-tools rpc-toolchain-check rpc-generate rpc-check rpc-compat-check rpc-legacy-check rpc-consumer-check rpc-bridge-check dependency-check architecture-check test race vet vuln tidy build contract rpc-contract-check contract-check integration verify verify-production
 
 toolchain-check:
 	@set -eu; \
@@ -102,6 +102,9 @@ dependency-check:
 	@cd app && $(GO) run ./cmd dependency check \
 		--repo-root "$(CURDIR)" --policy "$(DEPENDENCY_POLICY)" --go "$(GO)"
 
+architecture-check:
+	@cd pkg && $(GO) test -count=1 ./architecturepolicy
+
 test:
 	@set -eu; for module in $(MODULES); do \
 		echo "==> go test ./$$module/..."; \
@@ -159,6 +162,6 @@ integration:
 	echo "==> MySQL 8 transactional outbox integration"; \
 	(cd framework && $(GO) test -timeout=5m -count=1 -tags=integration ./event/outbox)
 
-verify: toolchain-check dependency-check rpc-check contract-check rpc-compat-check rpc-legacy-check rpc-consumer-check rpc-bridge-check test race vet vuln build
+verify: toolchain-check dependency-check architecture-check rpc-check contract-check rpc-compat-check rpc-legacy-check rpc-consumer-check rpc-bridge-check test race vet vuln build
 
 verify-production: verify integration

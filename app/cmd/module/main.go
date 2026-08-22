@@ -1,138 +1,189 @@
 package module
 
 import (
+	"bufio"
 	"fmt"
-	"github.com/kataras/golog"
-	"io/ioutil"
+	"go/format"
 	"os"
 	"path/filepath"
-	"yunka.io/pkg/fileExt"
-	"yunka.io/pkg/stringsExt"
+	"regexp"
+	"strings"
 )
 
-const (
-	AppName = `module`
-)
+const AppName = "module"
 
-var (
-	log = golog.New()
-)
-
-/**
- * @BelongProject namei
- * @BelongPackage router
- * @Description:
- *
- * @Copyright 2020 - Powered By 云咖
- * @Author: fworld
- * @Date:  2020/7/22 10:44 上午
- * @Version V1.0
- */
+var generatedModuleNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
 func Generate(moduleName string) error {
-
-	if fileExt.Exists(filepath.Join("modules", moduleName, `main.go`)) {
-		return nil
+	moduleName = strings.TrimSpace(moduleName)
+	if !generatedModuleNamePattern.MatchString(moduleName) {
+		return fmt.Errorf("module: name %q must match %s", moduleName, generatedModuleNamePattern)
 	}
-
-	paths := []string{
-		`adapter`,
-		`adapter/repository`,
-		`auto/controller`,
-		`auto/route`,
-		`auto/doc`,
-		`conf`,
-		`domain/aggregate`,
-		`domain/rpc`,
-		`domain/dependency`,
-		`domain/dto/code`,
-		`domain/dto/req`,
-		`domain/dto/resp`,
-		`domain/entity`,
-		`domain/po`,
-		`domain/services`,
+	goModule, err := findGoModule(".")
+	if err != nil {
+		return err
 	}
-
-	for _, path := range paths {
-		if err := os.MkdirAll(filepath.Join(`modules`, moduleName, path), 0750); err != nil {
+	root := filepath.Join("modules", moduleName)
+	if _, err := os.Stat(root); err == nil {
+		return fmt.Errorf("module: target %s already exists", root)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	parent := filepath.Dir(root)
+	if err := os.MkdirAll(parent, 0o750); err != nil {
+		return err
+	}
+	temporary, err := os.MkdirTemp(parent, ".yunka-module-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(temporary)
+	if err := os.MkdirAll(filepath.Join(temporary, "autoload"), 0o750); err != nil {
+		return err
+	}
+	packageImport := strings.TrimSuffix(goModule, "/") + "/modules/" + moduleName
+	files := map[string]string{
+		"config.go":                              configTemplate(moduleName),
+		"dependencies.go":                        dependenciesTemplate(moduleName),
+		"module.go":                              moduleTemplate(moduleName),
+		"zz_yunka_module_gen.go":                 generatedWiringTemplate(moduleName),
+		filepath.Join("autoload", "register.go"): autoloadTemplate(moduleName, packageImport),
+	}
+	order := []string{"config.go", "dependencies.go", "module.go", "zz_yunka_module_gen.go", filepath.Join("autoload", "register.go")}
+	for _, relative := range order {
+		formatted, err := format.Source([]byte(files[relative]))
+		if err != nil {
+			return fmt.Errorf("module: format %s: %w", relative, err)
+		}
+		path := filepath.Join(temporary, relative)
+		if err := os.WriteFile(path, formatted, 0o640); err != nil {
 			return err
 		}
 	}
-	file, err := os.Create(filepath.Join(`modules`, moduleName, `domain/services/main.go`))
-	if err != nil {
-		return err
-	}
-	file.Close()
-
-	err = generateMain(moduleName)
-	if err != nil {
-		return err
-	}
-
-	return generateMainService(moduleName)
+	return os.Rename(temporary, root)
 }
 
-func generateMainService(moduleName string) error {
-	camelModuleName := stringsExt.Lcfirst(stringsExt.CamelName(moduleName))
-	stm := `package services
+func findGoModule(start string) (string, error) {
+	current, err := filepath.Abs(start)
+	if err != nil {
+		return "", err
+	}
+	for {
+		path := filepath.Join(current, "go.mod")
+		if file, err := os.Open(path); err == nil {
+			defer file.Close()
+			scanner := bufio.NewScanner(file)
+			for scanner.Scan() {
+				line := strings.TrimSpace(scanner.Text())
+				if strings.HasPrefix(line, "module ") {
+					value := strings.TrimSpace(strings.TrimPrefix(line, "module "))
+					if value == "" {
+						return "", fmt.Errorf("module: empty module directive in %s", path)
+					}
+					return value, nil
+				}
+			}
+			if err := scanner.Err(); err != nil {
+				return "", err
+			}
+			return "", fmt.Errorf("module: module directive not found in %s", path)
+		} else if !os.IsNotExist(err) {
+			return "", err
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", fmt.Errorf("module: go.mod not found")
+		}
+		current = parent
+	}
+}
+
+func configTemplate(packageName string) string {
+	return fmt.Sprintf(`package %s
+
+// Config is populated from modules.%s by generated typed wiring.
+type Config struct{}
+
+func DefaultConfig() Config { return Config{} }
+func (Config) Validate() error { return nil }
+`, packageName, packageName)
+}
+
+func dependenciesTemplate(packageName string) string {
+	return fmt.Sprintf(`package %s
+
+import "yunka.io/pkg/logExt"
+
+// Dependencies declares what the module receives; it contains no lookup code.
+type Dependencies struct {
+	Config Config
+	Logger logExt.Logger
+}
+`, packageName)
+}
+
+func moduleTemplate(packageName string) string {
+	return fmt.Sprintf(`package %s
+
+import "fmt"
+
+const ModuleName = %q
+
+type Module struct { dependencies Dependencies }
+
+func NewModule(dependencies Dependencies) (*Module, error) {
+	if dependencies.Logger == nil {
+		return nil, fmt.Errorf("%%s: logger is required", ModuleName)
+	}
+	return &Module{dependencies: dependencies}, nil
+}
+
+func (*Module) Name() string { return ModuleName }
+`, packageName, packageName)
+}
+
+func generatedWiringTemplate(packageName string) string {
+	return fmt.Sprintf(`// Code generated by yunka module; DO NOT EDIT.
+
+package %s
 
 import (
-	_ "yunka/modules/%s/adapter/repository"
+	"fmt"
+	"yunka.io/framework/core/modulecatalog"
 )
-`
-	err := ioutil.WriteFile(filepath.Join(`modules`, moduleName, `domain/services/main.go`),
-		stringsExt.StringToSlice(fmt.Sprintf(stm, camelModuleName)),
-		0640)
-	return err
+
+func GeneratedDescriptor() modulecatalog.Descriptor {
+	return modulecatalog.Descriptor{
+		Name: ModuleName,
+		Requirements: modulecatalog.Requirements{
+			ConfigKey: "modules." + ModuleName,
+			Logger: true,
+		},
+		Build: generatedBuild,
+	}
 }
 
-func generateMain(moduleName string) error {
-
-	camelModuleName := stringsExt.CamelName(moduleName)
-	confTmpl := `package conf
-
-// module conf
-type %sConf struct {
-	
-}`
-
-	err := ioutil.WriteFile(filepath.Join(`modules`, moduleName, `conf/conf.go`),
-		stringsExt.StringToSlice(fmt.Sprintf(confTmpl, camelModuleName)),
-		0640)
-	if err != nil {
-		return err
+func generatedBuild(context modulecatalog.BuildContext) (modulecatalog.Instance, error) {
+	var config Config
+	if err := context.Config().Decode(ModuleName, "modules."+ModuleName, &config); err != nil {
+		return nil, fmt.Errorf("%%s config: %%w", ModuleName, err)
 	}
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("%%s config validation: %%w", ModuleName, err)
+	}
+	return NewModule(Dependencies{Config: config, Logger: context.Logger()})
+}
+`, packageName)
+}
 
-	tmpl := `package %s
+func autoloadTemplate(packageName, packageImport string) string {
+	return fmt.Sprintf(`package autoload
 
 import (
-	"yunka.io/framework/core"
-	"yunka.io/framework/core/module"
-	"yunka/modules/%s/conf"
+	"yunka.io/framework/core/modulecatalog"
+	module %q
 )
 
-
-const (
-	ModuleName = "%s"
-)
-
-var (
-	mod core.Module
-)
-
-func init() {
-	core.RegisterConfType(ModuleName, conf.%sConf{})
-	mod = module.NewModule(ModuleName, func(mod core.Module) {
-		
-	})
-}
-
-func Init(fn core.ModuleInit) {
-	mod.Init(fn)
-}
-`
-
-	return ioutil.WriteFile(filepath.Join(`modules`, moduleName, `main.go`),
-		stringsExt.StringToSlice(fmt.Sprintf(tmpl, moduleName, moduleName, moduleName, camelModuleName)),
-		0640)
+func init() { modulecatalog.MustRegister(module.GeneratedDescriptor()) }
+`, packageImport)
 }
