@@ -1,0 +1,83 @@
+name: C6 post-merge topology verifier
+
+on:
+  push:
+    branches:
+      - agent/c6-postmerge-verify-control
+    paths:
+      - .github/workflows/c6-postmerge-verify.yml
+
+permissions:
+  contents: write
+  issues: write
+  actions: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout verification control
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Wait for final closure and verify strict topology
+        id: topology
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          expected_parent=0408c860671e5d5b464d04ea73505680fc6a1609
+          feature_branch=agent/c6-rpc-unification
+
+          for attempt in $(seq 1 180); do
+            git fetch origin main "$feature_branch" --no-tags --force
+            main_sha="$(git rev-parse origin/main)"
+            feature_sha="$(git rev-parse "origin/$feature_branch")"
+
+            if test "$main_sha" = "$feature_sha" && test "$main_sha" != "$expected_parent"; then
+              test "$(git rev-parse "${main_sha}^")" = "$expected_parent"
+              test "$(git rev-list --count "${expected_parent}..${main_sha}")" = "1"
+              test "$(git rev-list --count "${main_sha}..${expected_parent}")" = "0"
+              test "$(git show -s --format=%s "$main_sha")" = "feat: unify standard RPC generation and runtime"
+              test -z "$(git ls-tree -r --name-only "$main_sha" | grep -E '(^app/cmd/rpc/|^gateway/rpc/pb/|gateway/rpc/gender\.sh$|\.xr_.*\.go$)' || true)"
+              test -n "$(git ls-tree -r --name-only "$main_sha" | grep '^tools/check_rpc_consumer_abi.py$')"
+              test -n "$(git ls-tree -r --name-only "$main_sha" | grep '^gateway/rpc/consumercompat/consumer_compat_test.go$')"
+              echo "final_sha=$main_sha" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            latest="$(gh run list --repo hvritual/yunka.io --workflow c6-finalize-and-merge.yml --branch agent/c6-rpc-unification-control --limit 1 --json status,conclusion,databaseId --jq '.[0] | [.status,.conclusion,.databaseId] | @tsv' 2>/dev/null || true)"
+            if test -n "$latest"; then
+              status="$(printf '%s' "$latest" | cut -f1)"
+              conclusion="$(printf '%s' "$latest" | cut -f2)"
+              run_id="$(printf '%s' "$latest" | cut -f3)"
+              if test "$status" = "completed" && test "$conclusion" != "success"; then
+                echo "final C6 workflow failed: run=$run_id conclusion=$conclusion main=$main_sha feature=$feature_sha" >&2
+                exit 1
+              fi
+            fi
+            sleep 10
+          done
+
+          echo "timed out waiting for final C6 topology" >&2
+          exit 1
+
+      - name: Record verified merge
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FINAL_SHA: ${{ steps.topology.outputs.final_sha }}
+        run: |
+          set -euo pipefail
+          gh issue comment 11 --repo hvritual/yunka.io --body "Post-merge topology verification passed: main and agent/c6-rpc-unification both point to \`${FINAL_SHA}\`; it is exactly one commit over C5 and contains no legacy RPC generator/runtime paths."
+
+      - name: Delete verifier branch
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin --delete agent/c6-postmerge-verify-control
