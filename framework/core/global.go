@@ -18,13 +18,12 @@ import (
  */
 
 var (
-	globalAppOnce sync.Once
-	app           *App
-	globalConf    = make(conf.Map)
-	store         = make(map[string]any)
-	storeLock     sync.Mutex
-	initiators    []Initiator
-	prepares      []Prepare
+	app        *App
+	globalConf = make(conf.Map)
+	store      = make(map[string]any)
+	storeLock  sync.Mutex
+	initiators []Initiator
+	prepares   []Prepare
 )
 
 // register module conf type
@@ -50,19 +49,11 @@ func GetItem[T any](key string, dt T) T {
 
 const dbSyncKey = `DBSync`
 
-func SetDbSync(v bool) {
-	SetItem[bool](dbSyncKey, v)
-}
-
-func IsDbSync() bool {
-	return GetItem[bool](dbSyncKey, false)
-}
+func SetDbSync(v bool) { SetItem[bool](dbSyncKey, v) }
+func IsDbSync() bool   { return GetItem[bool](dbSyncKey, false) }
 
 func GetConfV2[T any](name string, dt T) T {
 	return conf.GetConf[T](globalConf, name, dt)
 }
 
-// get logger
-func Log() logExt.Logger {
-	return app.Logger()
-}
+func Log() logExt.Logger { return app.Logger() }
