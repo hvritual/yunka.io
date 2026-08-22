@@ -1,0 +1,104 @@
+name: C6 final status verifier
+
+on:
+  push:
+    branches:
+      - agent/c6-final-status-control
+    paths:
+      - .github/workflows/c6-final-status.yml
+
+permissions:
+  contents: write
+  issues: write
+  actions: read
+  pull-requests: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout verifier control
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Verify and report exact C6 state
+        id: state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          parent=0408c860671e5d5b464d04ea73505680fc6a1609
+          feature_branch=agent/c6-rpc-unification
+          git fetch origin main "$feature_branch" --no-tags --force
+          main_sha="$(git rev-parse origin/main)"
+          feature_sha="$(git rev-parse "origin/$feature_branch")"
+
+          ahead="$(git rev-list --count "origin/main..origin/$feature_branch")"
+          behind="$(git rev-list --count "origin/$feature_branch..origin/main")"
+          main_from_parent="$(git rev-list --count "$parent..origin/main")"
+
+          final_run="$(gh run list --repo hvritual/yunka.io --workflow c6-finalize-and-merge.yml --limit 1 --json databaseId,status,conclusion,headSha --jq '.[0] // {} | [.databaseId,.status,.conclusion,.headSha] | @tsv' 2>/dev/null || true)"
+          fallback_run="$(gh run list --repo hvritual/yunka.io --workflow c6-finalize-fallback.yml --limit 1 --json databaseId,status,conclusion,headSha --jq '.[0] // {} | [.databaseId,.status,.conclusion,.headSha] | @tsv' 2>/dev/null || true)"
+
+          verified=false
+          reason="not-final"
+          if test "$main_sha" = "$feature_sha" && test "$main_sha" != "$parent"; then
+            test "$(git rev-parse "${main_sha}^")" = "$parent"
+            test "$main_from_parent" = "1"
+            test "$ahead" = "0"
+            test "$behind" = "0"
+            test "$(git show -s --format=%s "$main_sha")" = "feat: unify standard RPC generation and runtime"
+            test -z "$(git ls-tree -r --name-only "$main_sha" | grep -E '(^app/cmd/rpc/|^gateway/rpc/pb/|gateway/rpc/gender\.sh$|\.xr_.*\.go$)' || true)"
+            test -n "$(git ls-tree -r --name-only "$main_sha" | grep '^tools/check_rpc_consumer_abi.py$')"
+            test -n "$(git ls-tree -r --name-only "$main_sha" | grep '^gateway/rpc/consumercompat/consumer_compat_test.go$')"
+            verified=true
+            reason="strict-fast-forward-complete"
+          elif test "$main_sha" = "$parent" && test "$feature_sha" != "$parent"; then
+            if test "$(git rev-parse "${feature_sha}^")" = "$parent" && test "$ahead" = "1" && test "$behind" = "0"; then
+              reason="feature-final-main-pending"
+            else
+              reason="feature-not-final"
+            fi
+          elif test "$main_sha" = "$parent" && test "$feature_sha" = "$parent"; then
+            reason="no-c6-feature"
+          else
+            reason="unexpected-topology"
+          fi
+
+          report="$RUNNER_TEMP/c6-status.md"
+          {
+            echo "C6 final status verification."
+            echo
+            echo "- verified: \`$verified\`"
+            echo "- reason: \`$reason\`"
+            echo "- main: \`$main_sha\`"
+            echo "- feature: \`$feature_sha\`"
+            echo "- feature ahead/behind main: \`$ahead/$behind\`"
+            echo "- main commits over C5: \`$main_from_parent\`"
+            echo "- finalize workflow: \`$final_run\`"
+            echo "- fallback workflow: \`$fallback_run\`"
+          } > "$report"
+          gh issue comment 11 --repo hvritual/yunka.io --body-file "$report"
+
+          echo "verified=$verified" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          echo "main_sha=$main_sha" >> "$GITHUB_OUTPUT"
+          echo "feature_sha=$feature_sha" >> "$GITHUB_OUTPUT"
+
+          test "$verified" = true
+
+      - name: Close C6 and clean verifier
+        if: ${{ steps.state.outputs.verified == 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FINAL_SHA: ${{ steps.state.outputs.main_sha }}
+        run: |
+          set -euo pipefail
+          gh issue close 11 --repo hvritual/yunka.io --reason completed || true
+          gh pr comment 13 --repo hvritual/yunka.io --body "Post-merge verification passed: main and agent/c6-rpc-unification both point to \`${FINAL_SHA}\`; the commit is exactly one C5 child and contains no legacy RPC generator/runtime paths." || true
+          git push origin --delete agent/c6-final-status-control
