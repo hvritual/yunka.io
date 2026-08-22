@@ -1,0 +1,106 @@
+name: C6 final status and merge-only recovery
+
+on:
+  push:
+    branches:
+      - agent/c6-final-status-control
+    paths:
+      - .github/workflows/c6-final-status-2.yml
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: c6-final-status-recovery
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout status control
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Wait for final C6 and perform merge-only recovery
+        id: final
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          parent=0408c860671e5d5b464d04ea73505680fc6a1609
+          c62=eea872ce0415f294c54fc53c6575463e7e64e628
+          feature=agent/c6-rpc-unification
+
+          for attempt in $(seq 1 360); do
+            git fetch origin main "$feature" --no-tags --force
+            main_sha="$(git rev-parse origin/main)"
+            feature_sha="$(git rev-parse "origin/$feature")"
+
+            if test "$feature_sha" != "$c62"; then
+              test "$(git rev-parse "${feature_sha}^")" = "$parent"
+              test "$(git rev-list --count "${parent}..${feature_sha}")" = "1"
+              test "$(git rev-list --count "${feature_sha}..${parent}")" = "0"
+              test "$(git show -s --format=%s "$feature_sha")" = "feat: unify standard RPC generation and runtime"
+              test -z "$(git ls-tree -r --name-only "$feature_sha" | grep -E '(^app/cmd/rpc/|^gateway/rpc/pb/|gateway/rpc/gender\.sh$|\.xr_.*\.go$)' || true)"
+              test -n "$(git ls-tree -r --name-only "$feature_sha" | grep '^tools/check_rpc_consumer_abi.py$')"
+              test -n "$(git ls-tree -r --name-only "$feature_sha" | grep '^gateway/rpc/consumercompat/consumer_compat_test.go$')"
+
+              if test "$main_sha" = "$parent"; then
+                git push --force-with-lease="refs/heads/main:${parent}" origin "${feature_sha}:refs/heads/main"
+                git fetch origin main "$feature" --no-tags --force
+                main_sha="$(git rev-parse origin/main)"
+              fi
+
+              test "$main_sha" = "$feature_sha"
+              test "$(git rev-list --count "origin/main..origin/$feature")" = "0"
+              test "$(git rev-list --count "origin/$feature..origin/main")" = "0"
+              echo "sha=$feature_sha" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            if test "$main_sha" != "$parent"; then
+              echo "unexpected main movement: $main_sha" >&2
+              exit 1
+            fi
+
+            final_state="$(gh run list --repo hvritual/yunka.io --workflow c6-finalize-and-merge.yml --limit 1 --json status,conclusion,databaseId --jq '.[0] // {} | [.status,.conclusion,.databaseId] | @tsv' 2>/dev/null || true)"
+            fallback_state="$(gh run list --repo hvritual/yunka.io --workflow c6-finalize-fallback.yml --limit 1 --json status,conclusion,databaseId --jq '.[0] // {} | [.status,.conclusion,.databaseId] | @tsv' 2>/dev/null || true)"
+
+            final_status="$(printf '%s' "$final_state" | cut -f1)"
+            final_conclusion="$(printf '%s' "$final_state" | cut -f2)"
+            fallback_status="$(printf '%s' "$fallback_state" | cut -f1)"
+            fallback_conclusion="$(printf '%s' "$fallback_state" | cut -f2)"
+
+            if test "$final_status" = completed && test "$final_conclusion" != success \
+              && test "$fallback_status" = completed && test "$fallback_conclusion" != success; then
+              echo "both C6 finalization paths failed: final=$final_state fallback=$fallback_state" >&2
+              exit 1
+            fi
+            sleep 10
+          done
+
+          echo "timed out before final C6 publication" >&2
+          exit 1
+
+      - name: Record and clean final C6
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FINAL_SHA: ${{ steps.final.outputs.sha }}
+        run: |
+          set -euo pipefail
+          gh issue comment 11 --repo hvritual/yunka.io --body "C6 strict fast-forward verified: main and agent/c6-rpc-unification both point to \`${FINAL_SHA}\`; it is one commit over C5 with no legacy RPC generator/runtime paths."
+          gh issue close 11 --repo hvritual/yunka.io --reason completed || true
+          gh pr comment 13 --repo hvritual/yunka.io --body "C6 post-merge verification passed at \`${FINAL_SHA}\`." || true
+          git push origin --delete agent/c6-rpc-unification-control || true
+          git push origin --delete agent/c6-4-consumer-proof-control || true
+          git push origin --delete agent/c6-postmerge-verify-control || true
+          git push origin --delete agent/c6-final-status-control
