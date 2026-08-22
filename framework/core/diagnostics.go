@@ -1,6 +1,10 @@
 package core
 
-import "context"
+import (
+	"context"
+
+	"yunka.io/framework/core/modulecatalog"
+)
 
 const DiagnosticsSchemaVersion = 1
 
@@ -15,6 +19,7 @@ type DiagnosticsReport struct {
 
 type ModuleDiagnostic struct {
 	Name          string `json:"name"`
+	Composition   string `json:"composition,omitempty"`
 	Startable     bool   `json:"startable,omitempty"`
 	Shutdownable  bool   `json:"shutdownable,omitempty"`
 	HealthChecked bool   `json:"healthChecked,omitempty"`
@@ -32,32 +37,23 @@ func (app *App) Diagnostics(ctx context.Context) DiagnosticsReport {
 		ctx = context.Background()
 	}
 	if app == nil {
-		return DiagnosticsReport{
-			SchemaVersion: DiagnosticsSchemaVersion,
-			State:         "unknown",
-			Health:        HealthReport{State: "unknown"},
-		}
+		return DiagnosticsReport{SchemaVersion: DiagnosticsSchemaVersion, State: "unknown", Health: HealthReport{State: "unknown"}}
 	}
-
 	routes := app.rhTree.Paths()
-	modules := app.moduleSnapshot()
-	moduleDiagnostics := make([]ModuleDiagnostic, 0, len(modules))
-	for _, mod := range modules {
-		if mod == nil {
+	moduleDiagnostics := make([]ModuleDiagnostic, 0, len(app.moduleSnapshot())+len(app.composedModuleSnapshot()))
+	for _, module := range app.moduleSnapshot() {
+		if module == nil {
 			continue
 		}
-		_, startable := mod.(Startable)
-		_, shutdownable := mod.(Shutdowner)
-		_, healthChecked := mod.(HealthChecker)
-		moduleDiagnostics = append(moduleDiagnostics, ModuleDiagnostic{
-			Name:          mod.Name(),
-			Startable:     startable,
-			Shutdownable:  shutdownable,
-			HealthChecked: healthChecked,
-		})
+		moduleDiagnostics = append(moduleDiagnostics, diagnosticForModule(module, "legacy"))
+	}
+	for _, module := range app.composedModuleSnapshot() {
+		if module == nil {
+			continue
+		}
+		moduleDiagnostics = append(moduleDiagnostics, diagnosticForComposedModule(module))
 	}
 	rpcClientConfigured, rpcServerCount := app.rpcInventory()
-
 	return DiagnosticsReport{
 		SchemaVersion: DiagnosticsSchemaVersion,
 		State:         app.State().String(),
@@ -65,10 +61,22 @@ func (app *App) Diagnostics(ctx context.Context) DiagnosticsReport {
 		Modules:       moduleDiagnostics,
 		Routes:        routes,
 		Runtime: RuntimeDiagnostic{
-			RouteCount:          len(routes),
-			RPCClientConfigured: rpcClientConfigured,
-			RPCServerCount:      rpcServerCount,
-			EventBusConfigured:  app.eventBus != nil,
+			RouteCount: len(routes), RPCClientConfigured: rpcClientConfigured,
+			RPCServerCount: rpcServerCount, EventBusConfigured: app.eventBus != nil,
 		},
 	}
+}
+
+func diagnosticForModule(module Module, composition string) ModuleDiagnostic {
+	_, startable := module.(Startable)
+	_, shutdownable := module.(Shutdowner)
+	_, healthChecked := module.(HealthChecker)
+	return ModuleDiagnostic{Name: module.Name(), Composition: composition, Startable: startable, Shutdownable: shutdownable, HealthChecked: healthChecked}
+}
+
+func diagnosticForComposedModule(module modulecatalog.Instance) ModuleDiagnostic {
+	_, startable := module.(Startable)
+	_, shutdownable := module.(Shutdowner)
+	_, healthChecked := module.(HealthChecker)
+	return ModuleDiagnostic{Name: module.Name(), Composition: "typed", Startable: startable, Shutdownable: shutdownable, HealthChecked: healthChecked}
 }
