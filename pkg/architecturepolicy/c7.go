@@ -162,6 +162,8 @@ func checkTypedComposition(root string) ([]Diagnostic, error) {
 	paths := []string{
 		filepath.Join(root, "framework", "core", "modulecatalog"),
 		filepath.Join(root, "framework", "kernel"),
+		filepath.Join(root, "framework", "platform"),
+		filepath.Join(root, "framework", "requestscope"),
 	}
 	forbiddenCalls := map[string]struct{}{
 		"GetApp": {}, "GetClient": {}, "GetItem": {}, "GetConfV2": {},
@@ -192,6 +194,14 @@ func checkTypedComposition(root string) ([]Diagnostic, error) {
 				if pathValue == "reflect" {
 					relative, _ := filepath.Rel(root, path)
 					diagnostics = append(diagnostics, Diagnostic{Path: filepath.ToSlash(relative), Message: "typed composition may not import reflect"})
+				}
+				switch pathValue {
+				case "yunka.io/framework/core/module", "yunka.io/pkg/di":
+					relative, _ := filepath.Rel(root, path)
+					diagnostics = append(diagnostics, Diagnostic{Path: filepath.ToSlash(relative), Message: "typed composition may not import legacy reflection containers"})
+				case "yunka.io/framework/core/request":
+					relative, _ := filepath.Rel(root, path)
+					diagnostics = append(diagnostics, Diagnostic{Path: filepath.ToSlash(relative), Message: "typed request scopes may not depend on legacy request.Runtime"})
 				}
 			}
 			ast.Inspect(file, func(node ast.Node) bool {

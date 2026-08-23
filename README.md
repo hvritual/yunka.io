@@ -69,6 +69,12 @@ C7.1 preserves one-line module enablement through blank imports while replacing 
 
 The reflective module container and global App/config/store remain temporary migration debt during C7.1 and may not receive new call sites. C7.2 migrates real modules and request scopes; C7.3 deletes the old container, reflection injection, lifecycle pools, and legacy global APIs. See `docs/waves/C7.1-static-module-catalog.md`.
 
+## App-owned platform capabilities and request scope
+
+C7.2 makes the C7.1 typed catalog operational without exposing infrastructure acquisition to modules. `framework/platform.Provider` opens only the sealed plan's named DB/RPC requirements, opens each name once, gives each module a restricted capability view and module-scoped logger, and participates in the existing App Start/Health/Shutdown lifecycle. `kernel.Options.Platform` is the single ergonomic entry; it cannot be mixed with a second context factory or direct capability set. MySQL pool configuration and gRPC transport credentials remain process-level platform inputs and are never visible to module code.
+
+`framework/requestscope` replaces request mutation of singleton Services with a fresh typed Scope per operation. A Scope snapshots trusted Principal/metadata/trace state, owns one Unit of Work and typed repository set, commits on success, rolls back on error or panic, and closes exactly once. GORM repositories receive the current transaction while the underlying connection pool remains App-owned. Request scopes, repositories, transactions, identities, and contexts are never managed by `sync.Pool`. See `docs/waves/C7.2-platform-request-scope.md`.
+
 ## Security defaults
 
 - HTTP clients verify TLS certificates and enforce timeouts.

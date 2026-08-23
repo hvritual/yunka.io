@@ -101,7 +101,7 @@ func init() { modulecatalog.MustRegister(orders.GeneratedDescriptor(readEnvironm
 
 func TestTypedCompositionRejectsSelectorServiceLocatorAndAliasedPool(t *testing.T) {
 	root := t.TempDir()
-	for _, directory := range []string{"framework/core/modulecatalog", "framework/kernel"} {
+	for _, directory := range []string{"framework/core/modulecatalog", "framework/kernel", "framework/platform", "framework/requestscope"} {
 		if err := os.MkdirAll(filepath.Join(root, directory), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -121,6 +121,39 @@ func bad() { _ = core.GetApp() }
 		t.Fatal(err)
 	}
 	if len(diagnostics) < 2 {
+		t.Fatalf("diagnostics=%#v", diagnostics)
+	}
+}
+
+func TestTypedCompositionRejectsLegacyContainerImportsInC72Paths(t *testing.T) {
+	root := t.TempDir()
+	for _, directory := range []string{
+		"framework/core/modulecatalog",
+		"framework/kernel",
+		"framework/platform",
+		"framework/requestscope",
+	} {
+		if err := os.MkdirAll(filepath.Join(root, directory), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "framework/requestscope/bad.go"), []byte(`package requestscope
+import (
+  "yunka.io/framework/core/module"
+  "yunka.io/framework/core/request"
+  "yunka.io/pkg/di"
+)
+var _ = module.NewModule
+var _ request.Runtime
+var _ = di.Fill
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	diagnostics, err := checkTypedComposition(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diagnostics) < 3 {
 		t.Fatalf("diagnostics=%#v", diagnostics)
 	}
 }

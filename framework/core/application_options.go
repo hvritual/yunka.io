@@ -47,7 +47,7 @@ func NewApp(options AppOptions) (*App, error) {
 	if factory != nil {
 		application.compositionFactory = factory
 		if err := factory.Prepare(plan.Requirements()); err != nil {
-			return nil, errors.Join(fmt.Errorf("core: prepare module capabilities: %w", err), shutdownCompositionFactory(context.Background(), factory))
+			return nil, application.compositionBuildError(fmt.Errorf("core: prepare module capabilities: %w", err))
 		}
 	}
 	for _, descriptor := range plan.Descriptors {
@@ -72,7 +72,16 @@ func NewApp(options AppOptions) (*App, error) {
 }
 
 func (app *App) compositionBuildError(cause error) error {
-	return errors.Join(cause, shutdownComposedInstances(context.Background(), app.composedModuleSnapshot()), shutdownCompositionFactory(context.Background(), app.compositionFactory))
+	var eventBusErr error
+	if app != nil && app.eventBus != nil {
+		eventBusErr = safeLifecycleCall("close event bus after composition failure", app.eventBus.Close)
+	}
+	return errors.Join(
+		cause,
+		shutdownComposedInstances(context.Background(), app.composedModuleSnapshot()),
+		shutdownCompositionFactory(context.Background(), app.compositionFactory),
+		eventBusErr,
+	)
 }
 
 func shutdownCompositionFactory(ctx context.Context, factory modulecatalog.ContextFactory) error {

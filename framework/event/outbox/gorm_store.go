@@ -118,6 +118,9 @@ func (store *GORMStore) insert(db *gorm.DB, envelope event.Envelope) error {
 	return nil
 }
 
+// Claim returns at most options.Limit records. With SKIP LOCKED, a short
+// or empty batch can be transient while another claim transaction holds eligible
+// rows; callers must poll again rather than treating batch size as a fairness guarantee.
 func (store *GORMStore) Claim(ctx context.Context, options ClaimOptions) ([]Record, error) {
 	if store == nil || store.db == nil {
 		return nil, errors.New("outbox: gorm store is nil")

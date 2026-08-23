@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -89,27 +90,57 @@ func assertConcurrentClaimPartition(t *testing.T, workers, recordsPerWorker int)
 	}
 
 	now := time.Now().UTC().Add(time.Second)
+	claimCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 	start := make(chan struct{})
 	type claimResult struct {
 		owner   string
 		records []Record
 		err     error
 	}
-	results := make(chan claimResult, workers)
+	// A successful claim contributes at least one record, so total+workers
+	// bounds all positive batches plus one terminal error per worker.
+	results := make(chan claimResult, total+workers)
 	var wg sync.WaitGroup
+	var claimed atomic.Int64
 	for index := 0; index < workers; index++ {
 		owner := fmt.Sprintf("worker-%02d", index)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			<-start
-			records, err := store.Claim(ctx, ClaimOptions{
-				Owner: owner,
-				Limit: recordsPerWorker,
-				Lease: time.Minute,
-				Now:   now,
-			})
-			results <- claimResult{owner: owner, records: records, err: err}
+			for {
+				if claimed.Load() >= int64(total) {
+					return
+				}
+				records, err := store.Claim(claimCtx, ClaimOptions{
+					Owner: owner,
+					Limit: recordsPerWorker,
+					Lease: time.Minute,
+					Now:   now,
+				})
+				if err != nil {
+					results <- claimResult{owner: owner, err: err}
+					cancel()
+					return
+				}
+				if len(records) == 0 {
+					// SKIP LOCKED may transiently return an empty or short batch
+					// while another claim transaction owns the eligible index range.
+					if claimed.Load() >= int64(total) {
+						return
+					}
+					select {
+					case <-claimCtx.Done():
+						results <- claimResult{owner: owner, err: fmt.Errorf("claim convergence: %w", claimCtx.Err())}
+						return
+					case <-time.After(time.Millisecond):
+					}
+					continue
+				}
+				claimed.Add(int64(len(records)))
+				results <- claimResult{owner: owner, records: records}
+			}
 		}()
 	}
 	close(start)
@@ -121,8 +152,8 @@ func assertConcurrentClaimPartition(t *testing.T, workers, recordsPerWorker int)
 		if current.err != nil {
 			t.Fatalf("%s claim: %v", current.owner, current.err)
 		}
-		if len(current.records) != recordsPerWorker {
-			t.Fatalf("%s claimed=%d want %d", current.owner, len(current.records), recordsPerWorker)
+		if len(current.records) > recordsPerWorker {
+			t.Fatalf("%s claimed=%d exceeds limit %d", current.owner, len(current.records), recordsPerWorker)
 		}
 		for _, record := range current.records {
 			if owner, exists := seen[record.ID]; exists {
@@ -133,6 +164,9 @@ func assertConcurrentClaimPartition(t *testing.T, workers, recordsPerWorker int)
 			}
 			seen[record.ID] = current.owner
 		}
+	}
+	if got := claimed.Load(); got != int64(total) {
+		t.Fatalf("claim counter=%d want %d", got, total)
 	}
 	if len(seen) != total {
 		t.Fatalf("claimed=%d want %d", len(seen), total)
