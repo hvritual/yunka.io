@@ -18,6 +18,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.44.0
 	google.golang.org/grpc v1.82.1
 	google.golang.org/protobuf v1.36.11
+	gorm.io/driver/mysql v1.5.2
 	gorm.io/driver/sqlite v1.5.2
 	gorm.io/gorm v1.25.5
 	yunka.io/framework v0.0.0-00010101000000-000000000000
@@ -38,6 +39,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-playground/locales v0.13.0 // indirect
 	github.com/go-playground/universal-translator v0.17.0 // indirect
+	github.com/go-sql-driver/mysql v1.7.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect

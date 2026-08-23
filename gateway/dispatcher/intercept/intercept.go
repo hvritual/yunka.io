@@ -1,6 +1,8 @@
 package intercept
 
 import (
+	"context"
+
 	"yunka.io/gateway/rpc/meta"
 )
 
@@ -11,7 +13,7 @@ import (
  */
 
 type Intercept interface {
-	VerifyRoleApiRight(apiUUID, orgUUID string, RoleUUID []string) ([]byte, bool)
+	VerifyRoleApiRight(context.Context, string, string, []string) ([]byte, bool)
 
 	meta.GatewayServiceServer
 }

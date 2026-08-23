@@ -1,13 +1,15 @@
 package db
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/didi/gendry/builder"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"os"
-	"path/filepath"
 )
 
 type Store struct {
@@ -107,20 +109,37 @@ func (s *Store) OperateRole(orgUUID string, roleUUID string, modBtnUUID []string
 	})
 }
 
+// NewStoreFromDB binds the role repository to an existing GORM handle. In the
+// typed path this handle is the request-owned transaction supplied by
+// requestscope; the Store never owns or closes the App-level connection pool.
+func NewStoreFromDB(database *gorm.DB) (*Store, error) {
+	if database == nil {
+		return nil, errors.New("role db: GORM database is required")
+	}
+	return &Store{DB: database}, nil
+}
+
+func Migrate(database *gorm.DB) error {
+	if database == nil {
+		return errors.New("role db: GORM database is required")
+	}
+	return database.AutoMigrate(&ApiModuleButton{}, &RoleModuleButton{})
+}
+
 func NewStore(dirName, dbName string) (*Store, error) {
 	if err := os.MkdirAll(dirName, 0750); err != nil {
 		return nil, err
 	}
 
-	db, err := gorm.Open(sqlite.Open(filepath.Join(dirName, dbName)), &gorm.Config{})
+	database, err := gorm.Open(sqlite.Open(filepath.Join(dirName, dbName)), &gorm.Config{})
 	if err != nil {
 		return nil, err
 	}
 
-	s := &Store{
-		DB:      db,
-		dirName: dirName,
+	store, err := NewStoreFromDB(database)
+	if err != nil {
+		return nil, err
 	}
-
-	return s, s.AutoMigrate(&ApiModuleButton{}, &RoleModuleButton{})
+	store.dirName = dirName
+	return store, Migrate(database)
 }

@@ -3,6 +3,9 @@ package role
 import (
 	"context"
 	"errors"
+
+	"gorm.io/gorm"
+	"yunka.io/framework/requestscope"
 	"yunka.io/gateway/dispatcher/intercept"
 	"yunka.io/gateway/dispatcher/intercept/role/db"
 	"yunka.io/gateway/dispatcher/router"
@@ -25,11 +28,13 @@ import (
 type RoleIntercept struct {
 	bucketName []byte
 	apiTree    *router.Tree
-	db         *db.Store
+	scopes     requestscope.ScopeFactory[*db.Store]
 }
 
-func (r *RoleIntercept) VerifyRoleApiRight(apiUUID, orgUUID string, RoleUUID []string) ([]byte, bool) {
-	ok, err := r.db.VerifyRoleAPIRight(apiUUID, orgUUID, RoleUUID)
+func (r *RoleIntercept) VerifyRoleApiRight(ctx context.Context, apiUUID, orgUUID string, roleUUID []string) ([]byte, bool) {
+	ok, err := requestscope.ExecuteValue(ctx, r.scopes, func(scope *requestscope.Scope[*db.Store]) (bool, error) {
+		return scope.Repositories().VerifyRoleAPIRight(apiUUID, orgUUID, roleUUID)
+	})
 	if err != nil {
 		logExt.Error(err)
 		return resp.SysNotRightBys, false
@@ -50,8 +55,9 @@ func (r *RoleIntercept) BatchAddRuntimeApi(ctx context.Context,
 			ModuleButtonUUID: button.ModuleBtnUUID,
 		}
 	}
-	err := r.db.BatchCreate(btns)
-	if err != nil {
+	if err := requestscope.Execute(ctx, r.scopes, func(scope *requestscope.Scope[*db.Store]) error {
+		return scope.Repositories().BatchCreate(btns)
+	}); err != nil {
 		return &meta.OperateRuntimeApiResponse{}, err
 	}
 
@@ -64,8 +70,9 @@ func (r *RoleIntercept) BatchAddRuntimeApi(ctx context.Context,
 
 func (r *RoleIntercept) DeleteRuntimeApi(ctx context.Context,
 	request *meta.DeleteRuntimeApiRequest) (*meta.OperateRuntimeApiResponse, error) {
-	err := r.db.DeleteApi(request.Uuid)
-	if err != nil {
+	if err := requestscope.Execute(ctx, r.scopes, func(scope *requestscope.Scope[*db.Store]) error {
+		return scope.Repositories().DeleteApi(request.Uuid)
+	}); err != nil {
 		return &meta.OperateRuntimeApiResponse{}, err
 	}
 
@@ -75,28 +82,61 @@ func (r *RoleIntercept) DeleteRuntimeApi(ctx context.Context,
 
 func (r *RoleIntercept) OperateRoleAPI(ctx context.Context,
 	btn *meta.RoleModuleBtn) (*meta.OperateRoleResponse, error) {
-
-	return &meta.OperateRoleResponse{}, r.db.OperateRole(btn.OrgUUID, btn.RoleUUID, btn.ModuleBtnUUID, btn.DeleteModuleBtnUUID)
+	return &meta.OperateRoleResponse{}, requestscope.Execute(ctx, r.scopes, func(scope *requestscope.Scope[*db.Store]) error {
+		return scope.Repositories().OperateRole(btn.OrgUUID, btn.RoleUUID, btn.ModuleBtnUUID, btn.DeleteModuleBtnUUID)
+	})
 }
 
 type GatewayServiceRegistrar interface {
 	RegisterGatewayService(meta.GatewayServiceServer) error
 }
 
-var ErrGatewayServiceRegistrarUnavailable = errors.New("role intercept: typed GatewayService registrar is unavailable")
+var (
+	ErrGatewayServiceRegistrarUnavailable = errors.New("role intercept: typed GatewayService registrar is unavailable")
+	ErrRoleScopeFactoryUnavailable        = errors.New("role intercept: request scope factory is unavailable")
+)
 
-func NewRoleIntercept(rt *router.Tree, registrar GatewayServiceRegistrar) (intercept.Intercept, error) {
-	db, err := db.NewStore("build", "gateway.db")
-	if err != nil {
-		return nil, err
-	}
-
-	ri := &RoleIntercept{
-		apiTree: rt,
-		db:      db,
-	}
+func NewRoleInterceptWithScope(rt *router.Tree, registrar GatewayServiceRegistrar, scopes requestscope.ScopeFactory[*db.Store]) (intercept.Intercept, error) {
 	if registrar == nil {
 		return nil, ErrGatewayServiceRegistrarUnavailable
 	}
+	if scopes == nil {
+		return nil, ErrRoleScopeFactoryUnavailable
+	}
+	ri := &RoleIntercept{apiTree: rt, scopes: scopes}
 	return ri, registrar.RegisterGatewayService(ri)
+}
+
+// NewRoleInterceptWithDatabase is the typed C7.2.3 composition entry. The
+// database is App-owned (typically supplied by platform.Provider); each call
+// receives a fresh request transaction and a transaction-bound role Store.
+func NewRoleInterceptWithDatabase(rt *router.Tree, registrar GatewayServiceRegistrar, database *gorm.DB) (intercept.Intercept, error) {
+	if err := db.Migrate(database); err != nil {
+		return nil, err
+	}
+	units, err := requestscope.NewGORMFactory(database, nil)
+	if err != nil {
+		return nil, err
+	}
+	scopes, err := requestscope.NewFactory(requestscope.FactoryOptions[*db.Store]{
+		UnitOfWork: units,
+		Repositories: requestscope.GORMRepositories(func(_ context.Context, transaction *gorm.DB) (*db.Store, error) {
+			return db.NewStoreFromDB(transaction)
+		}),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return NewRoleInterceptWithScope(rt, registrar, scopes)
+}
+
+// NewRoleIntercept preserves the legacy filesystem constructor while routing
+// execution through requestscope. New composition code should use
+// NewRoleInterceptWithDatabase and obtain the GORM database from platform.Provider.
+func NewRoleIntercept(rt *router.Tree, registrar GatewayServiceRegistrar) (intercept.Intercept, error) {
+	store, err := db.NewStore("build", "gateway.db")
+	if err != nil {
+		return nil, err
+	}
+	return NewRoleInterceptWithDatabase(rt, registrar, store.DB)
 }

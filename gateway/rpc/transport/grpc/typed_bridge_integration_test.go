@@ -9,50 +9,81 @@ import (
 
 	grpcgo "google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
-	"yunka.io/framework/core"
 	"yunka.io/framework/core/identity"
 	coremiddleware "yunka.io/framework/core/middleware"
-	"yunka.io/framework/core/request"
+	"yunka.io/framework/core/runtimecontext"
+	"yunka.io/framework/requestscope"
 	"yunka.io/gateway/rpc/bridge"
 	"yunka.io/gateway/rpc/meta"
+	"yunka.io/pkg/rpcbridge"
 )
 
-type authenticatedGatewayService struct {
-	core.BaseService
-	seen chan identity.Principal
+type authenticatedScopedGatewayService struct {
+	scopes requestscope.ScopeFactory[grpcScopeRepositories]
+	seen   chan authenticatedScopedObservation
 }
 
-func (*authenticatedGatewayService) GetName() string { return bridge.DefaultGatewayServiceName }
-
-func (service *authenticatedGatewayService) BatchAddRuntimeApi(context.Context, *meta.BatchRuntimeApiRequest) (*meta.OperateRuntimeApiResponse, error) {
-	principal, _ := request.PrincipalFromRuntime(service.GetRuntime())
-	select {
-	case service.seen <- principal:
-	default:
-	}
-	return &meta.OperateRuntimeApiResponse{Msg: "authenticated"}, nil
+type authenticatedScopedObservation struct {
+	principal identity.Principal
+	metadata  runtimecontext.Metadata
+	traceID   string
 }
 
-func (*authenticatedGatewayService) DeleteRuntimeApi(context.Context, *meta.DeleteRuntimeApiRequest) (*meta.OperateRuntimeApiResponse, error) {
-	return &meta.OperateRuntimeApiResponse{}, nil
+func (service *authenticatedScopedGatewayService) BatchAddRuntimeApi(ctx context.Context, _ *meta.BatchRuntimeApiRequest) (*meta.OperateRuntimeApiResponse, error) {
+	return requestscope.ExecuteValue(ctx, service.scopes, func(scope *requestscope.Scope[grpcScopeRepositories]) (*meta.OperateRuntimeApiResponse, error) {
+		principal, _ := scope.Principal()
+		metadata, _ := scope.Metadata()
+		select {
+		case service.seen <- authenticatedScopedObservation{
+			principal: principal,
+			metadata:  metadata.Clone(),
+			traceID:   scope.TraceID(),
+		}:
+		default:
+		}
+		return &meta.OperateRuntimeApiResponse{Msg: "authenticated"}, nil
+	})
 }
 
-func (*authenticatedGatewayService) OperateRoleAPI(context.Context, *meta.RoleModuleBtn) (*meta.OperateRoleResponse, error) {
-	return &meta.OperateRoleResponse{}, nil
+func (service *authenticatedScopedGatewayService) DeleteRuntimeApi(ctx context.Context, _ *meta.DeleteRuntimeApiRequest) (*meta.OperateRuntimeApiResponse, error) {
+	return requestscope.ExecuteValue(ctx, service.scopes, func(*requestscope.Scope[grpcScopeRepositories]) (*meta.OperateRuntimeApiResponse, error) {
+		return &meta.OperateRuntimeApiResponse{}, nil
+	})
 }
 
-type authenticatedGatewayPool struct {
-	service core.Service
-	puts    atomic.Int32
+func (service *authenticatedScopedGatewayService) OperateRoleAPI(ctx context.Context, _ *meta.RoleModuleBtn) (*meta.OperateRoleResponse, error) {
+	return requestscope.ExecuteValue(ctx, service.scopes, func(*requestscope.Scope[grpcScopeRepositories]) (*meta.OperateRoleResponse, error) {
+		return &meta.OperateRoleResponse{}, nil
+	})
 }
 
-func (pool *authenticatedGatewayPool) GetService(string, request.Runtime) (core.Service, error) {
-	return pool.service, nil
+type grpcScopeUnitFactory struct {
+	begins    atomic.Int32
+	commits   atomic.Int32
+	rollbacks atomic.Int32
+	closes    atomic.Int32
 }
 
-func (pool *authenticatedGatewayPool) PutService(core.Service) {
-	pool.puts.Add(1)
+type grpcScopeUnit struct{ owner *grpcScopeUnitFactory }
+
+func (factory *grpcScopeUnitFactory) Begin(context.Context) (requestscope.UnitOfWork, error) {
+	factory.begins.Add(1)
+	return &grpcScopeUnit{owner: factory}, nil
 }
+func (unit *grpcScopeUnit) Commit(context.Context) error {
+	unit.owner.commits.Add(1)
+	return nil
+}
+func (unit *grpcScopeUnit) Rollback(context.Context) error {
+	unit.owner.rollbacks.Add(1)
+	return nil
+}
+func (unit *grpcScopeUnit) Close() error {
+	unit.owner.closes.Add(1)
+	return nil
+}
+
+type grpcScopeRepositories struct{}
 
 func TestTypedGatewayBridgeOverAuthenticatedTLSBufconn(t *testing.T) {
 	serverTLS, clientTLS := testTLSCredentials(t)
@@ -66,12 +97,19 @@ func TestTypedGatewayBridgeOverAuthenticatedTLSBufconn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	service := &authenticatedGatewayService{seen: make(chan identity.Principal, 1)}
-	pool := &authenticatedGatewayPool{service: service}
-	provider, err := bridge.NewModuleGatewayProvider(pool, "", bridge.WorkRuntimeFactory{})
+	units := &grpcScopeUnitFactory{}
+	scopes, err := requestscope.NewFactory(requestscope.FactoryOptions[grpcScopeRepositories]{
+		UnitOfWork: units,
+		Repositories: func(context.Context, requestscope.UnitOfWork) (grpcScopeRepositories, error) {
+			return grpcScopeRepositories{}, nil
+		},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	seen := make(chan authenticatedScopedObservation, 1)
+	service := &authenticatedScopedGatewayService{scopes: scopes, seen: seen}
+	provider := rpcbridge.Static[bridge.GatewayBusinessService](service)
 
 	listener := bufconn.Listen(1 << 20)
 	server := grpcgo.NewServer(
@@ -115,17 +153,18 @@ func TestTypedGatewayBridgeOverAuthenticatedTLSBufconn(t *testing.T) {
 		t.Fatalf("response = %+v", response)
 	}
 	select {
-	case principal := <-service.seen:
+	case observation := <-seen:
+		principal := observation.principal
 		if principal.Subject != "typed-gateway" || !principal.Authenticated || principal.AuthMethod != identity.AuthMethodServiceToken {
 			t.Fatalf("principal = %+v", principal)
 		}
+		if observation.metadata.Transport != "rpc" || observation.metadata.Protocol != "grpc" || observation.metadata.Operation != meta.GatewayService_BatchAddRuntimeApi_FullMethodName {
+			t.Fatalf("metadata = %+v", observation.metadata)
+		}
 	case <-ctx.Done():
-		t.Fatal("service did not observe authenticated runtime principal")
+		t.Fatal("service did not observe authenticated request scope")
 	}
-	if pool.puts.Load() != 1 {
-		t.Fatalf("PutService calls = %d", pool.puts.Load())
-	}
-	if service.GetRuntime() != nil {
-		t.Fatal("service retained request runtime after typed call")
+	if units.begins.Load() != 1 || units.commits.Load() != 1 || units.rollbacks.Load() != 0 || units.closes.Load() != 1 {
+		t.Fatalf("scope lifecycle begins=%d commits=%d rollbacks=%d closes=%d", units.begins.Load(), units.commits.Load(), units.rollbacks.Load(), units.closes.Load())
 	}
 }

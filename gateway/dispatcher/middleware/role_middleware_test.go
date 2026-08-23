@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -25,7 +26,7 @@ type allowRoleIntercept struct {
 	roles  []string
 }
 
-func (intercept *allowRoleIntercept) VerifyRoleApiRight(_ string, org string, roles []string) ([]byte, bool) {
+func (intercept *allowRoleIntercept) VerifyRoleApiRight(_ context.Context, _ string, org string, roles []string) ([]byte, bool) {
 	intercept.called = true
 	intercept.org = org
 	intercept.roles = append([]string(nil), roles...)
