@@ -1,1 +1,1 @@
-{"state":"failure","run_id":"32631170634","job":"release","trigger_sha":"ec70b4e842f7976076aef7a637bf5994de252d2a","base_sha":"34eaaf191ee9dd58589cd972b98ba2022e369824","release_branch":"agent/c7-2-3-gateway-role","release_sha":""}
+{"state":"running","run_id":"32631261855","job":"release","trigger_sha":"572c4984edf0d03a0195c16f3c508cc854d7452e","base_sha":"34eaaf191ee9dd58589cd972b98ba2022e369824","release_branch":"agent/c7-2-3-gateway-role"}
