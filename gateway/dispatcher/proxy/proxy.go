@@ -2,31 +2,19 @@ package proxy
 
 import (
 	"context"
-
-	"github.com/valyala/fasthttp"
 	"net"
 	"sync"
+
+	"github.com/valyala/fasthttp"
 	coremiddleware "yunka.io/framework/core/middleware"
-	"yunka.io/framework/core/request"
 	"yunka.io/gateway/dispatcher/router"
 	"yunka.io/pkg/logExt"
 )
 
-/**
- * @BelongProject yunka
- * @BelongPackage proxy
- * @Description:
- *
- * @Copyright 2020 - Powered By 云咖
- * @Author: fworld
- * @Date:  2020/9/18 1:15 下午
- * @Version V1.0
- */
-
+// Proxy owns routing and middleware composition. HTTP request contexts are
+// allocated per request and are never stored in a sync.Pool.
 type Proxy struct {
 	tree           *router.Tree
-	pool           *sync.Pool
-	ctxPool        *sync.Pool
 	logFn          func() logExt.Logger
 	contextLogFn   func(context.Context) logExt.Logger
 	middles        Next
@@ -35,65 +23,66 @@ type Proxy struct {
 	mu             sync.Mutex
 }
 
-func NewProxy(logFn func() logExt.Logger, fn func(rt *router.Tree)) *Proxy {
-	p := &Proxy{
-		pool: &sync.Pool{
-			New: func() interface{} {
-				return &multiContext{}
-			},
-		},
-		tree: router.New(),
-		ctxPool: &sync.Pool{
-			New: func() interface{} {
-				return request.NewWorkRuntime()
-			},
-		},
+func NewProxy(logFn func() logExt.Logger, configure func(*router.Tree)) *Proxy {
+	proxy := &Proxy{
+		tree:           router.New(),
 		logFn:          logFn,
 		runtimeMiddles: coremiddleware.New(),
 	}
-	fn(p.tree)
-	return p
-}
-
-func (p *Proxy) UriTree() *router.Tree {
-	return p.tree
-}
-
-func (p *Proxy) Run(address string) {
-	p.logFn().Debugf("start server:%s", address)
-	server := &fasthttp.Server{Handler: p.serverHttp}
-	p.setServer(server)
-	err := server.ListenAndServe(address)
-	if err != nil {
-		p.logFn().Errorf("start serve error, err:%v", err)
+	if configure != nil {
+		configure(proxy.tree)
 	}
+	return proxy
 }
 
-func (p *Proxy) RunLn(ln net.Listener) {
-	s := &fasthttp.Server{
-		Handler: p.serverHttp,
-	}
-	p.setServer(s)
-	err := s.Serve(ln)
-	if err != nil {
-		p.logFn().Errorf("start serve error, err:%v", err)
-	}
-}
+func (proxy *Proxy) UriTree() *router.Tree { return proxy.tree }
 
-func (p *Proxy) Stop() {
-	p.mu.Lock()
-	server := p.server
-	p.server = nil
-	p.mu.Unlock()
-	if server != nil {
-		if err := server.Shutdown(); err != nil {
-			p.logFn().Errorf("stop serve error, err:%v", err)
+func (proxy *Proxy) Run(address string) {
+	if logger := proxy.logger(); logger != nil {
+		logger.Debugf("start server:%s", address)
+	}
+	server := &fasthttp.Server{Handler: proxy.serverHTTP}
+	proxy.setServer(server)
+	if err := server.ListenAndServe(address); err != nil {
+		if logger := proxy.logger(); logger != nil {
+			logger.Errorf("start serve error, err:%v", err)
 		}
 	}
 }
 
-func (p *Proxy) setServer(server *fasthttp.Server) {
-	p.mu.Lock()
-	p.server = server
-	p.mu.Unlock()
+func (proxy *Proxy) RunLn(listener net.Listener) {
+	server := &fasthttp.Server{Handler: proxy.serverHTTP}
+	proxy.setServer(server)
+	if err := server.Serve(listener); err != nil {
+		if logger := proxy.logger(); logger != nil {
+			logger.Errorf("start serve error, err:%v", err)
+		}
+	}
+}
+
+func (proxy *Proxy) Stop() {
+	proxy.mu.Lock()
+	server := proxy.server
+	proxy.server = nil
+	proxy.mu.Unlock()
+	if server != nil {
+		if err := server.Shutdown(); err != nil {
+			if logger := proxy.logger(); logger != nil {
+				logger.Errorf("stop serve error, err:%v", err)
+			}
+		}
+	}
+}
+
+func (proxy *Proxy) setServer(server *fasthttp.Server) {
+	proxy.mu.Lock()
+	proxy.server = server
+	proxy.mu.Unlock()
+}
+
+func (proxy *Proxy) logger() logExt.Logger {
+	if proxy == nil || proxy.logFn == nil {
+		return nil
+	}
+	return proxy.logFn()
 }

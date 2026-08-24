@@ -1,7 +1,9 @@
 package bridge
 
 import (
+	"context"
 	"github.com/valyala/fasthttp"
+
 	"yunka.io/framework/core/request"
 	"yunka.io/gateway/internal/resp"
 	utils "yunka.io/gateway/internal/util"
@@ -25,7 +27,7 @@ var (
 )
 
 type ServiceNodeDiscovery interface {
-	GetNode(rt request.Runtime, serviceName string) (*meta.ServerNode, error)
+	GetNode(ctx context.Context, serviceName string) (*meta.ServerNode, error)
 }
 
 type distribute struct {
@@ -34,16 +36,20 @@ type distribute struct {
 	snd    ServiceNodeDiscovery
 }
 
-func (d *distribute) Do(modName, srvName string, rt request.Runtime, api *meta.RuntimeApi) (body []byte, err error) {
+func (d *distribute) Do(modName, srvName string, rt *request.Context, api *meta.RuntimeApi) (body []byte, err error) {
 	serverNode, err := d.snd.GetNode(rt, modName)
 	if err != nil {
-		rt.Logger().Error(err)
+		if logger := rt.Logger(); logger != nil {
+			logger.Error(err)
+		}
 		return nil, resp.SysNodeNotExistBys
 	}
 	r, err := d.client.Do(&(rt.GetRequestCtx().Request), serverNode.IpPort, d.opt)
 
 	if err != nil {
-		rt.Logger().Error(err)
+		if logger := rt.Logger(); logger != nil {
+			logger.Error(err)
+		}
 		return nil, err
 	}
 	if r.StatusCode() != fasthttp.StatusOK {

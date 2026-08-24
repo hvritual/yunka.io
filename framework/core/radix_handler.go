@@ -1,12 +1,13 @@
 package core
 
 import (
+	"context"
 	"sort"
 	"strings"
 	"sync"
 )
 
-type Handle func(srv Service) ([]byte, error)
+type Handle func(context.Context) ([]byte, error)
 
 type Param struct {
 	Val string

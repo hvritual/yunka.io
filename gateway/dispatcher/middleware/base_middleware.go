@@ -43,7 +43,7 @@ func (*BaseMiddleware) Name() string {
 	return baseName
 }
 
-func (base *BaseMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.RuntimeApi) {
+func (base *BaseMiddleware) Do(authStatus bool, rt *request.Context, api *meta.RuntimeApi) {
 	rCtx := rt.GetRequestCtx()
 	rCtx.Response.Header.Set(strServerHead, strServer)
 	rCtx.Response.Header.Set(strContentTypeHead, strContentType)

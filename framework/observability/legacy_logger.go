@@ -9,7 +9,7 @@ import (
 )
 
 // LegacyLogger adapts the existing logExt.Logger contract to W4 structured
-// logging. Passing a request.Runtime as ctx is supported: the runtime delegates
+// logging. Passing the concrete request.Context as ctx is supported: it delegates
 // context lookups to its current base context, so trace/operation metadata added
 // later in the middleware chain is still visible when the log call executes.
 func (provider *Provider) LegacyLogger(ctx context.Context) logExt.Logger {

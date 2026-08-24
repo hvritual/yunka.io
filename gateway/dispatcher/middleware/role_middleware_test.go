@@ -15,9 +15,9 @@ import (
 
 type roleCapture struct{ got bool }
 
-func (*roleCapture) Name() string                                                { return "role-capture" }
-func (*roleCapture) Use(proxy.MiddleWare) proxy.MiddleWare                       { return nil }
-func (capture *roleCapture) Do(auth bool, _ request.Runtime, _ *meta.RuntimeApi) { capture.got = auth }
+func (*roleCapture) Name() string                                                 { return "role-capture" }
+func (*roleCapture) Use(proxy.MiddleWare) proxy.MiddleWare                        { return nil }
+func (capture *roleCapture) Do(auth bool, _ *request.Context, _ *meta.RuntimeApi) { capture.got = auth }
 
 type allowRoleIntercept struct {
 	meta.GatewayServiceServer
@@ -39,11 +39,10 @@ func TestRoleMiddlewareRejectsQueryOnlyIdentity(t *testing.T) {
 	capture := &roleCapture{}
 	middleware.Use(capture)
 
-	runtime := request.NewWorkRuntime()
 	ctx := &fasthttp.RequestCtx{}
+	runtime := request.NewHTTPRequestContext(ctx)
 	ctx.QueryArgs().Set(define.OrgUUID, "attacker-tenant")
 	ctx.QueryArgs().Set(define.RoleUUID, "admin")
-	runtime.SetRequestCtx(ctx)
 
 	middleware.Do(false, runtime, &meta.RuntimeApi{Auth: meta.AuthBit_AuthRole})
 	if intercept.called || capture.got {
@@ -57,9 +56,8 @@ func TestRoleMiddlewareUsesTrustedPrincipal(t *testing.T) {
 	capture := &roleCapture{}
 	middleware.Use(capture)
 
-	runtime := request.NewWorkRuntime()
-	runtime.SetRequestCtx(&fasthttp.RequestCtx{})
-	request.SetPrincipal(runtime, identity.Principal{
+	runtime := request.NewHTTPRequestContext(&fasthttp.RequestCtx{})
+	runtime.SetPrincipal(identity.Principal{
 		Subject:       "user-1",
 		TenantID:      "tenant-1",
 		UserID:        "user-1",

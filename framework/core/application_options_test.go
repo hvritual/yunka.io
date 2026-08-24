@@ -10,7 +10,6 @@ import (
 
 	"yunka.io/framework/core/eventBus"
 	"yunka.io/framework/core/modulecatalog"
-	"yunka.io/pkg/conf"
 	"yunka.io/pkg/logExt"
 )
 
@@ -186,14 +185,7 @@ func TestNewAppPreparesAggregateBeforeBuild(t *testing.T) {
 	}
 }
 
-func TestNewAppDoesNotConsumeLegacyGlobalsOrShareRPCOnce(t *testing.T) {
-	originalPrepares := prepares
-	originalInitiators := initiators
-	defer func() { prepares, initiators = originalPrepares, originalInitiators }()
-	legacyCalls := 0
-	prepares = []Prepare{func(conf.Map) { legacyCalls++ }}
-	initiators = []Initiator{func(*App) { legacyCalls++ }}
-
+func TestNewAppInstancesHaveNoPackageGlobalRuntime(t *testing.T) {
 	first, err := NewApp(AppOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -202,18 +194,19 @@ func TestNewAppDoesNotConsumeLegacyGlobalsOrShareRPCOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first.Run(func() {})
-	if legacyCalls != 0 {
-		t.Fatalf("typed App consumed legacy global callbacks: %d", legacyCalls)
+	if first == second {
+		t.Fatal("NewApp returned shared application")
 	}
-	if err := first.InitConfContent("x = 1"); err == nil {
-		t.Fatal("typed App accepted legacy global configuration")
+	if first.State() != AppStateNew || second.State() != AppStateNew {
+		t.Fatalf("unexpected states first=%s second=%s", first.State(), second.State())
 	}
-	first.AppRegisterRpc("first")
-	second.AppRegisterRpc("second")
-	firstConfigured, _ := first.rpcInventory()
-	secondConfigured, _ := second.rpcInventory()
-	if !firstConfigured || !secondConfigured || first.rpcClient == second.rpcClient {
-		t.Fatalf("RPC ownership leaked: first=%v second=%v", first.rpcClient, second.rpcClient)
+	if err := first.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if first.State() != AppStateReady || second.State() != AppStateNew {
+		t.Fatalf("application state leaked first=%s second=%s", first.State(), second.State())
+	}
+	if err := first.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 }

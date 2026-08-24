@@ -1,45 +1,24 @@
 package core
 
-import "yunka.io/framework/core/request"
-
-/**
- * @BelongProject yunka
- * @BelongPackage core
- * @Description:
- *
- * @Copyright 2020 - Powered By 云咖
- * @Author: fworld
- * @Date:  2020/12/9 8:57 下午
- * @Version V1.0
- */
-
 type PersistObject struct {
-	conds map[string]interface{} `json:"-"`
+	conds map[string]any `json:"-"`
 }
 
-func (obj *PersistObject) Conds() map[string]interface{} {
-	if obj.conds == nil {
-		return make(map[string]interface{})
+func (object *PersistObject) Conds() map[string]any {
+	if object == nil || object.conds == nil {
+		return map[string]any{}
 	}
-	result := make(map[string]interface{})
-	for k, v := range obj.conds {
-		result[k] = v
+	result := make(map[string]any, len(object.conds))
+	for key, value := range object.conds {
+		result[key] = value
 	}
-	obj.conds = nil
+	object.conds = nil
 	return result
 }
 
-func (obj *PersistObject) ConfField(name string, value interface{}) {
-	if obj.conds == nil {
-		obj.conds = make(map[string]interface{})
+func (object *PersistObject) ConfField(name string, value any) {
+	if object.conds == nil {
+		object.conds = make(map[string]any)
 	}
-
-	obj.conds[name] = value
-	return
-}
-
-type Entity interface {
-	Identity() string
-	GetRuntime() request.Runtime
-	Marshal() []byte
+	object.conds[name] = value
 }

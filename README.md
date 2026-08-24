@@ -67,13 +67,21 @@ C7.1 preserves one-line module enablement through blank imports while replacing 
 
 `modulecatalog.Catalog` rejects duplicate modules, missing dependencies, cycles, and late registration, then resolves a deterministic topological order independent of import order. `core.NewApp(AppOptions)` and `framework/kernel.New` aggregate requirements before any module build, prepare named shared capabilities once, restrict each module to its declared config/logger/database/event/RPC view, and build isolated App instances from a supplied or process-default descriptor catalog. The default catalog stores descriptors only and is not a service locator.
 
-The reflective module container and global App/config/store remain temporary migration debt during C7.1 and may not receive new call sites. C7.2 migrates real modules and request scopes; C7.3 deletes the old container, reflection injection, lifecycle pools, and legacy global APIs. See `docs/waves/C7.1-static-module-catalog.md`.
+C7.3 completes the migration: the reflective module container, package-global App/configuration/prepare/initiator holders, service/repository lifecycle pools, Runtime mutation, `pkg/di`, and local pooled ingress are deleted. The typed catalog is the only composition path. See `docs/waves/C7.1-static-module-catalog.md` and `docs/waves/C7.3-legacy-runtime-removal.md`.
 
 ## App-owned platform capabilities and request scope
 
 C7.2 makes the C7.1 typed catalog operational without exposing infrastructure acquisition to modules. `framework/platform.Provider` opens only the sealed plan's named DB/RPC requirements, opens each name once, gives each module a restricted capability view and module-scoped logger, and participates in the existing App Start/Health/Shutdown lifecycle. `kernel.Options.Platform` is the single ergonomic entry; it cannot be mixed with a second context factory or direct capability set. MySQL pool configuration and gRPC transport credentials remain process-level platform inputs and are never visible to module code.
 
 `framework/requestscope` replaces request mutation of singleton Services with a fresh typed Scope per operation. A Scope snapshots trusted Principal/metadata/trace state, owns one Unit of Work and typed repository set, commits on success, rolls back on error or panic, and closes exactly once. GORM repositories receive the current transaction while the underlying connection pool remains App-owned. Request scopes, repositories, transactions, identities, and contexts are never managed by `sync.Pool`. See `docs/waves/C7.2-platform-request-scope.md`.
+
+## Single typed runtime
+
+C7.3 removes the compatibility runtime. `core.App` owns typed catalog instances, the capability factory, logger, event bus, route inventory, and lifecycle state; there is no package-level default App, global configuration store, reflection container, generic Service lookup, or mutable Runtime attached to singleton services. Start/Health/Shutdown operate only on typed modules and App-owned capabilities.
+
+Gateway HTTP execution creates one concrete `request.Context` per request. The Context carries cancellation, trusted Principal, runtime metadata, trace ID, logger, and transport state without entering a `sync.Pool`. Composed HTTP calls create a fresh Context, copy request transport data, and inherit only the parent `context.Context`; response state and mutable request storage are not shared. Transaction and repository ownership remains in `framework/requestscope`.
+
+The old local `GetModule → GetService → SetRuntime → PutService` path, `ModuleGatewayProvider`, runtime-mutating ORM hooks, `pkg/di`, and controller generator are deleted. `make architecture-check` permanently blocks their return while allowing reflection used for ordinary data binding and pools used for unrelated transport buffers. See `docs/waves/C7.3-legacy-runtime-removal.md`.
 
 ## Security defaults
 
@@ -98,41 +106,33 @@ commit a real key.
 
 ## Application lifecycle and health
 
-The framework owns the lifecycle of process-scoped singleton infrastructures. A singleton
-infrastructure may implement any of the following optional interfaces from
-`yunka.io/framework/core`:
+The typed App owns process-scoped capabilities and module instances. A capability or module may
+implement the following optional interfaces from `yunka.io/framework/core`:
 
 - `Startable` for explicit startup work.
 - `Shutdowner` for context-aware graceful shutdown.
 - `HealthChecker` for dependency health checks.
 
-Modules start in registration order and shut down in reverse registration order. Singleton
-infrastructures follow their binding order and are shut down in reverse order. Request-scoped
-objects held in `sync.Pool` are intentionally excluded from process lifecycle management.
+Modules start in deterministic catalog dependency order and shut down in reverse order. The
+Platform Provider starts named resources in stable key order and closes them in reverse order.
+Request-owned Context, Scope, transaction, and repository objects are not part of process
+lifecycle management and are never retained by singleton services.
 
 `App.Health(ctx)` returns a structured `HealthReport` with application state, liveness,
-readiness, and module health checks. The report is intended to be exposed later by gateway
-health endpoints and diagnostics without coupling health semantics to a specific transport.
+readiness, capability health, and typed module checks. Gateway health endpoints and diagnostics
+adapt this report without defining separate lifecycle semantics.
 
 ## Runtime context, identity, and middleware
 
-W2 introduces a transport-neutral execution context without breaking the existing
-`request.Runtime` interface:
+C7.3 makes `context.Context` the sole execution boundary:
 
-- `core/identity.Principal` is the canonical trusted caller identity. `Authenticated` is set
-  only after server-side credential verification.
-- `core/runtimecontext.Metadata` carries transport, protocol, operation, route, service,
-  module, method, request, and trace metadata through `context.Context`.
-- `core/middleware.Chain` wraps `context.Context`, so the same middleware model can be used
-  by HTTP, RPC, events, and jobs.
-- `request.ContextRuntime` is an optional richer contract implemented by `WorkRuntime` for
-  Principal, metadata, and trace access while preserving existing custom Runtime implementations.
-- Gateway JWT and API-key authentication establish a trusted Principal. Role authorization
-  reads only that Principal and never trusts query-supplied `oid`, `uid`, or `rid` values.
-- Composite gateway calls inherit the parent identity, deadline, and trace context while
-  deriving child operation metadata.
-- RPC middleware is attached through `core/middleware.WrapRPCClient` or non-generated gRPC
-  interceptors; generated RPC files remain untouched.
+- `core/identity.Principal` is the canonical trusted caller identity. `Authenticated` is set only after server-side credential verification.
+- `core/runtimecontext.Metadata` carries transport, protocol, operation, route, service, module, method, request, and trace metadata.
+- `core/middleware.Chain` wraps `context.Context`, so the same middleware model is used by HTTP, RPC, events, and jobs.
+- Gateway creates a fresh concrete `request.Context` per request; there is no `request.Runtime`, `WorkRuntime`, `BaseRuntime`, or Runtime mutation on singleton services.
+- Gateway JWT and API-key authentication establish a trusted Principal. Role authorization reads only that Principal and never trusts query-supplied `oid`, `uid`, or `rid` values.
+- Composite calls inherit identity, deadline, cancellation, and trace values through the parent context while using an isolated request/response/store object.
+- RPC middleware is attached through `core/middleware.WrapRPCClient` or non-generated gRPC interceptors; generated RPC files remain untouched.
 
 Remote RPC identity is never trusted merely because it arrived in metadata. C1 adds the
 non-generated `CredentialVerifier` boundary plus fail-closed unary and streaming server

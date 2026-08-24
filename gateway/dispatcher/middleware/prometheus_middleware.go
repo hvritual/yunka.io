@@ -130,7 +130,7 @@ func (pm *PrometheusMiddleware) Name() string {
 }
 
 // PromMiddleware returns a gin.HandlerFunc for exporting some Web metrics
-func (pm *PrometheusMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.RuntimeApi) {
+func (pm *PrometheusMiddleware) Do(authStatus bool, rt *request.Context, api *meta.RuntimeApi) {
 	// make sure promOpts is not nil
 	promOpts := defaultPromOpts
 	start := time.Now()

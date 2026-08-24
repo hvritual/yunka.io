@@ -15,13 +15,12 @@ func TestAPIMiddlewareEstablishesMachinePrincipal(t *testing.T) {
 	capture := &authCapture{}
 	middleware.Use(capture)
 
-	runtime := request.NewWorkRuntime()
 	ctx := &fasthttp.RequestCtx{}
+	runtime := request.NewHTTPRequestContext(ctx)
 	ctx.Request.Header.Set(xCode, key)
-	runtime.SetRequestCtx(ctx)
 	middleware.Do(false, runtime, &meta.RuntimeApi{Auth: meta.AuthBit_AuthApi})
 
-	principal, ok := request.PrincipalFromRuntime(runtime)
+	principal, ok := runtime.Principal()
 	if !ok || !principal.Authenticated || principal.AuthMethod != identity.AuthMethodAPIKey || principal.Subject != "api-key" {
 		t.Fatalf("principal=%#v ok=%v", principal, ok)
 	}

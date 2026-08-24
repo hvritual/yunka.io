@@ -7,7 +7,6 @@ import (
 	"sort"
 	"yunka.io/app/cmd/api"
 	"yunka.io/app/cmd/contract"
-	"yunka.io/app/cmd/controller"
 	"yunka.io/app/cmd/dependency"
 	"yunka.io/app/cmd/dev"
 	"yunka.io/app/cmd/doc"
@@ -45,43 +44,7 @@ func main() {
 				return po.Main(c.String(`generate`))
 			},
 		},
-		{
-			Name:  controller.AppName,
-			Usage: "auto scan module info, produce router&register file",
-			Flags: []cli.Flag{
 
-				cli.StringFlag{
-					Name:  "path",
-					Usage: `scan path`,
-					Value: "./",
-				},
-				cli.StringFlag{
-					Name:  "version",
-					Usage: `url version`,
-					Value: "v1",
-				},
-				cli.StringFlag{
-					Name:  "project",
-					Usage: `project name`,
-					Value: "yunka",
-				},
-				cli.StringFlag{
-					Name:  "pkg",
-					Usage: `package name`,
-					Value: "yunka.io",
-				},
-				cli.StringFlag{
-					Name:  "core",
-					Usage: `core package name`,
-					Value: "yunka.io/framework",
-				},
-			},
-			Action: func(c *cli.Context) error {
-				controller.APIParse(c.String("path"), c.String("project"),
-					c.String("core"), c.String("pkg"), c.String("version"))
-				return nil
-			},
-		},
 		{
 			Name:  module.AppName,
 			Usage: "module layout",

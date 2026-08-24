@@ -9,7 +9,6 @@ import (
 	grpcgo "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
-	"yunka.io/framework/core"
 	"yunka.io/gateway/rpc/bridge"
 	"yunka.io/gateway/rpc/client"
 	"yunka.io/gateway/rpc/handle"
@@ -17,12 +16,8 @@ import (
 	"yunka.io/pkg/rpcbridge"
 )
 
-// existingService has the pre-C6 business-service shape: BaseService embedding
-// plus context/request/response methods. It contains no grpc-go bootstrap code.
-type existingService struct {
-	core.BaseService
-	calls int
-}
+// existingService is a plain application-owned service with no runtime mutation.
+type existingService struct{ calls int }
 
 func (service *existingService) BatchAddRuntimeApi(context.Context, *meta.BatchRuntimeApiRequest) (*meta.OperateRuntimeApiResponse, error) {
 	service.calls++

@@ -26,7 +26,6 @@ func NewApp(options AppOptions) (*App, error) {
 	application := &App{
 		globalLogger: options.Logger,
 		eventBus:     options.EventBus,
-		modules:      make(map[string]Module),
 		rhTree:       NewHandleTree(),
 	}
 	application.setState(AppStateNew)
@@ -51,6 +50,9 @@ func NewApp(options AppOptions) (*App, error) {
 		}
 	}
 	for _, descriptor := range plan.Descriptors {
+		if factory == nil {
+			return nil, application.compositionBuildError(fmt.Errorf("core: module %s requires a context factory", descriptor.Name))
+		}
 		buildContext, err := factory.ForModule(descriptor)
 		if err != nil {
 			return nil, application.compositionBuildError(fmt.Errorf("core: module %s context: %w", descriptor.Name, err))
@@ -130,9 +132,7 @@ func shutdownComposedInstance(ctx context.Context, instance modulecatalog.Instan
 		return nil
 	}
 	if shutdowner, ok := instance.(Shutdowner); ok {
-		return safeLifecycleCall("shutdown composed module "+instance.Name(), func() error {
-			return shutdowner.Shutdown(ctx)
-		})
+		return safeLifecycleCall("shutdown composed module "+instance.Name(), func() error { return shutdowner.Shutdown(ctx) })
 	}
 	if closer, ok := instance.(io.Closer); ok {
 		return safeLifecycleCall("close composed module "+instance.Name(), closer.Close)

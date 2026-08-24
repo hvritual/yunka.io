@@ -7,7 +7,6 @@ toolchain go1.25.13
 replace github.com/go-kit/kit v0.10.0 => ../compat/go-kit-kit-log
 
 require (
-	github.com/BurntSushi/toml v0.3.1
 	github.com/buger/jsonparser v1.6.1
 	github.com/go-playground/locales v0.13.0
 	github.com/go-playground/universal-translator v0.17.0

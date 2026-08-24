@@ -2,9 +2,11 @@ package proxy
 
 import (
 	"context"
-	"github.com/valyala/fasthttp"
 	"net/http"
 	"runtime/debug"
+
+	"github.com/valyala/fasthttp"
+	"yunka.io/framework/core/request"
 	"yunka.io/framework/core/runtimecontext"
 	"yunka.io/framework/observability"
 	"yunka.io/gateway/internal/resp"
@@ -12,44 +14,36 @@ import (
 	"yunka.io/pkg/stringsExt"
 )
 
-/**
- * @BelongProject yunka
- * @BelongPackage proxy
- * @Description:
- *
- * @Copyright 2020 - Powered By 云咖
- * @Author: fworld
- * @Date:  2020/9/18 1:42 下午
- * @Version V1.0
- */
-
-func (p *Proxy) serverHttp(ctx *fasthttp.RequestCtx) {
-
-	rt := p.acquireControllerContext()
-	defer p.putControllerContext(rt)
+func (proxy *Proxy) serverHTTP(raw *fasthttp.RequestCtx) {
+	rt := request.NewHTTPRequestContext(raw)
 	defer func() {
-		if err := recover(); err != nil {
-			ctx.Write(response.ErrSysError)
-			rt.Logger().Error(string(debug.Stack()))
+		if recovered := recover(); recovered != nil {
+			_, _ = raw.Write(response.ErrSysError)
+			if logger := rt.Logger(); logger != nil {
+				logger.Error(recovered, string(debug.Stack()))
+			}
 		}
 	}()
 
-	rt.SetRequestCtx(ctx)
-	rt.SetContext(observability.Extract(rt, fastHTTPHeaderCarrier{header: &ctx.Request.Header}))
-	if p.contextLogFn != nil {
-		rt.SetLogger(p.contextLogFn(rt))
+	base := observability.Extract(context.Background(), fastHTTPHeaderCarrier{header: &raw.Request.Header})
+	rt.SetContext(base)
+	if proxy.contextLogFn != nil {
+		rt.SetLogger(proxy.contextLogFn(rt))
 	} else {
-		rt.SetLogger(p.logFn())
+		rt.SetLogger(proxy.logger())
 	}
-	path := stringsExt.SliceToString(ctx.Path())
-	api, ok := p.tree.Get(path)
+
+	path := stringsExt.SliceToString(raw.Path())
+	api, ok := proxy.tree.Get(path)
 	if !ok {
-		rt.Logger().Warn("[gateway]", path, " not found ip:", rt.GetRequestCtx().ClientIP())
-		ctx.Response.SetStatusCode(http.StatusNotFound)
-		ctx.Response.BodyWriter().Write(resp.SysCheckBys)
+		if logger := rt.Logger(); logger != nil {
+			logger.Warn("[gateway]", path, " not found ip:", rt.GetRequestCtx().ClientIP())
+		}
+		raw.Response.SetStatusCode(http.StatusNotFound)
+		_, _ = raw.Response.BodyWriter().Write(resp.SysCheckBys)
 		return
 	}
-	rt.SetSrvName(api.SrvName)
+
 	rt.SetMetadata(runtimecontext.Metadata{
 		Transport: "http",
 		Protocol:  "http",
@@ -57,21 +51,18 @@ func (p *Proxy) serverHttp(ctx *fasthttp.RequestCtx) {
 		Route:     path,
 		Service:   api.SrvName,
 		Module:    api.ModuleName,
-		Method:    stringsExt.SliceToString(ctx.Method()),
+		Method:    stringsExt.SliceToString(raw.Method()),
 	})
 
-	err := p.runtimeMiddles.Handle(rt, func(child context.Context) error {
-		// Runtime middleware derives deadlines, trace/span context, identity and
-		// operation metadata through context.Context. Bind the derived child to
-		// WorkRuntime before entering the legacy gateway chain.
+	if err := proxy.runtimeMiddles.Handle(rt, func(child context.Context) error {
 		rt.SetContext(child)
-		p.middles.Do(false, rt, api)
+		proxy.middles.Do(false, rt, api)
 		return nil
-	})
-	if err != nil {
-		rt.Logger().Error("runtime middleware error:", err)
-		ctx.Response.SetStatusCode(runtimeMiddlewareStatus(err))
-		ctx.Write(response.ErrSysError)
+	}); err != nil {
+		if logger := rt.Logger(); logger != nil {
+			logger.Error("runtime middleware error:", err)
+		}
+		raw.Response.SetStatusCode(runtimeMiddlewareStatus(err))
+		_, _ = raw.Write(response.ErrSysError)
 	}
-	return
 }

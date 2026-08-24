@@ -39,39 +39,28 @@ func (app *App) Diagnostics(ctx context.Context) DiagnosticsReport {
 	if app == nil {
 		return DiagnosticsReport{SchemaVersion: DiagnosticsSchemaVersion, State: "unknown", Health: HealthReport{State: "unknown"}}
 	}
-	routes := app.rhTree.Paths()
-	moduleDiagnostics := make([]ModuleDiagnostic, 0, len(app.moduleSnapshot())+len(app.composedModuleSnapshot()))
-	for _, module := range app.moduleSnapshot() {
-		if module == nil {
-			continue
-		}
-		moduleDiagnostics = append(moduleDiagnostics, diagnosticForModule(module, "legacy"))
+	var routes []string
+	if app.rhTree != nil {
+		routes = app.rhTree.Paths()
 	}
-	for _, module := range app.composedModuleSnapshot() {
-		if module == nil {
-			continue
+	modules := app.composedModuleSnapshot()
+	diagnostics := make([]ModuleDiagnostic, 0, len(modules))
+	for _, module := range modules {
+		if module != nil {
+			diagnostics = append(diagnostics, diagnosticForComposedModule(module))
 		}
-		moduleDiagnostics = append(moduleDiagnostics, diagnosticForComposedModule(module))
 	}
-	rpcClientConfigured, rpcServerCount := app.rpcInventory()
 	return DiagnosticsReport{
 		SchemaVersion: DiagnosticsSchemaVersion,
 		State:         app.State().String(),
 		Health:        app.Health(ctx),
-		Modules:       moduleDiagnostics,
+		Modules:       diagnostics,
 		Routes:        routes,
 		Runtime: RuntimeDiagnostic{
-			RouteCount: len(routes), RPCClientConfigured: rpcClientConfigured,
-			RPCServerCount: rpcServerCount, EventBusConfigured: app.eventBus != nil,
+			RouteCount:         len(routes),
+			EventBusConfigured: app.eventBus != nil,
 		},
 	}
-}
-
-func diagnosticForModule(module Module, composition string) ModuleDiagnostic {
-	_, startable := module.(Startable)
-	_, shutdownable := module.(Shutdowner)
-	_, healthChecked := module.(HealthChecker)
-	return ModuleDiagnostic{Name: module.Name(), Composition: composition, Startable: startable, Shutdownable: shutdownable, HealthChecked: healthChecked}
 }
 
 func diagnosticForComposedModule(module modulecatalog.Instance) ModuleDiagnostic {

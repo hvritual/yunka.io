@@ -33,7 +33,7 @@ func (erm *EnterpriseRoleMiddleware) Name() string {
 	return ermName
 }
 
-func (erm *EnterpriseRoleMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.RuntimeApi) {
+func (erm *EnterpriseRoleMiddleware) Do(authStatus bool, rt *request.Context, api *meta.RuntimeApi) {
 
 	if api.Auth > 0 && (api.Auth&meta.AuthBit_AuthRole != 0) {
 		principal, ok := identity.FromContext(rt)

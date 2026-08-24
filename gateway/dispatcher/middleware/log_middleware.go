@@ -47,7 +47,7 @@ func (*LogMiddleware) Name() string {
 	return logName
 }
 
-func (base *LogMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.RuntimeApi) {
+func (base *LogMiddleware) Do(authStatus bool, rt *request.Context, api *meta.RuntimeApi) {
 	start := time.Now()
 	base.Next.Do(authStatus, rt, api)
 

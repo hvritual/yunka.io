@@ -13,7 +13,11 @@ import (
 )
 
 func TestCollectorSortsAndIsolatesSourceFailure(t *testing.T) {
-	collector, err := New(core.GetApp(),
+	app, appErr := core.NewApp(core.AppOptions{})
+	if appErr != nil {
+		t.Fatal(appErr)
+	}
+	collector, err := New(app,
 		SourceFunc{SourceName: "z", Func: func(context.Context) (any, error) { panic("boom") }},
 		SourceFunc{SourceName: "a", Func: func(context.Context) (any, error) { return map[string]string{"ok": "yes"}, nil }},
 		SourceFunc{SourceName: "m", Func: func(context.Context) (any, error) { return nil, errors.New("unavailable") }},
@@ -31,7 +35,11 @@ func TestCollectorSortsAndIsolatesSourceFailure(t *testing.T) {
 }
 
 func TestHTTPHandlerSecurityDefaults(t *testing.T) {
-	collector, err := New(core.GetApp())
+	app, appErr := core.NewApp(core.AppOptions{})
+	if appErr != nil {
+		t.Fatal(appErr)
+	}
+	collector, err := New(app)
 	if err != nil {
 		t.Fatal(err)
 	}

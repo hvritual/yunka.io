@@ -18,5 +18,5 @@ import (
 
 // gateway 转发给node
 type Executor interface {
-	Do(modName, srvName string, rt request.Runtime, api *meta.RuntimeApi) (body []byte, err error)
+	Do(modName, srvName string, rt *request.Context, api *meta.RuntimeApi) (body []byte, err error)
 }

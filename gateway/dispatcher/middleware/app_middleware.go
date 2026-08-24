@@ -29,7 +29,7 @@ func (t TestMiddleware) Name() string {
 	return testName
 }
 
-func (t TestMiddleware) Do(b bool, rt request.Runtime, api *meta.RuntimeApi) {
+func (t TestMiddleware) Do(b bool, rt *request.Context, api *meta.RuntimeApi) {
 	t.Next.Do(true, rt, api)
 }
 

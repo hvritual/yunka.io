@@ -11,9 +11,9 @@ import (
 
 type authCapture struct{ got bool }
 
-func (*authCapture) Name() string                                          { return "capture" }
-func (*authCapture) Use(proxy.MiddleWare) proxy.MiddleWare                 { return nil }
-func (c *authCapture) Do(auth bool, _ request.Runtime, _ *meta.RuntimeApi) { c.got = auth }
+func (*authCapture) Name() string                                           { return "capture" }
+func (*authCapture) Use(proxy.MiddleWare) proxy.MiddleWare                  { return nil }
+func (c *authCapture) Do(auth bool, _ *request.Context, _ *meta.RuntimeApi) { c.got = auth }
 
 func TestAPIMiddlewareRequiresExactConfiguredKey(t *testing.T) {
 	key := "0123456789abcdef0123456789abcdef"
@@ -31,10 +31,9 @@ func TestAPIMiddlewareRequiresExactConfiguredKey(t *testing.T) {
 			middleware := NewAPIMiddleware(test.configured)
 			capture := &authCapture{}
 			middleware.Use(capture)
-			runtime := request.NewWorkRuntime()
 			ctx := &fasthttp.RequestCtx{}
+			runtime := request.NewHTTPRequestContext(ctx)
 			ctx.Request.Header.Set(xCode, test.supplied)
-			runtime.SetRequestCtx(ctx)
 			middleware.Do(false, runtime, &meta.RuntimeApi{Auth: meta.AuthBit_AuthApi})
 			if capture.got != test.want {
 				t.Fatalf("auth=%v want=%v", capture.got, test.want)

@@ -43,7 +43,7 @@ func (t *TestHandle) Use(middle MiddleWare) MiddleWare {
 	return t.m
 }
 
-func (t *TestHandle) Do(auth bool, c request.Runtime, api *meta.RuntimeApi) {
+func (t *TestHandle) Do(auth bool, c *request.Context, api *meta.RuntimeApi) {
 	*t.calls = append(*t.calls, t.HandlerName)
 	if t.m != nil {
 		t.m.Do(auth, c, api)
@@ -68,7 +68,7 @@ type Test4IntHandle struct {
 	TestHandle
 }
 
-func (t Test4IntHandle) Do(_ bool, _ request.Runtime, _ *meta.RuntimeApi) {
+func (t Test4IntHandle) Do(_ bool, _ *request.Context, _ *meta.RuntimeApi) {
 	*t.calls = append(*t.calls, t.HandlerName)
 }
 

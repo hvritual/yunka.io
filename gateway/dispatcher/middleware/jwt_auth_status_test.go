@@ -13,8 +13,7 @@ func TestJwtMiddlewarePreservesPriorAPIAuthenticationWithoutToken(t *testing.T) 
 	capture := &authCapture{}
 	middleware.Use(capture)
 
-	runtime := request.NewWorkRuntime()
-	runtime.SetRequestCtx(&fasthttp.RequestCtx{})
+	runtime := request.NewHTTPRequestContext(&fasthttp.RequestCtx{})
 	middleware.Do(true, runtime, &meta.RuntimeApi{Auth: meta.AuthBit_AuthApi})
 	if !capture.got {
 		t.Fatal("JWT middleware cleared an already authenticated API-key request")

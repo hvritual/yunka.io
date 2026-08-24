@@ -25,7 +25,7 @@ type MiddleWare interface {
 
 	Use(middle MiddleWare) MiddleWare
 
-	Do(bool, request.Runtime, *meta.RuntimeApi)
+	Do(bool, *request.Context, *meta.RuntimeApi)
 }
 
 type Next struct {
@@ -41,7 +41,7 @@ func (m *Next) Name() string {
 	return "yunka"
 }
 
-func (m *Next) Do(authStatus bool, ctx request.Runtime, api *meta.RuntimeApi) {
+func (m *Next) Do(authStatus bool, ctx *request.Context, api *meta.RuntimeApi) {
 	if m.next != nil {
 		m.next.Do(authStatus, ctx, api)
 	}

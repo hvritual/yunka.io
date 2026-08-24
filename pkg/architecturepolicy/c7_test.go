@@ -157,3 +157,32 @@ var _ = di.Fill
 		t.Fatalf("diagnostics=%#v", diagnostics)
 	}
 }
+
+func TestC73RejectsRemovedPathsAndRuntimeMutation(t *testing.T) {
+	root := t.TempDir()
+	for _, directory := range []string{"framework/core/request", "gateway/rpc/bridge", "gateway/dispatcher/proxy", "app/cmd"} {
+		if err := os.MkdirAll(filepath.Join(root, directory), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(root, "framework/core/module"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "gateway/rpc/bridge/bad.go"), []byte(`package bridge
+import (
+  old "yunka.io/framework/core/module"
+  "sync"
+)
+type ModuleGatewayProvider struct { pool sync.Pool }
+func bad(service interface{ SetRuntime(any) }) { service.SetRuntime(nil); _ = old.NewModule }
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	diagnostics, err := checkLegacyRuntimeRemoved(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diagnostics) < 4 {
+		t.Fatalf("diagnostics=%#v", diagnostics)
+	}
+}

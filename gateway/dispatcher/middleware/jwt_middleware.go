@@ -1,9 +1,9 @@
 package middleware
 
 import (
+	"errors"
 	"strings"
 	"time"
-	"yunka.io/framework/core"
 	"yunka.io/framework/core/identity"
 	"yunka.io/framework/core/request"
 	"yunka.io/gateway/dispatcher/proxy"
@@ -30,7 +30,7 @@ type TokenHook interface {
 	//  token str 本身
 	//  token 映射用户与 api 本身
 	//  请求IP 与 API 本身
-	CheckToken(rt request.Runtime, api *meta.RuntimeApi, token string) bool
+	CheckToken(rt *request.Context, api *meta.RuntimeApi, token string) bool
 
 	ResetToken(oldToken, token string) error
 }
@@ -43,29 +43,26 @@ type JwtMiddleware struct {
 	proxy.Next
 }
 
-func init() {
-	core.RegisterConfType(jwtKeyName, ``)
-	core.RegisterConfType(jwtIssuerName, ``)
-	core.RegisterConfType(jwtAudienceName, ``)
+type JWTConfig struct {
+	Secret   []byte
+	Issuer   string
+	Audience string
 }
 
-func NewJwtMiddleware() *JwtMiddleware {
-
-	secretKey := core.GetConfV2(jwtKeyName, ``)
-	issuer := core.GetConfV2(jwtIssuerName, ``)
-	audience := core.GetConfV2(jwtAudienceName, ``)
-
-	if len(secretKey) < 32 {
-		panic("jwt key must contain at least 32 bytes")
+func NewJwtMiddleware(config JWTConfig) (*JwtMiddleware, error) {
+	config.Issuer = strings.TrimSpace(config.Issuer)
+	config.Audience = strings.TrimSpace(config.Audience)
+	if len(config.Secret) < 32 {
+		return nil, errors.New("jwt key must contain at least 32 bytes")
 	}
-	if issuer == `` || audience == `` {
-		panic("jwt issuer and audience are required")
+	if config.Issuer == "" || config.Audience == "" {
+		return nil, errors.New("jwt issuer and audience are required")
 	}
 	return &JwtMiddleware{
-		secretKey: []byte(secretKey),
-		issuer:    issuer,
-		audience:  audience,
-	}
+		secretKey: append([]byte(nil), config.Secret...),
+		issuer:    config.Issuer,
+		audience:  config.Audience,
+	}, nil
 }
 
 func (jwt *JwtMiddleware) Name() string {
@@ -133,7 +130,7 @@ func principalFromClaims(claims map[string]interface{}) identity.Principal {
 	}
 }
 
-func (jwt *JwtMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.RuntimeApi) {
+func (jwt *JwtMiddleware) Do(authStatus bool, rt *request.Context, api *meta.RuntimeApi) {
 	reqCtx := rt.GetRequestCtx()
 	args := (&(reqCtx.Request)).URI().QueryArgs()
 	// Identity is derived from the validated token only. Remove client supplied
@@ -192,7 +189,7 @@ func (jwt *JwtMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.Runt
 			token = newToken
 		}
 
-		request.SetPrincipal(rt, principalFromClaims(map[string]interface{}(body)))
+		rt.SetPrincipal(principalFromClaims(map[string]interface{}(body)))
 
 		// Preserve validated string claims in the query only for source
 		// compatibility with legacy handlers. Authorization must use Principal.

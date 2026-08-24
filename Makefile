@@ -106,8 +106,10 @@ architecture-check:
 	@cd pkg && $(GO) test -count=1 ./architecturepolicy
 
 c7-check: architecture-check
-	@cd framework && $(GO) test -count=20 ./platform ./requestscope ./kernel ./core/modulecatalog
-	@cd framework && CGO_ENABLED=1 $(GO) test -race -count=3 ./platform ./requestscope ./kernel ./core/modulecatalog
+	@cd framework && $(GO) test -count=20 ./core ./core/request ./platform ./requestscope ./kernel ./core/modulecatalog
+	@cd framework && CGO_ENABLED=1 $(GO) test -race -count=3 ./core ./core/request ./platform ./requestscope ./kernel ./core/modulecatalog
+	@cd gateway && $(GO) test -count=20 ./dispatcher/intercept/role ./dispatcher/middleware ./dispatcher/proxy ./rpc/bridge ./rpc/consumercompat ./rpc/transport/grpc
+	@cd gateway && CGO_ENABLED=1 $(GO) test -race -count=3 ./dispatcher/middleware ./dispatcher/proxy ./rpc/bridge ./rpc/consumercompat ./rpc/transport/grpc
 
 test:
 	@set -eu; for module in $(MODULES); do \

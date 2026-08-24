@@ -34,14 +34,14 @@ func (erm *APIMiddleware) Name() string {
 	return apiName
 }
 
-func (erm *APIMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.RuntimeApi) {
+func (erm *APIMiddleware) Do(authStatus bool, rt *request.Context, api *meta.RuntimeApi) {
 	if api.Auth > 0 && (api.Auth&meta.AuthBit_AuthApi != 0) {
 		code := stringsExt.SliceToString(rt.GetRequestCtx().Request.Header.Peek(xCode))
 		if len(erm.key) >= 32 && len(code) == len(erm.key) &&
 			subtle.ConstantTimeCompare([]byte(code), []byte(erm.key)) == 1 {
 			authStatus = true
-			if principal, ok := request.PrincipalFromRuntime(rt); !ok || !principal.Authenticated {
-				request.SetPrincipal(rt, identity.Principal{
+			if principal, ok := rt.Principal(); !ok || !principal.Authenticated {
+				rt.SetPrincipal(identity.Principal{
 					Subject:       "api-key",
 					AuthMethod:    identity.AuthMethodAPIKey,
 					Authenticated: true,

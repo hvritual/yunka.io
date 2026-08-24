@@ -21,10 +21,10 @@ func (erm *TraceIdMiddleware) Name() string {
 
 const xTraceIDHeader = "X-Trace-Id"
 
-func (erm *TraceIdMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.RuntimeApi) {
+func (erm *TraceIdMiddleware) Do(authStatus bool, rt *request.Context, api *meta.RuntimeApi) {
 	// W4 span context is canonical when observability middleware is active.
 	// Keep the legacy trace_id request header only as a compatibility fallback.
-	traceId := strings.TrimSpace(request.TraceIDFromRuntime(rt))
+	traceId := strings.TrimSpace(rt.TraceID())
 	if traceId == "" {
 		traceId = strings.TrimSpace(stringsExt.SliceToString(rt.GetRequestCtx().Request.Header.Peek(define.TraceId)))
 	}
@@ -32,7 +32,7 @@ func (erm *TraceIdMiddleware) Do(authStatus bool, rt request.Runtime, api *meta.
 		traceId = uuid.New().String()
 	}
 
-	request.SetTraceID(rt, traceId)
+	rt.SetTraceID(traceId)
 	rt.GetRequestCtx().SetUserValue(define.TraceId, traceId)
 	rt.GetRequestCtx().Response.Header.Set(xTraceIDHeader, traceId)
 
