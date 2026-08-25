@@ -226,7 +226,11 @@ func writeMultiRepository(b *strings.Builder, spec Spec, object ObjectSpec) {
 func multiRESTTemplate(spec Spec, packageImport string) string {
 	var b strings.Builder
 	b.WriteString(generatedDomainMarker + "\n\npackage rest\n\n")
-	fmt.Fprintf(&b, "import(\n\t\"encoding/json\"\n\t\"net/http\"\n\t\"strconv\"\n\tapplication %q\n)\n", packageImport+"/application")
+	b.WriteString("import(\n\t\"encoding/json\"\n\t\"net/http\"\n\t\"strconv\"\n")
+	if multiSpecNeedsTime(spec) {
+		b.WriteString("\t\"time\"\n")
+	}
+	fmt.Fprintf(&b, "\tapplication %q\n)\n", packageImport+"/application")
 	b.WriteString("func Register(mux *http.ServeMux,service application.Service){\n")
 	for _, object := range spec.Objects {
 		entity := exportedIdentifier(object.Name)
