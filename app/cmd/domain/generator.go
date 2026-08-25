@@ -9,14 +9,33 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"yunka.io/app/cmd/project"
 )
 
 func Generate(options Options) error {
-	spec, root, err := normalizeOptions(options)
+	root := strings.TrimSpace(options.Root)
+	if root == "" {
+		root = "internal"
+	}
+	absoluteRoot, err := filepath.Abs(root)
 	if err != nil {
 		return err
 	}
-	moduleDirectory, goModule, err := findOwningGoModule(root)
+	moduleDirectory, goModule, err := findOwningGoModule(absoluteRoot)
+	if err != nil {
+		return err
+	}
+	projectConfig, err := project.Ensure(moduleDirectory)
+	if err != nil {
+		return err
+	}
+	if requested := strings.TrimSpace(options.TablePrefix); requested != "" && requested != projectConfig.Database.TablePrefix {
+		return fmt.Errorf("domain: table prefix %q differs from project database prefix %q", requested, projectConfig.Database.TablePrefix)
+	}
+	options.TablePrefix = projectConfig.Database.TablePrefix
+
+	spec, root, err := normalizeOptions(options)
 	if err != nil {
 		return err
 	}
@@ -47,6 +66,9 @@ func Generate(options Options) error {
 	if err := writeRendered(temporary, spec, packageImport); err != nil {
 		return err
 	}
+	if err := ensureDeveloperScaffold(temporary, spec); err != nil {
+		return err
+	}
 	return os.Rename(temporary, target)
 }
 
@@ -70,11 +92,21 @@ func Regenerate(path string) error {
 	if err != nil {
 		return err
 	}
+	projectConfig, err := project.LoadOrDefault(moduleDirectory)
+	if err != nil {
+		return err
+	}
+	if spec.TablePrefix != projectConfig.Database.TablePrefix {
+		return fmt.Errorf("domain: manifest table prefix %q differs from project database prefix %q", spec.TablePrefix, projectConfig.Database.TablePrefix)
+	}
 	packageImport, err := importPath(moduleDirectory, goModule, absolute)
 	if err != nil {
 		return err
 	}
-	return writeRendered(absolute, spec, packageImport)
+	if err := writeRendered(absolute, spec, packageImport); err != nil {
+		return err
+	}
+	return ensureDeveloperScaffold(absolute, spec)
 }
 
 func writeManifest(root string, spec Spec) error {
@@ -131,6 +163,23 @@ func writeRendered(root string, spec Spec, packageImport string) error {
 	return nil
 }
 
+func ensureDeveloperScaffold(root string, spec Spec) error {
+	path := filepath.Join(root, "infrastructure", "persistence", "po.go")
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return err
+	}
+	formatted, err := format.Source([]byte(developerPOTemplate(spec)))
+	if err != nil {
+		return fmt.Errorf("domain: format editable PO scaffold: %w", err)
+	}
+	return os.WriteFile(path, formatted, 0o640)
+}
+
 func cleanupStaleGenerated(root string, expected map[string]string) error {
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		return nil
@@ -168,12 +217,12 @@ func render(spec Spec, packageImport string) (map[string]string, error) {
 		return nil, err
 	}
 	files := map[string]string{
-		"domain/zz_yunka_entity_gen.go":                         entityTemplate(spec),
-		"application/zz_yunka_contract_gen.go":                  applicationTemplate(spec, packageImport),
-		"ports/zz_yunka_repository_gen.go":                      repositoryPortTemplate(spec, packageImport),
-		"infrastructure/persistence/zz_yunka_po_gen.go":         poTemplate(spec, packageImport),
-		"infrastructure/persistence/zz_yunka_repository_gen.go": persistenceRepositoryTemplate(spec, packageImport),
-		"wire/zz_yunka_wiring_gen.go":                           wireTemplate(spec, packageImport),
+		"domain/zz_yunka_entity_gen.go":                              entityTemplate(spec),
+		"application/zz_yunka_contract_gen.go":                       applicationTemplate(spec, packageImport),
+		"ports/zz_yunka_repository_gen.go":                           repositoryPortTemplate(spec, packageImport),
+		"infrastructure/persistence/zz_yunka_po_base_gen.go":         poBaseTemplate(spec, packageImport),
+		"infrastructure/persistence/zz_yunka_repository_gen.go":      persistenceRepositoryTemplate(spec, packageImport),
+		"wire/zz_yunka_wiring_gen.go":                                wireTemplate(spec, packageImport),
 	}
 	if spec.REST.Enabled {
 		files["transport/rest/zz_yunka_rest_gen.go"] = restTemplate(spec, packageImport)
@@ -205,8 +254,11 @@ func Check(root string) error {
 	if err != nil {
 		return err
 	}
+	projectConfig, err := project.LoadOrDefault(moduleDirectory)
+	if err != nil {
+		return err
+	}
 	var failures []error
-	fixedPrefix := ""
 	for _, entry := range entries {
 		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
 			continue
@@ -224,13 +276,14 @@ func Check(root string) error {
 			failures = append(failures, fmt.Errorf("%s: %w", entry.Name(), err))
 			continue
 		}
-		if fixedPrefix == "" {
-			fixedPrefix = spec.TablePrefix
-		} else if spec.TablePrefix != fixedPrefix {
-			failures = append(failures, fmt.Errorf("%s: table prefix %q differs from fixed domain root prefix %q", entry.Name(), spec.TablePrefix, fixedPrefix))
+		if spec.TablePrefix != projectConfig.Database.TablePrefix {
+			failures = append(failures, fmt.Errorf("%s: table prefix %q differs from project database prefix %q", entry.Name(), spec.TablePrefix, projectConfig.Database.TablePrefix))
 		}
 		if spec.Domain != entry.Name() {
 			failures = append(failures, fmt.Errorf("%s: manifest domain=%q must match directory name", entry.Name(), spec.Domain))
+		}
+		if _, err := os.Stat(filepath.Join(domainRoot, "infrastructure", "persistence", "po.go")); err != nil {
+			failures = append(failures, fmt.Errorf("%s: editable persistence PO scaffold is missing: %w", entry.Name(), err))
 		}
 		packageImport, err := importPath(moduleDirectory, goModule, domainRoot)
 		if err != nil {
