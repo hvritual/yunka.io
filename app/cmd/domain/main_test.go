@@ -90,6 +90,57 @@ func TestReservedFieldRejected(t *testing.T) {
 	}
 }
 
+func TestCheckRequiresOneFixedTablePrefix(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/biz\n\ngo 1.25.0\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	internal := filepath.Join(root, "internal")
+	if err := Generate(Options{Name: "device", Root: internal, TablePrefix: "biz", NoRPC: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Generate(Options{Name: "tenant", Root: internal, TablePrefix: "iot", NoRPC: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Check(internal); err == nil || !strings.Contains(err.Error(), "differs from fixed domain root prefix") {
+		t.Fatalf("expected fixed table prefix error, got %v", err)
+	}
+}
+
+func TestRegenerateRemovesStaleGeneratedTransport(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/biz\n\ngo 1.25.0\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	internal := filepath.Join(root, "internal")
+	if err := Generate(Options{Name: "device", Root: internal}); err != nil {
+		t.Fatal(err)
+	}
+	domainRoot := filepath.Join(internal, "device")
+	manifestPath := filepath.Join(domainRoot, ManifestName)
+	spec, err := readManifest(domainRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec.REST.Enabled = false
+	spec.RPC.Enabled = false
+	if err := writeManifest(domainRoot, spec); err != nil {
+		t.Fatal(err)
+	}
+	if err := Regenerate(domainRoot); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(domainRoot, "transport", "rest", "zz_yunka_rest_gen.go")); !os.IsNotExist(err) {
+		t.Fatalf("expected stale REST generated file to be removed, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(domainRoot, "transport", "rpc", "device.proto")); !os.IsNotExist(err) {
+		t.Fatalf("expected stale RPC proto to be removed, got %v", err)
+	}
+	if _, err := os.Stat(manifestPath); err != nil {
+		t.Fatalf("manifest must be preserved: %v", err)
+	}
+}
+
 func parseGeneratedGo(root string) error {
 	return filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
