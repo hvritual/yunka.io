@@ -38,6 +38,11 @@ func CheckC7(root string) ([]Diagnostic, error) {
 		return nil, err
 	}
 	diagnostics = append(diagnostics, legacy...)
+	moduleDX, err := checkModuleDeveloperContract(root)
+	if err != nil {
+		return nil, err
+	}
+	diagnostics = append(diagnostics, moduleDX...)
 	sort.Slice(diagnostics, func(left, right int) bool {
 		if diagnostics[left].Path != diagnostics[right].Path {
 			return diagnostics[left].Path < diagnostics[right].Path
@@ -370,4 +375,119 @@ func isRequestLifetimePath(relative string) bool {
 		strings.HasPrefix(relative, "gateway/dispatcher/proxy/") ||
 		strings.HasPrefix(relative, "gateway/dispatcher/bridge/") ||
 		strings.HasPrefix(relative, "gateway/rpc/bridge/")
+}
+
+func checkModuleDeveloperContract(root string) ([]Diagnostic, error) {
+	moduleRoots := []string{
+		"app/modules",
+		"framework/modules",
+		"gateway/modules",
+		"pkg/modules",
+	}
+	forbiddenImports := map[string]struct{}{
+		"reflect":                        {},
+		"yunka.io/framework/platform":    {},
+		"yunka.io/framework/core/module": {},
+		"yunka.io/framework/ingress":     {},
+		"yunka.io/pkg/di":                {},
+	}
+	forbiddenCalls := map[string]struct{}{
+		"GetApp": {}, "GetService": {}, "GetRepo": {}, "GetInfra": {},
+		"SetRuntime": {}, "GetRuntime": {}, "RegisterPrepare": {}, "RegisterInitiator": {},
+	}
+	var diagnostics []Diagnostic
+	for _, relativeRoot := range moduleRoots {
+		directory := filepath.Join(root, filepath.FromSlash(relativeRoot))
+		if _, err := os.Stat(directory); os.IsNotExist(err) {
+			continue
+		} else if err != nil {
+			return nil, err
+		}
+		err := filepath.WalkDir(directory, func(path string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+				return nil
+			}
+			relative, _ := filepath.Rel(root, path)
+			relativePath := filepath.ToSlash(relative)
+			if filepath.Base(filepath.Dir(path)) == "autoload" {
+				autoloadDiagnostics, err := CheckAutoloadFile(path)
+				if err != nil {
+					return err
+				}
+				for _, diagnostic := range autoloadDiagnostics {
+					diagnostic.Path = relativePath
+					diagnostics = append(diagnostics, diagnostic)
+				}
+				return nil
+			}
+			fileSet := token.NewFileSet()
+			file, err := parser.ParseFile(fileSet, path, nil, parser.SkipObjectResolution)
+			if err != nil {
+				return err
+			}
+			aliases := make(map[string]string)
+			for _, imported := range file.Imports {
+				importPath := strings.Trim(imported.Path.Value, `"`)
+				alias := filepath.Base(importPath)
+				if imported.Name != nil {
+					alias = imported.Name.Name
+				}
+				aliases[alias] = importPath
+				if _, forbidden := forbiddenImports[importPath]; forbidden {
+					diagnostics = append(diagnostics, Diagnostic{Path: relativePath, Message: "module code imports forbidden dependency " + importPath})
+				}
+			}
+			for _, declaration := range file.Decls {
+				if function, ok := declaration.(*ast.FuncDecl); ok && function.Name.Name == "init" {
+					diagnostics = append(diagnostics, Diagnostic{Path: relativePath, Message: "module packages may not use init; registration belongs only in autoload"})
+				}
+			}
+			ast.Inspect(file, func(node ast.Node) bool {
+				switch current := node.(type) {
+				case *ast.SelectorExpr:
+					identifier, ok := current.X.(*ast.Ident)
+					if !ok {
+						return true
+					}
+					importPath := aliases[identifier.Name]
+					if importPath == "sync" && current.Sel.Name == "Pool" {
+						diagnostics = append(diagnostics, Diagnostic{Path: relativePath, Message: "module code may not use sync.Pool"})
+					}
+				case *ast.CallExpr:
+					name := ""
+					receiverPath := ""
+					switch function := current.Fun.(type) {
+					case *ast.Ident:
+						name = function.Name
+					case *ast.SelectorExpr:
+						name = function.Sel.Name
+						if identifier, ok := function.X.(*ast.Ident); ok {
+							receiverPath = aliases[identifier.Name]
+						}
+					}
+					if _, forbidden := forbiddenCalls[name]; forbidden {
+						diagnostics = append(diagnostics, Diagnostic{Path: relativePath, Message: "module code may not call " + name})
+					}
+					if receiverPath == "os" && (name == "Getenv" || name == "LookupEnv") {
+						diagnostics = append(diagnostics, Diagnostic{Path: relativePath, Message: "module code may not acquire configuration from the environment"})
+					}
+					if receiverPath == "gorm.io/gorm" && name == "Open" {
+						diagnostics = append(diagnostics, Diagnostic{Path: relativePath, Message: "module code may not open databases"})
+					}
+					if receiverPath == "google.golang.org/grpc" && (name == "Dial" || name == "DialContext" || name == "NewClient") {
+						diagnostics = append(diagnostics, Diagnostic{Path: relativePath, Message: "module code may not create RPC connections"})
+					}
+				}
+				return true
+			})
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return diagnostics, nil
 }

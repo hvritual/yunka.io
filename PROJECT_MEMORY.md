@@ -262,3 +262,11 @@ GitHub connector authorization and local Git authorization are separate. The con
 - Gateway local execution through `App.GetModule → GetService → SetRuntime → PutService` is removed. `HandleMiddleware` requires an explicitly composed executor. Typed gRPC registers an explicitly owned `GatewayBusinessService` and no longer adapts a module service pool.
 - JWT and in-memory SMS adapters receive configuration/logger dependencies explicitly. The old `yunka controller` generator is deleted; the supported generator is the typed module descriptor/autoload path.
 - The C7 architecture gate permanently requires removed paths and APIs to remain absent and forbids request-context pooling in Gateway execution. Reflection used for ordinary binding/serialization and pools used for unrelated stateless transport buffers remain allowed.
+
+### 2026-08-25 — C7.4 typed module developer experience baseline
+
+- `yunka module new` is the canonical module bootstrap. It generates atomically, resolves the owning Go module from `--root`, declares Config/Logger/named DB/EventBus/named RPC/DependsOn capabilities explicitly, and emits compiler-checked `Dependencies`, `GeneratedDescriptor`, and one-purpose autoload registration.
+- `yunka module check` plus `make module-check` is the permanent structural/DX gate. Generated wiring is owned by the generator; business config, dependencies, and lifecycle remain ordinary reviewed Go source.
+- Module packages may not acquire environment configuration, construct database/RPC connections, import `platform.Provider`, use package-global service lookup, reflection composition, hidden `init`, or lifecycle-bearing `sync.Pool`. Autoload remains the only bounded `init` surface and may register one immutable descriptor only.
+- `framework/modules/outboxruntime` is the second real typed module and the reference App-lifecycle shape. It declares Config + Logger + named `primary` DB + EventBus, owns one GORM outbox store/local broker/dispatcher per App, supports deterministic Start/Health/Shutdown, and keeps request transactions/repositories outside the module in `requestscope`.
+- C7.4 does not introduce a DI container, generic service locator, framework-owned business repository abstraction, contract changes, or implicit infrastructure defaults.
