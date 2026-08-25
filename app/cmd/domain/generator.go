@@ -221,8 +221,8 @@ func render(spec Spec, packageImport string) (map[string]string, error) {
 		"application/zz_yunka_contract_gen.go":                       applicationTemplate(spec, packageImport),
 		"ports/zz_yunka_repository_gen.go":                           repositoryPortTemplate(spec, packageImport),
 		"infrastructure/persistence/zz_yunka_po_base_gen.go":         poBaseTemplate(spec, packageImport),
-		"infrastructure/persistence/zz_yunka_repository_gen.go":      persistenceRepositoryTemplate(spec, packageImport),
-		"wire/zz_yunka_wiring_gen.go":                                wireTemplate(spec, packageImport),
+		"infrastructure/persistence/zz_yunka_repository_gen.go":      persistenceRepositoryV2Template(spec, packageImport),
+		"wire/zz_yunka_wiring_gen.go":                                wireV2Template(spec, packageImport),
 	}
 	if spec.REST.Enabled {
 		files["transport/rest/zz_yunka_rest_gen.go"] = restTemplate(spec, packageImport)
