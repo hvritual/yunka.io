@@ -38,7 +38,7 @@ func TestGenerateAndCheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(po), "Application-owned; safe to edit") {
+	if !strings.Contains(string(po), "Application-owned; safe to add persistence fields") {
 		t.Fatalf("editable PO scaffold was not generated: %s", po)
 	}
 	rest, err := os.ReadFile(filepath.Join(domainRoot, "transport", "rest", "zz_yunka_rest_gen.go"))
