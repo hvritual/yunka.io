@@ -1,295 +1,207 @@
-# Domain scaffolding
+# Domain compiler
 
-`yunka domain` turns a business-domain manifest into the repetitive internal architecture so application developers concentrate on business rules instead of package layout, PO naming, request-scope plumbing, DTO conversion, REST/RPC delegation, or schema synchronization.
+`yunka domain` treats developer-owned PO structs as the low-friction business schema input and compiles repetitive architecture around them. The framework owns table naming, standard columns, request transactions, repositories, Service contracts, REST DTO mapping, `domain.proto`, pinned protobuf/gRPC generation, typed gRPC bridge/registration, and zero-drift checks.
 
-## 1. Initialize the project once
+## Project initialization
 
-The database table prefix is a project-level decision, not a per-domain decision.
+Choose the database prefix once:
 
 ```bash
 yunka init --db-prefix biz
 ```
 
-This writes:
+If omitted, the project default is `yk`. If `yunka init` is skipped entirely, the first `yunka domain new` creates `.yunka/project.json` with `yk`.
+
+Every generated table is:
 
 ```text
-.yunka/project.json
+<project-prefix>_<domain>_<po-object>
 ```
 
-with:
+Examples:
 
-```json
-{
-  "version": 1,
-  "database": {
-    "tablePrefix": "biz"
-  }
+```text
+yk_device_coffee_machine
+yk_device_device_group
+biz_tenant_member
+```
+
+A domain cannot override the project prefix.
+
+## PO-first workflow
+
+The ordinary workflow no longer requires repeating every field on the CLI or in `domain.json`:
+
+```bash
+yunka domain new --name device
+```
+
+If `internal/device/infrastructure/persistence` already contains PO files, `domain new` adopts and scans them. If no PO exists, it bootstraps `<domain>.go` and the developer can edit that PO and run `yunka domain generate` again.
+
+One PO object must live in one file and the filename is the object name in `snake_case`:
+
+```text
+internal/device/infrastructure/persistence/
+├── coffee_machine.go   -> type CoffeeMachinePO struct
+├── device_group.go     -> type DeviceGroupPO struct
+└── site_binding.go     -> type SiteBindingPO struct
+```
+
+A mismatched filename is rejected by `domain new`, `domain generate`, and `domain check`.
+
+Example developer PO:
+
+```go
+package persistence
+
+import "time"
+
+type CoffeeMachinePO struct {
+    Serial      string    `gorm:"column:serial;type:varchar(64);index"`
+    Enabled     bool      `gorm:"column:enabled;type:tinyint(1)"`
+    ActivatedAt time.Time `gorm:"column:activated_at;type:datetime(3)"`
+
+    // Persist and AutoMigrate this field, but do not expose it through
+    // Domain, Service, REST, or RPC.
+    InternalHash string `gorm:"column:internal_hash;type:varchar(64)" yunka:"-"`
 }
 ```
 
-If `--db-prefix` is omitted, the default is `yk`.
+Supported contract field types are `string`, `int64`, `uint64`, `bool`, `float64`, and `time.Time`. Unsupported/relational persistence fields are allowed when marked `yunka:"-"`; GORM still sees them through the generated final persistence record.
 
-```bash
-yunka init
-```
+Framework-owned columns (`id`, `tenant_id`, `version`, `created_at`, `updated_at`, `deleted_at`) must not be redeclared in developer POs.
 
-If a developer skips `yunka init`, the first `yunka domain new` automatically initializes the project with the same `yk` default. Once persisted, the prefix is immutable through the scaffolder: an existing `biz` project cannot silently generate an `iot_*` domain.
+## What `domain new/generate` compiles
 
-## 2. Create a domain
-
-From a downstream Go module:
-
-```bash
-yunka domain new \
-  --name device \
-  --object machine \
-  --root internal \
-  --field serial:string \
-  --field enabled:bool
-```
-
-No table-prefix flag is needed. The generator reads the project prefix and creates `internal/device/domain.json` as the generated-contract source of truth.
+For multiple PO objects, one generation pass produces:
 
 ```text
 internal/device/
 ├── domain.json
 ├── domain/
-│   └── zz_yunka_entity_gen.go
+│   ├── zz_yunka_coffee_machine_entity_gen.go
+│   └── zz_yunka_device_group_entity_gen.go
 ├── application/
-│   └── zz_yunka_contract_gen.go
+│   └── zz_yunka_service_gen.go
 ├── ports/
-│   └── zz_yunka_repository_gen.go
-├── infrastructure/
-│   └── persistence/
-│       ├── po.go                         # developer-owned, safe to edit
-│       ├── zz_yunka_po_base_gen.go      # framework-owned
-│       └── zz_yunka_repository_gen.go   # framework-owned
-├── transport/
-│   ├── rest/
-│   │   └── zz_yunka_rest_gen.go
-│   └── rpc/
-│       ├── machine.proto
-│       └── zz_yunka_rpc_gen.go
+│   └── zz_yunka_repositories_gen.go
+├── infrastructure/persistence/
+│   ├── coffee_machine.go                       # developer-owned
+│   ├── device_group.go                         # developer-owned
+│   ├── zz_yunka_coffee_machine_record_gen.go
+│   ├── zz_yunka_device_group_record_gen.go
+│   └── zz_yunka_repositories_gen.go
+├── transport/rest/
+│   └── zz_yunka_rest_gen.go
+├── transport/rpc/
+│   ├── domain.proto
+│   ├── pb/
+│   │   ├── domain.pb.go
+│   │   └── domain_grpc.pb.go
+│   └── zz_yunka_grpc_bridge_gen.go
 └── wire/
     └── zz_yunka_wiring_gen.go
 ```
 
-All `zz_yunka_*` files and generated protobuf schemas are framework-owned artifacts and must not be edited manually. Ordinary non-generated files are application-owned.
+`domain.json` records the normalized PO inventory, table names, transport settings, persistence columns, stable protobuf field numbers, and reserved protobuf slots. PO files are authoritative for object/field discovery; `domain generate` reconciles the manifest from them.
 
-## 3. Persistence / PO contract
+## Pinned gRPC lifecycle
 
-Table naming is fixed to:
-
-```text
-<project-prefix>_<domain>_<business-object>
-```
-
-For a project initialized with `biz`:
+RPC generation is part of the same command:
 
 ```text
-biz_device_machine
-biz_tenant_member
-biz_contract_lease
+PO scan
+  -> normalized domain contract
+  -> domain.proto
+  -> pinned protoc 3.21.12
+  -> pinned protoc-gen-go v1.36.11
+  -> pinned protoc-gen-go-grpc v1.6.2
+  -> pb/domain.pb.go
+  -> pb/domain_grpc.pb.go
+  -> typed gRPC bridge
+  -> pb.Register<Domain>ServiceServer
 ```
 
-For an uninitialized/default project:
+The pin values are checked against `tools/toolchain.env`. `yunka domain generate` verifies the exact protoc version, reuses exact project/repository plugins when available, and otherwise installs the pinned Go plugins into `.yunka/bin`. `protoc` plus its standard include directory must be the pinned version; `yunka doctor` remains the toolchain readiness entry point.
 
-```text
-yk_device_machine
-yk_tenant_member
-yk_contract_lease
-```
+Generated bridge methods map protobuf request types directly to the canonical `application.Service` input types and map Service outputs back to protobuf messages. No reflection dispatcher, string service lookup, or second RPC runtime is introduced.
 
-`yunka domain check --root internal` validates every manifest against `.yunka/project.json`. The prefix is no longer repeated in every domain command.
-
-### Framework-owned PO base
-
-The generator owns standard persistence columns in `zz_yunka_po_base_gen.go`:
-
-```text
-id
-tenant_id             # tenant-scoped domains
-<manifest fields>
-version
-created_at
-updated_at
-deleted_at
-```
-
-`id`, `tenant_id`, `version`, `created_at`, `updated_at`, and `deleted_at` are reserved manifest field names.
-
-### Developer-owned PO extension
-
-The generated scaffold creates `infrastructure/persistence/po.go` once and never overwrites it during regeneration:
-
-```go
-type MachinePO struct {
-    MachinePOBase `gorm:"embedded"`
-
-    ExternalCode string `gorm:"column:external_code;type:varchar(64);index"`
-    Source       string `gorm:"column:source;type:varchar(32)"`
-}
-```
-
-Developers may add persistence-only fields, indexes, relations, or GORM metadata directly to this final PO type. Those additions do not need to be copied into a generator template and are not erased by `yunka domain generate`.
-
-Use `domain.json` when a field belongs to the domain/service/API contract. Use editable `po.go` when a field is persistence-specific.
-
-## 4. PO changes automatically reach the database
-
-`wire.Build(database)` automatically calls generated `persistence.AutoMigrate(...)` against the **final editable PO type**, not only the generated base type.
-
-Therefore this change:
-
-```go
-type MachinePO struct {
-    MachinePOBase `gorm:"embedded"`
-    ExternalCode string `gorm:"column:external_code;type:varchar(64);index"`
-}
-```
-
-is seen by GORM on the next application composition/start and the missing column/index is reconciled automatically.
-
-The migration target is always:
-
-```go
-&MachinePO{}
-```
-
-so developer-added PO fields participate in schema migration without modifying framework-owned files.
-
-## 5. Tenant boundary is generated
-
-Tenant-scoped repositories never accept tenant identity from REST/RPC input. They resolve the trusted `identity.Principal` from `context.Context` and append `tenant_id = ?` at the persistence boundary.
-
-```text
-REST/RPC request
-      ↓
-trusted Principal.TenantID
-      ↓
-application.Service
-      ↓
-requestscope
-      ↓
-repository
-      ↓
-WHERE tenant_id = ?
-```
-
-Use `--global` only for explicitly global domains.
-
-## 6. Request scope and service boundary
-
-Generated application CRUD methods use `framework/requestscope` for every operation. The generated persistence factory begins a fresh GORM transaction and builds request-owned repositories. No request transaction or repository is retained by a singleton service.
-
-The generated `application.Service` is the canonical internal contract:
-
-```text
-REST request ─┐
-              ├─ generated DTO mapping → application.Service → requestscope → repository
-RPC request ──┘
-```
-
-REST handlers decode route/query/body fields into service input structs and call the matching service method directly. The RPC adapter performs the same conversion and delegates directly to the same service. Transport code does not own business rules.
-
-The adjacent generated protobuf file is the external RPC schema for the existing pinned standard protobuf/gRPC pipeline. `yunka domain` does not introduce reflection dispatch, a second RPC runtime, or service lookup.
-
-## 7. One-line composition
-
-`wire.Build(database)` is the generated composition seam:
+Generated composition is one line plus registration:
 
 ```go
 bundle, err := devicewire.Build(primaryDatabase)
+if err != nil { /* ... */ }
+
+bundle.RegisterREST(httpMux)
+bundle.RegisterGRPC(grpcServer)
 ```
 
-It performs:
+`RegisterGRPC` calls the generated typed bridge registration, which calls standard `pb.Register<Domain>ServiceServer`.
+
+## Stable protobuf numbers
+
+PO fields receive stable protobuf numbers in `domain.json`. Adding a new PO field appends a new number without renumbering existing fields. Removing a field reserves its previous protobuf number/name so a later field cannot silently reuse the ABI slot.
+
+Developers do not manage these numbers manually. Removing or renaming an entire PO object is intentionally not treated as an automatic compatibility-safe operation.
+
+## Persistence and automatic schema reconciliation
+
+Yunka generates a final GORM record for each PO:
 
 ```text
-final editable PO
-      ↓
-AutoMigrate
-      ↓
-RequestScope Factory
-      ↓
-Repository
-      ↓
-Application Service
-      ↓
-REST Handler / RPC Adapter
+framework standard columns
++ developer-owned <Object>PO
 ```
 
-A yunka runtime module should consume this bundle instead of rebuilding repository, transaction, DTO, or transport wiring.
+`wire.Build(database)` runs `AutoMigrate` against every final record before constructing request scopes and repositories. Therefore adding a PO field or GORM index is automatically reconciled to the database at application composition/start.
 
-## 8. Regenerate and validate
+Fields tagged `yunka:"-"` remain persistence-only but are still part of the final GORM record and AutoMigrate.
 
-Edit `domain.json` when changing generated domain/service/transport fields, then run:
+Tenant-scoped repositories continue to derive `tenant_id` only from trusted `identity.Principal` and execute through `framework/requestscope` transactions.
+
+## Regenerate and check
+
+After editing/adding/removing PO files or fields:
 
 ```bash
 yunka domain generate --path internal/device
 yunka domain check --root internal
 ```
 
-`domain generate`:
+`generate` performs PO rescan, manifest reconciliation, REST generation, pinned protobuf/gRPC generation, typed bridge/registration generation, stale generated cleanup, and wiring generation in one lifecycle.
 
-- regenerates framework-owned artifacts;
-- removes obsolete framework-owned transport files;
-- preserves developer-owned `po.go` and other ordinary source files;
-- recreates the editable PO scaffold only if it is missing.
+`check` repeats the PO scan and pinned RPC generation without accepting drift. It fails on:
 
-`domain check` fails on:
+- PO type/file snake_case mismatch;
+- object/field contract drift;
+- project table-prefix drift;
+- missing/stale framework artifacts;
+- changed `domain.proto`;
+- changed `domain.pb.go` / `domain_grpc.pb.go`;
+- changed gRPC bridge/register code;
+- wrong protoc/plugin versions;
+- any other generated zero-drift mismatch.
 
-- project/database-prefix mismatch;
-- invalid `<prefix>_<domain>_<object>` table naming;
-- missing editable PO scaffold;
-- generated drift;
-- stale generated artifacts.
+## Ownership boundary
 
-## 9. Supported generated field types
-
-The initial manifest field types are:
-
-```text
-string
-int64
-uint64
-bool
-float64
-time
-```
-
-The manifest sorts fields deterministically. Transport DTOs, application inputs, domain entities, generated PO base fields, REST bindings, RPC bindings, and protobuf fields all derive from the same field list.
-
-## Final developer experience
-
-A developer should decide only:
+Framework-owned and never hand-edited:
 
 ```text
-project DB prefix        once
-business domain
-business object
-business fields
-business rules
-authorization policy
-workflows / invariants
+zz_yunka_*
+domain.proto
+transport/rpc/pb/*.pb.go
+domain.json protobuf numbering / generated contract metadata
 ```
 
-Yunka owns the repeatable mechanics:
+Application-owned:
 
 ```text
-project persistence convention
-internal directory layout
-PO base + editable extension seam
-TableName
-schema AutoMigrate
-request transaction
-repository construction
-tenant filter
-service input/output contract
-REST DTO mapping
-RPC DTO mapping
-service delegation
-composition wiring
-generated drift checking
+infrastructure/persistence/<po_object_snake_case>.go
+non-generated domain policy files
+business invariants
+permission policy
+state machines
+cross-domain workflows
 ```
 
-The boundary remains deliberate: Yunka removes repetitive engineering mechanics; developers still own domain invariants, calculations, authorization policy, workflows, and product-specific behavior.
+The intended developer task is to define PO objects and business rules. Directory layout, table naming, transactions, CRUD repositories, DTO conversion, protobuf generation, gRPC registration, and schema synchronization are framework responsibilities.

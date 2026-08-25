@@ -33,43 +33,94 @@ func Generate(options Options) error {
 	if requested := strings.TrimSpace(options.TablePrefix); requested != "" && requested != projectConfig.Database.TablePrefix {
 		return fmt.Errorf("domain: table prefix %q differs from project database prefix %q", requested, projectConfig.Database.TablePrefix)
 	}
-	options.TablePrefix = projectConfig.Database.TablePrefix
-
-	spec, root, err := normalizeOptions(options)
+	spec, root, err := newDomainSpec(options, projectConfig.Database.TablePrefix)
 	if err != nil {
 		return err
 	}
 	target := filepath.Join(root, spec.Domain)
-	if _, err := os.Stat(target); err == nil {
-		return fmt.Errorf("domain: target %s already exists", target)
-	} else if !os.IsNotExist(err) {
-		return err
-	}
 	if err := ensureInside(moduleDirectory, target); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(root, 0o750); err != nil {
 		return err
 	}
+
+	if info, statErr := os.Stat(target); statErr == nil {
+		if !info.IsDir() {
+			return fmt.Errorf("domain: target %s is not a directory", target)
+		}
+		if _, manifestErr := os.Stat(filepath.Join(target, ManifestName)); manifestErr == nil {
+			return fmt.Errorf("domain: target %s already contains %s", target, ManifestName)
+		} else if !os.IsNotExist(manifestErr) {
+			return manifestErr
+		}
+		return initializeExistingDomain(target, moduleDirectory, goModule, spec, options)
+	} else if !os.IsNotExist(statErr) {
+		return statErr
+	}
+
 	temporary, err := os.MkdirTemp(root, ".yunka-domain-*")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(temporary)
-	if err := writeManifest(temporary, spec); err != nil {
+	if err := ensureInitialPO(temporary, options); err != nil {
+		return err
+	}
+	objects, err := scanPOObjects(temporary, nil, spec.TablePrefix, spec.Domain)
+	if err != nil {
+		return err
+	}
+	spec.Objects = objects
+	spec = canonicalizeSpec(spec)
+	if err := validateSpec(spec); err != nil {
 		return err
 	}
 	packageImport, err := importPath(moduleDirectory, goModule, target)
 	if err != nil {
 		return err
 	}
-	if err := writeRendered(temporary, spec, packageImport); err != nil {
+	files, err := renderComplete(spec, packageImport, moduleDirectory)
+	if err != nil {
 		return err
 	}
-	if err := ensureDeveloperScaffold(temporary, spec); err != nil {
+	if err := writeGeneratedFiles(temporary, files); err != nil {
+		return err
+	}
+	if err := writeManifest(temporary, spec); err != nil {
 		return err
 	}
 	return os.Rename(temporary, target)
+}
+
+func initializeExistingDomain(target, moduleDirectory, goModule string, spec Spec, options Options) error {
+	if err := ensureInitialPO(target, options); err != nil {
+		return err
+	}
+	objects, err := scanPOObjects(target, nil, spec.TablePrefix, spec.Domain)
+	if err != nil {
+		return err
+	}
+	spec.Objects = objects
+	spec = canonicalizeSpec(spec)
+	if err := validateSpec(spec); err != nil {
+		return err
+	}
+	packageImport, err := importPath(moduleDirectory, goModule, target)
+	if err != nil {
+		return err
+	}
+	files, err := renderComplete(spec, packageImport, moduleDirectory)
+	if err != nil {
+		return err
+	}
+	if err := cleanupStaleGenerated(target, files); err != nil {
+		return err
+	}
+	if err := writeGeneratedFiles(target, files); err != nil {
+		return err
+	}
+	return writeManifest(target, spec)
 }
 
 func Regenerate(path string) error {
@@ -81,13 +132,11 @@ func Regenerate(path string) error {
 	if err != nil {
 		return err
 	}
-	spec, err := readManifest(absolute)
+	rawSpec, err := readManifest(absolute)
 	if err != nil {
 		return err
 	}
-	if err := validateSpec(spec); err != nil {
-		return err
-	}
+	spec := canonicalizeSpec(upgradeSpec(rawSpec))
 	moduleDirectory, goModule, err := findOwningGoModule(absolute)
 	if err != nil {
 		return err
@@ -99,17 +148,37 @@ func Regenerate(path string) error {
 	if spec.TablePrefix != projectConfig.Database.TablePrefix {
 		return fmt.Errorf("domain: manifest table prefix %q differs from project database prefix %q", spec.TablePrefix, projectConfig.Database.TablePrefix)
 	}
+	if err := migrateLegacyPOFilename(absolute, rawSpec); err != nil {
+		return err
+	}
+	objects, err := scanPOObjects(absolute, spec.Objects, spec.TablePrefix, spec.Domain)
+	if err != nil {
+		return err
+	}
+	spec.Objects = objects
+	spec = canonicalizeSpec(spec)
+	if err := validateSpec(spec); err != nil {
+		return err
+	}
 	packageImport, err := importPath(moduleDirectory, goModule, absolute)
 	if err != nil {
 		return err
 	}
-	if err := writeRendered(absolute, spec, packageImport); err != nil {
+	files, err := renderComplete(spec, packageImport, moduleDirectory)
+	if err != nil {
 		return err
 	}
-	return ensureDeveloperScaffold(absolute, spec)
+	if err := cleanupStaleGenerated(absolute, files); err != nil {
+		return err
+	}
+	if err := writeGeneratedFiles(absolute, files); err != nil {
+		return err
+	}
+	return writeManifest(absolute, spec)
 }
 
 func writeManifest(root string, spec Spec) error {
+	spec = canonicalizeSpec(spec)
 	contents, err := json.MarshalIndent(spec, "", "  ")
 	if err != nil {
 		return err
@@ -130,14 +199,21 @@ func readManifest(root string) (Spec, error) {
 	return spec, nil
 }
 
-func writeRendered(root string, spec Spec, packageImport string) error {
-	files, err := render(spec, packageImport)
-	if err != nil {
-		return err
+func renderComplete(spec Spec, packageImport, projectRoot string) (map[string]string, error) {
+	spec = canonicalizeSpec(spec)
+	if err := validateSpec(spec); err != nil {
+		return nil, err
 	}
-	if err := cleanupStaleGenerated(root, files); err != nil {
-		return err
+	files := renderMultiStructural(spec, packageImport)
+	if spec.RPC.Enabled {
+		if err := attachPinnedRPCGenerated(files, projectRoot); err != nil {
+			return nil, err
+		}
 	}
+	return files, nil
+}
+
+func writeGeneratedFiles(root string, files map[string]string) error {
 	paths := make([]string, 0, len(files))
 	for path := range files {
 		paths = append(paths, path)
@@ -149,7 +225,7 @@ func writeRendered(root string, spec Spec, packageImport string) error {
 			return err
 		}
 		contents := files[relative]
-		if strings.HasSuffix(relative, ".go") {
+		if strings.HasSuffix(relative, ".go") && strings.HasPrefix(contents, generatedDomainMarker) {
 			formatted, err := format.Source([]byte(contents))
 			if err != nil {
 				return fmt.Errorf("domain: format %s: %w", relative, err)
@@ -161,23 +237,6 @@ func writeRendered(root string, spec Spec, packageImport string) error {
 		}
 	}
 	return nil
-}
-
-func ensureDeveloperScaffold(root string, spec Spec) error {
-	path := filepath.Join(root, "infrastructure", "persistence", "po.go")
-	if _, err := os.Stat(path); err == nil {
-		return nil
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		return err
-	}
-	formatted, err := format.Source([]byte(developerPOTemplate(spec)))
-	if err != nil {
-		return fmt.Errorf("domain: format editable PO scaffold: %w", err)
-	}
-	return os.WriteFile(path, formatted, 0o640)
 }
 
 func cleanupStaleGenerated(root string, expected map[string]string) error {
@@ -205,33 +264,21 @@ func cleanupStaleGenerated(root string, expected map[string]string) error {
 		if err != nil {
 			return err
 		}
-		if strings.HasPrefix(string(contents), "// Code generated by yunka domain; DO NOT EDIT.") {
+		if isFrameworkGenerated(relative, string(contents)) {
 			return os.Remove(path)
 		}
 		return nil
 	})
 }
 
-func render(spec Spec, packageImport string) (map[string]string, error) {
-	if err := validateSpec(spec); err != nil {
-		return nil, err
+func isFrameworkGenerated(relative, contents string) bool {
+	if strings.HasPrefix(contents, generatedDomainMarker) {
+		return true
 	}
-	files := map[string]string{
-		"domain/zz_yunka_entity_gen.go":                              entityTemplate(spec),
-		"application/zz_yunka_contract_gen.go":                       applicationTemplate(spec, packageImport),
-		"ports/zz_yunka_repository_gen.go":                           repositoryPortTemplate(spec, packageImport),
-		"infrastructure/persistence/zz_yunka_po_base_gen.go":         poBaseTemplate(spec, packageImport),
-		"infrastructure/persistence/zz_yunka_repository_gen.go":      persistenceRepositoryV2Template(spec, packageImport),
-		"wire/zz_yunka_wiring_gen.go":                                wireV2Template(spec, packageImport),
+	if strings.HasPrefix(relative, "transport/rpc/pb/") && strings.HasSuffix(relative, ".pb.go") {
+		return strings.HasPrefix(contents, "// Code generated by protoc-gen-go")
 	}
-	if spec.REST.Enabled {
-		files["transport/rest/zz_yunka_rest_gen.go"] = restTemplate(spec, packageImport)
-	}
-	if spec.RPC.Enabled {
-		files["transport/rpc/zz_yunka_rpc_gen.go"] = rpcTemplate(spec, packageImport)
-		files["transport/rpc/"+spec.Object+".proto"] = protoTemplate(spec, packageImport)
-	}
-	return files, nil
+	return false
 }
 
 func Check(root string) error {
@@ -267,14 +314,14 @@ func Check(root string) error {
 		if _, err := os.Stat(filepath.Join(domainRoot, ManifestName)); os.IsNotExist(err) {
 			continue
 		}
-		spec, err := readManifest(domainRoot)
+		rawSpec, err := readManifest(domainRoot)
 		if err != nil {
 			failures = append(failures, fmt.Errorf("%s: %w", entry.Name(), err))
 			continue
 		}
-		if err := validateSpec(spec); err != nil {
-			failures = append(failures, fmt.Errorf("%s: %w", entry.Name(), err))
-			continue
+		spec := canonicalizeSpec(upgradeSpec(rawSpec))
+		if rawSpec.Version != SpecVersion || len(rawSpec.Objects) == 0 {
+			failures = append(failures, fmt.Errorf("%s: manifest requires deterministic upgrade; run yunka domain generate --path %s", entry.Name(), domainRoot))
 		}
 		if spec.TablePrefix != projectConfig.Database.TablePrefix {
 			failures = append(failures, fmt.Errorf("%s: table prefix %q differs from project database prefix %q", entry.Name(), spec.TablePrefix, projectConfig.Database.TablePrefix))
@@ -282,17 +329,34 @@ func Check(root string) error {
 		if spec.Domain != entry.Name() {
 			failures = append(failures, fmt.Errorf("%s: manifest domain=%q must match directory name", entry.Name(), spec.Domain))
 		}
-		if _, err := os.Stat(filepath.Join(domainRoot, "infrastructure", "persistence", "po.go")); err != nil {
-			failures = append(failures, fmt.Errorf("%s: editable persistence PO scaffold is missing: %w", entry.Name(), err))
+		if err := validateSpec(spec); err != nil {
+			failures = append(failures, fmt.Errorf("%s: %w", entry.Name(), err))
+			continue
 		}
+		scanned, scanErr := scanPOObjects(domainRoot, spec.Objects, spec.TablePrefix, spec.Domain)
+		if scanErr != nil {
+			failures = append(failures, fmt.Errorf("%s: %w", entry.Name(), scanErr))
+			continue
+		}
+		for _, object := range scanned {
+			if _, err := os.Stat(filepath.Join(domainRoot, "infrastructure", "persistence", object.File)); err != nil {
+				failures = append(failures, fmt.Errorf("%s: PO object %s must be stored in snake_case file %s: %w", entry.Name(), object.Name, object.File, err))
+			}
+		}
+		if !poContractEqual(spec.Objects, scanned) {
+			failures = append(failures, fmt.Errorf("%s: PO object/field contract drift; run yunka domain generate --path %s", entry.Name(), domainRoot))
+		}
+		expectedSpec := spec
+		expectedSpec.Objects = scanned
+		expectedSpec = canonicalizeSpec(expectedSpec)
 		packageImport, err := importPath(moduleDirectory, goModule, domainRoot)
 		if err != nil {
 			failures = append(failures, err)
 			continue
 		}
-		expected, err := render(spec, packageImport)
+		expected, err := renderComplete(expectedSpec, packageImport, moduleDirectory)
 		if err != nil {
-			failures = append(failures, err)
+			failures = append(failures, fmt.Errorf("%s: %w", entry.Name(), err))
 			continue
 		}
 		_ = filepath.WalkDir(domainRoot, func(path string, current os.DirEntry, walkErr error) error {
@@ -311,13 +375,13 @@ func Check(root string) error {
 			if readErr != nil {
 				return readErr
 			}
-			if strings.HasPrefix(string(contents), "// Code generated by yunka domain; DO NOT EDIT.") {
+			if isFrameworkGenerated(relative, string(contents)) {
 				failures = append(failures, fmt.Errorf("%s: stale generated file %s", entry.Name(), relative))
 			}
 			return nil
 		})
 		for relative, source := range expected {
-			if strings.HasSuffix(relative, ".go") {
+			if strings.HasSuffix(relative, ".go") && strings.HasPrefix(source, generatedDomainMarker) {
 				formatted, formatErr := format.Source([]byte(source))
 				if formatErr != nil {
 					failures = append(failures, formatErr)
