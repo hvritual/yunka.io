@@ -16,6 +16,7 @@ import (
 	"yunka.io/app/cmd/inspect"
 	"yunka.io/app/cmd/module"
 	"yunka.io/app/cmd/po"
+	"yunka.io/app/cmd/project"
 )
 
 func main() {
@@ -29,6 +30,7 @@ func main() {
 		doctor.Command(),
 		domain.Command(),
 		graph.Command(),
+		project.Command(),
 		inspect.Command(),
 		{
 			Name:        po.AppName,
