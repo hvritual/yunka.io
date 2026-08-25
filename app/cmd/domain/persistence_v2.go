@@ -28,6 +28,7 @@ func poBaseTemplate(spec Spec, packageImport string) string {
 	b.WriteString("\tUpdatedAt time.Time `gorm:\"column:updated_at;type:datetime(3);not null\"`\n")
 	b.WriteString("\tDeletedAt gorm.DeletedAt `gorm:\"column:deleted_at;type:datetime(3);index\"`\n")
 	b.WriteString("}\n\n")
+	fmt.Fprintf(&b, "func (%sPO) TableName() string { return %sTableName }\n\n", object, lowerFirst(object))
 	fmt.Fprintf(&b, "func (po %sPO) Domain() domain.%s {\n", object, object)
 	fmt.Fprintf(&b, "\treturn domain.%s{\n\t\tID: po.ID,\n", object)
 	if spec.TenantScoped {
@@ -55,15 +56,14 @@ func developerPOTemplate(spec Spec) string {
 	object := exportedIdentifier(spec.Object)
 	base := object + "POBase"
 	var b strings.Builder
-	b.WriteString("// Scaffolded by yunka domain. Application-owned; safe to edit.\n\n")
+	b.WriteString("// Scaffolded by yunka domain. Application-owned; safe to add persistence fields.\n\n")
 	b.WriteString("package persistence\n\n")
-	fmt.Fprintf(&b, "// %sPO is the editable persistence model. Add persistence-only fields here;\n", object)
-	b.WriteString("// wire.Build automatically runs GORM AutoMigrate against this final type.\n")
+	fmt.Fprintf(&b, "// %sPO is the editable persistence model. Add persistence-only fields here.\n", object)
+	b.WriteString("// Table naming stays framework-owned and wire.Build automatically runs GORM AutoMigrate against this final type.\n")
 	fmt.Fprintf(&b, "type %sPO struct {\n\t%s `gorm:\"embedded\"`\n", object, base)
 	b.WriteString("\t// Add application-owned PO fields below. Example:\n")
 	b.WriteString("\t// ExternalCode string `gorm:\"column:external_code;type:varchar(64);index\"`\n")
-	b.WriteString("}\n\n")
-	fmt.Fprintf(&b, "func (%sPO) TableName() string { return %sTableName }\n", object, lowerFirst(object))
+	b.WriteString("}\n")
 	return b.String()
 }
 
