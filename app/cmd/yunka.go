@@ -45,20 +45,7 @@ func main() {
 			},
 		},
 
-		{
-			Name:  module.AppName,
-			Usage: "module layout",
-			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name:  "name",
-					Usage: `module name`,
-					Value: "org",
-				},
-			},
-			Action: func(c *cli.Context) error {
-				return module.Generate(c.String("name"))
-			},
-		},
+		module.Command(),
 		{
 			Name:    api.AppName,
 			Aliases: []string{"a"},
