@@ -38,11 +38,13 @@ replace github.com/go-kit/kit v0.10.0 => %s
 	}); err != nil {
 		t.Fatal(err)
 	}
-	command := exec.Command("go", "test", "./...")
-	command.Dir = root
-	command.Env = append(os.Environ(), "GOWORK=off")
-	output, err := command.CombinedOutput()
-	if err != nil {
-		t.Fatalf("generated downstream domain does not compile: %v\n%s", err, output)
+	for _, args := range [][]string{{"mod", "tidy"}, {"test", "./..."}} {
+		command := exec.Command("go", args...)
+		command.Dir = root
+		command.Env = append(os.Environ(), "GOWORK=off")
+		output, err := command.CombinedOutput()
+		if err != nil {
+			t.Fatalf("generated downstream domain command go %v failed: %v\n%s", args, err, output)
+		}
 	}
 }
