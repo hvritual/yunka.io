@@ -1,14 +1,14 @@
-name: c8-3-generate-verify
+name: c8-3-finalize
 
 on:
   push:
     branches: [agent/c8-3-permission-convergence]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  generate-verify:
+  finalize:
     runs-on: ubuntu-latest
     services:
       mysql:
@@ -92,23 +92,46 @@ jobs:
           (cd gateway && go test -count=1 -tags=integration ./dispatcher/intercept/role)
           make rpc-contract-check
 
-      - name: Collect deterministic generated changes
+      - name: Guard deterministic change set
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p c8-artifact/files
-          git diff --name-only > c8-artifact/files.txt
-          while IFS= read -r path; do
-            [ -n "$path" ] || continue
-            [ -f "$path" ] || continue
-            mkdir -p "c8-artifact/files/$(dirname "$path")"
-            cp "$path" "c8-artifact/files/$path"
-          done < c8-artifact/files.txt
-          git status --short > c8-artifact/status.txt
-          cat c8-artifact/status.txt
+          cat > /tmp/c8-allowed <<'EOF'
+          contracts/generated/client.ts
+          contracts/generated/manifest.json
+          contracts/generated/openapi.json
+          gateway/dispatcher/intercept/role/db/sqlite_db.go
+          gateway/dispatcher/middleware/role_middleware_test.go
+          gateway/go.mod
+          gateway/go.sum
+          gateway/rpc/meta/gateway.pb.go
+          pkg/architecturepolicy/c8_authz_test.go
+          EOF
+          git diff --name-only | sort > /tmp/c8-changed
+          sort -o /tmp/c8-allowed /tmp/c8-allowed
+          unexpected="$(comm -23 /tmp/c8-changed /tmp/c8-allowed)"
+          if [ -n "$unexpected" ]; then
+            printf 'unexpected generated changes:\n%s\n' "$unexpected" >&2
+            exit 1
+          fi
+          cat /tmp/c8-changed
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: c8-3-generated
-          path: c8-artifact
-          if-no-files-found: error
+      - name: Commit canonical outputs and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            contracts/generated/client.ts \
+            contracts/generated/manifest.json \
+            contracts/generated/openapi.json \
+            gateway/dispatcher/intercept/role/db/sqlite_db.go \
+            gateway/dispatcher/middleware/role_middleware_test.go \
+            gateway/go.mod gateway/go.sum \
+            gateway/rpc/meta/gateway.pb.go \
+            pkg/architecturepolicy/c8_authz_test.go
+          git rm .github/workflows/c8-3-generate-verify.yml
+          git diff --cached --check
+          git commit -m "chore: finalize C8.3 generated artifacts"
+          git push origin HEAD:agent/c8-3-permission-convergence
