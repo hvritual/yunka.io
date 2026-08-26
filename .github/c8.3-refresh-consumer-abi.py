@@ -26,12 +26,10 @@ spec.loader.exec_module(mod)
 source = Path(consumer["path"]).read_text(encoding="utf-8")
 actual = {name: mod.digest_method(source, consumer["receiver"], name) for name in expected_old}
 changed = {name for name in expected_old if actual[name] != expected_old[name]}
-intended = {"BatchAddRuntimeApi", "OperateRoleAPI"}
-if changed != intended:
-    raise SystemExit(f"C8.3.3: unexpected business-method drift: {sorted(changed)}")
-if actual["DeleteRuntimeApi"] != expected_old["DeleteRuntimeApi"]:
-    raise SystemExit("C8.3.3: DeleteRuntimeApi method body changed unexpectedly")
 
-consumer["methods"] = {name: actual[name] for name in expected_old}
-baseline_path.write_text(json.dumps(baseline, indent=2) + "\n", encoding="utf-8")
-print("C8.3.3: accepted intentional consumer behavior drift", actual)
+print("C8.3.3 candidate consumer digests:", json.dumps(actual, sort_keys=True))
+for name in expected_old:
+    print(f"=== C8.3.3 candidate (*RoleIntercept).{name} ===")
+    print(mod.extract_method(source, consumer["receiver"], name), end="")
+
+raise SystemExit(f"C8.3.3 diagnostic stop; changed methods: {sorted(changed)}")
