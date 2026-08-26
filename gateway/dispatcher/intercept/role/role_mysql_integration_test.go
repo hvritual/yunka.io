@@ -27,8 +27,8 @@ func TestRoleRequestScopeMySQLCommitAndRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_ = database.Exec("DELETE FROM "+db.ApiModuleButtonTableName+" WHERE api_uuid LIKE ?", "c723-%").Error
-		_ = database.Exec("DELETE FROM "+db.RoleModuleButtonTableName+" WHERE org_uuid LIKE ?", "c723-%").Error
+		_ = database.Exec("DELETE FROM "+db.RolePermissionTableName+" WHERE org_uuid LIKE ?", "c83-%").Error
+		_ = database.Exec("DELETE FROM "+db.ButtonPermissionTableName+" WHERE module_button_uuid LIKE ?", "c83-%").Error
 	})
 
 	units, err := requestscope.NewGORMFactory(database, nil)
@@ -45,17 +45,15 @@ func TestRoleRequestScopeMySQLCommitAndRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	committed := db.ApiModuleButton{ApiUUID: "c723-commit", ModuleButtonUUID: "c723-button-commit"}
 	if err := requestscope.Execute(context.Background(), scopes, func(scope *requestscope.Scope[*db.Store]) error {
-		return scope.Repositories().BatchCreate([]db.ApiModuleButton{committed})
+		return scope.Repositories().GrantRolePermissions("c83-commit", "role", []string{"c83.execute"}, nil)
 	}); err != nil {
 		t.Fatal(err)
 	}
 
 	rollbackErr := errors.New("force role rollback")
-	rolledBack := db.ApiModuleButton{ApiUUID: "c723-rollback", ModuleButtonUUID: "c723-button-rollback"}
 	err = requestscope.Execute(context.Background(), scopes, func(scope *requestscope.Scope[*db.Store]) error {
-		if err := scope.Repositories().BatchCreate([]db.ApiModuleButton{rolledBack}); err != nil {
+		if err := scope.Repositories().GrantRolePermissions("c83-rollback", "role", []string{"c83.execute"}, nil); err != nil {
 			return err
 		}
 		return rollbackErr
@@ -65,14 +63,14 @@ func TestRoleRequestScopeMySQLCommitAndRollback(t *testing.T) {
 	}
 
 	var committedCount int64
-	if err := database.Table(db.ApiModuleButtonTableName).Where("api_uuid = ?", committed.ApiUUID).Count(&committedCount).Error; err != nil {
+	if err := database.Table(db.RolePermissionTableName).Where("org_uuid = ?", "c83-commit").Count(&committedCount).Error; err != nil {
 		t.Fatal(err)
 	}
 	if committedCount != 1 {
 		t.Fatalf("committed row count=%d want=1", committedCount)
 	}
 	var rolledBackCount int64
-	if err := database.Table(db.ApiModuleButtonTableName).Where("api_uuid = ?", rolledBack.ApiUUID).Count(&rolledBackCount).Error; err != nil {
+	if err := database.Table(db.RolePermissionTableName).Where("org_uuid = ?", "c83-rollback").Count(&rolledBackCount).Error; err != nil {
 		t.Fatal(err)
 	}
 	if rolledBackCount != 0 {

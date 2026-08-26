@@ -1,11 +1,9 @@
 package middleware
 
 import (
-	"yunka.io/framework/core/identity"
 	"yunka.io/framework/core/request"
 	"yunka.io/gateway/dispatcher/intercept"
 	"yunka.io/gateway/dispatcher/proxy"
-	"yunka.io/gateway/internal/resp"
 	"yunka.io/gateway/rpc/meta"
 )
 
@@ -18,15 +16,18 @@ const (
 	ermName = `enterpriseRole`
 )
 
+// EnterpriseRoleMiddleware is retained as a source-compatible chain element.
+// Deprecated: C8.3 moved authorization to gateway/authz.Authorizer at the
+// execution boundary. This middleware must not grant or deny access.
 type EnterpriseRoleMiddleware struct {
-	intercept intercept.Intercept
 	proxy.Next
 }
 
-func NewEnterpriseRoleMiddleware(v intercept.Intercept) *EnterpriseRoleMiddleware {
-	return &EnterpriseRoleMiddleware{
-		intercept: v,
-	}
+// NewEnterpriseRoleMiddleware preserves the historical constructor ABI. The
+// intercept argument is intentionally ignored: role control-plane services are
+// no longer authorization decision points.
+func NewEnterpriseRoleMiddleware(_ intercept.Intercept) *EnterpriseRoleMiddleware {
+	return &EnterpriseRoleMiddleware{}
 }
 
 func (erm *EnterpriseRoleMiddleware) Name() string {
@@ -34,21 +35,5 @@ func (erm *EnterpriseRoleMiddleware) Name() string {
 }
 
 func (erm *EnterpriseRoleMiddleware) Do(authStatus bool, rt *request.Context, api *meta.RuntimeApi) {
-
-	if api.Auth > 0 && (api.Auth&meta.AuthBit_AuthRole != 0) {
-		principal, ok := identity.FromContext(rt)
-		if !ok || !principal.Authenticated || principal.TenantID == "" || len(principal.Roles) == 0 || erm.intercept == nil {
-			rt.GetRequestCtx().Write(resp.SysNotRightBys)
-			return
-		}
-		if bys, allowed := erm.intercept.VerifyRoleApiRight(rt, api.Uuid, principal.TenantID, principal.Roles); !allowed {
-			rt.GetRequestCtx().Write(bys)
-			return
-		}
-		authStatus = true
-	}
-
 	erm.Next.Do(authStatus, rt, api)
-
-	return
 }

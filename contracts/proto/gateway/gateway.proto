@@ -24,13 +24,19 @@ message OperateRoleResponse {
 message RoleModuleBtn {
     string orgUUID = 1;
     string roleUUID = 2;
-    repeated string moduleBtnUUID = 3;
-    repeated string deleteModuleBtnUUID = 4;
+    repeated string moduleBtnUUID = 3 [deprecated = true];
+    repeated string deleteModuleBtnUUID = 4 [deprecated = true];
+    // C8.3: roles own permissions, never buttons.
+    repeated string permissions = 5;
+    repeated string deletePermissions = 6;
 }
 
 message RuntimeApiModuleButton {
     string apiUUID = 1;
     string moduleBtnUUID = 2;
+    // Button visibility references the same permission vocabulary as API
+    // authorization. It is not itself an authorization grant.
+    repeated string permissions = 3;
 }
 
 message BatchRuntimeApiRequest {

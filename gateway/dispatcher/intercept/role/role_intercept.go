@@ -3,15 +3,15 @@ package role
 import (
 	"context"
 	"errors"
+	"sort"
+	"strings"
 
 	"gorm.io/gorm"
 	"yunka.io/framework/requestscope"
 	"yunka.io/gateway/dispatcher/intercept"
 	"yunka.io/gateway/dispatcher/intercept/role/db"
 	"yunka.io/gateway/dispatcher/router"
-	"yunka.io/gateway/internal/resp"
 	"yunka.io/gateway/rpc/meta"
-	"yunka.io/pkg/logExt"
 )
 
 /**
@@ -31,59 +31,84 @@ type RoleIntercept struct {
 	scopes     requestscope.ScopeFactory[*db.Store]
 }
 
-func (r *RoleIntercept) VerifyRoleApiRight(ctx context.Context, apiUUID, orgUUID string, roleUUID []string) ([]byte, bool) {
-	ok, err := requestscope.ExecuteValue(ctx, r.scopes, func(scope *requestscope.Scope[*db.Store]) (bool, error) {
-		return scope.Repositories().VerifyRoleAPIRight(apiUUID, orgUUID, roleUUID)
-	})
-	if err != nil {
-		logExt.Error(err)
-		return resp.SysNotRightBys, false
-	}
-	if !ok {
-		return resp.SysRoleNotMatchBys, false
-	}
-	return nil, true
-}
-
 func (r *RoleIntercept) BatchAddRuntimeApi(ctx context.Context,
 	request *meta.BatchRuntimeApiRequest) (*meta.OperateRuntimeApiResponse, error) {
+	if request == nil {
+		return &meta.OperateRuntimeApiResponse{}, nil
+	}
 
-	btns := make([]db.ApiModuleButton, len(request.Buttons))
-	for idx, button := range request.Buttons {
-		btns[idx] = db.ApiModuleButton{
-			ApiUUID:          button.ApiUUID,
-			ModuleButtonUUID: button.ModuleBtnUUID,
+	apiPermissions := make(map[string][]string, len(request.Apis))
+	for _, api := range request.Apis {
+		if api == nil || api.Authorization == nil {
+			continue
 		}
+		apiPermissions[api.Uuid] = mergePermissions(apiPermissions[api.Uuid], api.Authorization.Permissions)
+	}
+	bindings := make([]db.ButtonPermissionBinding, 0, len(request.Buttons))
+	buttonUUIDs := make([]string, 0, len(request.Buttons))
+	for _, button := range request.Buttons {
+		if button == nil || strings.TrimSpace(button.ModuleBtnUUID) == "" {
+			continue
+		}
+		bindings = append(bindings, db.ButtonPermissionBinding{
+			ModuleButtonUUID: button.ModuleBtnUUID,
+			Permissions:      mergePermissions(apiPermissions[button.ApiUUID], button.Permissions),
+		})
+		buttonUUIDs = append(buttonUUIDs, button.ModuleBtnUUID)
 	}
 	if err := requestscope.Execute(ctx, r.scopes, func(scope *requestscope.Scope[*db.Store]) error {
-		return scope.Repositories().BatchCreate(btns)
+		repository := scope.Repositories()
+		if err := repository.BindButtonPermissions(bindings); err != nil {
+			return err
+		}
+		return repository.BackfillLegacyRolePermissionsForButtons(buttonUUIDs)
 	}); err != nil {
 		return &meta.OperateRuntimeApiResponse{}, err
 	}
 
-	for idx, api := range request.Apis {
-		r.apiTree.Insert(api.Uri, request.Apis[idx])
+	if r.apiTree != nil {
+		for idx, api := range request.Apis {
+			if api != nil {
+				r.apiTree.Insert(api.Uri, request.Apis[idx])
+			}
+		}
 	}
-
 	return &meta.OperateRuntimeApiResponse{}, nil
 }
 
-func (r *RoleIntercept) DeleteRuntimeApi(ctx context.Context,
+func (r *RoleIntercept) DeleteRuntimeApi(_ context.Context,
 	request *meta.DeleteRuntimeApiRequest) (*meta.OperateRuntimeApiResponse, error) {
-	if err := requestscope.Execute(ctx, r.scopes, func(scope *requestscope.Scope[*db.Store]) error {
-		return scope.Repositories().DeleteApi(request.Uuid)
-	}); err != nil {
-		return &meta.OperateRuntimeApiResponse{}, err
+	// API lifecycle is deliberately independent from grants. Deleting an API
+	// must never revoke Role->Permission or Button->Permission relationships.
+	if request != nil && r.apiTree != nil {
+		r.apiTree.Delete(request.Uri)
 	}
-
-	r.apiTree.Delete(request.Uri)
 	return &meta.OperateRuntimeApiResponse{}, nil
 }
 
 func (r *RoleIntercept) OperateRoleAPI(ctx context.Context,
-	btn *meta.RoleModuleBtn) (*meta.OperateRoleResponse, error) {
+	request *meta.RoleModuleBtn) (*meta.OperateRoleResponse, error) {
+	if request == nil {
+		return &meta.OperateRoleResponse{}, nil
+	}
 	return &meta.OperateRoleResponse{}, requestscope.Execute(ctx, r.scopes, func(scope *requestscope.Scope[*db.Store]) error {
-		return scope.Repositories().OperateRole(btn.OrgUUID, btn.RoleUUID, btn.ModuleBtnUUID, btn.DeleteModuleBtnUUID)
+		repository := scope.Repositories()
+		add := mergePermissions(nil, request.Permissions)
+		remove := mergePermissions(nil, request.DeletePermissions)
+
+		// Fields 3 and 4 are preserved as a wire-compatibility adapter only. They
+		// resolve Button->Permission and never create Role->Button grants.
+		legacyAdd, err := repository.PermissionsForButtons(request.ModuleBtnUUID)
+		if err != nil {
+			return err
+		}
+		legacyRemove, err := repository.PermissionsForButtons(request.DeleteModuleBtnUUID)
+		if err != nil {
+			return err
+		}
+		add = mergePermissions(add, legacyAdd)
+		remove = mergePermissions(remove, legacyRemove)
+		return repository.GrantRolePermissions(request.OrgUUID, request.RoleUUID, add, remove)
 	})
 }
 
@@ -139,4 +164,24 @@ func NewRoleIntercept(rt *router.Tree, registrar GatewayServiceRegistrar) (inter
 		return nil, err
 	}
 	return NewRoleInterceptWithDatabase(rt, registrar, store.DB)
+}
+
+func mergePermissions(left, right []string) []string {
+	seen := make(map[string]struct{}, len(left)+len(right))
+	result := make([]string, 0, len(left)+len(right))
+	for _, values := range [][]string{left, right} {
+		for _, permission := range values {
+			permission = strings.TrimSpace(permission)
+			if permission == "" {
+				continue
+			}
+			if _, exists := seen[permission]; exists {
+				continue
+			}
+			seen[permission] = struct{}{}
+			result = append(result, permission)
+		}
+	}
+	sort.Strings(result)
+	return result
 }
