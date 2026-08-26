@@ -10,34 +10,14 @@ permissions:
   issues: write
 
 jobs:
-  wave34-retry:
+  inspect-retry:
     runs-on: ubuntu-24.04
-    services:
-      mysql:
-        image: mysql:8.4
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: yunka_test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=12
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: agent/c8-3-authz-control
           fetch-depth: 0
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
-        with:
-          go-version: '1.25.13'
-          cache: false
-      - name: Execute C8.3.3 and C8.3.4 retry
-        env:
-          GH_TOKEN: ${{ github.token }}
-          YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?parseTime=true&multiStatements=true
+      - name: Inspect generated C8.3 retry script
         run: |
           set -euo pipefail
           cat \
@@ -55,57 +35,10 @@ jobs:
           test "$(wc -c < .github/c8.3-retry-builder.py.gz.b64)" = "3356"
           echo '2888dc2afc83c509f6631ba7dd1ab89131bec29b2d0083bc5391541112b58604  .github/c8.3-retry-builder.py.gz.b64' | sha256sum -c -
           base64 --decode .github/c8.3-retry-builder.py.gz.b64 | gzip -dc > /tmp/c8.3-retry-builder.py
-          python3 -m py_compile /tmp/c8.3-retry-builder.py
           python3 /tmp/c8.3-retry-builder.py
-
-          # Historical payload launched overlapping gofmt work in the background,
-          # allowing Git to index files while their size was still changing.
-          # Make formatting synchronous and add an explicit barrier before every
-          # Git index/commit operation. This modifies only the transient runner script.
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          p = Path('/tmp/c83-wave34-retry.sh')
-          lines = p.read_text().splitlines()
-          out = []
-          for line in lines:
-              if 'gofmt' in line:
-                  line = re.sub(r'\s*&\s*$', '', line)
-              stripped = line.lstrip()
-              if stripped.startswith(('git add ', 'git diff ', 'git commit ', 'git status ')):
-                  indent = line[:len(line)-len(stripped)]
-                  out.append(indent + 'wait')
-              out.append(line)
-          p.write_text('\n'.join(out) + '\n')
-          PY
           bash -n /tmp/c83-wave34-retry.sh
-
-          real_gofmt="$(command -v gofmt)"
-          mkdir -p /tmp/c83-bin
-          cat > /tmp/c83-bin/gofmt <<'EOF'
-          #!/usr/bin/env bash
-          set -euo pipefail
-          : "${C83_REAL_GOFMT:?C83_REAL_GOFMT is required}"
-          exec 9>/tmp/c83-gofmt.lock
-          flock 9
-          declare -a args=()
-          declare -A seen=()
-          for arg in "$@"; do
-            if [[ "$arg" == -* || ! -f "$arg" ]]; then
-              args+=("$arg")
-              continue
-            fi
-            canonical="$(readlink -f -- "$arg")"
-            if [[ -n "${seen[$canonical]+x}" ]]; then
-              continue
-            fi
-            seen[$canonical]=1
-            args+=("$arg")
-          done
-          exec "$C83_REAL_GOFMT" "${args[@]}"
-          EOF
-          chmod +x /tmp/c83-bin/gofmt
-          export C83_REAL_GOFMT="$real_gofmt"
-          export PATH="/tmp/c83-bin:$PATH"
-
-          bash /tmp/c83-wave34-retry.sh
+          echo '=== sequencing lines ==='
+          grep -n -E 'gofmt|rpc-generate|git (add|diff|commit|status)|find .*\.go' /tmp/c83-wave34-retry.sh || true
+          echo '=== context around C8.3.3 ==='
+          sed -n '1,220p' /tmp/c83-wave34-retry.sh
+          exit 1
