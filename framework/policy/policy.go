@@ -117,8 +117,8 @@ func (value matcher[T]) Filter(principal identity.Principal, grant Grant) Filter
 
 func All[T any]() Matcher[T] {
 	return matcher[T]{
-		allow:  func(identity.Principal, Grant, T) bool { return true },
-		filter: func(identity.Principal, Grant) Filter { return Filter{All: true} },
+		allow:  func(_ identity.Principal, grant Grant, _ T) bool { return grant.All },
+		filter: func(_ identity.Principal, grant Grant) Filter { return Filter{All: grant.All} },
 	}
 }
 
