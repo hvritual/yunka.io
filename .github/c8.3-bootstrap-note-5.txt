@@ -1,0 +1,1 @@
+Formal C8.3 product commits and main ref updates must be created by local git in the runner, never through connector commit/tree/ref APIs.
