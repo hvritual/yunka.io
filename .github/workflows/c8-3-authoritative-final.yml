@@ -1,0 +1,264 @@
+name: C8.3 Authoritative Completion
+
+on:
+  push:
+    branches:
+      - agent/c8-3-authoritative-control
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: c8-3-authoritative-completion
+  cancel-in-progress: false
+
+jobs:
+  complete:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+
+    env:
+      C83_BASE: 1b9b36f52a1b499fe52f873167e1fb4093146dbd
+      OLD_CONTROL: agent/c8-3-authz-control
+      YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?parseTime=true&multiStatements=true
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/c8-3-authoritative-control
+          fetch-depth: 0
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.25.13'
+          cache: false
+
+      - name: Bootstrap repository and install locked protoc
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat AGENTS.md >/dev/null
+          cat PROJECT_MEMORY.md >/dev/null
+          git status --short --branch
+          git branch --show-current
+          git remote -v
+          git fetch origin main --prune
+          source tools/toolchain.env
+          archive="$RUNNER_TEMP/protoc.zip"
+          home="$RUNNER_TEMP/protoc"
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" \
+            --output "$archive"
+          echo "${PROTOC_LINUX_X86_64_SHA256}  ${archive}" | sha256sum -c -
+          rm -rf "$home"
+          mkdir -p "$home"
+          unzip -q "$archive" -d "$home"
+          echo "$home/bin" >> "$GITHUB_PATH"
+          "$home/bin/protoc" --version
+
+      - name: Determine C8.3 resume point
+        id: state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --prune
+          sha="$(git rev-parse origin/main)"
+          subject="$(git show -s --format=%s origin/main)"
+          parent_subject="$(git show -s --format=%s origin/main^ 2>/dev/null || true)"
+          printf 'sha=%s\nsubject=%s\n' "$sha" "$subject" >> "$GITHUB_OUTPUT"
+          case "$subject" in
+            "refactor: enforce gateway authorization at execution boundaries")
+              test "$sha" = "$C83_BASE"
+              echo 'mode=both' >> "$GITHUB_OUTPUT"
+              ;;
+            "refactor: grant roles permissions directly")
+              test "$(git rev-parse origin/main^)" = "$C83_BASE"
+              echo 'mode=wave4' >> "$GITHUB_OUTPUT"
+              ;;
+            "refactor: make protobuf the gateway authorization source")
+              test "$parent_subject" = "refactor: grant roles permissions directly"
+              test "$(git rev-parse origin/main^^)" = "$C83_BASE"
+              echo 'mode=verify' >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "unexpected main state: $sha $subject" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Reconstruct and execute remaining product waves
+        if: steps.state.outputs.mode != 'verify'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          C83_MODE: ${{ steps.state.outputs.mode }}
+          C83_CURRENT_MAIN: ${{ steps.state.outputs.sha }}
+          C83_REFRESH_CONSUMER_ABI: ${{ runner.temp }}/c8.3-refresh-consumer-abi.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$OLD_CONTROL"
+
+          : > "$RUNNER_TEMP/c83-wave234.b64"
+          for part in 00 01 02 03 04 05 06; do
+            git show "origin/${OLD_CONTROL}:.github/c8.3-wave234.part${part}" >> "$RUNNER_TEMP/c83-wave234.b64"
+          done
+          test "$(wc -c < "$RUNNER_TEMP/c83-wave234.b64")" = "25456"
+          echo "1be51a4964ae3bdd8fb43774b902b5038c7bb19ac526fcff6eddb259873430b8  $RUNNER_TEMP/c83-wave234.b64" | sha256sum -c -
+          base64 --decode "$RUNNER_TEMP/c83-wave234.b64" | gzip -dc > "$RUNNER_TEMP/c83-wave234.sh"
+
+          git show "origin/${OLD_CONTROL}:.github/c8.3-retry-builder.py.gz.b64" > "$RUNNER_TEMP/c8.3-retry-builder.py.gz.b64"
+          test "$(wc -c < "$RUNNER_TEMP/c8.3-retry-builder.py.gz.b64")" = "3356"
+          echo "2888dc2afc83c509f6631ba7dd1ab89131bec29b2d0083bc5391541112b58604  $RUNNER_TEMP/c8.3-retry-builder.py.gz.b64" | sha256sum -c -
+          base64 --decode "$RUNNER_TEMP/c8.3-retry-builder.py.gz.b64" | gzip -dc > "$RUNNER_TEMP/c8.3-retry-builder.py"
+          python3 -m py_compile "$RUNNER_TEMP/c8.3-retry-builder.py"
+          python3 "$RUNNER_TEMP/c8.3-retry-builder.py"
+          test -s /tmp/c83-wave34-retry.sh
+
+          cat > "$C83_REFRESH_CONSUMER_ABI" <<'PY'
+          #!/usr/bin/env python3
+          from pathlib import Path
+          import importlib.util
+          import json
+
+          baseline_path = Path('tools/rpc-consumer-abi.json')
+          baseline = json.loads(baseline_path.read_text(encoding='utf-8'))
+          consumers = baseline.get('consumers', [])
+          if baseline.get('schemaVersion') != 1 or len(consumers) != 1:
+              raise SystemExit('C8.3.3: unexpected RPC consumer ABI baseline shape')
+          consumer = consumers[0]
+          if consumer.get('path') != 'gateway/dispatcher/intercept/role/role_intercept.go' or consumer.get('receiver') != 'RoleIntercept':
+              raise SystemExit('C8.3.3: unexpected RPC consumer baseline target')
+          expected_old = {
+              'BatchAddRuntimeApi': '9de88417b82aed40a8183886695e07169cb379da880ab7c2393e5676197571ca',
+              'DeleteRuntimeApi': '7ebf99f71eb98843c02a05c20b106f28fb298831a70fb21361d934550f92859e',
+              'OperateRoleAPI': '3caed6befd08683dc7f3b0d7eeaa24963f80b2384be0b8083c39170988541262',
+          }
+          if consumer.get('methods') != expected_old:
+              raise SystemExit('C8.3.3: consumer baseline moved before controlled migration')
+          spec = importlib.util.spec_from_file_location('rpc_consumer_abi', 'tools/check_rpc_consumer_abi.py')
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          source = Path(consumer['path']).read_text(encoding='utf-8')
+          actual = {name: module.digest_method(source, consumer['receiver'], name) for name in expected_old}
+          changed = {name for name in expected_old if actual[name] != expected_old[name]}
+          allowed = {'BatchAddRuntimeApi', 'OperateRoleAPI'}
+          if not changed or not changed.issubset(allowed) or 'BatchAddRuntimeApi' not in changed:
+              raise SystemExit(f'C8.3.3: unexpected business-method drift: {sorted(changed)}')
+          if actual['DeleteRuntimeApi'] != expected_old['DeleteRuntimeApi']:
+              raise SystemExit('C8.3.3: DeleteRuntimeApi changed unexpectedly')
+          consumer['methods'] = {name: actual[name] for name in expected_old}
+          baseline_path.write_text(json.dumps(baseline, indent=2) + '\n', encoding='utf-8')
+          print('C8.3.3: accepted intended Role→Permission behavior drift', sorted(changed))
+          PY
+          chmod +x "$C83_REFRESH_CONSUMER_ABI"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+
+          path = Path('/tmp/c83-wave34-retry.sh')
+          text = path.read_text(encoding='utf-8')
+          old = 'gofmt -w gateway/dispatcher/intercept gateway/dispatcher/intercept/role/db'
+          new = "find gateway/dispatcher/intercept -type f -name '*.go' -print0 | sort -z | xargs -0 -r gofmt -w\npython3 \"$C83_REFRESH_CONSUMER_ABI\""
+          if text.count(old) != 1:
+              raise SystemExit(f'C8.3: expected one overlapping gofmt command, found {text.count(old)}')
+          text = text.replace(old, new)
+
+          if os.environ['C83_MODE'] == 'wave4':
+              old_base = 'EXPECTED_BASE="1b9b36f52a1b499fe52f873167e1fb4093146dbd"'
+              new_base = f'EXPECTED_BASE="{os.environ["C83_CURRENT_MAIN"]}"'
+              if text.count(old_base) != 1:
+                  raise SystemExit('C8.3: expected base declaration not found')
+              text = text.replace(old_base, new_base)
+              marker3 = '# C8.3.3 — Role Permission Store'
+              marker4 = '# C8.3.4 — PB Authz Source'
+              start = text.index(marker3)
+              start = text.rfind('# -----------------------------------------------------------------------------', 0, start)
+              end = text.index(marker4)
+              end = text.rfind('# -----------------------------------------------------------------------------', 0, end)
+              text = text[:start] + '# C8.3.3 already published; resume from remote main\nWAVE2_SHA="$EXPECTED_BASE"\nWAVE3_SHA="$EXPECTED_BASE"\n\n' + text[end:]
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          bash -n /tmp/c83-wave34-retry.sh
+          grep -F "find gateway/dispatcher/intercept -type f -name '*.go'" /tmp/c83-wave34-retry.sh || test "$C83_MODE" = wave4
+          if test "$C83_MODE" = both; then
+            grep -F 'python3 "$C83_REFRESH_CONSUMER_ABI"' /tmp/c83-wave34-retry.sh
+          fi
+          bash /tmp/c83-wave34-retry.sh
+
+      - name: Verify final commit chain and production tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --prune
+          final_sha="$(git rev-parse origin/main)"
+          test "$(git show -s --format=%s origin/main)" = "refactor: make protobuf the gateway authorization source"
+          test "$(git show -s --format=%s origin/main^)" = "refactor: grant roles permissions directly"
+          test "$(git rev-parse origin/main^^)" = "$C83_BASE"
+          test "$(git rev-list --count "$C83_BASE..origin/main")" = "2"
+          git cat-file -e "origin/main:gateway/dispatcher/intercept/role/db/RolePermission.go"
+          git cat-file -e "origin/main:gateway/dispatcher/intercept/role/db/ButtonPermission.go"
+          git cat-file -e "origin/main:contracts/generated/authz.json"
+          printf 'final_main_sha=%s\n' "$final_sha" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Independent final full verification on MySQL 8.4
+        shell: bash
+        run: |
+          set -euo pipefail
+          final="$RUNNER_TEMP/c83-final-tree"
+          rm -rf "$final"
+          git worktree add --detach "$final" origin/main
+          cd "$final"
+          make tidy
+          git diff -- go.work go.work.sum '*/go.mod' '*/go.sum' > "$RUNNER_TEMP/c83-final-tidy-1.diff"
+          make tidy
+          git diff -- go.work go.work.sum '*/go.mod' '*/go.sum' > "$RUNNER_TEMP/c83-final-tidy-2.diff"
+          cmp "$RUNNER_TEMP/c83-final-tidy-1.diff" "$RUNNER_TEMP/c83-final-tidy-2.diff"
+          make architecture-check
+          make dependency-check
+          make authz-check
+          make rpc-check
+          make contract-check
+          make rpc-compat-check
+          make rpc-legacy-check
+          make rpc-consumer-check
+          make rpc-bridge-check
+          make verify
+          make integration
+          (cd gateway && go test -timeout=10m -count=3 -tags=integration ./dispatcher/intercept/role)
+          (cd framework && go test -timeout=15m -count=20 -tags=integration ./event/outbox)
+          make rpc-generate
+          make contract
+          git diff --exit-code
+
+      - name: Delete every C8.3 product and control branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin --prune
+          mapfile -t branches < <(
+            git ls-remote --heads origin 'refs/heads/agent/c8-3-*' |
+              awk '{sub("refs/heads/", "", $2); print $2}' |
+              sort -u
+          )
+          for branch in "${branches[@]}"; do
+            [ -n "$branch" ] || continue
+            git push origin --delete "$branch"
+          done
+          test -z "$(git ls-remote --heads origin 'refs/heads/agent/c8-3-*')"
