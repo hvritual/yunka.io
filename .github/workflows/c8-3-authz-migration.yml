@@ -10,8 +10,21 @@ permissions:
   issues: write
 
 jobs:
-  wave1:
+  wave234:
     runs-on: ubuntu-24.04
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -21,15 +34,24 @@ jobs:
         with:
           go-version: '1.25.13'
           cache: false
-      - name: Execute C8.3.1
+      - name: Execute C8.3.2 through C8.3.4
         env:
           GH_TOKEN: ${{ github.token }}
+          YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?parseTime=true&multiStatements=true
         run: |
           set -euo pipefail
-          cat .github/c8.3-wave1.part1 .github/c8.3-wave1.part2 .github/c8.3-wave1.part3 > "$RUNNER_TEMP/c83-wave1.b64"
-          test "$(wc -c < "$RUNNER_TEMP/c83-wave1.b64")" = "8728"
-          echo '97bd678ec6f24c1dda07c067d939dbfe1df9c9c3  '"$RUNNER_TEMP/c83-wave1.b64" | sha1sum -c -
-          base64 --decode "$RUNNER_TEMP/c83-wave1.b64" | gzip -dc > "$RUNNER_TEMP/c83-wave1.sh"
-          chmod +x "$RUNNER_TEMP/c83-wave1.sh"
-          bash -n "$RUNNER_TEMP/c83-wave1.sh"
-          bash "$RUNNER_TEMP/c83-wave1.sh"
+          cat \
+            .github/c8.3-wave234.part00 \
+            .github/c8.3-wave234.part01 \
+            .github/c8.3-wave234.part02 \
+            .github/c8.3-wave234.part03 \
+            .github/c8.3-wave234.part04 \
+            .github/c8.3-wave234.part05 \
+            .github/c8.3-wave234.part06 \
+            > "$RUNNER_TEMP/c83-wave234.b64"
+          test "$(wc -c < "$RUNNER_TEMP/c83-wave234.b64")" = "25456"
+          echo '1be51a4964ae3bdd8fb43774b902b5038c7bb19ac526fcff6eddb259873430b8  '"$RUNNER_TEMP/c83-wave234.b64" | sha256sum -c -
+          base64 --decode "$RUNNER_TEMP/c83-wave234.b64" | gzip -dc > "$RUNNER_TEMP/c83-wave234.sh"
+          chmod +x "$RUNNER_TEMP/c83-wave234.sh"
+          bash -n "$RUNNER_TEMP/c83-wave234.sh"
+          bash "$RUNNER_TEMP/c83-wave234.sh"
