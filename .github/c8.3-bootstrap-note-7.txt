@@ -1,0 +1,1 @@
+This branch is control-only. Product code must originate from a clean worktree at current main and be committed with local git after verification.
