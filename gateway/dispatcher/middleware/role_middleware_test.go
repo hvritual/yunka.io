@@ -11,8 +11,8 @@ import (
 
 type roleCapture struct{ got bool }
 
-func (*roleCapture) Name() string                                                  { return "role-capture" }
-func (*roleCapture) Use(proxy.MiddleWare) proxy.MiddleWare                         { return nil }
+func (*roleCapture) Name() string                                                 { return "role-capture" }
+func (*roleCapture) Use(proxy.MiddleWare) proxy.MiddleWare                        { return nil }
 func (capture *roleCapture) Do(auth bool, _ *request.Context, _ *meta.RuntimeApi) { capture.got = auth }
 
 type noDecisionRoleIntercept struct{ meta.GatewayServiceServer }

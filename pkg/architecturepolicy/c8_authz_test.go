@@ -26,9 +26,9 @@ func TestC83GatewayAuthorizationUsesPermissionAsOnlyGrantPrimitive(t *testing.T)
 	authz := read("gateway/authz/types.go")
 
 	for path, content := range map[string]string{
-		"gateway/dispatcher/intercept/intercept.go":                  intercept,
-		"gateway/dispatcher/intercept/role/role_intercept.go":       roleHandler,
-		"gateway/dispatcher/middleware/role_middleware.go":           roleMiddleware,
+		"gateway/dispatcher/intercept/intercept.go":           intercept,
+		"gateway/dispatcher/intercept/role/role_intercept.go": roleHandler,
+		"gateway/dispatcher/middleware/role_middleware.go":    roleMiddleware,
 	} {
 		for _, forbidden := range []string{"VerifyRoleApiRight", "VerifyRoleAPIRight"} {
 			if strings.Contains(content, forbidden) {

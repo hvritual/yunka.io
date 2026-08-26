@@ -624,6 +624,12 @@
             },
             "type": "array"
           },
+          "deletePermissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "moduleBtnUUID": {
             "items": {
               "type": "string"
@@ -632,6 +638,12 @@
           },
           "orgUUID": {
             "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "roleUUID": {
             "type": "string"
@@ -689,6 +701,12 @@
           },
           "moduleBtnUUID": {
             "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "type": "object",

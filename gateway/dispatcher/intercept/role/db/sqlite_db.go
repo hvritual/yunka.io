@@ -89,9 +89,9 @@ func (s *Store) BackfillLegacyRolePermissionsForButtons(buttonUUIDs []string) er
 		Permission string `gorm:"column:permission"`
 	}
 	var grants []legacyGrant
-	if err := s.Table(legacyRoleModuleButtonTableName + " AS role_button").
+	if err := s.Table(legacyRoleModuleButtonTableName+" AS role_button").
 		Select("role_button.org_uuid AS org_uuid, role_button.role_uuid AS role_uuid, button_permission.permission AS permission").
-		Joins("JOIN " + ButtonPermissionTableName + " AS button_permission ON button_permission.module_button_uuid = role_button.module_button_uuid").
+		Joins("JOIN "+ButtonPermissionTableName+" AS button_permission ON button_permission.module_button_uuid = role_button.module_button_uuid").
 		Where("role_button.module_button_uuid IN ?", buttons).
 		Scan(&grants).Error; err != nil {
 		return err
