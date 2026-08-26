@@ -1,0 +1,43 @@
+name: C8.3 Gateway Authz Migration
+
+on:
+  push:
+    branches:
+      - agent/c8-3-authz-control
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  migrate-verify-publish:
+    runs-on: ubuntu-24.04
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/c8-3-authz-control
+          fetch-depth: 0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.25.13'
+          cache: false
+      - name: Execute migration
+        env:
+          GH_TOKEN: ${{ github.token }}
+          YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?parseTime=true&multiStatements=true
+        run: |
+          echo "C8.3 runner control branch initialized"
+          echo "Implementation payload will be updated after repository bootstrap audit."
