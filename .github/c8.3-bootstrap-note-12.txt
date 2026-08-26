@@ -1,0 +1,1 @@
+Stop marker generation. Subsequent work is expected to occur only inside the runner's clean main worktree.
