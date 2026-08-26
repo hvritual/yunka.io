@@ -28,7 +28,7 @@ jobs:
           set -euo pipefail
           cat .github/c8.3-wave1.part1 .github/c8.3-wave1.part2 .github/c8.3-wave1.part3 > "$RUNNER_TEMP/c83-wave1.b64"
           test "$(wc -c < "$RUNNER_TEMP/c83-wave1.b64")" = "8728"
-          echo 'e1c997b6c0a065a95d4c626658bbea8995ba9222  '"$RUNNER_TEMP/c83-wave1.b64" | sha1sum -c -
+          echo '97bd678ec6f24c1dda07c067d939dbfe1df9c9c3  '"$RUNNER_TEMP/c83-wave1.b64" | sha1sum -c -
           base64 --decode "$RUNNER_TEMP/c83-wave1.b64" | gzip -dc > "$RUNNER_TEMP/c83-wave1.sh"
           chmod +x "$RUNNER_TEMP/c83-wave1.sh"
           bash -n "$RUNNER_TEMP/c83-wave1.sh"
