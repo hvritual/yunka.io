@@ -10,7 +10,7 @@ permissions:
   issues: write
 
 jobs:
-  wave234:
+  wave34-retry:
     runs-on: ubuntu-24.04
     services:
       mysql:
@@ -34,7 +34,7 @@ jobs:
         with:
           go-version: '1.25.13'
           cache: false
-      - name: Execute C8.3.2 through C8.3.4
+      - name: Execute C8.3.3 and C8.3.4 retry
         env:
           GH_TOKEN: ${{ github.token }}
           YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?parseTime=true&multiStatements=true
@@ -48,10 +48,14 @@ jobs:
             .github/c8.3-wave234.part04 \
             .github/c8.3-wave234.part05 \
             .github/c8.3-wave234.part06 \
-            > "$RUNNER_TEMP/c83-wave234.b64"
-          test "$(wc -c < "$RUNNER_TEMP/c83-wave234.b64")" = "25456"
-          echo '1be51a4964ae3bdd8fb43774b902b5038c7bb19ac526fcff6eddb259873430b8  '"$RUNNER_TEMP/c83-wave234.b64" | sha256sum -c -
-          base64 --decode "$RUNNER_TEMP/c83-wave234.b64" | gzip -dc > "$RUNNER_TEMP/c83-wave234.sh"
-          chmod +x "$RUNNER_TEMP/c83-wave234.sh"
-          bash -n "$RUNNER_TEMP/c83-wave234.sh"
-          bash "$RUNNER_TEMP/c83-wave234.sh"
+            > /tmp/c83-wave234.b64
+          test "$(wc -c < /tmp/c83-wave234.b64)" = "25456"
+          echo '1be51a4964ae3bdd8fb43774b902b5038c7bb19ac526fcff6eddb259873430b8  /tmp/c83-wave234.b64' | sha256sum -c -
+          base64 --decode /tmp/c83-wave234.b64 | gzip -dc > /tmp/c83-wave234.sh
+          test "$(wc -c < .github/c8.3-retry-builder.py.gz.b64)" = "3356"
+          echo '2888dc2afc83c509f6631ba7dd1ab89131bec29b2d0083bc5391541112b58604  .github/c8.3-retry-builder.py.gz.b64' | sha256sum -c -
+          base64 --decode .github/c8.3-retry-builder.py.gz.b64 | gzip -dc > /tmp/c8.3-retry-builder.py
+          python3 -m py_compile /tmp/c8.3-retry-builder.py
+          python3 /tmp/c8.3-retry-builder.py
+          bash -n /tmp/c83-wave34-retry.sh
+          bash /tmp/c83-wave34-retry.sh
