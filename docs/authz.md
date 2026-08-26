@@ -59,3 +59,7 @@ The legacy `EnterpriseRoleMiddleware` is retained only as a source-compatible pa
 ## Framework composition
 
 `role.NewAuthorizerWithDatabase` and `role.NewAuthorizerFromBuildContext` compose the DB-backed permission checker into the Gateway `RBACAuthorizer`. Applications provide the App-owned database capability; they do not construct SQL joins, button relationships, or permission matching logic themselves.
+
+## C8.3 completion gate
+
+The migration is complete only when deterministic protobuf/contract generation produces no uncommitted drift, architecture guards prohibit reintroducing API -> Button -> Role authorization, targeted Gateway tests and race tests pass, and the MySQL 8.4 role-permission integration succeeds. The repository's standard pull-request verification remains the final merge gate.
