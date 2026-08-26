@@ -61,6 +61,8 @@ The generated standard policy implements the existing Yunka data-scope semantics
 
 Create with a site-scoped permission requires the requested site to be granted. Update first authorizes the current object; when the target site changes, the new site must independently be permitted. A self-only grant does not allow moving an object to an arbitrary site.
 
+`created_by` and `owner_id` are trusted ownership conventions when used by the standard `Self` scope. On create, the generated application service derives that field from `identity.Principal.UserID`; it does not trust the transport payload. On update, the generated service preserves the existing ownership value instead of allowing reassignment through the generic CRUD input. Applications that need ownership transfer should model it as an explicit use case with its own policy and business rules.
+
 The persistence layer receives a `policy.Filter` from the application service and applies it after trusted-tenant scoping. If a policy asks for a scope dimension that the object cannot represent, the generated repository fails closed instead of broadening access.
 
 ## Authentication middleware contract
