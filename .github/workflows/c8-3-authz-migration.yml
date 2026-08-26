@@ -1,18 +1,22 @@
-name: C8.3 Gateway Authz Migration
+name: C8.3 Gateway Authz Migration Final
 
 on:
   push:
     branches:
-      - agent/c8-3-authz-control
+      - agent/c8-3-authz-final-run
 
 permissions:
   contents: write
   issues: write
 
-# Diagnostic trigger: inspect all intentional C8.3.3 consumer changes before release.
+concurrency:
+  group: c8-3-authz-final-run
+  cancel-in-progress: false
+
 jobs:
   wave34-final:
     runs-on: ubuntu-24.04
+    timeout-minutes: 180
     services:
       mysql:
         image: mysql:8.4
@@ -29,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: agent/c8-3-authz-control
+          ref: agent/c8-3-authz-final-run
           fetch-depth: 0
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
@@ -66,6 +70,8 @@ jobs:
           grep -n "find gateway/dispatcher/intercept -type f" /tmp/c83-wave34-retry.sh
           bash /tmp/c83-wave34-retry.sh
 
+          # Product waves succeeded and remote main was verified by the local-Git
+          # script. Remove every temporary C8.3 branch with local git only.
           git fetch origin --prune
           mapfile -t c83_branches < <(
             git ls-remote --heads origin 'refs/heads/agent/c8-3-*' |
