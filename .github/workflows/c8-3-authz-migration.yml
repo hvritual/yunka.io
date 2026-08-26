@@ -10,40 +10,23 @@ permissions:
   issues: write
 
 jobs:
-  audit:
+  wave1:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: agent/c8-3-authz-control
           fetch-depth: 0
-      - name: Bootstrap and audit current main
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.25.13'
+          cache: false
+      - name: Execute C8.3.1
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git fetch origin main
-          git worktree add "$RUNNER_TEMP/main-audit" origin/main
-          cd "$RUNNER_TEMP/main-audit"
-          cat AGENTS.md >/dev/null
-          cat PROJECT_MEMORY.md >/dev/null
-          git status --short --branch
-          git branch --show-current
-          git remote -v
-          echo '== MAIN =='
-          git rev-parse HEAD
-          git show -s --format='%s'
-          echo '== AUTHZ CALL SITES =='
-          git grep -n -E 'NewHandleMiddleware|NewEnterpriseRoleMiddleware|VerifyRoleApiRight|OperateRoleAPI|BatchAddRuntimeApi|RoleModuleButton|ApiModuleButton|AuthBit_AuthRole|RuntimeApi' -- gateway app framework pkg | head -300 || true
-          echo '== ROLE/MIDDLEWARE FILES =='
-          for f in \
-            gateway/dispatcher/middleware/role_middleware.go \
-            gateway/dispatcher/middleware/handle_middleware.go \
-            gateway/dispatcher/intercept/intercept.go \
-            gateway/dispatcher/intercept/role/role_intercept.go \
-            gateway/dispatcher/intercept/role/db/sqlite_db.go \
-            gateway/dispatcher/intercept/role/db/ApiModuleButton.go \
-            gateway/dispatcher/intercept/role/db/RoleModuleButton.go \
-            contracts/proto/gateway/api_common.proto \
-            contracts/proto/gateway/gateway.proto; do
-            echo "--- $f ---"
-            sed -n '1,260p' "$f"
-          done
+          base64 --decode .github/c8.3-wave1.sh.gz.b64 | gzip -dc > "$RUNNER_TEMP/c83-wave1.sh"
+          chmod +x "$RUNNER_TEMP/c83-wave1.sh"
+          bash -n "$RUNNER_TEMP/c83-wave1.sh"
+          bash "$RUNNER_TEMP/c83-wave1.sh"
