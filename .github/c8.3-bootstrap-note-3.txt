@@ -1,0 +1,1 @@
+Fail closed: if main SHA changes, required files cannot be read, architecture gates fail, or migration cannot preserve stable permission identities, do not move main.
