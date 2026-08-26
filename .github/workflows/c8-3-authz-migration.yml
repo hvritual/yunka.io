@@ -1,21 +1,21 @@
-name: C8.3 Gateway Authz Migration Final
+name: C8.3 Gateway Authz Migration Final 2
 
 on:
   push:
     branches:
-      - agent/c8-3-authz-final-run
+      - agent/c8-3-authz-final-run-2
 
 permissions:
   contents: write
   issues: write
 
 concurrency:
-  group: c8-3-authz-final-run
+  group: c8-3-authz-final-run-2
   cancel-in-progress: true
 
 jobs:
   wave34-final:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     services:
       mysql:
@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: agent/c8-3-authz-final-run
+          ref: agent/c8-3-authz-final-run-2
           fetch-depth: 0
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
@@ -68,15 +68,11 @@ jobs:
             .github/c8.3-patch-retry.py \
             .github/c8.3-patch-role-migration.py \
             .github/c8.3-refresh-consumer-abi.py
-          export C83_PATCH_ROLE_MIGRATION="$GITHUB_WORKSPACE/.github/c8.3-patch-role-migration.py"
-          export C83_REFRESH_CONSUMER_ABI="$GITHUB_WORKSPACE/.github/c8.3-refresh-consumer-abi.py"
           python3 .github/c8.3-patch-retry.py
           bash -n /tmp/c83-wave34-retry.sh
-          grep -n "C83_PATCH_ROLE_MIGRATION\|find gateway/dispatcher/intercept -type f" /tmp/c83-wave34-retry.sh
+          grep -n "patch-role-migration\|find gateway/dispatcher/intercept -type f" /tmp/c83-wave34-retry.sh
           bash /tmp/c83-wave34-retry.sh
 
-          # Product waves succeeded and remote main was verified by the local-Git
-          # script. Remove every temporary C8.3 branch with local git only.
           git fetch origin --prune
           mapfile -t c83_branches < <(
             git ls-remote --heads origin 'refs/heads/agent/c8-3-*' |
