@@ -14,11 +14,13 @@ jobs:
         with:
           go-version: 1.25.13
           cache: false
-      - name: Validate internal candidate
+      - name: Validate complete biz candidate
         shell: bash
         run: |
           set -euo pipefail
           cd tools/biz-domain-export
           GOWORK=off go mod tidy
           GOWORK=off go test ./...
+          GOWORK=off go test -race ./...
           GOWORK=off go vet ./...
+          GOWORK=off go build ./cmd/biz
