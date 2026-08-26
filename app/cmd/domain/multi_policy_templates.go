@@ -226,7 +226,7 @@ func multiPolicyRESTTemplate(spec Spec, packageImport string) string {
 	}
 	b.WriteString("}\n")
 	for _, object := range spec.Objects {
-		writeMultiRESTObject(&b, object)
+		writePolicyRESTObject(&b, object)
 	}
 	b.WriteString("func writeJSON(w http.ResponseWriter,value any,err error){if err!=nil{writeError(w,err);return};w.Header().Set(\"Content-Type\",\"application/json\");_=json.NewEncoder(w).Encode(value)}\nfunc writeError(w http.ResponseWriter,err error){status:=http.StatusBadRequest;switch{case errors.Is(err,policy.ErrUnauthorized):status=http.StatusUnauthorized;case errors.Is(err,policy.ErrForbidden):status=http.StatusForbidden;case errors.Is(err,ports.ErrNotFound):status=http.StatusNotFound;case errors.Is(err,ports.ErrConflict):status=http.StatusConflict};http.Error(w,http.StatusText(status),status)}\n")
 	return b.String()
