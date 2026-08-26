@@ -1,0 +1,26 @@
+name: C8.3 Runner Pool Probe
+
+on:
+  push:
+    branches:
+      - agent/c8-3-runner-probe-6
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - run: uname -a
+
+  macos:
+    runs-on: macos-15
+    steps:
+      - run: uname -a
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - shell: pwsh
+        run: Write-Output $env:RUNNER_OS
