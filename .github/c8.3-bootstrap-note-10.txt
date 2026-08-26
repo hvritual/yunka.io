@@ -1,0 +1,1 @@
+Control-only content. Runner must construct formal product commits from a clean main worktree and exclude control artifacts.
