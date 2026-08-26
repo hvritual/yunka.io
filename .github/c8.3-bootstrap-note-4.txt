@@ -1,0 +1,1 @@
+Bootstrap source requirement: AGENTS.md + PROJECT_MEMORY.md + latest main branch metadata are mandatory inputs before implementation.
