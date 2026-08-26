@@ -1,0 +1,1 @@
+Next runner revision must read AGENTS.md and PROJECT_MEMORY.md before any product edit; main must still match the audited SHA; any formal product commit/ref update must be performed with local git in the runner.
