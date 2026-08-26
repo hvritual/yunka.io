@@ -10,34 +10,40 @@ permissions:
   issues: write
 
 jobs:
-  migrate-verify-publish:
+  audit:
     runs-on: ubuntu-24.04
-    services:
-      mysql:
-        image: mysql:8.4
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: yunka_test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=12
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: agent/c8-3-authz-control
           fetch-depth: 0
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
-        with:
-          go-version: '1.25.13'
-          cache: false
-      - name: Execute migration
-        env:
-          GH_TOKEN: ${{ github.token }}
-          YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?parseTime=true&multiStatements=true
+      - name: Bootstrap and audit current main
         run: |
-          echo "C8.3 runner control branch initialized"
-          echo "Implementation payload will be updated after repository bootstrap audit."
+          set -euo pipefail
+          git fetch origin main
+          git worktree add "$RUNNER_TEMP/main-audit" origin/main
+          cd "$RUNNER_TEMP/main-audit"
+          cat AGENTS.md >/dev/null
+          cat PROJECT_MEMORY.md >/dev/null
+          git status --short --branch
+          git branch --show-current
+          git remote -v
+          echo '== MAIN =='
+          git rev-parse HEAD
+          git show -s --format='%s'
+          echo '== AUTHZ CALL SITES =='
+          git grep -n -E 'NewHandleMiddleware|NewEnterpriseRoleMiddleware|VerifyRoleApiRight|OperateRoleAPI|BatchAddRuntimeApi|RoleModuleButton|ApiModuleButton|AuthBit_AuthRole|RuntimeApi' -- gateway app framework pkg | head -300 || true
+          echo '== ROLE/MIDDLEWARE FILES =='
+          for f in \
+            gateway/dispatcher/middleware/role_middleware.go \
+            gateway/dispatcher/middleware/handle_middleware.go \
+            gateway/dispatcher/intercept/intercept.go \
+            gateway/dispatcher/intercept/role/role_intercept.go \
+            gateway/dispatcher/intercept/role/db/sqlite_db.go \
+            gateway/dispatcher/intercept/role/db/ApiModuleButton.go \
+            gateway/dispatcher/intercept/role/db/RoleModuleButton.go \
+            contracts/proto/gateway/api_common.proto \
+            contracts/proto/gateway/gateway.proto; do
+            echo "--- $f ---"
+            sed -n '1,260p' "$f"
+          done
