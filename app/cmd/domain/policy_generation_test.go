@@ -40,6 +40,12 @@ type DevicePO struct {
 			t.Fatalf("generated application missing %q", expected)
 		}
 	}
+	if !strings.Contains(application, "CreatedBy: principal.UserID") {
+		t.Fatal("generated create must derive ownership from trusted principal")
+	}
+	if strings.Contains(application, "value.CreatedBy = input.CreatedBy") {
+		t.Fatal("generated update must not allow ownership reassignment")
+	}
 	repositories := mustReadPolicyGenerated(t, filepath.Join(domainRoot, "infrastructure", "persistence", "zz_yunka_repositories_gen.go"))
 	for _, expected := range []string{"filter policy.Filter", "site_id IN ?", "created_by = ?", "strings.Join"} {
 		if !strings.Contains(repositories, expected) {

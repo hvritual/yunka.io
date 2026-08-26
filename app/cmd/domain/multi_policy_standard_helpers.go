@@ -56,3 +56,12 @@ func policyScopeGoFields(object ObjectSpec) (string, string) {
 	}
 	return siteField, ownerField
 }
+
+func isPolicyOwnerField(field Field) bool {
+	switch field.Column {
+	case "created_by", "owner_id":
+		return true
+	default:
+		return false
+	}
+}

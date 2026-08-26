@@ -89,6 +89,10 @@ func writePolicyApplicationMethods(b *strings.Builder, object ObjectSpec) {
 	fmt.Fprintf(b, "func(service *DefaultService)Create%s(ctx context.Context,input Create%sInput)(%sOutput,error){principal:=principalFromContext(ctx);if err:=service.%sPolicy.AuthorizeCreate(ctx,principal,input);err!=nil{return %sOutput{},err};if err:=service.%sRules.ValidateCreate(ctx,input);err!=nil{return %sOutput{},err};value:=domain.%s{ID:newID(),Version:1,CreatedAt:time.Now().UTC(),UpdatedAt:time.Now().UTC(),", entity, entity, entity, field, entity, field, entity, entity)
 	for _, current := range object.Fields {
 		name := fieldGoName(current)
+		if isPolicyOwnerField(current) {
+			fmt.Fprintf(b, "%s:principal.UserID,", name)
+			continue
+		}
 		fmt.Fprintf(b, "%s:input.%s,", name, name)
 	}
 	fmt.Fprintf(b, "};created,err:=requestscope.ExecuteValue(ctx,service.scopes,func(scope *requestscope.Scope[ports.Repositories])(domain.%s,error){if err:=scope.Repositories().%s.Create(scope.Context(),&value);err!=nil{return domain.%s{},err};return value,nil});return %sOutput{Value:created},err}\n", entity, entity, entity, entity)
@@ -99,6 +103,9 @@ func writePolicyApplicationMethods(b *strings.Builder, object ObjectSpec) {
 
 	fmt.Fprintf(b, "func(service *DefaultService)Update%s(ctx context.Context,input Update%sInput)(%sOutput,error){principal:=principalFromContext(ctx);updated,err:=requestscope.ExecuteValue(ctx,service.scopes,func(scope *requestscope.Scope[ports.Repositories])(domain.%s,error){repository:=scope.Repositories().%s;current,err:=repository.Get(scope.Context(),input.ID);if err!=nil{return domain.%s{},err};if err:=service.%sPolicy.AuthorizeUpdate(scope.Context(),principal,current,input);err!=nil{return domain.%s{},err};if err:=service.%sRules.ValidateUpdate(scope.Context(),current,input);err!=nil{return domain.%s{},err};value:=current;value.Version=input.Version;value.UpdatedAt=time.Now().UTC();", entity, entity, entity, entity, entity, entity, field, entity, field, entity)
 	for _, current := range object.Fields {
+		if isPolicyOwnerField(current) {
+			continue
+		}
 		name := fieldGoName(current)
 		fmt.Fprintf(b, "value.%s=input.%s;", name, name)
 	}
