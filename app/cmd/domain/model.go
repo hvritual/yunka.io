@@ -23,6 +23,7 @@ var (
 
 type Field struct {
 	Name        string `json:"name"`
+	GoName      string `json:"-"`
 	Type        string `json:"type"`
 	Column      string `json:"column,omitempty"`
 	ProtoNumber int    `json:"protoNumber,omitempty"`
@@ -31,6 +32,7 @@ type Field struct {
 
 type ObjectSpec struct {
 	Name                 string   `json:"name"`
+	GoName               string   `json:"-"`
 	File                 string   `json:"file"`
 	TableName            string   `json:"tableName"`
 	Fields               []Field  `json:"fields,omitempty"`
@@ -145,6 +147,7 @@ func normalizeOptions(options Options) (Spec, string, error) {
 	fields = assignMissingProtoNumbers(fields, nil)
 	spec.Objects = []ObjectSpec{{
 		Name:      object,
+		GoName:    exportedIdentifier(object),
 		File:      snakeCase(object) + ".go",
 		TableName: tableName(tablePrefix, spec.Domain, object),
 		Fields:    fields,
@@ -178,7 +181,7 @@ func parseFields(values []string) ([]Field, error) {
 			return nil, fmt.Errorf("domain: duplicate field %q", name)
 		}
 		seen[name] = struct{}{}
-		fields = append(fields, Field{Name: name, Type: kind, Column: name, POOwned: true})
+		fields = append(fields, Field{Name: name, GoName: exportedIdentifier(name), Type: kind, Column: name, POOwned: true})
 	}
 	sort.Slice(fields, func(i, j int) bool { return fields[i].Name < fields[j].Name })
 	return fields, nil
@@ -324,10 +327,11 @@ func upgradeSpec(spec Spec) Spec {
 		TablePrefix:  spec.TablePrefix,
 		TenantScoped: spec.TenantScoped,
 		Objects: []ObjectSpec{{
-			Name:          spec.Object,
-			File:          snakeCase(spec.Object) + ".go",
-			TableName:     spec.TableName,
-			Fields:        fields,
+			Name:         spec.Object,
+			GoName:       exportedIdentifier(spec.Object),
+			File:         snakeCase(spec.Object) + ".go",
+			TableName:    spec.TableName,
+			Fields:       fields,
 			POEmbedsBase: true,
 		}},
 		REST: RESTSpec{Enabled: spec.REST.Enabled, Prefix: prefix},
@@ -394,6 +398,9 @@ func assignMissingProtoNumbers(fields []Field, prior []Field) []Field {
 	result := append([]Field(nil), fields...)
 	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
 	for i := range result {
+		if result[i].GoName == "" {
+			result[i].GoName = exportedIdentifier(result[i].Name)
+		}
 		if previous, ok := priorByName[result[i].Name]; ok && previous.ProtoNumber > 0 {
 			result[i].ProtoNumber = previous.ProtoNumber
 			if result[i].Column == "" {
