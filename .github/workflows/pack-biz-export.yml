@@ -27,7 +27,8 @@ jobs:
           for domain in iam site device; do
             tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
               -C "$src" -czf "$RUNNER_TEMP/${domain}.tar.gz" "$domain"
-            base64 -w 76 "$RUNNER_TEMP/${domain}.tar.gz" > "$out/${domain}.tar.gz.b64"
+            base64 -w 76 "$RUNNER_TEMP/${domain}.tar.gz" > "$RUNNER_TEMP/${domain}.b64"
+            split -b 6000 -d -a 2 "$RUNNER_TEMP/${domain}.b64" "$out/${domain}.tar.gz.b64.part"
             sha256sum "$RUNNER_TEMP/${domain}.tar.gz" | awk '{print $1}' > "$out/${domain}.tar.gz.sha256"
           done
       - name: Commit packs
