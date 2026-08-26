@@ -58,4 +58,35 @@ jobs:
           python3 -m py_compile /tmp/c8.3-retry-builder.py
           python3 /tmp/c8.3-retry-builder.py
           bash -n /tmp/c83-wave34-retry.sh
+
+          # The retry payload historically feeds gofmt overlapping parent/child
+          # find roots. Go 1.25 can process duplicate file arguments concurrently,
+          # which yields "size changed during reading". Keep the product script
+          # unchanged and enforce a de-duplicated gofmt argv at the runner boundary.
+          real_gofmt="$(command -v gofmt)"
+          mkdir -p /tmp/c83-bin
+          cat > /tmp/c83-bin/gofmt <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          : "${C83_REAL_GOFMT:?C83_REAL_GOFMT is required}"
+          declare -a args=()
+          declare -A seen=()
+          for arg in "$@"; do
+            if [[ "$arg" == -* || ! -f "$arg" ]]; then
+              args+=("$arg")
+              continue
+            fi
+            canonical="$(readlink -f -- "$arg")"
+            if [[ -n "${seen[$canonical]+x}" ]]; then
+              continue
+            fi
+            seen[$canonical]=1
+            args+=("$arg")
+          done
+          exec "$C83_REAL_GOFMT" "${args[@]}"
+          EOF
+          chmod +x /tmp/c83-bin/gofmt
+          export C83_REAL_GOFMT="$real_gofmt"
+          export PATH="/tmp/c83-bin:$PATH"
+
           bash /tmp/c83-wave34-retry.sh
