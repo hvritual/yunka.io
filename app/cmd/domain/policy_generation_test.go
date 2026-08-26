@@ -63,9 +63,9 @@ func TestGeneratedGRPCMapsPolicyErrors(t *testing.T) {
 		Domain:       "device",
 		TablePrefix:  "yk",
 		TenantScoped: true,
-		Objects: []ObjectSpec{{Name: "device", GoName: "Device", File: "device.go", TableName: "yk_device_device"}},
-		REST: RESTSpec{Enabled: true, Prefix: "/v1"},
-		RPC:  RPCSpec{Enabled: true},
+		Objects:      []ObjectSpec{{Name: "device", GoName: "Device", File: "device.go", TableName: "yk_device_device"}},
+		REST:         RESTSpec{Enabled: true, Prefix: "/v1"},
+		RPC:          RPCSpec{Enabled: true},
 	}
 	bridge := multiPolicyGRPCBridgeTemplate(spec, "example.com/biz/internal/device")
 	for _, expected := range []string{"codes.Unauthenticated", "codes.PermissionDenied", "ports.ErrNotFound", "rpcError(err)"} {

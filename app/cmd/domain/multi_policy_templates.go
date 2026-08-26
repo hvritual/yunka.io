@@ -132,14 +132,18 @@ func multiPolicyRepositoriesTemplate(spec Spec, packageImport string) string {
 	b.WriteString(")\n")
 	b.WriteString("func AutoMigrate(ctx context.Context,database *gorm.DB)error{if database==nil{return errors.New(\"domain persistence: database is required\")};if ctx==nil{ctx=context.Background()};return database.WithContext(ctx).AutoMigrate(")
 	for index, object := range spec.Objects {
-		if index > 0 { b.WriteString(",") }
+		if index > 0 {
+			b.WriteString(",")
+		}
 		fmt.Fprintf(&b, "&%sPORecord{}", objectGoName(object))
 	}
 	b.WriteString(")}\n")
 	if spec.TenantScoped {
 		b.WriteString("func trustedTenant(ctx context.Context)(string,error){principal,ok:=identity.FromContext(ctx);if !ok||!principal.Authenticated||principal.TenantID==\"\"{return \"\",errors.New(\"domain persistence: trusted tenant principal is required\")};return principal.TenantID,nil}\n")
 	}
-	for _, object := range spec.Objects { writePolicyRepository(&b, spec, object) }
+	for _, object := range spec.Objects {
+		writePolicyRepository(&b, spec, object)
+	}
 	b.WriteString("func NewScopeFactory(database *gorm.DB)(requestscope.ScopeFactory[ports.Repositories],error){unit,err:=requestscope.NewGORMFactory(database,nil);if err!=nil{return nil,err};return requestscope.NewFactory(requestscope.FactoryOptions[ports.Repositories]{UnitOfWork:unit,Repositories:requestscope.GORMRepositories(func(ctx context.Context,transaction *gorm.DB)(ports.Repositories,error){repositories:=ports.Repositories{};")
 	for _, object := range spec.Objects {
 		entity := objectGoName(object)
@@ -154,10 +158,14 @@ func writePolicyRepository(b *strings.Builder, spec Spec, object ObjectSpec) {
 	record := entity + "PORecord"
 	siteColumn, ownerColumn := policyScopeColumns(object)
 	fmt.Fprintf(b, "type %sRepository struct{database *gorm.DB}\nfunc(repository *%sRepository)scoped(ctx context.Context)(*gorm.DB,error){query:=repository.database.WithContext(ctx)", entity, entity)
-	if spec.TenantScoped { b.WriteString(";tenantID,err:=trustedTenant(ctx);if err!=nil{return nil,err};query=query.Where(\"tenant_id = ?\",tenantID)") }
+	if spec.TenantScoped {
+		b.WriteString(";tenantID,err:=trustedTenant(ctx);if err!=nil{return nil,err};query=query.Where(\"tenant_id = ?\",tenantID)")
+	}
 	b.WriteString(";return query,nil}\n")
 	fmt.Fprintf(b, "func(repository *%sRepository)Create(ctx context.Context,value *domain.%s)error{if value==nil{return errors.New(\"domain persistence: value is required\")}", entity, entity)
-	if spec.TenantScoped { b.WriteString(";tenantID,err:=trustedTenant(ctx);if err!=nil{return err};value.TenantID=tenantID") }
+	if spec.TenantScoped {
+		b.WriteString(";tenantID,err:=trustedTenant(ctx);if err!=nil{return err};value.TenantID=tenantID")
+	}
 	b.WriteString(";if value.Version==0{value.Version=1};now:=time.Now().UTC();if value.CreatedAt.IsZero(){value.CreatedAt=now};value.UpdatedAt=now;")
 	fmt.Fprintf(b, "record:=%sRecordFromDomain(*value);if err:=repository.database.WithContext(ctx).Create(&record).Error;err!=nil{return err};*value=record.Domain();return nil}\n", lowerFirst(entity))
 	fmt.Fprintf(b, "func(repository *%sRepository)Get(ctx context.Context,id string)(domain.%s,error){query,err:=repository.scoped(ctx);if err!=nil{return domain.%s{},err};var record %s;if err:=query.Where(\"id = ?\",id).First(&record).Error;err!=nil{if errors.Is(err,gorm.ErrRecordNotFound){return domain.%s{},ports.ErrNotFound};return domain.%s{},err};return record.Domain(),nil}\n", entity, entity, entity, record, entity, entity)
@@ -180,7 +188,9 @@ func writePolicyRepository(b *strings.Builder, spec Spec, object ObjectSpec) {
 	b.WriteString(entity)
 	b.WriteString(",0,len(rows));for _,row:=range rows{result=append(result,row.Domain())};return result,nil}\n")
 	fmt.Fprintf(b, "func(repository *%sRepository)Update(ctx context.Context,value *domain.%s,expected uint64)error{if value==nil||value.ID==\"\"{return errors.New(\"domain persistence: update value/id is required\")};query,err:=repository.scoped(ctx);if err!=nil{return err};updates:=map[string]any{\"version\":gorm.Expr(\"version + 1\"),\"updated_at\":time.Now().UTC(),", entity, entity)
-	for _, current := range object.Fields { fmt.Fprintf(b, "%q:value.%s,", current.Column, fieldGoName(current)) }
+	for _, current := range object.Fields {
+		fmt.Fprintf(b, "%q:value.%s,", current.Column, fieldGoName(current))
+	}
 	fmt.Fprintf(b, "};result:=query.Model(&%s{}).Where(\"id = ? AND version = ?\",value.ID,expected).Updates(updates);if result.Error!=nil{return result.Error};if result.RowsAffected!=1{return ports.ErrConflict};return nil}\n", record)
 	fmt.Fprintf(b, "func(repository *%sRepository)Delete(ctx context.Context,id string,expected uint64)error{query,err:=repository.scoped(ctx);if err!=nil{return err};result:=query.Where(\"id = ? AND version = ?\",id,expected).Delete(&%s{});if result.Error!=nil{return result.Error};if result.RowsAffected!=1{return ports.ErrConflict};return nil}\n", entity, record)
 }
@@ -192,7 +202,9 @@ func policyScopeColumns(object ObjectSpec) (string, string) {
 		case "site_id":
 			site = field.Column
 		case "created_by", "owner_id":
-			if owner == "" { owner = field.Column }
+			if owner == "" {
+				owner = field.Column
+			}
 		}
 	}
 	return site, owner
@@ -202,7 +214,9 @@ func multiPolicyRESTTemplate(spec Spec, packageImport string) string {
 	var b strings.Builder
 	b.WriteString(generatedDomainMarker + "\n\npackage rest\n\n")
 	b.WriteString("import(\n\t\"encoding/json\"\n\t\"errors\"\n\t\"net/http\"\n\t\"strconv\"\n")
-	if multiSpecNeedsTime(spec) { b.WriteString("\t\"time\"\n") }
+	if multiSpecNeedsTime(spec) {
+		b.WriteString("\t\"time\"\n")
+	}
 	fmt.Fprintf(&b, "\tapplication %q\n\tports %q\n\tpolicy \"yunka.io/framework/policy\"\n)\n", packageImport+"/application", packageImport+"/ports")
 	b.WriteString("type Middleware func(http.Handler)http.Handler\nfunc Register(mux *http.ServeMux,service application.Service,middleware ...Middleware){wrap:=func(handler http.Handler)http.Handler{for index:=len(middleware)-1;index>=0;index--{if middleware[index]!=nil{handler=middleware[index](handler)}};return handler};\n")
 	for _, object := range spec.Objects {
@@ -211,7 +225,9 @@ func multiPolicyRESTTemplate(spec Spec, packageImport string) string {
 		fmt.Fprintf(&b, "mux.Handle(\"POST %s\",wrap(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){create%s(w,r,service)})));mux.Handle(\"GET %s\",wrap(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){list%s(w,r,service)})));mux.Handle(\"GET %s/{id}\",wrap(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){get%s(w,r,service)})));mux.Handle(\"PUT %s/{id}\",wrap(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){update%s(w,r,service)})));mux.Handle(\"DELETE %s/{id}\",wrap(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){delete%s(w,r,service)})));\n", path, entity, path, entity, path, entity, path, entity, path, entity)
 	}
 	b.WriteString("}\n")
-	for _, object := range spec.Objects { writeMultiRESTObject(&b, object) }
+	for _, object := range spec.Objects {
+		writeMultiRESTObject(&b, object)
+	}
 	b.WriteString("func writeJSON(w http.ResponseWriter,value any,err error){if err!=nil{writeError(w,err);return};w.Header().Set(\"Content-Type\",\"application/json\");_=json.NewEncoder(w).Encode(value)}\nfunc writeError(w http.ResponseWriter,err error){status:=http.StatusBadRequest;switch{case errors.Is(err,policy.ErrUnauthorized):status=http.StatusUnauthorized;case errors.Is(err,policy.ErrForbidden):status=http.StatusForbidden;case errors.Is(err,ports.ErrNotFound):status=http.StatusNotFound;case errors.Is(err,ports.ErrConflict):status=http.StatusConflict};http.Error(w,http.StatusText(status),status)}\n")
 	return b.String()
 }
@@ -221,11 +237,15 @@ func multiPolicyGRPCBridgeTemplate(spec Spec, packageImport string) string {
 	var b strings.Builder
 	b.WriteString(generatedDomainMarker + "\n\npackage rpc\n\n")
 	b.WriteString("import(\n\t\"context\"\n\t\"errors\"\n")
-	if multiSpecNeedsTime(spec) { b.WriteString("\t\"time\"\n") }
+	if multiSpecNeedsTime(spec) {
+		b.WriteString("\t\"time\"\n")
+	}
 	b.WriteString("\tgrpc \"google.golang.org/grpc\"\n\t\"google.golang.org/grpc/codes\"\n\t\"google.golang.org/grpc/status\"\n\t\"google.golang.org/protobuf/types/known/timestamppb\"\n")
 	fmt.Fprintf(&b, "\tapplication %q\n\tdomain %q\n\tports %q\n\tpb %q\n\tpolicy \"yunka.io/framework/policy\"\n)\n", packageImport+"/application", packageImport+"/domain", packageImport+"/ports", packageImport+"/transport/rpc/pb")
 	fmt.Fprintf(&b, "type %s struct{pb.Unimplemented%sServer;service application.Service}\nfunc Register(registrar grpc.ServiceRegistrar,service application.Service){pb.Register%sServer(registrar,&%s{service:service})}\n", service, exportedIdentifier(spec.Domain)+"Service", exportedIdentifier(spec.Domain)+"Service", service)
-	for _, object := range spec.Objects { writePolicyGRPCMethods(&b, spec, object, service) }
+	for _, object := range spec.Objects {
+		writePolicyGRPCMethods(&b, spec, object, service)
+	}
 	b.WriteString("func rpcError(err error)error{switch{case err==nil:return nil;case errors.Is(err,policy.ErrUnauthorized):return status.Error(codes.Unauthenticated,\"unauthenticated\");case errors.Is(err,policy.ErrForbidden):return status.Error(codes.PermissionDenied,\"permission denied\");case errors.Is(err,ports.ErrNotFound):return status.Error(codes.NotFound,\"not found\");case errors.Is(err,ports.ErrConflict):return status.Error(codes.Aborted,\"version conflict\");default:return err}}\n")
 	return b.String()
 }
@@ -234,20 +254,30 @@ func writePolicyGRPCMethods(b *strings.Builder, spec Spec, object ObjectSpec, se
 	entity := objectGoName(object)
 	plural := exportedIdentifier(pluralize(object.Name))
 	fmt.Fprintf(b, "func(server *%s)Create%s(ctx context.Context,request *pb.Create%sRequest)(*pb.%s,error){output,err:=server.service.Create%s(ctx,application.Create%sInput{", service, entity, entity, entity, entity, entity)
-	for _, field := range object.Fields { fmt.Fprintf(b, "%s:%s,", fieldGoName(field), multiProtoRequestExpr("request", field)) }
+	for _, field := range object.Fields {
+		fmt.Fprintf(b, "%s:%s,", fieldGoName(field), multiProtoRequestExpr("request", field))
+	}
 	fmt.Fprintf(b, "});if err!=nil{return nil,rpcError(err)};return %sToProto(output.Value),nil}\n", lowerFirst(entity))
 	fmt.Fprintf(b, "func(server *%s)Get%s(ctx context.Context,request *pb.Get%sRequest)(*pb.%s,error){output,err:=server.service.Get%s(ctx,application.Get%sInput{ID:request.GetId()});if err!=nil{return nil,rpcError(err)};return %sToProto(output.Value),nil}\n", service, entity, entity, entity, entity, entity, lowerFirst(entity))
 	fmt.Fprintf(b, "func(server *%s)List%s(ctx context.Context,request *pb.List%sRequest)(*pb.List%sResponse,error){output,err:=server.service.List%s(ctx,application.List%sInput{Limit:int(request.GetLimit()),Offset:int(request.GetOffset())});if err!=nil{return nil,rpcError(err)};response:=&pb.List%sResponse{Items:make([]*pb.%s,0,len(output.Items))};for _,item:=range output.Items{response.Items=append(response.Items,%sToProto(item))};return response,nil}\n", service, plural, plural, plural, plural, plural, plural, entity, lowerFirst(entity))
 	fmt.Fprintf(b, "func(server *%s)Update%s(ctx context.Context,request *pb.Update%sRequest)(*pb.%s,error){output,err:=server.service.Update%s(ctx,application.Update%sInput{ID:request.GetId(),Version:request.GetVersion(),", service, entity, entity, entity, entity, entity)
-	for _, field := range object.Fields { fmt.Fprintf(b, "%s:%s,", fieldGoName(field), multiProtoRequestExpr("request", field)) }
+	for _, field := range object.Fields {
+		fmt.Fprintf(b, "%s:%s,", fieldGoName(field), multiProtoRequestExpr("request", field))
+	}
 	fmt.Fprintf(b, "});if err!=nil{return nil,rpcError(err)};return %sToProto(output.Value),nil}\n", lowerFirst(entity))
 	fmt.Fprintf(b, "func(server *%s)Delete%s(ctx context.Context,request *pb.Delete%sRequest)(*pb.Delete%sResponse,error){if err:=server.service.Delete%s(ctx,application.Delete%sInput{ID:request.GetId(),Version:request.GetVersion()});err!=nil{return nil,rpcError(err)};return &pb.Delete%sResponse{},nil}\n", service, entity, entity, entity, entity, entity, entity)
 	fmt.Fprintf(b, "func %sToProto(value domain.%s)*pb.%s{result:=&pb.%s{Id:value.ID,Version:value.Version,CreatedAt:timestamppb.New(value.CreatedAt),UpdatedAt:timestamppb.New(value.UpdatedAt),", lowerFirst(entity), entity, entity, entity)
-	if spec.TenantScoped { b.WriteString("TenantId:value.TenantID,") }
+	if spec.TenantScoped {
+		b.WriteString("TenantId:value.TenantID,")
+	}
 	for _, field := range object.Fields {
 		goField := fieldGoName(field)
 		protoField := exportedIdentifier(field.Name)
-		if field.Type == "time" { fmt.Fprintf(b, "%s:timestamppb.New(value.%s),", protoField, goField) } else { fmt.Fprintf(b, "%s:value.%s,", protoField, goField) }
+		if field.Type == "time" {
+			fmt.Fprintf(b, "%s:timestamppb.New(value.%s),", protoField, goField)
+		} else {
+			fmt.Fprintf(b, "%s:value.%s,", protoField, goField)
+		}
 	}
 	b.WriteString("};return result}\n")
 }
@@ -255,14 +285,26 @@ func writePolicyGRPCMethods(b *strings.Builder, spec Spec, object ObjectSpec, se
 func multiPolicyWireTemplate(spec Spec, packageImport string) string {
 	var b strings.Builder
 	b.WriteString(generatedDomainMarker + "\n\npackage wire\n\nimport(\n\t\"context\"\n\t\"fmt\"\n")
-	if spec.REST.Enabled { b.WriteString("\t\"net/http\"\n") }
-	if spec.RPC.Enabled { b.WriteString("\tgrpc \"google.golang.org/grpc\"\n") }
+	if spec.REST.Enabled {
+		b.WriteString("\t\"net/http\"\n")
+	}
+	if spec.RPC.Enabled {
+		b.WriteString("\tgrpc \"google.golang.org/grpc\"\n")
+	}
 	b.WriteString("\t\"gorm.io/gorm\"\n")
 	fmt.Fprintf(&b, "\tapplication %q\n\tpersistence %q\n", packageImport+"/application", packageImport+"/infrastructure/persistence")
-	if spec.REST.Enabled { fmt.Fprintf(&b, "\trest %q\n", packageImport+"/transport/rest") }
-	if spec.RPC.Enabled { fmt.Fprintf(&b, "\trpc %q\n", packageImport+"/transport/rpc") }
+	if spec.REST.Enabled {
+		fmt.Fprintf(&b, "\trest %q\n", packageImport+"/transport/rest")
+	}
+	if spec.RPC.Enabled {
+		fmt.Fprintf(&b, "\trpc %q\n", packageImport+"/transport/rpc")
+	}
 	b.WriteString(")\ntype Bundle struct{Service application.Service}\nfunc Build(database *gorm.DB,options ...application.Option)(Bundle,error){if err:=persistence.AutoMigrate(context.Background(),database);err!=nil{return Bundle{},fmt.Errorf(\"domain wire: auto migrate: %w\",err)};scopes,err:=persistence.NewScopeFactory(database);if err!=nil{return Bundle{},err};service,err:=application.NewService(scopes,options...);if err!=nil{return Bundle{},err};return Bundle{Service:service},nil}\n")
-	if spec.REST.Enabled { b.WriteString("func(bundle Bundle)RegisterREST(mux *http.ServeMux,middleware ...rest.Middleware){rest.Register(mux,bundle.Service,middleware...)}\n") }
-	if spec.RPC.Enabled { b.WriteString("func(bundle Bundle)RegisterGRPC(registrar grpc.ServiceRegistrar){rpc.Register(registrar,bundle.Service)}\n") }
+	if spec.REST.Enabled {
+		b.WriteString("func(bundle Bundle)RegisterREST(mux *http.ServeMux,middleware ...rest.Middleware){rest.Register(mux,bundle.Service,middleware...)}\n")
+	}
+	if spec.RPC.Enabled {
+		b.WriteString("func(bundle Bundle)RegisterGRPC(registrar grpc.ServiceRegistrar){rpc.Register(registrar,bundle.Service)}\n")
+	}
 	return b.String()
 }

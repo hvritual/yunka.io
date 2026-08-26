@@ -204,7 +204,7 @@ func renderComplete(spec Spec, packageImport, projectRoot string) (map[string]st
 	if err := validateSpec(spec); err != nil {
 		return nil, err
 	}
-	files := renderMultiStructural(spec, packageImport)
+	files := renderMultiPolicyStructural(spec, packageImport)
 	if spec.RPC.Enabled {
 		if err := attachPinnedRPCGenerated(files, projectRoot); err != nil {
 			return nil, err
