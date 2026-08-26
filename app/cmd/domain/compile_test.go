@@ -43,6 +43,7 @@ import "time"
 
 type CoffeeMachinePO struct {
 	Serial string `+"`gorm:\"column:serial;type:varchar(64)\"`"+`
+	SiteID string `+"`gorm:\"column:site_id;type:varchar(64)\"`"+`
 	Enabled bool
 	LastSeen time.Time `+"`gorm:\"column:last_seen\"`"+`
 }
@@ -50,6 +51,10 @@ type CoffeeMachinePO struct {
 	writeTestPO(t, persistence, "device_group.go", `package persistence
 
 type DeviceGroupPO struct { Name string }
+`)
+	writeTestPO(t, persistence, "api_token.go", `package persistence
+
+type APITokenPO struct { TokenHash string }
 `)
 	t.Setenv("YUNKA_DOMAIN_TOOL_DIR", filepath.Join(repositoryRoot, ".yunka", "bin"))
 	if err := Generate(Options{Name: "device", Root: filepath.Join(root, "internal")}); err != nil {

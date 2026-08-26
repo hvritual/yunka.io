@@ -124,6 +124,7 @@ func scanPOFile(path, filename string, priorByName map[string]ObjectSpec) (Objec
 	sort.Strings(reservedNames)
 	return ObjectSpec{
 		Name:                 objectName,
+		GoName:               foundName,
 		File:                 expectedFile,
 		Fields:               fields,
 		POEmbedsBase:         embedsBase,
@@ -178,7 +179,7 @@ func scanPOFields(structure *ast.StructType, objectType string, prior ObjectSpec
 			if column == "" {
 				column = fieldName
 			}
-			field := Field{Name: fieldName, Type: kind, Column: column, POOwned: true}
+			field := Field{Name: fieldName, GoName: name.Name, Type: kind, Column: column, POOwned: true}
 			if previous, ok := priorByName[fieldName]; ok {
 				field.ProtoNumber = previous.ProtoNumber
 			}
@@ -340,7 +341,8 @@ func poContractEqual(left, right []ObjectSpec) bool {
 			return false
 		}
 		for j := range left[i].Fields {
-			if left[i].Fields[j] != right[i].Fields[j] {
+			l, r := left[i].Fields[j], right[i].Fields[j]
+			if l.Name != r.Name || l.Type != r.Type || l.Column != r.Column || l.ProtoNumber != r.ProtoNumber || l.POOwned != r.POOwned {
 				return false
 			}
 		}
