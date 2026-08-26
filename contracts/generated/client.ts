@@ -229,6 +229,8 @@ export interface Io_Yunka_Gateway_Rpc_RoleModuleBtn {
   roleUUID?: string;
   moduleBtnUUID?: readonly string[];
   deleteModuleBtnUUID?: readonly string[];
+  permissions?: readonly string[];
+  deletePermissions?: readonly string[];
 }
 
 export interface Io_Yunka_Gateway_Rpc_RuntimeApi {
@@ -248,6 +250,7 @@ export interface Io_Yunka_Gateway_Rpc_RuntimeApi {
 export interface Io_Yunka_Gateway_Rpc_RuntimeApiModuleButton {
   apiUUID?: string;
   moduleBtnUUID?: string;
+  permissions?: readonly string[];
 }
 
 export interface Io_Yunka_Gateway_Rpc_RuntimeAuthorization {

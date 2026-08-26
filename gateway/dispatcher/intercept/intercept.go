@@ -1,19 +1,9 @@
 package intercept
 
-import (
-	"context"
+import "yunka.io/gateway/rpc/meta"
 
-	"yunka.io/gateway/rpc/meta"
-)
-
-/**
-* @Description: TODO
-* @date 2019-01-15
-* @version V1.0
- */
-
+// Intercept is the typed Gateway control-plane service. Authorization is not a
+// business-service method: every execution boundary delegates to authz.Authorizer.
 type Intercept interface {
-	VerifyRoleApiRight(context.Context, string, string, []string) ([]byte, bool)
-
 	meta.GatewayServiceServer
 }

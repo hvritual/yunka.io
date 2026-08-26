@@ -178,13 +178,18 @@ func (x *OperateRoleResponse) GetMsg() string {
 }
 
 type RoleModuleBtn struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	OrgUUID             string                 `protobuf:"bytes,1,opt,name=orgUUID,proto3" json:"orgUUID,omitempty"`
-	RoleUUID            string                 `protobuf:"bytes,2,opt,name=roleUUID,proto3" json:"roleUUID,omitempty"`
-	ModuleBtnUUID       []string               `protobuf:"bytes,3,rep,name=moduleBtnUUID,proto3" json:"moduleBtnUUID,omitempty"`
-	DeleteModuleBtnUUID []string               `protobuf:"bytes,4,rep,name=deleteModuleBtnUUID,proto3" json:"deleteModuleBtnUUID,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	OrgUUID  string                 `protobuf:"bytes,1,opt,name=orgUUID,proto3" json:"orgUUID,omitempty"`
+	RoleUUID string                 `protobuf:"bytes,2,opt,name=roleUUID,proto3" json:"roleUUID,omitempty"`
+	// Deprecated: Marked as deprecated in gateway/gateway.proto.
+	ModuleBtnUUID []string `protobuf:"bytes,3,rep,name=moduleBtnUUID,proto3" json:"moduleBtnUUID,omitempty"`
+	// Deprecated: Marked as deprecated in gateway/gateway.proto.
+	DeleteModuleBtnUUID []string `protobuf:"bytes,4,rep,name=deleteModuleBtnUUID,proto3" json:"deleteModuleBtnUUID,omitempty"`
+	// C8.3: roles own permissions, never buttons.
+	Permissions       []string `protobuf:"bytes,5,rep,name=permissions,proto3" json:"permissions,omitempty"`
+	DeletePermissions []string `protobuf:"bytes,6,rep,name=deletePermissions,proto3" json:"deletePermissions,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *RoleModuleBtn) Reset() {
@@ -231,6 +236,7 @@ func (x *RoleModuleBtn) GetRoleUUID() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in gateway/gateway.proto.
 func (x *RoleModuleBtn) GetModuleBtnUUID() []string {
 	if x != nil {
 		return x.ModuleBtnUUID
@@ -238,9 +244,24 @@ func (x *RoleModuleBtn) GetModuleBtnUUID() []string {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in gateway/gateway.proto.
 func (x *RoleModuleBtn) GetDeleteModuleBtnUUID() []string {
 	if x != nil {
 		return x.DeleteModuleBtnUUID
+	}
+	return nil
+}
+
+func (x *RoleModuleBtn) GetPermissions() []string {
+	if x != nil {
+		return x.Permissions
+	}
+	return nil
+}
+
+func (x *RoleModuleBtn) GetDeletePermissions() []string {
+	if x != nil {
+		return x.DeletePermissions
 	}
 	return nil
 }
@@ -249,6 +270,9 @@ type RuntimeApiModuleButton struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ApiUUID       string                 `protobuf:"bytes,1,opt,name=apiUUID,proto3" json:"apiUUID,omitempty"`
 	ModuleBtnUUID string                 `protobuf:"bytes,2,opt,name=moduleBtnUUID,proto3" json:"moduleBtnUUID,omitempty"`
+	// Button visibility references the same permission vocabulary as API
+	// authorization. It is not itself an authorization grant.
+	Permissions   []string `protobuf:"bytes,3,rep,name=permissions,proto3" json:"permissions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -295,6 +319,13 @@ func (x *RuntimeApiModuleButton) GetModuleBtnUUID() string {
 		return x.ModuleBtnUUID
 	}
 	return ""
+}
+
+func (x *RuntimeApiModuleButton) GetPermissions() []string {
+	if x != nil {
+		return x.Permissions
+	}
+	return nil
 }
 
 type BatchRuntimeApiRequest struct {
@@ -406,15 +437,18 @@ const file_gateway_gateway_proto_rawDesc = "" +
 	"\x03uri\x18\x02 \x01(\tR\x03uri\"_\n" +
 	"\x13OperateRoleResponse\x126\n" +
 	"\x04code\x18\x01 \x01(\x0e2\".io.yunka.gateway.rpc.ResponseCodeR\x04code\x12\x10\n" +
-	"\x03msg\x18\x02 \x01(\tR\x03msg\"\x9d\x01\n" +
+	"\x03msg\x18\x02 \x01(\tR\x03msg\"\xf5\x01\n" +
 	"\rRoleModuleBtn\x12\x18\n" +
 	"\aorgUUID\x18\x01 \x01(\tR\aorgUUID\x12\x1a\n" +
-	"\broleUUID\x18\x02 \x01(\tR\broleUUID\x12$\n" +
-	"\rmoduleBtnUUID\x18\x03 \x03(\tR\rmoduleBtnUUID\x120\n" +
-	"\x13deleteModuleBtnUUID\x18\x04 \x03(\tR\x13deleteModuleBtnUUID\"X\n" +
+	"\broleUUID\x18\x02 \x01(\tR\broleUUID\x12(\n" +
+	"\rmoduleBtnUUID\x18\x03 \x03(\tB\x02\x18\x01R\rmoduleBtnUUID\x124\n" +
+	"\x13deleteModuleBtnUUID\x18\x04 \x03(\tB\x02\x18\x01R\x13deleteModuleBtnUUID\x12 \n" +
+	"\vpermissions\x18\x05 \x03(\tR\vpermissions\x12,\n" +
+	"\x11deletePermissions\x18\x06 \x03(\tR\x11deletePermissions\"z\n" +
 	"\x16RuntimeApiModuleButton\x12\x18\n" +
 	"\aapiUUID\x18\x01 \x01(\tR\aapiUUID\x12$\n" +
-	"\rmoduleBtnUUID\x18\x02 \x01(\tR\rmoduleBtnUUID\"\x96\x01\n" +
+	"\rmoduleBtnUUID\x18\x02 \x01(\tR\rmoduleBtnUUID\x12 \n" +
+	"\vpermissions\x18\x03 \x03(\tR\vpermissions\"\x96\x01\n" +
 	"\x16BatchRuntimeApiRequest\x124\n" +
 	"\x04apis\x18\x01 \x03(\v2 .io.yunka.gateway.rpc.RuntimeApiR\x04apis\x12F\n" +
 	"\abuttons\x18\x02 \x03(\v2,.io.yunka.gateway.rpc.RuntimeApiModuleButtonR\abuttons\"?\n" +

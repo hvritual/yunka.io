@@ -9,7 +9,6 @@ replace github.com/go-kit/kit v0.10.0 => ../compat/go-kit-kit-log
 require (
 	github.com/aliyun/aliyun-log-go-sdk v0.1.127
 	github.com/buger/jsonparser v1.6.1
-	github.com/didi/gendry v1.6.0
 	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/valyala/fasthttp v1.73.0

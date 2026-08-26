@@ -830,6 +830,22 @@
           "kind": "scalar",
           "type": "string",
           "repeated": true
+        },
+        {
+          "name": "permissions",
+          "jsonName": "permissions",
+          "number": 5,
+          "kind": "scalar",
+          "type": "string",
+          "repeated": true
+        },
+        {
+          "name": "deletePermissions",
+          "jsonName": "deletePermissions",
+          "number": 6,
+          "kind": "scalar",
+          "type": "string",
+          "repeated": true
         }
       ]
     },
@@ -934,6 +950,14 @@
           "number": 2,
           "kind": "scalar",
           "type": "string"
+        },
+        {
+          "name": "permissions",
+          "jsonName": "permissions",
+          "number": 3,
+          "kind": "scalar",
+          "type": "string",
+          "repeated": true
         }
       ]
     },

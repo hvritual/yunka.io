@@ -17,16 +17,49 @@ rpc GetMachine(GetMachineRequest) returns (MachineDTO);
 
 `operation` and permission keys are stable business identities. They must not be derived from HTTP paths, API UUIDs, button UUIDs, or database primary keys.
 
-## Ownership
+## C8.3 ownership model
 
-- PB/API Operation references Permission.
-- UI Button/Menu references Permission only for visibility/navigation.
-- Tenant Role owns Permission grants.
-- Gateway Authorizer is the backend enforcement point.
-- Resource/data scope is a separate evaluator seam; PB must not contain SQL predicates.
+The authorization graph is deliberately small:
 
-The historical `AuthBit` and API/Button join remain compatibility inputs during C8.3 migration only. New authorization code must use typed policies and Permission keys.
+```text
+PB Method / Operation ──requires──> Permission <──granted── Tenant Role
+                                      ^
+                                      │ represents
+                                  UI Button
+```
 
-## C8.3.2 execution boundary
+- PB/API Operation references Permission through `RuntimeAuthorization.permissions`.
+- UI Button references Permission through `RuntimeApiModuleButton.permissions` only for visibility/navigation and compatibility translation.
+- Tenant Role owns Permission grants in `role_permission`.
+- Button metadata is stored in `button_permission`.
+- Gateway `Authorizer` is the only backend enforcement point.
+- Resource/data scope remains a separate evaluator seam; PB must not contain SQL predicates.
+
+There is intentionally no Role -> Button grant and no API -> Button authorization relationship.
+
+## Compatibility migration
+
+C8.3 preserves wire compatibility without preserving the old authorization model:
+
+1. `RoleModuleBtn.moduleBtnUUID` and `deleteModuleBtnUUID` keep their historical field numbers but are deprecated.
+2. New clients use `permissions` and `deletePermissions` directly.
+3. Old Button-based requests are translated at the Gateway control-plane boundary by resolving Button -> Permission and then mutating Role -> Permission.
+4. Existing `role_module_button` rows are read only for idempotent backfill after Button -> Permission metadata becomes available.
+5. C8.3 does not AutoMigrate, write, or authorize through `role_module_button` or `api_module_button`.
+6. Deleting an API never revokes role permissions.
+
+This is an expand-and-cutover migration: stored legacy rows may remain until a later data-retention wave, but they are no longer part of the live authorization path.
+
+## Execution boundary
 
 Typed authorization is enforced immediately before the business executor. `NewAuthorizedHandleMiddleware` wraps the configured Gateway executor with `bridge.AuthorizedExecutor`, so every composite child operation is authorized independently. Direct gRPC servers use `grpc.NewAuthorizedServer` (or `AuthorizedUnaryServerInterceptor`) with a `gateway/authz.PolicyResolver`; HTTP and gRPC therefore share the same `Authorizer` contract and `Principal` semantics. Protected typed operations fail closed if a Gateway handle is constructed without an Authorizer.
+
+The legacy `EnterpriseRoleMiddleware` is retained only as a source-compatible pass-through chain element. It must not grant or deny access. `intercept.Intercept` similarly exposes only the typed `GatewayServiceServer`; authorization is not a business service method.
+
+## Framework composition
+
+`role.NewAuthorizerWithDatabase` and `role.NewAuthorizerFromBuildContext` compose the DB-backed permission checker into the Gateway `RBACAuthorizer`. Applications provide the App-owned database capability; they do not construct SQL joins, button relationships, or permission matching logic themselves.
+
+## C8.3 completion gate
+
+The migration is complete only when deterministic protobuf/contract generation produces no uncommitted drift, architecture guards prohibit reintroducing API -> Button -> Role authorization, targeted Gateway tests and race tests pass, and the MySQL 8.4 role-permission integration succeeds. The repository's standard pull-request verification remains the final merge gate.
