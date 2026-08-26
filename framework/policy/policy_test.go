@@ -17,7 +17,7 @@ type resource struct {
 func TestContextResolverAndAnyScope(t *testing.T) {
 	principal := identity.Principal{TenantID: "tenant-a", UserID: "user-a", Authenticated: true}
 	ctx := WithGrants(context.Background(), map[string]Grant{
-		"device.read": {Allowed: true, Sites: []string{"site-b", "site-a", "site-a"}, Self: true},
+		"device.read": {Allowed: true, SiteIDs: []string{"site-b", "site-a", "site-a"}, Self: true},
 	})
 	rule := Permission("device.read", Any(
 		Site(func(value resource) string { return value.SiteID }),
