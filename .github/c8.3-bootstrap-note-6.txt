@@ -1,0 +1,1 @@
+Control branch bootstrap markers only; runner must discard these control-only files from all product commits.
