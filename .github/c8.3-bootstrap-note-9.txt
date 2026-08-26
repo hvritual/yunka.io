@@ -1,0 +1,1 @@
+No additional bootstrap markers should be created. All implementation logic belongs in the runner script after clean checkout of main.
