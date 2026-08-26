@@ -41,6 +41,8 @@ export type Io_Yunka_Gateway_Rpc_AuthBit = "AuthNot" | "AuthToken" | "AuthRole" 
 
 export type Io_Yunka_Gateway_Rpc_CallType = "CallReserve" | "HttpCall" | "RpcCall";
 
+export type Io_Yunka_Gateway_Rpc_PermissionMode = "PermissionAll" | "PermissionAny";
+
 export type Io_Yunka_Gateway_Rpc_ResponseCode = "Not" | "Response";
 
 export interface Api {
@@ -240,11 +242,20 @@ export interface Io_Yunka_Gateway_Rpc_RuntimeApi {
   srvApi?: string;
   isRedirect?: boolean;
   composes?: readonly Io_Yunka_Gateway_Rpc_RuntimeApi[];
+  authorization?: Io_Yunka_Gateway_Rpc_RuntimeAuthorization;
 }
 
 export interface Io_Yunka_Gateway_Rpc_RuntimeApiModuleButton {
   apiUUID?: string;
   moduleBtnUUID?: string;
+}
+
+export interface Io_Yunka_Gateway_Rpc_RuntimeAuthorization {
+  operationId?: string;
+  permissions?: readonly string[];
+  mode?: Io_Yunka_Gateway_Rpc_PermissionMode;
+  tenantRequired?: boolean;
+  authentication?: readonly string[];
 }
 
 export interface Io_Yunka_Gateway_Rpc_ServerNode {

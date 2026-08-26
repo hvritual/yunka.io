@@ -152,6 +152,7 @@ func ManifestFromDescriptorSet(data []byte, roots []string) (Manifest, error) {
 					ServerStreaming: method.ServerStreaming,
 					HTTP:            bindings,
 					Directives:      directives,
+					Authorization:   authorizationFromDirectives(directives),
 				})
 			}
 			manifest.Services = append(manifest.Services, contractService)

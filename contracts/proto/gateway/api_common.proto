@@ -17,6 +17,19 @@ enum AuthBit {
     AuthApi = 16;
 }
 
+enum PermissionMode {
+    PermissionAll = 0;
+    PermissionAny = 1;
+}
+
+message RuntimeAuthorization {
+    string operationId = 1;
+    repeated string permissions = 2;
+    PermissionMode mode = 3;
+    bool tenantRequired = 4;
+    repeated string authentication = 5;
+}
+
 message RuntimeApi {
     string uuid = 1;
     string srvName = 2;
@@ -28,6 +41,7 @@ message RuntimeApi {
     string srvApi = 8;
     bool isRedirect = 9;
     repeated RuntimeApi composes = 10;
+    RuntimeAuthorization authorization = 11;
 }
 
 message CircuitCfg {

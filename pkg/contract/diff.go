@@ -215,6 +215,13 @@ func compareService(oldService, newService Service) []Change {
 		if directivesKey(oldMethod.Directives) != directivesKey(newMethod.Directives) {
 			changes = append(changes, warning("method_directives_changed", path, "yunka method directives changed; review runtime policy impact"))
 		}
+		if authorizationKey(oldMethod.Authorization) != authorizationKey(newMethod.Authorization) {
+			if oldMethod.Authorization != nil && newMethod.Authorization != nil && oldMethod.Authorization.OperationID != newMethod.Authorization.OperationID {
+				changes = append(changes, breaking("operation_id_changed", path, "stable authorization operation id changed"))
+			} else {
+				changes = append(changes, warning("authorization_policy_changed", path, "authorization policy changed; review permission impact"))
+			}
+		}
 		changes = append(changes, compareHTTPBindings(path, oldMethod.HTTP, newMethod.HTTP)...)
 	}
 	for name := range newMethods {
@@ -307,4 +314,16 @@ func changeSeverityRank(severity ChangeSeverity) int {
 	default:
 		return 2
 	}
+}
+
+func authorizationKey(policy *AuthorizationPolicy) string {
+	if policy == nil {
+		return ""
+	}
+	copy := *policy
+	copy.Permissions = append([]string(nil), policy.Permissions...)
+	copy.Authentication = append([]string(nil), policy.Authentication...)
+	sort.Strings(copy.Permissions)
+	sort.Strings(copy.Authentication)
+	return strings.Join([]string{copy.OperationID, copy.PermissionMode, fmt.Sprint(copy.TenantRequired), strings.Join(copy.Permissions, ","), strings.Join(copy.Authentication, ",")}, "|")
 }

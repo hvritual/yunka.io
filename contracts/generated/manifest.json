@@ -907,6 +907,13 @@
           "kind": "message",
           "type": "io.yunka.gateway.rpc.RuntimeApi",
           "repeated": true
+        },
+        {
+          "name": "authorization",
+          "jsonName": "authorization",
+          "number": 11,
+          "kind": "message",
+          "type": "io.yunka.gateway.rpc.RuntimeAuthorization"
         }
       ]
     },
@@ -927,6 +934,49 @@
           "number": 2,
           "kind": "scalar",
           "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "RuntimeAuthorization",
+      "fullName": "io.yunka.gateway.rpc.RuntimeAuthorization",
+      "fields": [
+        {
+          "name": "operationId",
+          "jsonName": "operationId",
+          "number": 1,
+          "kind": "scalar",
+          "type": "string"
+        },
+        {
+          "name": "permissions",
+          "jsonName": "permissions",
+          "number": 2,
+          "kind": "scalar",
+          "type": "string",
+          "repeated": true
+        },
+        {
+          "name": "mode",
+          "jsonName": "mode",
+          "number": 3,
+          "kind": "enum",
+          "type": "io.yunka.gateway.rpc.PermissionMode"
+        },
+        {
+          "name": "tenantRequired",
+          "jsonName": "tenantRequired",
+          "number": 4,
+          "kind": "scalar",
+          "type": "bool"
+        },
+        {
+          "name": "authentication",
+          "jsonName": "authentication",
+          "number": 5,
+          "kind": "scalar",
+          "type": "string",
+          "repeated": true
         }
       ]
     },
@@ -1188,6 +1238,20 @@
         {
           "name": "RpcCall",
           "number": 2
+        }
+      ]
+    },
+    {
+      "name": "PermissionMode",
+      "fullName": "io.yunka.gateway.rpc.PermissionMode",
+      "values": [
+        {
+          "name": "PermissionAll",
+          "number": 0
+        },
+        {
+          "name": "PermissionAny",
+          "number": 1
         }
       ]
     },

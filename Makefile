@@ -16,7 +16,7 @@ PYTHON ?= python3
 VULNCHECK ?= $(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
 MODULES := compat/go-kit-kit-log pkg framework gateway app
 
-.PHONY: toolchain-check rpc-tools rpc-toolchain-check rpc-generate rpc-check rpc-compat-check rpc-legacy-check rpc-consumer-check rpc-bridge-check dependency-check architecture-check module-check c7-check test race vet vuln tidy build contract rpc-contract-check contract-check integration verify verify-production
+.PHONY: toolchain-check rpc-tools rpc-toolchain-check rpc-generate rpc-check rpc-compat-check rpc-legacy-check rpc-consumer-check rpc-bridge-check dependency-check architecture-check module-check authz-check c7-check test race vet vuln tidy build contract rpc-contract-check contract-check integration verify verify-production
 
 toolchain-check:
 	@set -eu; \
@@ -109,6 +109,11 @@ module-check: architecture-check
 	@cd app && $(GO) test -count=10 ./cmd/module
 	@cd app && $(GO) run ./cmd module check --root ../framework/modules
 
+authz-check:
+	@cd gateway && $(GO) test -count=20 ./authz
+	@cd gateway && CGO_ENABLED=1 $(GO) test -race -count=3 ./authz
+	@cd pkg && $(GO) test -count=20 ./contract
+
 c7-check: architecture-check
 	@cd framework && $(GO) test -count=20 ./core ./core/request ./platform ./requestscope ./kernel ./core/modulecatalog
 	@cd framework && CGO_ENABLED=1 $(GO) test -race -count=3 ./core ./core/request ./platform ./requestscope ./kernel ./core/modulecatalog
@@ -172,6 +177,6 @@ integration:
 	echo "==> MySQL 8 transactional outbox and request-scope integration"; \
 	(cd framework && $(GO) test -timeout=5m -count=1 -tags=integration ./event/outbox ./requestscope)
 
-verify: toolchain-check dependency-check module-check c7-check rpc-check contract-check rpc-compat-check rpc-legacy-check rpc-consumer-check rpc-bridge-check test race vet vuln build
+verify: toolchain-check dependency-check module-check authz-check c7-check rpc-check contract-check rpc-compat-check rpc-legacy-check rpc-consumer-check rpc-bridge-check test race vet vuln build
 
 verify-production: verify integration

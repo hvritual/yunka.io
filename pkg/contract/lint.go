@@ -75,6 +75,19 @@ func Lint(manifest Manifest) []Diagnostic {
 			if _, ok := messages[method.Response]; !ok && !knownExternalType(method.Response) {
 				diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "unresolved response type " + method.Response})
 			}
+			if policy := method.Authorization; policy != nil {
+				if strings.TrimSpace(policy.OperationID) == "" {
+					diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "authz operationId is required when authz directives are present"})
+				}
+				if policy.PermissionMode != "all" && policy.PermissionMode != "any" {
+					diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "authz permission_mode must be all or any"})
+				}
+				for _, permission := range policy.Permissions {
+					if !validPolicyKey(permission) {
+						diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "invalid permission key " + permission})
+					}
+				}
+			}
 			for _, binding := range method.HTTP {
 				if err := validateHTTPMethod(binding.Method); err != nil {
 					diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: err.Error()})
@@ -126,4 +139,24 @@ func severityRank(severity Severity) int {
 	default:
 		return 2
 	}
+}
+
+func validPolicyKey(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	for i, current := range value {
+		if current >= 'a' && current <= 'z' {
+			continue
+		}
+		if current >= '0' && current <= '9' && i > 0 {
+			continue
+		}
+		if (current == '.' || current == '_' || current == '-' || current == ':') && i > 0 {
+			continue
+		}
+		return false
+	}
+	return true
 }

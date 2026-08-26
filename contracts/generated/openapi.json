@@ -600,6 +600,14 @@
         "type": "object",
         "x-yunka-proto-full-name": "io.yunka.gateway.rpc.OperateRuntimeApiResponse"
       },
+      "io_yunka_gateway_rpc_PermissionMode": {
+        "enum": [
+          "PermissionAll",
+          "PermissionAny"
+        ],
+        "type": "string",
+        "x-yunka-proto-full-name": "io.yunka.gateway.rpc.PermissionMode"
+      },
       "io_yunka_gateway_rpc_ResponseCode": {
         "enum": [
           "Not",
@@ -636,6 +644,9 @@
         "properties": {
           "auth": {
             "$ref": "#/components/schemas/io_yunka_gateway_rpc_AuthBit"
+          },
+          "authorization": {
+            "$ref": "#/components/schemas/io_yunka_gateway_rpc_RuntimeAuthorization"
           },
           "callType": {
             "$ref": "#/components/schemas/io_yunka_gateway_rpc_CallType"
@@ -682,6 +693,33 @@
         },
         "type": "object",
         "x-yunka-proto-full-name": "io.yunka.gateway.rpc.RuntimeApiModuleButton"
+      },
+      "io_yunka_gateway_rpc_RuntimeAuthorization": {
+        "properties": {
+          "authentication": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/io_yunka_gateway_rpc_PermissionMode"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tenantRequired": {
+            "type": "boolean"
+          }
+        },
+        "type": "object",
+        "x-yunka-proto-full-name": "io.yunka.gateway.rpc.RuntimeAuthorization"
       },
       "io_yunka_gateway_rpc_ServerNode": {
         "properties": {

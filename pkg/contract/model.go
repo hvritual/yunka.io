@@ -61,14 +61,23 @@ type Service struct {
 }
 
 type Method struct {
-	Name            string            `json:"name"`
-	FullName        string            `json:"fullName"`
-	Request         string            `json:"request"`
-	Response        string            `json:"response"`
-	ClientStreaming bool              `json:"clientStreaming,omitempty"`
-	ServerStreaming bool              `json:"serverStreaming,omitempty"`
-	HTTP            []HTTPBinding     `json:"http,omitempty"`
-	Directives      map[string]string `json:"directives,omitempty"`
+	Name            string               `json:"name"`
+	FullName        string               `json:"fullName"`
+	Request         string               `json:"request"`
+	Response        string               `json:"response"`
+	ClientStreaming bool                 `json:"clientStreaming,omitempty"`
+	ServerStreaming bool                 `json:"serverStreaming,omitempty"`
+	HTTP            []HTTPBinding        `json:"http,omitempty"`
+	Directives      map[string]string    `json:"directives,omitempty"`
+	Authorization   *AuthorizationPolicy `json:"authorization,omitempty"`
+}
+
+type AuthorizationPolicy struct {
+	OperationID    string   `json:"operationId"`
+	Permissions    []string `json:"permissions,omitempty"`
+	PermissionMode string   `json:"permissionMode,omitempty"`
+	TenantRequired bool     `json:"tenantRequired,omitempty"`
+	Authentication []string `json:"authentication,omitempty"`
 }
 
 type HTTPBinding struct {

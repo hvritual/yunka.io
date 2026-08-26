@@ -125,6 +125,128 @@ func (AuthBit) EnumDescriptor() ([]byte, []int) {
 	return file_gateway_api_common_proto_rawDescGZIP(), []int{1}
 }
 
+type PermissionMode int32
+
+const (
+	PermissionMode_PermissionAll PermissionMode = 0
+	PermissionMode_PermissionAny PermissionMode = 1
+)
+
+// Enum value maps for PermissionMode.
+var (
+	PermissionMode_name = map[int32]string{
+		0: "PermissionAll",
+		1: "PermissionAny",
+	}
+	PermissionMode_value = map[string]int32{
+		"PermissionAll": 0,
+		"PermissionAny": 1,
+	}
+)
+
+func (x PermissionMode) Enum() *PermissionMode {
+	p := new(PermissionMode)
+	*p = x
+	return p
+}
+
+func (x PermissionMode) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PermissionMode) Descriptor() protoreflect.EnumDescriptor {
+	return file_gateway_api_common_proto_enumTypes[2].Descriptor()
+}
+
+func (PermissionMode) Type() protoreflect.EnumType {
+	return &file_gateway_api_common_proto_enumTypes[2]
+}
+
+func (x PermissionMode) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PermissionMode.Descriptor instead.
+func (PermissionMode) EnumDescriptor() ([]byte, []int) {
+	return file_gateway_api_common_proto_rawDescGZIP(), []int{2}
+}
+
+type RuntimeAuthorization struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OperationId    string                 `protobuf:"bytes,1,opt,name=operationId,proto3" json:"operationId,omitempty"`
+	Permissions    []string               `protobuf:"bytes,2,rep,name=permissions,proto3" json:"permissions,omitempty"`
+	Mode           PermissionMode         `protobuf:"varint,3,opt,name=mode,proto3,enum=io.yunka.gateway.rpc.PermissionMode" json:"mode,omitempty"`
+	TenantRequired bool                   `protobuf:"varint,4,opt,name=tenantRequired,proto3" json:"tenantRequired,omitempty"`
+	Authentication []string               `protobuf:"bytes,5,rep,name=authentication,proto3" json:"authentication,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RuntimeAuthorization) Reset() {
+	*x = RuntimeAuthorization{}
+	mi := &file_gateway_api_common_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RuntimeAuthorization) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RuntimeAuthorization) ProtoMessage() {}
+
+func (x *RuntimeAuthorization) ProtoReflect() protoreflect.Message {
+	mi := &file_gateway_api_common_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RuntimeAuthorization.ProtoReflect.Descriptor instead.
+func (*RuntimeAuthorization) Descriptor() ([]byte, []int) {
+	return file_gateway_api_common_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *RuntimeAuthorization) GetOperationId() string {
+	if x != nil {
+		return x.OperationId
+	}
+	return ""
+}
+
+func (x *RuntimeAuthorization) GetPermissions() []string {
+	if x != nil {
+		return x.Permissions
+	}
+	return nil
+}
+
+func (x *RuntimeAuthorization) GetMode() PermissionMode {
+	if x != nil {
+		return x.Mode
+	}
+	return PermissionMode_PermissionAll
+}
+
+func (x *RuntimeAuthorization) GetTenantRequired() bool {
+	if x != nil {
+		return x.TenantRequired
+	}
+	return false
+}
+
+func (x *RuntimeAuthorization) GetAuthentication() []string {
+	if x != nil {
+		return x.Authentication
+	}
+	return nil
+}
+
 type RuntimeApi struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Uuid          string                 `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
@@ -137,13 +259,14 @@ type RuntimeApi struct {
 	SrvApi        string                 `protobuf:"bytes,8,opt,name=srvApi,proto3" json:"srvApi,omitempty"`
 	IsRedirect    bool                   `protobuf:"varint,9,opt,name=isRedirect,proto3" json:"isRedirect,omitempty"`
 	Composes      []*RuntimeApi          `protobuf:"bytes,10,rep,name=composes,proto3" json:"composes,omitempty"`
+	Authorization *RuntimeAuthorization  `protobuf:"bytes,11,opt,name=authorization,proto3" json:"authorization,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RuntimeApi) Reset() {
 	*x = RuntimeApi{}
-	mi := &file_gateway_api_common_proto_msgTypes[0]
+	mi := &file_gateway_api_common_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -155,7 +278,7 @@ func (x *RuntimeApi) String() string {
 func (*RuntimeApi) ProtoMessage() {}
 
 func (x *RuntimeApi) ProtoReflect() protoreflect.Message {
-	mi := &file_gateway_api_common_proto_msgTypes[0]
+	mi := &file_gateway_api_common_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -168,7 +291,7 @@ func (x *RuntimeApi) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RuntimeApi.ProtoReflect.Descriptor instead.
 func (*RuntimeApi) Descriptor() ([]byte, []int) {
-	return file_gateway_api_common_proto_rawDescGZIP(), []int{0}
+	return file_gateway_api_common_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *RuntimeApi) GetUuid() string {
@@ -241,6 +364,13 @@ func (x *RuntimeApi) GetComposes() []*RuntimeApi {
 	return nil
 }
 
+func (x *RuntimeApi) GetAuthorization() *RuntimeAuthorization {
+	if x != nil {
+		return x.Authorization
+	}
+	return nil
+}
+
 type CircuitCfg struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	CloseTime     int32                  `protobuf:"varint,1,opt,name=CloseTime,proto3" json:"CloseTime,omitempty"`
@@ -254,7 +384,7 @@ type CircuitCfg struct {
 
 func (x *CircuitCfg) Reset() {
 	*x = CircuitCfg{}
-	mi := &file_gateway_api_common_proto_msgTypes[1]
+	mi := &file_gateway_api_common_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -266,7 +396,7 @@ func (x *CircuitCfg) String() string {
 func (*CircuitCfg) ProtoMessage() {}
 
 func (x *CircuitCfg) ProtoReflect() protoreflect.Message {
-	mi := &file_gateway_api_common_proto_msgTypes[1]
+	mi := &file_gateway_api_common_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -279,7 +409,7 @@ func (x *CircuitCfg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CircuitCfg.ProtoReflect.Descriptor instead.
 func (*CircuitCfg) Descriptor() ([]byte, []int) {
-	return file_gateway_api_common_proto_rawDescGZIP(), []int{1}
+	return file_gateway_api_common_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *CircuitCfg) GetCloseTime() int32 {
@@ -330,7 +460,7 @@ type ServerNode struct {
 
 func (x *ServerNode) Reset() {
 	*x = ServerNode{}
-	mi := &file_gateway_api_common_proto_msgTypes[2]
+	mi := &file_gateway_api_common_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -342,7 +472,7 @@ func (x *ServerNode) String() string {
 func (*ServerNode) ProtoMessage() {}
 
 func (x *ServerNode) ProtoReflect() protoreflect.Message {
-	mi := &file_gateway_api_common_proto_msgTypes[2]
+	mi := &file_gateway_api_common_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -355,7 +485,7 @@ func (x *ServerNode) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerNode.ProtoReflect.Descriptor instead.
 func (*ServerNode) Descriptor() ([]byte, []int) {
-	return file_gateway_api_common_proto_rawDescGZIP(), []int{2}
+	return file_gateway_api_common_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ServerNode) GetIpPort() string {
@@ -397,7 +527,13 @@ var File_gateway_api_common_proto protoreflect.FileDescriptor
 
 const file_gateway_api_common_proto_rawDesc = "" +
 	"\n" +
-	"\x18gateway/api_common.proto\x12\x14io.yunka.gateway.rpc\"\xe5\x02\n" +
+	"\x18gateway/api_common.proto\x12\x14io.yunka.gateway.rpc\"\xe4\x01\n" +
+	"\x14RuntimeAuthorization\x12 \n" +
+	"\voperationId\x18\x01 \x01(\tR\voperationId\x12 \n" +
+	"\vpermissions\x18\x02 \x03(\tR\vpermissions\x128\n" +
+	"\x04mode\x18\x03 \x01(\x0e2$.io.yunka.gateway.rpc.PermissionModeR\x04mode\x12&\n" +
+	"\x0etenantRequired\x18\x04 \x01(\bR\x0etenantRequired\x12&\n" +
+	"\x0eauthentication\x18\x05 \x03(\tR\x0eauthentication\"\xb7\x03\n" +
 	"\n" +
 	"RuntimeApi\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\x12\x18\n" +
@@ -414,7 +550,8 @@ const file_gateway_api_common_proto_rawDesc = "" +
 	"isRedirect\x18\t \x01(\bR\n" +
 	"isRedirect\x12<\n" +
 	"\bcomposes\x18\n" +
-	" \x03(\v2 .io.yunka.gateway.rpc.RuntimeApiR\bcomposes\"\xaa\x01\n" +
+	" \x03(\v2 .io.yunka.gateway.rpc.RuntimeApiR\bcomposes\x12P\n" +
+	"\rauthorization\x18\v \x01(\v2*.io.yunka.gateway.rpc.RuntimeAuthorizationR\rauthorization\"\xaa\x01\n" +
 	"\n" +
 	"CircuitCfg\x12\x1c\n" +
 	"\tCloseTime\x18\x01 \x01(\x05R\tCloseTime\x12 \n" +
@@ -438,7 +575,10 @@ const file_gateway_api_common_proto_rawDesc = "" +
 	"\tAuthToken\x10\x02\x12\f\n" +
 	"\bAuthRole\x10\x04\x12\x11\n" +
 	"\rAuthTimeLimit\x10\b\x12\v\n" +
-	"\aAuthApi\x10\x10B Z\x1eyunka.io/gateway/rpc/meta;metab\x06proto3"
+	"\aAuthApi\x10\x10*6\n" +
+	"\x0ePermissionMode\x12\x11\n" +
+	"\rPermissionAll\x10\x00\x12\x11\n" +
+	"\rPermissionAny\x10\x01B Z\x1eyunka.io/gateway/rpc/meta;metab\x06proto3"
 
 var (
 	file_gateway_api_common_proto_rawDescOnce sync.Once
@@ -452,25 +592,29 @@ func file_gateway_api_common_proto_rawDescGZIP() []byte {
 	return file_gateway_api_common_proto_rawDescData
 }
 
-var file_gateway_api_common_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_gateway_api_common_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_gateway_api_common_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_gateway_api_common_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_gateway_api_common_proto_goTypes = []any{
-	(CallType)(0),      // 0: io.yunka.gateway.rpc.CallType
-	(AuthBit)(0),       // 1: io.yunka.gateway.rpc.AuthBit
-	(*RuntimeApi)(nil), // 2: io.yunka.gateway.rpc.RuntimeApi
-	(*CircuitCfg)(nil), // 3: io.yunka.gateway.rpc.CircuitCfg
-	(*ServerNode)(nil), // 4: io.yunka.gateway.rpc.ServerNode
+	(CallType)(0),                // 0: io.yunka.gateway.rpc.CallType
+	(AuthBit)(0),                 // 1: io.yunka.gateway.rpc.AuthBit
+	(PermissionMode)(0),          // 2: io.yunka.gateway.rpc.PermissionMode
+	(*RuntimeAuthorization)(nil), // 3: io.yunka.gateway.rpc.RuntimeAuthorization
+	(*RuntimeApi)(nil),           // 4: io.yunka.gateway.rpc.RuntimeApi
+	(*CircuitCfg)(nil),           // 5: io.yunka.gateway.rpc.CircuitCfg
+	(*ServerNode)(nil),           // 6: io.yunka.gateway.rpc.ServerNode
 }
 var file_gateway_api_common_proto_depIdxs = []int32{
-	0, // 0: io.yunka.gateway.rpc.RuntimeApi.callType:type_name -> io.yunka.gateway.rpc.CallType
-	1, // 1: io.yunka.gateway.rpc.RuntimeApi.auth:type_name -> io.yunka.gateway.rpc.AuthBit
-	2, // 2: io.yunka.gateway.rpc.RuntimeApi.composes:type_name -> io.yunka.gateway.rpc.RuntimeApi
-	3, // 3: io.yunka.gateway.rpc.ServerNode.Circuit:type_name -> io.yunka.gateway.rpc.CircuitCfg
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	2, // 0: io.yunka.gateway.rpc.RuntimeAuthorization.mode:type_name -> io.yunka.gateway.rpc.PermissionMode
+	0, // 1: io.yunka.gateway.rpc.RuntimeApi.callType:type_name -> io.yunka.gateway.rpc.CallType
+	1, // 2: io.yunka.gateway.rpc.RuntimeApi.auth:type_name -> io.yunka.gateway.rpc.AuthBit
+	4, // 3: io.yunka.gateway.rpc.RuntimeApi.composes:type_name -> io.yunka.gateway.rpc.RuntimeApi
+	3, // 4: io.yunka.gateway.rpc.RuntimeApi.authorization:type_name -> io.yunka.gateway.rpc.RuntimeAuthorization
+	5, // 5: io.yunka.gateway.rpc.ServerNode.Circuit:type_name -> io.yunka.gateway.rpc.CircuitCfg
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_gateway_api_common_proto_init() }
@@ -483,8 +627,8 @@ func file_gateway_api_common_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gateway_api_common_proto_rawDesc), len(file_gateway_api_common_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   3,
+			NumEnums:      3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

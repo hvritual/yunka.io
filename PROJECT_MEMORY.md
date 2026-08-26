@@ -270,3 +270,11 @@ GitHub connector authorization and local Git authorization are separate. The con
 - Module packages may not acquire environment configuration, construct database/RPC connections, import `platform.Provider`, use package-global service lookup, reflection composition, hidden `init`, or lifecycle-bearing `sync.Pool`. Autoload remains the only bounded `init` surface and may register one immutable descriptor only.
 - `framework/modules/outboxruntime` is the second real typed module and the reference App-lifecycle shape. It declares Config + Logger + named `primary` DB + EventBus, owns one GORM outbox store/local broker/dispatcher per App, supports deterministic Start/Health/Shutdown, and keeps request transactions/repositories outside the module in `requestscope`.
 - C7.4 does not introduce a DI container, generic service locator, framework-owned business repository abstraction, contract changes, or implicit infrastructure defaults.
+
+### 2026-08-26 — C8.3 gateway authorization convergence decision
+
+- `gateway/authz` is the canonical authorization boundary. Authentication establishes `identity.Principal`; authorization evaluates explicit Operation policies and stable Permission keys.
+- Roles own Permissions, never Buttons. API/Operation and UI Button/Menu may both reference a Permission; Button/Menu binding is UI metadata and is not a backend authorization grant.
+- PB method declarations are the authorization source of truth. Stable operation/permission identities must not be derived from API UUID, HTTP path, Button UUID, or database identifiers.
+- Gateway enforcement is fail-closed and must converge on one Authorizer at every execution boundary, including composite child operations. Resource/data-scope evaluation remains a separate seam and must not be encoded as SQL in PB.
+- Existing `AuthBit`, `api_module_button`, and `role_module_button` are migration compatibility inputs only; they must not be expanded as the new authorization model.
