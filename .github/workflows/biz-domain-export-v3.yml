@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   export:
-    if: ${{ !contains(github.event.head_commit.message, '[domain-export]') }}
+    if: ${{ !contains(github.event.head_commit.message, '[domain-export]') && !contains(github.event.head_commit.message, '[packed-export]') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
