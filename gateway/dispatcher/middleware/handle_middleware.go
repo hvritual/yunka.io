@@ -8,6 +8,7 @@ import (
 	"github.com/buger/jsonparser"
 	"yunka.io/framework/core/request"
 	"yunka.io/framework/core/runtimecontext"
+	"yunka.io/gateway/authz"
 	"yunka.io/gateway/dispatcher/bridge"
 	"yunka.io/gateway/dispatcher/proxy"
 	"yunka.io/gateway/internal/resp"
@@ -28,7 +29,8 @@ var ErrExecutorUnavailable = errors.New("gateway handle middleware: executor is 
 
 type HandleMiddleware struct {
 	proxy.Next
-	exec bridge.Executor
+	exec       bridge.Executor
+	authorized bool
 }
 
 func NewHandleMiddleware(executor bridge.Executor) *HandleMiddleware {
@@ -36,6 +38,14 @@ func NewHandleMiddleware(executor bridge.Executor) *HandleMiddleware {
 		panic(ErrExecutorUnavailable)
 	}
 	return &HandleMiddleware{exec: executor}
+}
+
+func NewAuthorizedHandleMiddleware(executor bridge.Executor, authorizer authz.Authorizer) *HandleMiddleware {
+	authorized, err := bridge.NewAuthorizedExecutor(executor, authorizer)
+	if err != nil {
+		panic(err)
+	}
+	return &HandleMiddleware{exec: authorized, authorized: true}
 }
 
 func (middleware *HandleMiddleware) Name() string { return handleName }
@@ -46,6 +56,10 @@ func (middleware *HandleMiddleware) Do(authStatus bool, rt *request.Context, api
 	}
 	if middleware.exec == nil {
 		_ = rt.Write(response.ErrSysError)
+		return
+	}
+	if api.Authorization != nil && !middleware.authorized {
+		_ = rt.Write(resp.SysNotRightBys)
 		return
 	}
 	if api.Auth > 0 && !authStatus {
@@ -141,6 +155,10 @@ func (middleware *HandleMiddleware) Do(authStatus bool, rt *request.Context, api
 }
 
 func (*HandleMiddleware) writeError(rt *request.Context, err error) {
+	if authz.IsDenied(err) {
+		_ = rt.Write(resp.SysNotRightBys)
+		return
+	}
 	if responseError, ok := err.(response.HttpResponse); ok {
 		_ = rt.Write(responseError)
 		return

@@ -26,3 +26,7 @@ rpc GetMachine(GetMachineRequest) returns (MachineDTO);
 - Resource/data scope is a separate evaluator seam; PB must not contain SQL predicates.
 
 The historical `AuthBit` and API/Button join remain compatibility inputs during C8.3 migration only. New authorization code must use typed policies and Permission keys.
+
+## C8.3.2 execution boundary
+
+Typed authorization is enforced immediately before the business executor. `NewAuthorizedHandleMiddleware` wraps the configured Gateway executor with `bridge.AuthorizedExecutor`, so every composite child operation is authorized independently. Direct gRPC servers use `grpc.NewAuthorizedServer` (or `AuthorizedUnaryServerInterceptor`) with a `gateway/authz.PolicyResolver`; HTTP and gRPC therefore share the same `Authorizer` contract and `Principal` semantics. Protected typed operations fail closed if a Gateway handle is constructed without an Authorizer.

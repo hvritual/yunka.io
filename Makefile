@@ -110,8 +110,8 @@ module-check: architecture-check
 	@cd app && $(GO) run ./cmd module check --root ../framework/modules
 
 authz-check:
-	@cd gateway && $(GO) test -count=20 ./authz
-	@cd gateway && CGO_ENABLED=1 $(GO) test -race -count=3 ./authz
+	@cd gateway && $(GO) test -count=20 ./authz ./dispatcher/bridge ./dispatcher/middleware ./rpc/transport/grpc
+	@cd gateway && CGO_ENABLED=1 $(GO) test -race -count=3 ./authz ./dispatcher/bridge ./dispatcher/middleware ./rpc/transport/grpc
 	@cd pkg && $(GO) test -count=20 ./contract
 
 c7-check: architecture-check

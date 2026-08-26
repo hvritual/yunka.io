@@ -27,6 +27,16 @@ type Policy struct {
 	Authentication []string
 }
 
+func (policy Policy) Protected() bool {
+	policy = Normalize(policy)
+	return len(policy.Authentication) > 0 || len(policy.Permissions) > 0 || policy.TenantRequired
+}
+
+func (policy Policy) AcceptsAuthentication(method string) bool {
+	policy = Normalize(policy)
+	return containsString(policy.Authentication, strings.TrimSpace(method))
+}
+
 type Reason string
 
 const (
