@@ -1,0 +1,1 @@
+C8.3 bootstrap control branch. No product code is committed from the connector; formal product commits will be created by local git inside the GitHub Actions runner after reading AGENTS.md and PROJECT_MEMORY.md and validating main SHA.
