@@ -1,0 +1,1 @@
+Final bootstrap marker. The product commit must not contain any .github/c8.3-bootstrap-note-* files or the control workflow.
