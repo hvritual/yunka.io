@@ -96,7 +96,7 @@ jobs:
           package persistence
 
           type MembershipPO struct {
-            TenantID string `gorm:"column:tenant_id;type:varchar(64);not null;index" yunka:"-"`
+            ScopeTenantID string `gorm:"column:tenant_id;type:varchar(64);not null;index" yunka:"-"`
             UserID string `gorm:"column:user_id;type:varchar(64);not null;index" yunka:"-"`
             Status string `gorm:"column:status;type:varchar(32);not null;index"`
           }
@@ -105,7 +105,7 @@ jobs:
           package persistence
 
           type RolePO struct {
-            TenantID string `gorm:"column:tenant_id;type:varchar(64);not null;index" yunka:"-"`
+            ScopeTenantID string `gorm:"column:tenant_id;type:varchar(64);not null;index" yunka:"-"`
             Name string `gorm:"column:name;type:varchar(100);not null"`
             Status string `gorm:"column:status;type:varchar(32);not null"`
           }
@@ -114,7 +114,7 @@ jobs:
           package persistence
 
           type MemberRolePO struct {
-            TenantID string `gorm:"column:tenant_id;type:varchar(64);not null;index" yunka:"-"`
+            ScopeTenantID string `gorm:"column:tenant_id;type:varchar(64);not null;index" yunka:"-"`
             UserID string `gorm:"column:user_id;type:varchar(64);not null;index" yunka:"-"`
             RoleID string `gorm:"column:role_id;type:varchar(64);not null;index" yunka:"-"`
           }
@@ -123,7 +123,7 @@ jobs:
           package persistence
 
           type RolePermissionPO struct {
-            TenantID string `gorm:"column:tenant_id;type:varchar(64);not null;index" yunka:"-"`
+            ScopeTenantID string `gorm:"column:tenant_id;type:varchar(64);not null;index" yunka:"-"`
             RoleID string `gorm:"column:role_id;type:varchar(64);not null;index" yunka:"-"`
             Permission string `gorm:"column:permission;type:varchar(120);not null;index"`
             DataScope string `gorm:"column:data_scope;type:varchar(16);not null"`
@@ -133,7 +133,7 @@ jobs:
           package persistence
 
           type MemberSitePO struct {
-            TenantID string `gorm:"column:tenant_id;type:varchar(64);not null;index" yunka:"-"`
+            ScopeTenantID string `gorm:"column:tenant_id;type:varchar(64);not null;index" yunka:"-"`
             UserID string `gorm:"column:user_id;type:varchar(64);not null;index" yunka:"-"`
             SiteID string `gorm:"column:site_id;type:varchar(64);not null;index" yunka:"-"`
           }
@@ -145,7 +145,7 @@ jobs:
 
           type APITokenPO struct {
             TokenHash string `gorm:"column:token_hash;type:varchar(64);not null;uniqueIndex" yunka:"-"`
-            TenantID string `gorm:"column:tenant_id;type:varchar(64);not null;index" yunka:"-"`
+            ScopeTenantID string `gorm:"column:tenant_id;type:varchar(64);not null;index" yunka:"-"`
             UserID string `gorm:"column:user_id;type:varchar(64);not null;index" yunka:"-"`
             ExpiresAt *time.Time `gorm:"column:expires_at" yunka:"-"`
             Disabled bool `gorm:"column:disabled;not null;default:false" yunka:"-"`
