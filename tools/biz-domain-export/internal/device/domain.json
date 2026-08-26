@@ -1,0 +1,50 @@
+{
+  "version": 2,
+  "domain": "device",
+  "tablePrefix": "biz",
+  "tenantScoped": true,
+  "objects": [
+    {
+      "name": "device",
+      "file": "device.go",
+      "tableName": "biz_device_device",
+      "fields": [
+        {
+          "name": "created_by",
+          "type": "string",
+          "column": "created_by",
+          "protoNumber": 1,
+          "poOwned": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "column": "name",
+          "protoNumber": 2,
+          "poOwned": true
+        },
+        {
+          "name": "serial",
+          "type": "string",
+          "column": "serial",
+          "protoNumber": 3,
+          "poOwned": true
+        },
+        {
+          "name": "site_id",
+          "type": "string",
+          "column": "site_id",
+          "protoNumber": 4,
+          "poOwned": true
+        }
+      ]
+    }
+  ],
+  "rest": {
+    "enabled": true,
+    "prefix": "/v1"
+  },
+  "rpc": {
+    "enabled": true
+  }
+}

@@ -1,0 +1,128 @@
+{
+  "version": 2,
+  "domain": "iam",
+  "tablePrefix": "biz",
+  "tenantScoped": false,
+  "objects": [
+    {
+      "name": "api_token",
+      "file": "api_token.go",
+      "tableName": "biz_iam_api_token"
+    },
+    {
+      "name": "member_role",
+      "file": "member_role.go",
+      "tableName": "biz_iam_member_role"
+    },
+    {
+      "name": "member_site",
+      "file": "member_site.go",
+      "tableName": "biz_iam_member_site"
+    },
+    {
+      "name": "membership",
+      "file": "membership.go",
+      "tableName": "biz_iam_membership",
+      "fields": [
+        {
+          "name": "status",
+          "type": "string",
+          "column": "status",
+          "protoNumber": 1,
+          "poOwned": true
+        }
+      ]
+    },
+    {
+      "name": "role",
+      "file": "role.go",
+      "tableName": "biz_iam_role",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "column": "name",
+          "protoNumber": 1,
+          "poOwned": true
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "column": "status",
+          "protoNumber": 2,
+          "poOwned": true
+        }
+      ]
+    },
+    {
+      "name": "role_permission",
+      "file": "role_permission.go",
+      "tableName": "biz_iam_role_permission",
+      "fields": [
+        {
+          "name": "data_scope",
+          "type": "string",
+          "column": "data_scope",
+          "protoNumber": 1,
+          "poOwned": true
+        },
+        {
+          "name": "permission",
+          "type": "string",
+          "column": "permission",
+          "protoNumber": 2,
+          "poOwned": true
+        }
+      ]
+    },
+    {
+      "name": "tenant",
+      "file": "tenant.go",
+      "tableName": "biz_iam_tenant",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "column": "name",
+          "protoNumber": 1,
+          "poOwned": true
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "column": "status",
+          "protoNumber": 2,
+          "poOwned": true
+        }
+      ]
+    },
+    {
+      "name": "user",
+      "file": "user.go",
+      "tableName": "biz_iam_user",
+      "fields": [
+        {
+          "name": "email",
+          "type": "string",
+          "column": "email",
+          "protoNumber": 1,
+          "poOwned": true
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "column": "status",
+          "protoNumber": 2,
+          "poOwned": true
+        }
+      ]
+    }
+  ],
+  "rest": {
+    "enabled": false,
+    "prefix": "/v1"
+  },
+  "rpc": {
+    "enabled": false
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "domain": "site",
+  "tablePrefix": "biz",
+  "tenantScoped": true,
+  "objects": [
+    {
+      "name": "site",
+      "file": "site.go",
+      "tableName": "biz_site_site",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "column": "name",
+          "protoNumber": 1,
+          "poOwned": true
+        }
+      ]
+    }
+  ],
+  "rest": {
+    "enabled": false,
+    "prefix": "/v1"
+  },
+  "rpc": {
+    "enabled": false
+  }
+}
