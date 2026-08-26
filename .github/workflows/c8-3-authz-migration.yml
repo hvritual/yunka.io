@@ -57,12 +57,29 @@ jobs:
           base64 --decode .github/c8.3-retry-builder.py.gz.b64 | gzip -dc > /tmp/c8.3-retry-builder.py
           python3 -m py_compile /tmp/c8.3-retry-builder.py
           python3 /tmp/c8.3-retry-builder.py
+
+          # Historical payload launched overlapping gofmt work in the background,
+          # allowing Git to index files while their size was still changing.
+          # Make formatting synchronous and add an explicit barrier before every
+          # Git index/commit operation. This modifies only the transient runner script.
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('/tmp/c83-wave34-retry.sh')
+          lines = p.read_text().splitlines()
+          out = []
+          for line in lines:
+              if 'gofmt' in line:
+                  line = re.sub(r'\s*&\s*$', '', line)
+              stripped = line.lstrip()
+              if stripped.startswith(('git add ', 'git diff ', 'git commit ', 'git status ')):
+                  indent = line[:len(line)-len(stripped)]
+                  out.append(indent + 'wait')
+              out.append(line)
+          p.write_text('\n'.join(out) + '\n')
+          PY
           bash -n /tmp/c83-wave34-retry.sh
 
-          # Historical C8.3 payload invokes gofmt from overlapping parent/child
-          # roots in separate processes. Serialize every gofmt invocation at the
-          # runner boundary and also remove duplicate file arguments. Product
-          # sources and formal commits remain produced by the local-Git runner.
           real_gofmt="$(command -v gofmt)"
           mkdir -p /tmp/c83-bin
           cat > /tmp/c83-bin/gofmt <<'EOF'
