@@ -24,12 +24,51 @@ spec = importlib.util.spec_from_file_location("rpc_consumer_abi", "tools/check_r
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 source = Path(consumer["path"]).read_text(encoding="utf-8")
-actual = {name: mod.digest_method(source, consumer["receiver"], name) for name in expected_old}
+fragments = {
+    name: mod.extract_method(source, consumer["receiver"], name)
+    for name in expected_old
+}
+actual = {
+    name: mod.digest_method(source, consumer["receiver"], name)
+    for name in expected_old
+}
 changed = {name for name in expected_old if actual[name] != expected_old[name]}
+expected_changed = set(expected_old)
 
-print("C8.3.3 candidate consumer digests:", json.dumps(actual, sort_keys=True))
-for name in expected_old:
-    print(f"=== C8.3.3 candidate (*RoleIntercept).{name} ===")
-    print(mod.extract_method(source, consumer["receiver"], name), end="")
 
-raise SystemExit(f"C8.3.3 diagnostic stop; changed methods: {sorted(changed)}")
+def fail(message: str) -> None:
+    print("C8.3.3 candidate consumer digests:", json.dumps(actual, sort_keys=True))
+    for name in expected_old:
+        print(f"=== C8.3.3 candidate (*RoleIntercept).{name} ===")
+        print(fragments[name], end="")
+    raise SystemExit(message)
+
+
+if changed != expected_changed:
+    fail(f"C8.3.3: unexpected business-method drift set: {sorted(changed)}")
+
+batch = fragments["BatchAddRuntimeApi"]
+for required in ("BatchCreate", "BindButtonPermissions", "r.apiTree.Insert"):
+    if required not in batch:
+        fail(f"C8.3.3: BatchAddRuntimeApi missing required permission-convergence behavior: {required}")
+
+# API deletion may remove API-to-UI bindings, but it must not revoke durable
+# role_permission grants. The API tree entry is still removed explicitly.
+delete = fragments["DeleteRuntimeApi"]
+for required in ("DeleteApi(request.Uuid)", "r.apiTree.Delete(request.Uri)"):
+    if required not in delete:
+        fail(f"C8.3.3: DeleteRuntimeApi missing required behavior: {required}")
+for forbidden in ("GrantRolePermissions", "OperateRole(", "RolePermission", "DeleteRole"):
+    if forbidden in delete:
+        fail(f"C8.3.3: DeleteRuntimeApi unexpectedly mutates role permissions: {forbidden}")
+
+operate = fragments["OperateRoleAPI"]
+for required in ("GrantRolePermissions", "btn.Permissions", "btn.DeletePermissions"):
+    if required not in operate:
+        fail(f"C8.3.3: OperateRoleAPI missing direct role-to-permission behavior: {required}")
+if "OperateRole(" in operate:
+    fail("C8.3.3: OperateRoleAPI still delegates authorization to Button grants")
+
+consumer["methods"] = {name: actual[name] for name in expected_old}
+baseline_path.write_text(json.dumps(baseline, indent=2) + "\n", encoding="utf-8")
+print("C8.3.3: validated and accepted intentional consumer behavior drift", json.dumps(actual, sort_keys=True))
