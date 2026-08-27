@@ -16,7 +16,7 @@ PYTHON ?= python3
 VULNCHECK ?= $(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
 MODULES := compat/go-kit-kit-log pkg framework gateway app
 
-.PHONY: toolchain-check rpc-tools rpc-toolchain-check rpc-generate rpc-check rpc-compat-check rpc-legacy-check rpc-consumer-check rpc-bridge-check dependency-check architecture-check module-check authz-check c7-check test race vet vuln tidy build contract rpc-contract-check contract-check integration verify verify-production
+.PHONY: toolchain-check rpc-tools rpc-toolchain-check rpc-generate rpc-check rpc-compat-check rpc-legacy-check rpc-consumer-check rpc-bridge-check dependency-check architecture-check module-check authz-check c7-check domain-check dsl-check test race vet vuln tidy build contract rpc-contract-check contract-check integration verify verify-production
 
 toolchain-check:
 	@set -eu; \
@@ -36,9 +36,9 @@ rpc-tools:
 
 rpc-toolchain-check:
 	@set -eu; \
-	actual_go="$$($(PROTOC_GEN_GO) --version | awk '{print $$NF}' | sed 's/^v//')"; \
+	actual_go="$$( $(PROTOC_GEN_GO) --version | awk '{print $$NF}' | sed 's/^v//' )"; \
 	expected_go="$$(printf '%s' '$(PROTOC_GEN_GO_VERSION)' | sed 's/^v//')"; \
-	actual_grpc="$$($(PROTOC_GEN_GO_GRPC) --version | awk '{print $$NF}' | sed 's/^v//')"; \
+	actual_grpc="$$( $(PROTOC_GEN_GO_GRPC) --version | awk '{print $$NF}' | sed 's/^v//' )"; \
 	expected_grpc="$$(printf '%s' '$(PROTOC_GEN_GO_GRPC_VERSION)' | sed 's/^v//')"; \
 	test "$$actual_go" = "$$expected_go" || { echo "rpc-toolchain-check: protoc-gen-go=$$actual_go want $$expected_go" >&2; exit 1; }; \
 	test "$$actual_grpc" = "$$expected_grpc" || { echo "rpc-toolchain-check: protoc-gen-go-grpc=$$actual_grpc want $$expected_grpc" >&2; exit 1; }; \
@@ -77,7 +77,8 @@ rpc-legacy-check:
 		echo "rpc-legacy-check: legacy protobuf import remains in RPC code" >&2; exit 1; \
 	fi; \
 	if grep -R -n -E 'sync\.Pool|reflect\.Value|RegisterServer\(name string|SrvHandler|messageFactories|handlerMap' \
-		gateway/rpc/bridge gateway/rpc/client gateway/rpc/handle gateway/rpc/method gateway/rpc/server gateway/rpc/transport pkg/rpcbridge; then \
+		gateway/rpc/bridge gateway/rpc/client gateway/rpc/handle \
+		gateway/rpc/method gateway/rpc/server gateway/rpc/transport pkg/rpcbridge; then \
 		echo "rpc-legacy-check: hidden registry, reflection, or pooling remains" >&2; exit 1; \
 	fi
 
@@ -119,6 +120,15 @@ c7-check: architecture-check
 	@cd framework && CGO_ENABLED=1 $(GO) test -race -count=3 ./core ./core/request ./platform ./requestscope ./kernel ./core/modulecatalog
 	@cd gateway && $(GO) test -count=20 ./dispatcher/intercept/role ./dispatcher/middleware ./dispatcher/proxy ./rpc/bridge ./rpc/consumercompat ./rpc/transport/grpc
 	@cd gateway && CGO_ENABLED=1 $(GO) test -race -count=3 ./dispatcher/middleware ./dispatcher/proxy ./rpc/bridge ./rpc/consumercompat ./rpc/transport/grpc
+
+domain-check: architecture-check
+	@cd app && $(GO) test -count=10 ./cmd/domain
+
+dsl-check: toolchain-check architecture-check
+	@cd pkg && $(GO) test -count=10 ./contract ./applicationgraph ./architecturepolicy
+	@cd framework && $(GO) test -count=10 ./applicationgraph
+	@cd app && PROTOC="$(PROTOC)" $(GO) run ./cmd contract lint \
+		--sources "$(CONTRACT_SOURCES)" --repo-root "$(CURDIR)"
 
 test:
 	@set -eu; for module in $(MODULES); do \
@@ -177,6 +187,6 @@ integration:
 	echo "==> MySQL 8 transactional outbox and request-scope integration"; \
 	(cd framework && $(GO) test -timeout=5m -count=1 -tags=integration ./event/outbox ./requestscope)
 
-verify: toolchain-check dependency-check module-check authz-check c7-check rpc-check contract-check rpc-compat-check rpc-legacy-check rpc-consumer-check rpc-bridge-check test race vet vuln build
+verify: toolchain-check dependency-check module-check authz-check c7-check domain-check dsl-check rpc-check contract-check rpc-compat-check rpc-legacy-check rpc-consumer-check rpc-bridge-check test race vet vuln build
 
 verify-production: verify integration
