@@ -53,6 +53,9 @@ func TestRenderApplicationCodeProducesSharedPortAdaptersAndPolicy(t *testing.T) 
 	if !strings.Contains(rest, `handler.authorize(request, "/device.v1.DeviceApplication/GetMachine")`) || !strings.Contains(rest, "handler.application.GetMachine(request.Context(), wire)") || !strings.Contains(rest, "handler.authorizer.Authorize") {
 		t.Fatalf("REST does not reuse policy/authorizer/application port:\n%s", rest)
 	}
+	if strings.Contains(rest, `strconv "strconv"`) {
+		t.Fatalf("string-only REST adapter imported strconv:\n%s", rest)
+	}
 }
 
 func TestRenderApplicationCodeRejectsBusinessSemanticBodyMapping(t *testing.T) {
@@ -100,5 +103,36 @@ func TestRenderRESTAppliesPathAfterWholeBody(t *testing.T) {
 	}
 	if pathIndex <= bodyIndex {
 		t.Fatalf("path binding must override whole-body values: bodyIndex=%d pathIndex=%d\n%s", bodyIndex, pathIndex, rest)
+	}
+}
+
+func TestRenderRESTImportsStrconvForParsedScalarOnly(t *testing.T) {
+	manifest := Manifest{
+		SchemaVersion: ManifestVersion,
+		Files: []File{{Name: "device.proto", Package: "device.v1", GoPackage: "example.com/biz/contracts/device/v1;devicev1", Domain: &DomainDeclaration{Name: "device"}}},
+		Messages: []Message{
+			{Name: "GetMachineRequest", FullName: "device.v1.GetMachineRequest", Fields: []Field{{Name: "slot", JSONName: "slot", Number: 1, Kind: "scalar", Type: "int32"}}},
+			{Name: "MachineDTO", FullName: "device.v1.MachineDTO"},
+		},
+		Services: []Service{{Name: "DeviceApplication", FullName: "device.v1.DeviceApplication", Domain: "device", Application: &ApplicationDeclaration{Name: "device"}, Methods: []Method{{
+			Name: "GetMachine", FullName: "device.v1.DeviceApplication.GetMachine", Request: "device.v1.GetMachineRequest", Response: "device.v1.MachineDTO",
+			HTTP: []HTTPBinding{{Method: "GET", Path: "/v1/machines/{slot}"}},
+			Operation: &OperationDeclaration{ID: "device.machine.get", UseCase: "get_machine", Permissions: []string{"device.machine.read"}, PermissionMode: "all"},
+			Authorization: &AuthorizationPolicy{OperationID: "device.machine.get", Permissions: []string{"device.machine.read"}, PermissionMode: "all"},
+		}}}},
+	}
+	files, err := RenderApplicationCode(manifest, ApplicationCodeOptions{RootImport: "example.com/biz/internal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rest string
+	for _, file := range files {
+		if strings.Contains(file.Path, "/transport/rest/") {
+			rest = string(file.Content)
+			break
+		}
+	}
+	if !strings.Contains(rest, `strconv "strconv"`) || !strings.Contains(rest, "strconv.ParseInt") {
+		t.Fatalf("numeric REST adapter must import and use strconv:\n%s", rest)
 	}
 }
