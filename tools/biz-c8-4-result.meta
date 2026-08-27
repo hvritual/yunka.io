@@ -1,0 +1,8 @@
+framework_main=cdf7d933758d3c94e03a5601801dbf84d8144d00
+framework_tree=0cb7ec037a4cb25379a1d870785980b76e6141da
+mysql=8.4
+go=go1.25.13
+protoc=3.21.12
+files=40
+parts=12
+validation=domain-check,module-check,contract-check,test,race,vet,build,mysql-integration,determinism
