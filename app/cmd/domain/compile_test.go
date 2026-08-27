@@ -20,6 +20,7 @@ func TestPOFirstDomainCompilesPersistenceOnlyDownstream(t *testing.T) {
 go 1.25.0
 
 require (
+	gorm.io/driver/sqlite v1.5.4
 	gorm.io/gorm v1.25.5
 	yunka.io/framework v0.0.0
 )
@@ -69,6 +70,7 @@ type DeviceGroupPO struct { Name string }
 	if err := Check(filepath.Join(root, "internal")); err != nil {
 		t.Fatal(err)
 	}
+	writeTestPO(t, root, "repository_runtime_test.go", generatedRepositoryRuntimeTest)
 	for _, args := range [][]string{{"mod", "tidy"}, {"test", "./..."}} {
 		command := exec.Command("go", args...)
 		command.Dir = root
@@ -91,3 +93,55 @@ func TestDomainCompilerHasNoProtobufOrTransportGenerationSurface(t *testing.T) {
 		}
 	}
 }
+
+const generatedRepositoryRuntimeTest = `package biz_test
+
+import (
+    "context"
+    "errors"
+    "testing"
+
+    "gorm.io/driver/sqlite"
+    "gorm.io/gorm"
+    device "example.com/biz/internal/device/domain"
+    persistence "example.com/biz/internal/device/infrastructure/persistence"
+    "example.com/biz/internal/device/ports"
+    "yunka.io/framework/core/identity"
+)
+
+func tenantContext(tenant string) context.Context {
+    return identity.WithPrincipal(context.Background(), identity.Principal{
+        Subject: "user-1", TenantID: tenant, UserID: "user-1", Roles: []string{"operator"},
+        AuthMethod: identity.AuthMethodJWT, Authenticated: true,
+    })
+}
+
+func TestGeneratedRepositoryTenantIsolationAndOptimisticConflict(t *testing.T) {
+    database, err := gorm.Open(sqlite.Open("file:c84-domain?mode=memory&cache=shared"), &gorm.Config{})
+    if err != nil { t.Fatal(err) }
+    if err := persistence.AutoMigrate(context.Background(), database); err != nil { t.Fatal(err) }
+    repository, err := persistence.NewCoffeeMachineRepository(database)
+    if err != nil { t.Fatal(err) }
+
+    ctxA := tenantContext("tenant-a")
+    ctxB := tenantContext("tenant-b")
+    machine := &device.CoffeeMachine{ID: "machine-1", Serial: "SERIAL-A", SiteID: "site-a", Enabled: true}
+    if err := repository.Create(ctxA, machine); err != nil { t.Fatal(err) }
+    if machine.TenantID != "tenant-a" || machine.Version != 1 { t.Fatalf("create scope/version drift: %#v", machine) }
+
+    loaded, err := repository.Get(ctxA, machine.ID)
+    if err != nil { t.Fatal(err) }
+    if loaded.Serial != "SERIAL-A" || loaded.TenantID != "tenant-a" { t.Fatalf("unexpected tenant-a record: %#v", loaded) }
+    if _, err := repository.Get(ctxB, machine.ID); !errors.Is(err, ports.ErrNotFound) { t.Fatalf("tenant-b visibility err=%v want ErrNotFound", err) }
+    if rows, err := repository.List(ctxB, 10, 0); err != nil || len(rows) != 0 { t.Fatalf("tenant-b list rows=%d err=%v", len(rows), err) }
+
+    loaded.Serial = "SERIAL-B"
+    if err := repository.Update(ctxA, &loaded, 1); err != nil { t.Fatal(err) }
+    loaded.Serial = "SERIAL-C"
+    if err := repository.Update(ctxA, &loaded, 1); !errors.Is(err, ports.ErrConflict) { t.Fatalf("stale update err=%v want ErrConflict", err) }
+
+    current, err := repository.Get(ctxA, machine.ID)
+    if err != nil { t.Fatal(err) }
+    if current.Serial != "SERIAL-B" || current.Version != 2 { t.Fatalf("optimistic update drift: %#v", current) }
+}
+`
