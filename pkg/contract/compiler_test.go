@@ -3,25 +3,10 @@ package contract
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
-
-func testProtoc(t *testing.T) string {
-	t.Helper()
-	protoc := os.Getenv("PROTOC")
-	if protoc == "" {
-		if path, err := exec.LookPath("protoc"); err == nil {
-			protoc = path
-		}
-	}
-	if protoc == "" {
-		t.Skip("protoc is not available")
-	}
-	return protoc
-}
 
 func TestCompileDirectoryAndDirectiveHTTP(t *testing.T) {
 	protoc := testProtoc(t)
