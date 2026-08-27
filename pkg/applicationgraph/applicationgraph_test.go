@@ -44,6 +44,81 @@ func TestContractGraphAndImpact(t *testing.T) {
 	}
 }
 
+func TestTypedContractGraphUsesDeclaredBusinessIdentities(t *testing.T) {
+	manifest := contract.Manifest{
+		SchemaVersion: contract.ManifestVersion,
+		Files: []contract.File{{Name: "device.proto", Domain: &contract.DomainDeclaration{Name: "device", Version: "v1"}}},
+		Messages: []contract.Message{
+			{Name: "GetMachineRequest", FullName: "device.v1.GetMachineRequest", DTO: &contract.DTODeclaration{Kind: "input"}},
+			{Name: "MachineDTO", FullName: "device.v1.MachineDTO", DTO: &contract.DTODeclaration{Kind: "output"}},
+		},
+		Services: []contract.Service{{
+			Name: "DeviceApplication", FullName: "device.v1.DeviceApplication", Domain: "device", Application: &contract.ApplicationDeclaration{Name: "device_management"},
+			Methods: []contract.Method{{
+				Name: "GetMachine", FullName: "device.v1.DeviceApplication.GetMachine", Request: "device.v1.GetMachineRequest", Response: "device.v1.MachineDTO",
+				HTTP: []contract.HTTPBinding{{Method: "GET", Path: "/v1/machines/{id}"}},
+				Operation: &contract.OperationDeclaration{ID: "device.machine.get", UseCase: "get_machine", Permissions: []string{"device.machine.read"}, PermissionMode: "all", TenantRequired: true, Authentication: []string{"jwt"}},
+			}},
+		}},
+	}
+	builder := NewBuilder()
+	if err := AddContract(builder, manifest); err != nil {
+		t.Fatal(err)
+	}
+	graph, err := builder.Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	domainID := ID(NodeDomain, "device")
+	applicationID := ID(NodeApplication, "device/device_management")
+	serviceID := ID(NodeService, "device.v1.DeviceApplication")
+	operationID := ID(NodeOperation, "device.machine.get")
+	requestID := ID(NodeMessage, "device.v1.GetMachineRequest")
+	responseID := ID(NodeMessage, "device.v1.MachineDTO")
+	permissionID := ID(NodePermission, "device.machine.read")
+	routeID := ID(NodeHTTPRoute, "GET /v1/machines/{id}")
+	for _, id := range []string{domainID, applicationID, serviceID, operationID, requestID, responseID, permissionID, routeID} {
+		node, ok := graph.Node(id)
+		if !ok {
+			t.Fatalf("typed graph node missing: %s", id)
+		}
+		for _, evidence := range node.Evidence {
+			if evidence.Type != EvidenceDeclared || evidence.Confidence != ConfidenceHigh {
+				t.Fatalf("typed PB node must be declared/high: %s %+v", id, evidence)
+			}
+		}
+	}
+	wantEdges := map[string]bool{
+		domainID + "|" + string(EdgeContains) + "|" + applicationID: false,
+		applicationID + "|" + string(EdgeContains) + "|" + operationID: false,
+		serviceID + "|" + string(EdgeExposes) + "|" + operationID: false,
+		operationID + "|" + string(EdgeAccepts) + "|" + requestID: false,
+		operationID + "|" + string(EdgeReturns) + "|" + responseID: false,
+		operationID + "|" + string(EdgeRequires) + "|" + permissionID: false,
+		routeID + "|" + string(EdgeRoutesTo) + "|" + operationID: false,
+	}
+	for _, edge := range graph.Edges {
+		key := edge.From + "|" + string(edge.Kind) + "|" + edge.To
+		if _, ok := wantEdges[key]; ok {
+			wantEdges[key] = true
+		}
+	}
+	for key, found := range wantEdges {
+		if !found {
+			t.Fatalf("typed graph edge missing: %s\n%+v", key, graph.Edges)
+		}
+	}
+	request, _ := graph.Node(requestID)
+	response, _ := graph.Node(responseID)
+	if request.Attributes["dtoKind"] != "input" || response.Attributes["dtoKind"] != "output" {
+		t.Fatalf("DTO classifications missing from graph: request=%+v response=%+v", request.Attributes, response.Attributes)
+	}
+	operation, _ := graph.Node(operationID)
+	if operation.Attributes["rpcMethod"] != "device.v1.DeviceApplication.GetMachine" || operation.Attributes["useCase"] != "get_machine" {
+		t.Fatalf("operation declaration metadata missing: %+v", operation.Attributes)
+	}
+}
+
 func TestRuntimeGraphDoesNotInventServiceOwnership(t *testing.T) {
 	builder := NewBuilder()
 	snapshot := RuntimeSnapshot{State: "ready", Modules: []RuntimeModule{{Name: "device", Startable: true}}, Routes: []string{"/internal/health"}, Runtime: RuntimeInventory{RouteCount: 1}}
@@ -98,6 +173,21 @@ func TestAddContractDoesNotMutateCallerManifest(t *testing.T) {
 	}
 	if manifest.Services[0].FullName != "z" {
 		t.Fatal("contract graph mutated caller manifest")
+	}
+}
+
+func TestAddContractDoesNotMutateTypedPointers(t *testing.T) {
+	manifest := contract.Manifest{
+		Files: []contract.File{{Name: "device.proto", Domain: &contract.DomainDeclaration{Name: " device "}}},
+		Messages: []contract.Message{{Name: "Request", FullName: "device.Request", DTO: &contract.DTODeclaration{Kind: "input"}}},
+		Services: []contract.Service{{Name: "Device", FullName: "device.Device", Domain: " device ", Application: &contract.ApplicationDeclaration{Name: " device_app ",}, Methods: []contract.Method{{Name: "Get", FullName: "device.Device.Get", Operation: &contract.OperationDeclaration{ID: " device.get ", UseCase: " get ", Permissions: []string{" device.read "}}}}}},
+	}
+	builder := NewBuilder()
+	if err := AddContract(builder, manifest); err != nil {
+		t.Fatal(err)
+	}
+	if manifest.Files[0].Domain.Name != " device " || manifest.Services[0].Application.Name != " device_app " || manifest.Services[0].Methods[0].Operation.ID != " device.get " {
+		t.Fatal("contract graph mutated typed declaration pointers")
 	}
 }
 
