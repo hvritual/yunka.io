@@ -14,8 +14,10 @@ import tempfile
 MANAGED_ROOTS = (
     Path("gateway/rpc/meta"),
     Path("pkg/rpcmeta/legacy"),
+    Path("pkg/contractdsl/v1"),
 )
 PROTO_FILES = (
+    "yunka/dsl/v1/options.proto",
     "gateway/api_common.proto",
     "gateway/common.proto",
     "gateway/gateway.proto",
