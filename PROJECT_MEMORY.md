@@ -77,6 +77,7 @@ GitHub connector authorization and local Git authorization are separate. The con
 - Gateway JWT/API-key authentication establishes a Principal. Role authorization reads only that trusted Principal; query-supplied `oid`/`uid`/`rid` values are compatibility data and are not authorization inputs.
 - Generated RPC files remain immutable. RPC middleware must be attached through transport-neutral client wrappers or non-generated gRPC interceptors.
 - Remote RPC identity metadata is not automatically trusted; a downstream service must validate its own service/caller credentials before marking a Principal authenticated.
+
 ### 2026-08-18 — Resilience baseline
 
 - Resilience policies are transport-neutral middleware and must not be embedded directly in business services.
@@ -176,7 +177,7 @@ GitHub connector authorization and local Git authorization are separate. The con
 ### 2026-08-20 — C2 toolchain-determinism baseline
 
 - `tools/toolchain.env` is the canonical repository tool lock. C2 pins Go `1.25.13`, protobuf release `21.12` / `libprotoc 3.21.12`, the Linux x86_64 protoc archive SHA-256, and `govulncheck v1.7.0`.
-- Normal GitHub Actions CI is read-only (`contents: read`). It must never run `git commit`, `git push`, or auto-repair dependency/generated state; drift is a blocking signal for the ordinary local developer workflow.
+- Normal GitHub Actions CI is read-only (`contents: read`). It must never run `git commit`, `git push`, or auto-repair dependency/generated state; drift is a blocking signal for the ordinary local development workflow.
 - Third-party GitHub Actions used by CI are pinned to immutable commit SHAs. CI installs protoc from the locked release archive and verifies its SHA-256 before use; package-manager-selected protoc versions are not accepted for contract verification.
 - `make toolchain-check`, contract generation/checking, `make verify`, and `yunka doctor` enforce exact Go/protoc agreement with the lock. Newer compilers are intentionally rejected until the lock is deliberately updated and reviewed.
 - CI proves determinism twice: `make tidy` must leave workspace dependency metadata unchanged, contract regeneration must leave `contracts/generated` unchanged, and the final worktree must be clean. C2 changes tooling/governance only and does not start C3 contract-source convergence.
