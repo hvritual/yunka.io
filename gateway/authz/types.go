@@ -52,6 +52,7 @@ type Decision struct {
 	Allowed     bool
 	Operation   OperationID
 	Permissions []PermissionKey
+	Grants      []Grant
 	Reason      Reason
 }
 

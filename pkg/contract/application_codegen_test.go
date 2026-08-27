@@ -8,7 +8,7 @@ import (
 func TestRenderApplicationCodeProducesSharedPortAdaptersAndPolicy(t *testing.T) {
 	manifest := Manifest{
 		SchemaVersion: ManifestVersion,
-		Files: []File{{Name: "device.proto", Package: "device.v1", GoPackage: "example.com/biz/contracts/device/v1;devicev1", Domain: &DomainDeclaration{Name: "device", Version: "v1"}}},
+		Files:         []File{{Name: "device.proto", Package: "device.v1", GoPackage: "example.com/biz/contracts/device/v1;devicev1", Domain: &DomainDeclaration{Name: "device", Version: "v1"}}},
 		Messages: []Message{
 			{Name: "GetMachineRequest", FullName: "device.v1.GetMachineRequest", DTO: &DTODeclaration{Kind: "input"}, Fields: []Field{{Name: "id", JSONName: "id", Number: 1, Kind: "scalar", Type: "string"}}},
 			{Name: "MachineDTO", FullName: "device.v1.MachineDTO", DTO: &DTODeclaration{Kind: "output"}, Fields: []Field{{Name: "id", JSONName: "id", Number: 1, Kind: "scalar", Type: "string"}}},
@@ -17,8 +17,8 @@ func TestRenderApplicationCodeProducesSharedPortAdaptersAndPolicy(t *testing.T) 
 			Name: "DeviceApplication", FullName: "device.v1.DeviceApplication", Domain: "device", Application: &ApplicationDeclaration{Name: "device_management"},
 			Methods: []Method{{
 				Name: "GetMachine", FullName: "device.v1.DeviceApplication.GetMachine", Request: "device.v1.GetMachineRequest", Response: "device.v1.MachineDTO",
-				HTTP: []HTTPBinding{{Method: "GET", Path: "/v1/machines/{id}"}},
-				Operation: &OperationDeclaration{ID: "device.machine.get", UseCase: "get_machine", Permissions: []string{"device.machine.read"}, PermissionMode: "all", TenantRequired: true, Authentication: []string{"jwt"}},
+				HTTP:          []HTTPBinding{{Method: "GET", Path: "/v1/machines/{id}"}},
+				Operation:     &OperationDeclaration{ID: "device.machine.get", UseCase: "get_machine", Permissions: []string{"device.machine.read"}, PermissionMode: "all", TenantRequired: true, Authentication: []string{"jwt"}},
 				Authorization: &AuthorizationPolicy{OperationID: "device.machine.get", Permissions: []string{"device.machine.read"}, PermissionMode: "all", TenantRequired: true, Authentication: []string{"jwt"}},
 			}},
 		}},
@@ -42,7 +42,7 @@ func TestRenderApplicationCodeProducesSharedPortAdaptersAndPolicy(t *testing.T) 
 		t.Fatalf("unexpected application port:\n%s", port)
 	}
 	policy := byPath["device/policy/zz_yunka_device_management_operation_policy_gen.go"]
-	if !strings.Contains(policy, `OperationGetMachine authz.OperationID = "device.machine.get"`) || !strings.Contains(policy, `"device.machine.read"`) || !strings.Contains(policy, `"/device.v1.DeviceApplication/GetMachine"`) {
+	if !strings.Contains(policy, `OperationGetMachine authz.OperationID = "device.machine.get"`) || !strings.Contains(policy, `"device.machine.read"`) || !strings.Contains(policy, `"/device.v1.DeviceApplication/GetMachine"`) || !strings.Contains(policy, "func Permissions() []authz.PermissionKey") {
 		t.Fatalf("unexpected policy:\n%s", policy)
 	}
 	rpc := byPath["device/transport/rpc/zz_yunka_device_management_rpc_adapter_gen.go"]
@@ -50,8 +50,11 @@ func TestRenderApplicationCodeProducesSharedPortAdaptersAndPolicy(t *testing.T) 
 		t.Fatalf("RPC does not delegate to shared port:\n%s", rpc)
 	}
 	rest := byPath["device/transport/rest/zz_yunka_device_management_rest_adapter_gen.go"]
-	if !strings.Contains(rest, `handler.authorize(request, "/device.v1.DeviceApplication/GetMachine")`) || !strings.Contains(rest, "handler.application.GetMachine(request.Context(), wire)") || !strings.Contains(rest, "handler.authorizer.Authorize") {
-		t.Fatalf("REST does not reuse policy/authorizer/application port:\n%s", rest)
+	if !strings.Contains(rest, `handler.runtime.Prepare(request.Context(), "/device.v1.DeviceApplication/GetMachine", wire)`) || !strings.Contains(rest, "handler.application.GetMachine(secured, wire)") || !strings.Contains(rest, "runtime     authz.OperationRuntime") {
+		t.Fatalf("REST does not use shared C8.5 operation runtime before application:\n%s", rest)
+	}
+	if strings.Contains(rest, "handler.authorizer") || strings.Contains(rest, "ResolvePolicy") {
+		t.Fatalf("REST retained transport-local authorization logic:\n%s", rest)
 	}
 	if strings.Contains(rest, `strconv "strconv"`) {
 		t.Fatalf("string-only REST adapter imported strconv:\n%s", rest)
@@ -61,9 +64,9 @@ func TestRenderApplicationCodeProducesSharedPortAdaptersAndPolicy(t *testing.T) 
 func TestRenderApplicationCodeRejectsBusinessSemanticBodyMapping(t *testing.T) {
 	manifest := Manifest{
 		SchemaVersion: ManifestVersion,
-		Files: []File{{Name: "device.proto", Package: "device.v1", GoPackage: "example.com/biz/contracts/device/v1;devicev1", Domain: &DomainDeclaration{Name: "device"}}},
-		Messages: []Message{{Name: "Request", FullName: "device.v1.Request"}, {Name: "Response", FullName: "device.v1.Response"}},
-		Services: []Service{{Name: "DeviceApplication", FullName: "device.v1.DeviceApplication", Domain: "device", Application: &ApplicationDeclaration{Name: "device"}, Methods: []Method{{Name: "Update", FullName: "device.v1.DeviceApplication.Update", Request: "device.v1.Request", Response: "device.v1.Response", HTTP: []HTTPBinding{{Method: "PATCH", Path: "/v1/device", Body: "payload"}}, Operation: &OperationDeclaration{ID: "device.update", UseCase: "update", Permissions: []string{"device.write"}, PermissionMode: "all"}}}}},
+		Files:         []File{{Name: "device.proto", Package: "device.v1", GoPackage: "example.com/biz/contracts/device/v1;devicev1", Domain: &DomainDeclaration{Name: "device"}}},
+		Messages:      []Message{{Name: "Request", FullName: "device.v1.Request"}, {Name: "Response", FullName: "device.v1.Response"}},
+		Services:      []Service{{Name: "DeviceApplication", FullName: "device.v1.DeviceApplication", Domain: "device", Application: &ApplicationDeclaration{Name: "device"}, Methods: []Method{{Name: "Update", FullName: "device.v1.DeviceApplication.Update", Request: "device.v1.Request", Response: "device.v1.Response", HTTP: []HTTPBinding{{Method: "PATCH", Path: "/v1/device", Body: "payload"}}, Operation: &OperationDeclaration{ID: "device.update", UseCase: "update", Permissions: []string{"device.write"}, PermissionMode: "all"}}}}},
 	}
 	if _, err := RenderApplicationCode(manifest, ApplicationCodeOptions{RootImport: "example.com/biz/internal"}); err == nil || !strings.Contains(err.Error(), "handwritten mapping") {
 		t.Fatalf("expected explicit handwritten mapping rejection, got %v", err)
@@ -73,15 +76,15 @@ func TestRenderApplicationCodeRejectsBusinessSemanticBodyMapping(t *testing.T) {
 func TestRenderRESTAppliesPathAfterWholeBody(t *testing.T) {
 	manifest := Manifest{
 		SchemaVersion: ManifestVersion,
-		Files: []File{{Name: "device.proto", Package: "device.v1", GoPackage: "example.com/biz/contracts/device/v1;devicev1", Domain: &DomainDeclaration{Name: "device"}}},
+		Files:         []File{{Name: "device.proto", Package: "device.v1", GoPackage: "example.com/biz/contracts/device/v1;devicev1", Domain: &DomainDeclaration{Name: "device"}}},
 		Messages: []Message{
 			{Name: "UpdateMachineRequest", FullName: "device.v1.UpdateMachineRequest", Fields: []Field{{Name: "id", JSONName: "id", Number: 1, Kind: "scalar", Type: "string"}, {Name: "serial", JSONName: "serial", Number: 2, Kind: "scalar", Type: "string"}}},
 			{Name: "MachineDTO", FullName: "device.v1.MachineDTO"},
 		},
 		Services: []Service{{Name: "DeviceApplication", FullName: "device.v1.DeviceApplication", Domain: "device", Application: &ApplicationDeclaration{Name: "device"}, Methods: []Method{{
 			Name: "UpdateMachine", FullName: "device.v1.DeviceApplication.UpdateMachine", Request: "device.v1.UpdateMachineRequest", Response: "device.v1.MachineDTO",
-			HTTP: []HTTPBinding{{Method: "PUT", Path: "/v1/machines/{id}", Body: "*"}},
-			Operation: &OperationDeclaration{ID: "device.machine.update", UseCase: "update_machine", Permissions: []string{"device.machine.write"}, PermissionMode: "all"},
+			HTTP:          []HTTPBinding{{Method: "PUT", Path: "/v1/machines/{id}", Body: "*"}},
+			Operation:     &OperationDeclaration{ID: "device.machine.update", UseCase: "update_machine", Permissions: []string{"device.machine.write"}, PermissionMode: "all"},
 			Authorization: &AuthorizationPolicy{OperationID: "device.machine.update", Permissions: []string{"device.machine.write"}, PermissionMode: "all"},
 		}}}},
 	}
@@ -109,15 +112,15 @@ func TestRenderRESTAppliesPathAfterWholeBody(t *testing.T) {
 func TestRenderRESTImportsStrconvForParsedScalarOnly(t *testing.T) {
 	manifest := Manifest{
 		SchemaVersion: ManifestVersion,
-		Files: []File{{Name: "device.proto", Package: "device.v1", GoPackage: "example.com/biz/contracts/device/v1;devicev1", Domain: &DomainDeclaration{Name: "device"}}},
+		Files:         []File{{Name: "device.proto", Package: "device.v1", GoPackage: "example.com/biz/contracts/device/v1;devicev1", Domain: &DomainDeclaration{Name: "device"}}},
 		Messages: []Message{
 			{Name: "GetMachineRequest", FullName: "device.v1.GetMachineRequest", Fields: []Field{{Name: "slot", JSONName: "slot", Number: 1, Kind: "scalar", Type: "int32"}}},
 			{Name: "MachineDTO", FullName: "device.v1.MachineDTO"},
 		},
 		Services: []Service{{Name: "DeviceApplication", FullName: "device.v1.DeviceApplication", Domain: "device", Application: &ApplicationDeclaration{Name: "device"}, Methods: []Method{{
 			Name: "GetMachine", FullName: "device.v1.DeviceApplication.GetMachine", Request: "device.v1.GetMachineRequest", Response: "device.v1.MachineDTO",
-			HTTP: []HTTPBinding{{Method: "GET", Path: "/v1/machines/{slot}"}},
-			Operation: &OperationDeclaration{ID: "device.machine.get", UseCase: "get_machine", Permissions: []string{"device.machine.read"}, PermissionMode: "all"},
+			HTTP:          []HTTPBinding{{Method: "GET", Path: "/v1/machines/{slot}"}},
+			Operation:     &OperationDeclaration{ID: "device.machine.get", UseCase: "get_machine", Permissions: []string{"device.machine.read"}, PermissionMode: "all"},
 			Authorization: &AuthorizationPolicy{OperationID: "device.machine.get", Permissions: []string{"device.machine.read"}, PermissionMode: "all"},
 		}}}},
 	}

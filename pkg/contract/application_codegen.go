@@ -147,6 +147,24 @@ func renderOperationPolicy(service Service) (string, error) {
 		operation := method.Operation
 		fmt.Fprintf(&b, "const Operation%s authz.OperationID = %q\n", method.Name, operation.ID)
 	}
+	permissionSet := map[string]struct{}{}
+	for _, method := range service.Methods {
+		for _, permission := range method.Operation.Permissions {
+			if permission = strings.TrimSpace(permission); permission != "" {
+				permissionSet[permission] = struct{}{}
+			}
+		}
+	}
+	permissionValues := make([]string, 0, len(permissionSet))
+	for permission := range permissionSet {
+		permissionValues = append(permissionValues, permission)
+	}
+	sort.Strings(permissionValues)
+	b.WriteString("\nfunc Permissions() []authz.PermissionKey {\n\treturn []authz.PermissionKey{")
+	for _, permission := range permissionValues {
+		fmt.Fprintf(&b, "%q,", permission)
+	}
+	b.WriteString("}\n}\n")
 	b.WriteString("\nfunc Resolver() authz.StaticResolver {\n\treturn authz.NewStaticResolver(map[string]authz.Policy{\n")
 	for _, method := range service.Methods {
 		operation := method.Operation
@@ -214,19 +232,13 @@ func renderRPCAdapter(service Service, packages []protoGoPackage, rootImport str
 func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[string]Message, rootImport string) (string, error) {
 	imports := newImportSet()
 	applicationAlias := imports.add(rootImport+"/"+service.Domain+"/application", "application")
-	policyAlias := imports.add(rootImport+"/"+service.Domain+"/policy", "policy")
-	imports.add("yunka.io/framework/core/identity", "identity")
 	imports.add("yunka.io/gateway/authz", "authz")
 	imports.add("google.golang.org/protobuf/encoding/protojson", "protojson")
 
 	var handlers strings.Builder
 	var registrations strings.Builder
 	bindingCount := 0
-	protected := false
 	for _, method := range service.Methods {
-		if method.Authorization != nil && method.Authorization.ProtectedLike() {
-			protected = true
-		}
 		requestRef, err := resolveGoType(method.Request, packages, imports)
 		if err != nil {
 			return "", err
@@ -241,8 +253,6 @@ func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[
 			pattern := strings.ToUpper(binding.Method) + " " + binding.Path
 			fmt.Fprintf(&registrations, "\tmux.HandleFunc(%q, handler.%s)\n", pattern, handlerName)
 			fmt.Fprintf(&handlers, "func (handler *Handler) %s(writer http.ResponseWriter, request *http.Request) {\n", handlerName)
-			fullMethod := "/" + strings.TrimPrefix(service.FullName, ".") + "/" + method.Name
-			fmt.Fprintf(&handlers, "\tif err := handler.authorize(request, %q); err != nil { writeAuthorizationError(writer, err); return }\n", fullMethod)
 			fmt.Fprintf(&handlers, "\twire := &%s.%s{}\n", requestRef.Alias, requestRef.Type)
 			pathFields, _ := simplePathFields(binding.Path)
 			if binding.Body == "*" {
@@ -268,7 +278,6 @@ func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[
 					handlers.WriteString("\t}\n")
 				}
 			}
-			// HTTP path bindings are authoritative over body/query values. Apply them last.
 			for _, fieldName := range pathFields {
 				field, ok := findMessageField(requestMessage, fieldName)
 				if !ok {
@@ -281,7 +290,10 @@ func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[
 					return "", fmt.Errorf("contract application codegen: %s: %w", method.FullName, err)
 				}
 			}
-			fmt.Fprintf(&handlers, "\toutput, err := handler.application.%s(request.Context(), wire)\n", method.Name)
+			fullMethod := "/" + strings.TrimPrefix(service.FullName, ".") + "/" + method.Name
+			fmt.Fprintf(&handlers, "\tsecured, err := handler.runtime.Prepare(request.Context(), %q, wire)\n", fullMethod)
+			handlers.WriteString("\tif err != nil { writeSecurityError(writer, err); return }\n")
+			fmt.Fprintf(&handlers, "\toutput, err := handler.application.%s(secured, wire)\n", method.Name)
 			handlers.WriteString("\tif err != nil { http.Error(writer, \"application request failed\", http.StatusBadRequest); return }\n\tpayload, err := protojson.Marshal(output)\n\tif err != nil { http.Error(writer, \"response encoding failed\", http.StatusInternalServerError); return }\n\twriter.Header().Set(\"Content-Type\", \"application/json\")\n\t_, _ = writer.Write(payload)\n}\n\n")
 		}
 	}
@@ -293,17 +305,19 @@ func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[
 	b.WriteString(GeneratedApplicationMarker + "\n\npackage rest\n\nimport (\n\t\"errors\"\n\t\"net/http\"\n")
 	b.WriteString(imports.render())
 	b.WriteString(")\n\n")
-	fmt.Fprintf(&b, "type Handler struct { application %s.%s; authorizer authz.Authorizer; resolver authz.PolicyResolver }\n\n", applicationAlias, service.Name)
-	fmt.Fprintf(&b, "func Register(mux *http.ServeMux, application %s.%s, authorizer authz.Authorizer) error {\n", applicationAlias, service.Name)
-	b.WriteString("\tif mux == nil { return errors.New(\"contract REST adapter: mux is required\") }\n\tif application == nil { return errors.New(\"contract REST adapter: application is required\") }\n")
-	if protected {
-		b.WriteString("\tif authorizer == nil { return errors.New(\"contract REST adapter: authorizer is required for protected operations\") }\n")
-	}
-	fmt.Fprintf(&b, "\thandler := &Handler{application: application, authorizer: authorizer, resolver: %s.Resolver()}\n", policyAlias)
+	fmt.Fprintf(&b, "type Handler struct { application %s.%s; runtime authz.OperationRuntime }\n\n", applicationAlias, service.Name)
+	fmt.Fprintf(&b, "func Register(mux *http.ServeMux, application %s.%s, runtime authz.OperationRuntime) error {\n", applicationAlias, service.Name)
+	b.WriteString("\tif mux == nil { return errors.New(\"contract REST adapter: mux is required\") }\n")
+	b.WriteString("\tif application == nil { return errors.New(\"contract REST adapter: application is required\") }\n")
+	b.WriteString("\tif runtime == nil { return errors.New(\"contract REST adapter: operation runtime is required\") }\n")
+	b.WriteString("\thandler := &Handler{application: application, runtime: runtime}\n")
 	b.WriteString(registrations.String())
 	b.WriteString("\treturn nil\n}\n\n")
-	b.WriteString("func (handler *Handler) authorize(request *http.Request, key string) error {\n\tpolicyValue, ok := handler.resolver.ResolvePolicy(request.Context(), key)\n\tif !ok || !policyValue.Protected() { return nil }\n\tif handler.authorizer == nil { return errors.New(\"authorization unavailable\") }\n\tprincipal, _ := identity.FromContext(request.Context())\n\tdecision, err := handler.authorizer.Authorize(request.Context(), principal, policyValue)\n\tif err != nil { return err }\n\tif !decision.Allowed { return authz.Denied(decision) }\n\treturn nil\n}\n\n")
-	b.WriteString("func writeAuthorizationError(writer http.ResponseWriter, err error) {\n\tif !authz.IsDenied(err) { http.Error(writer, \"authorization unavailable\", http.StatusInternalServerError); return }\n\tstatusCode := http.StatusForbidden\n\tvar denied *authz.DeniedError\n\tif errors.As(err, &denied) && (denied.Decision.Reason == authz.ReasonUnauthenticated || denied.Decision.Reason == authz.ReasonAuthenticationMethod) { statusCode = http.StatusUnauthorized }\n\thttp.Error(writer, http.StatusText(statusCode), statusCode)\n}\n\n")
+	b.WriteString("func writeSecurityError(writer http.ResponseWriter, err error) {\n")
+	b.WriteString("\tif !authz.IsDenied(err) { http.Error(writer, \"authorization unavailable\", http.StatusInternalServerError); return }\n")
+	b.WriteString("\tstatusCode := http.StatusForbidden\n\tvar denied *authz.DeniedError\n")
+	b.WriteString("\tif errors.As(err, &denied) && (denied.Decision.Reason == authz.ReasonUnauthenticated || denied.Decision.Reason == authz.ReasonAuthenticationMethod) { statusCode = http.StatusUnauthorized }\n")
+	b.WriteString("\thttp.Error(writer, http.StatusText(statusCode), statusCode)\n}\n\n")
 	b.WriteString(handlers.String())
 	return b.String(), nil
 }

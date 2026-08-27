@@ -18,8 +18,8 @@ func TestC84GeneratedApplicationRuntime(t *testing.T) {
 	protocGenGo := strings.TrimSpace(os.Getenv("PROTOC_GEN_GO"))
 	protocGenGRPC := strings.TrimSpace(os.Getenv("PROTOC_GEN_GO_GRPC"))
 	for label, path := range map[string]string{
-		"PROTOC": protoc,
-		"PROTOC_GEN_GO": protocGenGo,
+		"PROTOC":             protoc,
+		"PROTOC_GEN_GO":      protocGenGo,
 		"PROTOC_GEN_GO_GRPC": protocGenGRPC,
 	} {
 		if path == "" {
@@ -98,10 +98,10 @@ replace yunka.io/pkg => %s
 	}
 
 	compiled, err := Compile(context.Background(), CompileOptions{
-		Dir: contractsRoot,
+		Dir:        contractsRoot,
 		ProtoPaths: []string{filepath.Join(repositoryRoot, "contracts", "proto")},
-		Files: []string{"device/v1/device.proto"},
-		Protoc: protoc,
+		Files:      []string{"device/v1/device.proto"},
+		Protoc:     protoc,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -230,7 +230,9 @@ func TestRESTAndGRPCSharePolicyAuthorizerAndApplication(t *testing.T) {
     if err != nil { t.Fatal(err) }
     application := &service{}
 
-    authInterceptor, err := authzgrpc.AuthorizedUnaryServerInterceptor(authorizer, policy.Resolver())
+    securityRuntime, err := authz.NewOperationRuntime(policy.Resolver(), authorizer, nil)
+    if err != nil { t.Fatal(err) }
+    authInterceptor, err := authzgrpc.SecuredUnaryServerInterceptor(securityRuntime)
     if err != nil { t.Fatal(err) }
     listener := bufconn.Listen(1024 * 1024)
     server := grpcgo.NewServer(grpcgo.ChainUnaryInterceptor(injectPrincipal(principal), authInterceptor))
@@ -247,7 +249,7 @@ func TestRESTAndGRPCSharePolicyAuthorizerAndApplication(t *testing.T) {
     if grpcResponse.GetId() != "grpc-id" || grpcResponse.GetSerial() != "shared-application" { t.Fatalf("unexpected gRPC response: %#v", grpcResponse) }
 
     mux := http.NewServeMux()
-    if err := rest.Register(mux, application, authorizer); err != nil { t.Fatal(err) }
+    if err := rest.Register(mux, application, securityRuntime); err != nil { t.Fatal(err) }
     restRequest := httptest.NewRequest(http.MethodGet, "/v1/machines/rest-id", nil)
     restRequest = restRequest.WithContext(identity.WithPrincipal(restRequest.Context(), principal))
     recorder := httptest.NewRecorder()
