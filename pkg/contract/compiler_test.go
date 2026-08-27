@@ -8,7 +8,8 @@ import (
 	"testing"
 )
 
-func TestCompileDirectoryAndDirectiveHTTP(t *testing.T) {
+func testProtoc(t *testing.T) string {
+	t.Helper()
 	protoc := os.Getenv("PROTOC")
 	if protoc == "" {
 		if path, err := exec.LookPath("protoc"); err == nil {
@@ -18,6 +19,11 @@ func TestCompileDirectoryAndDirectiveHTTP(t *testing.T) {
 	if protoc == "" {
 		t.Skip("protoc is not available")
 	}
+	return protoc
+}
+
+func TestCompileDirectoryAndDirectiveHTTP(t *testing.T) {
+	protoc := testProtoc(t)
 	dir := t.TempDir()
 	proto := `syntax = "proto3";
 package demo.v1;
@@ -37,6 +43,9 @@ service EchoService {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if result.Manifest.SchemaVersion != ManifestVersion {
+		t.Fatalf("schemaVersion=%d want=%d", result.Manifest.SchemaVersion, ManifestVersion)
+	}
 	if len(result.Manifest.Services) != 1 || len(result.Manifest.Services[0].Methods) != 1 {
 		t.Fatalf("unexpected services: %#v", result.Manifest.Services)
 	}
@@ -55,28 +64,76 @@ service EchoService {
 	}
 }
 
-func TestCompileExistingLegacyProtoSubset(t *testing.T) {
-	protoc := os.Getenv("PROTOC")
-	if protoc == "" {
-		if path, err := exec.LookPath("protoc"); err == nil {
-			protoc = path
-		}
-	}
-	if protoc == "" {
-		t.Skip("protoc is not available")
-	}
-	dir := filepath.Join("..", "..", "app", "cmd", "rpc", "pb")
-	if _, err := os.Stat(dir); err != nil {
-		t.Skip("legacy proto fixture is not present")
-	}
-	result, err := Compile(context.Background(), CompileOptions{Dir: dir, Protoc: protoc})
+func TestCompileTypedPBDSL(t *testing.T) {
+	protoc := testProtoc(t)
+	repositoryRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Manifest.Services) != 2 {
-		t.Fatalf("services=%d want=2", len(result.Manifest.Services))
+	dir := t.TempDir()
+	proto := `syntax = "proto3";
+package device.v1;
+import "yunka/dsl/v1/options.proto";
+option go_package = "example/device/v1;devicev1";
+option (yunka.dsl.v1.domain) = { name: "device" version: "v1" };
+message GetMachineRequest {
+  option (yunka.dsl.v1.dto) = { kind: DTO_INPUT };
+  string id = 1;
+}
+message MachineDTO {
+  option (yunka.dsl.v1.dto) = { kind: DTO_OUTPUT };
+  string id = 1;
+  string serial = 2;
+}
+service DeviceApplication {
+  option (yunka.dsl.v1.application) = { name: "device_management" };
+  rpc GetMachine(GetMachineRequest) returns (MachineDTO) {
+    option (yunka.dsl.v1.operation) = {
+      id: "device.machine.get"
+      use_case: "get_machine"
+      permissions: "device.machine.read"
+      permission_mode: PERMISSION_ALL
+      tenant_required: true
+      authentication: AUTHENTICATION_JWT
+    };
+  }
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "device.proto"), []byte(proto), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	if len(result.Manifest.Messages) == 0 || len(result.Manifest.Enums) == 0 {
-		t.Fatalf("unexpected empty schema: messages=%d enums=%d", len(result.Manifest.Messages), len(result.Manifest.Enums))
+	result, err := Compile(context.Background(), CompileOptions{
+		Dir:        dir,
+		ProtoPaths: []string{filepath.Join(repositoryRoot, "contracts", "proto")},
+		Files:      []string{"device.proto"},
+		Protoc:     protoc,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Manifest.Files) != 1 || result.Manifest.Files[0].Domain == nil || result.Manifest.Files[0].Domain.Name != "device" {
+		t.Fatalf("typed domain missing: %#v", result.Manifest.Files)
+	}
+	if len(result.Manifest.Messages) != 2 || result.Manifest.Messages[0].DTO == nil || result.Manifest.Messages[1].DTO == nil {
+		t.Fatalf("typed dto metadata missing: %#v", result.Manifest.Messages)
+	}
+	service := result.Manifest.Services[0]
+	if service.Domain != "device" || service.Application == nil || service.Application.Name != "device_management" {
+		t.Fatalf("typed application missing: %#v", service)
+	}
+	method := service.Methods[0]
+	if method.Operation == nil || method.Operation.ID != "device.machine.get" || method.Operation.UseCase != "get_machine" {
+		t.Fatalf("typed operation missing: %#v", method)
+	}
+	if method.Authorization == nil || method.Authorization.OperationID != "device.machine.get" || len(method.Authorization.Permissions) != 1 || method.Authorization.Permissions[0] != "device.machine.read" || method.Authorization.PermissionMode != "all" || !method.Authorization.TenantRequired {
+		t.Fatalf("typed authorization normalization failed: %#v", method.Authorization)
+	}
+	if diagnostics := Lint(result.Manifest); HasErrors(diagnostics) {
+		t.Fatalf("typed DSL lint failed: %#v", diagnostics)
+	}
+	for _, message := range result.Manifest.Messages {
+		if len(message.FullName) >= len("yunka.dsl") && message.FullName[:len("yunka.dsl")] == "yunka.dsl" {
+			t.Fatalf("DSL support message leaked into business manifest: %s", message.FullName)
+		}
 	}
 }
