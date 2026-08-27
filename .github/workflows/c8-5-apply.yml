@@ -6,6 +6,7 @@ on:
       - agent/c8-5-operation-security-boundary
     paths:
       - tools/c8_5_apply.py
+      - tools/c8_5_fix_tests.py
       - .github/workflows/c8-5-apply.yml
 
 permissions:
@@ -43,8 +44,9 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/c8_5_apply.py
-          gofmt -w gateway/authz/operation_runtime.go gateway/authz/operation_runtime_test.go gateway/authz/types.go gateway/rpc/transport/grpc/authz.go pkg/contract/application_codegen.go pkg/contract/application_runtime_test.go
-          rm tools/c8_5_apply.py
+          python3 tools/c8_5_fix_tests.py
+          gofmt -w gateway/authz/operation_runtime.go gateway/authz/operation_runtime_test.go gateway/authz/types.go gateway/rpc/transport/grpc/authz.go pkg/contract/application_codegen.go pkg/contract/application_runtime_test.go pkg/contract/application_codegen_test.go
+          rm tools/c8_5_apply.py tools/c8_5_fix_tests.py
 
       - name: Targeted tests
         shell: bash
