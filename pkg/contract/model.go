@@ -140,7 +140,7 @@ func (manifest *Manifest) Normalize() {
 			if manifest.Enums[i].Values[a].Number == manifest.Enums[i].Values[b].Number {
 				return manifest.Enums[i].Values[a].Name < manifest.Enums[i].Values[b].Name
 			}
-			return manifest.Enums[i].Values[a].Number < manifest.Enums[j].Values[b].Number
+			return manifest.Enums[i].Values[a].Number < manifest.Enums[i].Values[b].Number
 		})
 	}
 	sort.Slice(manifest.Enums, func(i, j int) bool { return manifest.Enums[i].FullName < manifest.Enums[j].FullName })
