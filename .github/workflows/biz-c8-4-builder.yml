@@ -88,7 +88,7 @@ jobs:
           rm -rf "$WORK"
           mkdir -p "$WORK"
           ln -s "$GITHUB_WORKSPACE" "$WORK/yunka.io"
-          cat tools/biz-c8-4-seed.part-* | base64 -d | tar -xz -C "$WORK"
+          python3 -c 'import base64,glob,sys; data=b"".join(open(path,"rb").read() for path in sorted(glob.glob("tools/biz-c8-4-seed.part-*"))); sys.stdout.buffer.write(base64.b64decode(data, validate=True))' | tar -xz -C "$WORK"
           mv "$WORK/biz_seed" "$WORK/biz"
           BIZ="$WORK/biz"
 
