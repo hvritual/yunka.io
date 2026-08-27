@@ -33,6 +33,97 @@ type goTypeRef struct {
 	Type       string
 }
 
+type serviceCodegenNaming struct {
+	Multi                bool
+	FileStem             string
+	Symbol               string
+	ApplicationInterface string
+	OperationPrefix      string
+	PermissionsFunc      string
+	ResolverFunc         string
+	PoliciesFunc         string
+	RPCServer            string
+	RPCRegister          string
+	RESTHandler          string
+	RESTRegister         string
+	SecurityError        string
+}
+
+func namingForService(service Service, multi bool) serviceCodegenNaming {
+	fileStem := safeFileName(service.Application.Name)
+	if fileStem == "" {
+		fileStem = safeFileName(service.Name)
+	}
+	if !multi {
+		return serviceCodegenNaming{
+			FileStem:             fileStem,
+			Symbol:               service.Name,
+			ApplicationInterface: service.Name,
+			PermissionsFunc:      "Permissions",
+			ResolverFunc:         "Resolver",
+			PoliciesFunc:         "policies",
+			RPCServer:            service.Name + "Server",
+			RPCRegister:          "Register",
+			RESTHandler:          "Handler",
+			RESTRegister:         "Register",
+			SecurityError:        "writeSecurityError",
+		}
+	}
+	symbol := exportedApplicationSymbol(service.Application.Name)
+	if symbol == "" {
+		symbol = exportedApplicationSymbol(service.Name)
+	}
+	applicationInterface := symbol
+	if !strings.HasSuffix(applicationInterface, "Application") {
+		applicationInterface += "Application"
+	}
+	privateSymbol := lowerFirstIdentifier(symbol)
+	return serviceCodegenNaming{
+		Multi:                true,
+		FileStem:             fileStem,
+		Symbol:               symbol,
+		ApplicationInterface: applicationInterface,
+		OperationPrefix:      symbol,
+		PermissionsFunc:      symbol + "Permissions",
+		ResolverFunc:         symbol + "Resolver",
+		PoliciesFunc:         privateSymbol + "Policies",
+		RPCServer:            symbol + "Server",
+		RPCRegister:          "Register" + symbol,
+		RESTHandler:          symbol + "Handler",
+		RESTRegister:         "Register" + symbol,
+		SecurityError:        "write" + symbol + "SecurityError",
+	}
+}
+
+func exportedApplicationSymbol(value string) string {
+	parts := strings.FieldsFunc(strings.TrimSpace(value), func(current rune) bool {
+		return !unicode.IsLetter(current) && !unicode.IsDigit(current)
+	})
+	var b strings.Builder
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		runes := []rune(part)
+		runes[0] = unicode.ToUpper(runes[0])
+		b.WriteString(string(runes))
+	}
+	return sanitizeGoIdentifier(b.String())
+}
+
+func lowerFirstIdentifier(value string) string {
+	runes := []rune(value)
+	if len(runes) == 0 {
+		return "application"
+	}
+	runes[0] = unicode.ToLower(runes[0])
+	return string(runes)
+}
+
+func operationIdentifier(naming serviceCodegenNaming, method Method) string {
+	return "Operation" + naming.OperationPrefix + method.Name
+}
+
 func RenderApplicationCode(manifest Manifest, options ApplicationCodeOptions) ([]GeneratedApplicationFile, error) {
 	manifest.Normalize()
 	rootImport := strings.TrimRight(strings.TrimSpace(options.RootImport), "/")
@@ -44,7 +135,7 @@ func RenderApplicationCode(manifest Manifest, options ApplicationCodeOptions) ([
 		return nil, err
 	}
 	messages := messageIndex(manifest)
-	var files []GeneratedApplicationFile
+	typedByDomain := make(map[string][]Service)
 	for _, service := range manifest.Services {
 		if service.Application == nil {
 			continue
@@ -52,71 +143,107 @@ func RenderApplicationCode(manifest Manifest, options ApplicationCodeOptions) ([
 		if service.Domain == "" {
 			return nil, fmt.Errorf("contract application codegen: service %s has no domain", service.FullName)
 		}
-		for _, method := range service.Methods {
-			if method.Operation == nil {
-				return nil, fmt.Errorf("contract application codegen: typed application method %s has no operation", method.FullName)
-			}
-			if method.ClientStreaming || method.ServerStreaming {
-				return nil, fmt.Errorf("contract application codegen: streaming method %s requires handwritten adapter", method.FullName)
-			}
-			if _, ok := messages[method.Request]; !ok && !knownExternalType(method.Request) {
-				return nil, fmt.Errorf("contract application codegen: request %s is not in the manifest", method.Request)
-			}
-			if _, ok := messages[method.Response]; !ok && !knownExternalType(method.Response) {
-				return nil, fmt.Errorf("contract application codegen: response %s is not in the manifest", method.Response)
-			}
-			for _, binding := range method.HTTP {
-				if binding.Body != "" && binding.Body != "*" {
-					return nil, fmt.Errorf("contract application codegen: %s HTTP body %q requires handwritten mapping", method.FullName, binding.Body)
-				}
-				if binding.ResponseBody != "" {
-					return nil, fmt.Errorf("contract application codegen: %s response_body requires handwritten mapping", method.FullName)
-				}
-				if _, err := simplePathFields(binding.Path); err != nil {
-					return nil, fmt.Errorf("contract application codegen: %s: %w", method.FullName, err)
-				}
-			}
-		}
+		typedByDomain[service.Domain] = append(typedByDomain[service.Domain], service)
+	}
+	domains := make([]string, 0, len(typedByDomain))
+	for domain := range typedByDomain {
+		domains = append(domains, domain)
+	}
+	sort.Strings(domains)
 
-		domainDir := filepath.ToSlash(service.Domain)
-		fileStem := safeFileName(service.Application.Name)
-		if fileStem == "" {
-			fileStem = safeFileName(service.Name)
+	var files []GeneratedApplicationFile
+	for _, domain := range domains {
+		services := append([]Service(nil), typedByDomain[domain]...)
+		sort.Slice(services, func(i, j int) bool { return services[i].FullName < services[j].FullName })
+		multi := len(services) > 1
+		namings := make(map[string]serviceCodegenNaming, len(services))
+		codegenOwners := map[string]string{}
+		for _, service := range services {
+			naming := namingForService(service, multi)
+			if multi {
+				identity := naming.FileStem + "|" + naming.Symbol
+				if owner, duplicate := codegenOwners[identity]; duplicate && owner != service.FullName {
+					return nil, fmt.Errorf("contract application codegen: applications %s and %s collapse to the same generated identity %q", owner, service.FullName, identity)
+				}
+				codegenOwners[identity] = service.FullName
+			}
+			namings[service.FullName] = naming
+			for _, method := range service.Methods {
+				if method.Operation == nil {
+					return nil, fmt.Errorf("contract application codegen: typed application method %s has no operation", method.FullName)
+				}
+				if method.ClientStreaming || method.ServerStreaming {
+					return nil, fmt.Errorf("contract application codegen: streaming method %s requires handwritten adapter", method.FullName)
+				}
+				if _, ok := messages[method.Request]; !ok && !knownExternalType(method.Request) {
+					return nil, fmt.Errorf("contract application codegen: request %s is not in the manifest", method.Request)
+				}
+				if _, ok := messages[method.Response]; !ok && !knownExternalType(method.Response) {
+					return nil, fmt.Errorf("contract application codegen: response %s is not in the manifest", method.Response)
+				}
+				for _, binding := range method.HTTP {
+					if binding.Body != "" && binding.Body != "*" {
+						return nil, fmt.Errorf("contract application codegen: %s HTTP body %q requires handwritten mapping", method.FullName, binding.Body)
+					}
+					if binding.ResponseBody != "" {
+						return nil, fmt.Errorf("contract application codegen: %s response_body requires handwritten mapping", method.FullName)
+					}
+					if _, err := simplePathFields(binding.Path); err != nil {
+						return nil, fmt.Errorf("contract application codegen: %s: %w", method.FullName, err)
+					}
+				}
+			}
+
+			domainDir := filepath.ToSlash(service.Domain)
+			artifacts := []struct {
+				path   string
+				render func() (string, error)
+			}{
+				{filepath.ToSlash(filepath.Join(domainDir, "application", "zz_yunka_"+naming.FileStem+"_application_port_gen.go")), func() (string, error) {
+					return renderApplicationPort(service, packages, naming)
+				}},
+				{filepath.ToSlash(filepath.Join(domainDir, "policy", "zz_yunka_"+naming.FileStem+"_operation_policy_gen.go")), func() (string, error) {
+					return renderOperationPolicy(service, naming)
+				}},
+				{filepath.ToSlash(filepath.Join(domainDir, "transport", "rpc", "zz_yunka_"+naming.FileStem+"_rpc_adapter_gen.go")), func() (string, error) {
+					return renderRPCAdapter(service, packages, rootImport, naming)
+				}},
+				{filepath.ToSlash(filepath.Join(domainDir, "transport", "rest", "zz_yunka_"+naming.FileStem+"_rest_adapter_gen.go")), func() (string, error) {
+					return renderRESTAdapter(service, packages, messages, rootImport, naming)
+				}},
+			}
+			for _, artifact := range artifacts {
+				source, err := artifact.render()
+				if err != nil {
+					return nil, err
+				}
+				formatted, err := format.Source([]byte(source))
+				if err != nil {
+					return nil, fmt.Errorf("contract application codegen: format %s: %w\n%s", artifact.path, err, source)
+				}
+				files = append(files, GeneratedApplicationFile{Path: artifact.path, Content: formatted})
+			}
 		}
-		artifacts := []struct {
-			path   string
-			render func() (string, error)
-		}{
-			{filepath.ToSlash(filepath.Join(domainDir, "application", "zz_yunka_"+fileStem+"_application_port_gen.go")), func() (string, error) {
-				return renderApplicationPort(service, packages)
-			}},
-			{filepath.ToSlash(filepath.Join(domainDir, "policy", "zz_yunka_"+fileStem+"_operation_policy_gen.go")), func() (string, error) {
-				return renderOperationPolicy(service)
-			}},
-			{filepath.ToSlash(filepath.Join(domainDir, "transport", "rpc", "zz_yunka_"+fileStem+"_rpc_adapter_gen.go")), func() (string, error) {
-				return renderRPCAdapter(service, packages, rootImport)
-			}},
-			{filepath.ToSlash(filepath.Join(domainDir, "transport", "rest", "zz_yunka_"+fileStem+"_rest_adapter_gen.go")), func() (string, error) {
-				return renderRESTAdapter(service, packages, messages, rootImport)
-			}},
-		}
-		for _, artifact := range artifacts {
-			source, err := artifact.render()
+		if multi {
+			source, err := renderDomainPolicy(services, namings)
 			if err != nil {
 				return nil, err
 			}
 			formatted, err := format.Source([]byte(source))
 			if err != nil {
-				return nil, fmt.Errorf("contract application codegen: format %s: %w\n%s", artifact.path, err, source)
+				return nil, fmt.Errorf("contract application codegen: format domain policy %s: %w\n%s", domain, err, source)
 			}
-			files = append(files, GeneratedApplicationFile{Path: artifact.path, Content: formatted})
+			files = append(files, GeneratedApplicationFile{
+				Path:    filepath.ToSlash(filepath.Join(domain, "policy", "zz_yunka_domain_operation_policy_gen.go")),
+				Content: formatted,
+			})
 		}
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	return files, nil
 }
 
-func renderApplicationPort(service Service, packages []protoGoPackage) (string, error) {
+func renderApplicationPort(service Service, packages []protoGoPackage, naming serviceCodegenNaming) (string, error) {
 	imports := newImportSet()
 	var methods strings.Builder
 	for _, method := range service.Methods {
@@ -135,18 +262,100 @@ func renderApplicationPort(service Service, packages []protoGoPackage) (string, 
 	b.WriteString(imports.render())
 	b.WriteString(")\n\n")
 	fmt.Fprintf(&b, "// %s is generated from PB and contains no business implementation.\n", service.Name)
-	fmt.Fprintf(&b, "type %s interface {\n%s}\n", service.Name, methods.String())
+	fmt.Fprintf(&b, "type %s interface {\n%s}\n", naming.ApplicationInterface, methods.String())
 	return b.String(), nil
 }
 
-func renderOperationPolicy(service Service) (string, error) {
+func renderOperationPolicy(service Service, naming serviceCodegenNaming) (string, error) {
+	if !naming.Multi {
+		var b strings.Builder
+		b.WriteString(GeneratedApplicationMarker + "\n\npackage policy\n\n")
+		b.WriteString("import \"yunka.io/gateway/authz\"\n\n")
+		for _, method := range service.Methods {
+			operation := method.Operation
+			fmt.Fprintf(&b, "const Operation%s authz.OperationID = %q\n", method.Name, operation.ID)
+		}
+		permissionSet := map[string]struct{}{}
+		for _, method := range service.Methods {
+			for _, permission := range method.Operation.Permissions {
+				if permission = strings.TrimSpace(permission); permission != "" {
+					permissionSet[permission] = struct{}{}
+				}
+			}
+		}
+		permissionValues := make([]string, 0, len(permissionSet))
+		for permission := range permissionSet {
+			permissionValues = append(permissionValues, permission)
+		}
+		sort.Strings(permissionValues)
+		b.WriteString("\nfunc Permissions() []authz.PermissionKey {\n\treturn []authz.PermissionKey{")
+		for _, permission := range permissionValues {
+			fmt.Fprintf(&b, "%q,", permission)
+		}
+		b.WriteString("}\n}\n")
+		b.WriteString("\nfunc Resolver() authz.StaticResolver {\n\treturn authz.NewStaticResolver(map[string]authz.Policy{\n")
+		for _, method := range service.Methods {
+			operation := method.Operation
+			fullMethod := "/" + strings.TrimPrefix(service.FullName, ".") + "/" + method.Name
+			fmt.Fprintf(&b, "\t\t%q: {Operation: Operation%s", fullMethod, method.Name)
+			writeOperationPolicyLiteral(&b, operation)
+			b.WriteString("},\n")
+		}
+		b.WriteString("\t})\n}\n")
+		return b.String(), nil
+	}
+
 	var b strings.Builder
 	b.WriteString(GeneratedApplicationMarker + "\n\npackage policy\n\n")
 	b.WriteString("import \"yunka.io/gateway/authz\"\n\n")
 	for _, method := range service.Methods {
-		operation := method.Operation
-		fmt.Fprintf(&b, "const Operation%s authz.OperationID = %q\n", method.Name, operation.ID)
+		fmt.Fprintf(&b, "const %s authz.OperationID = %q\n", operationIdentifier(naming, method), method.Operation.ID)
 	}
+	permissions := servicePermissionValues(service)
+	fmt.Fprintf(&b, "\nfunc %s() []authz.PermissionKey {\n\treturn []authz.PermissionKey{", naming.PermissionsFunc)
+	for _, permission := range permissions {
+		fmt.Fprintf(&b, "%q,", permission)
+	}
+	b.WriteString("}\n}\n")
+	fmt.Fprintf(&b, "\nfunc %s() authz.StaticResolver { return authz.NewStaticResolver(%s()) }\n", naming.ResolverFunc, naming.PoliciesFunc)
+	fmt.Fprintf(&b, "\nfunc %s() map[string]authz.Policy {\n\treturn map[string]authz.Policy{\n", naming.PoliciesFunc)
+	for _, method := range service.Methods {
+		operation := method.Operation
+		fullMethod := "/" + strings.TrimPrefix(service.FullName, ".") + "/" + method.Name
+		fmt.Fprintf(&b, "\t\t%q: {Operation: %s", fullMethod, operationIdentifier(naming, method))
+		writeOperationPolicyLiteral(&b, operation)
+		b.WriteString("},\n")
+	}
+	b.WriteString("\t}\n}\n")
+	return b.String(), nil
+}
+
+func writeOperationPolicyLiteral(b *strings.Builder, operation *OperationDeclaration) {
+	if len(operation.Permissions) > 0 {
+		b.WriteString(", Permissions: []authz.PermissionKey{")
+		for _, permission := range operation.Permissions {
+			fmt.Fprintf(b, "%q,", permission)
+		}
+		b.WriteString("}")
+	}
+	if operation.PermissionMode == "any" {
+		b.WriteString(", Mode: authz.PermissionAny")
+	} else {
+		b.WriteString(", Mode: authz.PermissionAll")
+	}
+	if operation.TenantRequired {
+		b.WriteString(", TenantRequired: true")
+	}
+	if len(operation.Authentication) > 0 {
+		b.WriteString(", Authentication: []string{")
+		for _, authentication := range operation.Authentication {
+			fmt.Fprintf(b, "%q,", authentication)
+		}
+		b.WriteString("}")
+	}
+}
+
+func servicePermissionValues(service Service) []string {
 	permissionSet := map[string]struct{}{}
 	for _, method := range service.Methods {
 		for _, permission := range method.Operation.Permissions {
@@ -155,50 +364,48 @@ func renderOperationPolicy(service Service) (string, error) {
 			}
 		}
 	}
-	permissionValues := make([]string, 0, len(permissionSet))
+	values := make([]string, 0, len(permissionSet))
 	for permission := range permissionSet {
-		permissionValues = append(permissionValues, permission)
+		values = append(values, permission)
 	}
-	sort.Strings(permissionValues)
-	b.WriteString("\nfunc Permissions() []authz.PermissionKey {\n\treturn []authz.PermissionKey{")
-	for _, permission := range permissionValues {
+	sort.Strings(values)
+	return values
+}
+
+func renderDomainPolicy(services []Service, namings map[string]serviceCodegenNaming) (string, error) {
+	permissionSet := map[string]struct{}{}
+	for _, service := range services {
+		for _, permission := range servicePermissionValues(service) {
+			permissionSet[permission] = struct{}{}
+		}
+	}
+	permissions := make([]string, 0, len(permissionSet))
+	for permission := range permissionSet {
+		permissions = append(permissions, permission)
+	}
+	sort.Strings(permissions)
+
+	var b strings.Builder
+	b.WriteString(GeneratedApplicationMarker + "\n\npackage policy\n\n")
+	b.WriteString("import \"yunka.io/gateway/authz\"\n\n")
+	b.WriteString("func Permissions() []authz.PermissionKey {\n\treturn []authz.PermissionKey{")
+	for _, permission := range permissions {
 		fmt.Fprintf(&b, "%q,", permission)
 	}
 	b.WriteString("}\n}\n")
-	b.WriteString("\nfunc Resolver() authz.StaticResolver {\n\treturn authz.NewStaticResolver(map[string]authz.Policy{\n")
-	for _, method := range service.Methods {
-		operation := method.Operation
-		fullMethod := "/" + strings.TrimPrefix(service.FullName, ".") + "/" + method.Name
-		fmt.Fprintf(&b, "\t\t%q: {Operation: Operation%s", fullMethod, method.Name)
-		if len(operation.Permissions) > 0 {
-			b.WriteString(", Permissions: []authz.PermissionKey{")
-			for _, permission := range operation.Permissions {
-				fmt.Fprintf(&b, "%q,", permission)
-			}
-			b.WriteString("}")
+	b.WriteString("\nfunc Resolver() authz.StaticResolver {\n\tpolicies := map[string]authz.Policy{}\n")
+	for _, service := range services {
+		naming, ok := namings[service.FullName]
+		if !ok {
+			return "", fmt.Errorf("contract application codegen: missing naming for service %s", service.FullName)
 		}
-		if operation.PermissionMode == "any" {
-			b.WriteString(", Mode: authz.PermissionAny")
-		} else {
-			b.WriteString(", Mode: authz.PermissionAll")
-		}
-		if operation.TenantRequired {
-			b.WriteString(", TenantRequired: true")
-		}
-		if len(operation.Authentication) > 0 {
-			b.WriteString(", Authentication: []string{")
-			for _, authentication := range operation.Authentication {
-				fmt.Fprintf(&b, "%q,", authentication)
-			}
-			b.WriteString("}")
-		}
-		b.WriteString("},\n")
+		fmt.Fprintf(&b, "\tfor key, value := range %s() { policies[key] = value }\n", naming.PoliciesFunc)
 	}
-	b.WriteString("\t})\n}\n")
+	b.WriteString("\treturn authz.NewStaticResolver(policies)\n}\n")
 	return b.String(), nil
 }
 
-func renderRPCAdapter(service Service, packages []protoGoPackage, rootImport string) (string, error) {
+func renderRPCAdapter(service Service, packages []protoGoPackage, rootImport string, naming serviceCodegenNaming) (string, error) {
 	imports := newImportSet()
 	servicePackage, err := resolveServicePackage(service, packages, imports)
 	if err != nil {
@@ -217,19 +424,19 @@ func renderRPCAdapter(service Service, packages []protoGoPackage, rootImport str
 		if err != nil {
 			return "", err
 		}
-		fmt.Fprintf(&methods, "func (server *%sServer) %s(ctx context.Context, request *%s.%s) (*%s.%s, error) { return server.application.%s(ctx, request) }\n\n", service.Name, method.Name, request.Alias, request.Type, response.Alias, response.Type, method.Name)
+		fmt.Fprintf(&methods, "func (server *%s) %s(ctx context.Context, request *%s.%s) (*%s.%s, error) { return server.application.%s(ctx, request) }\n\n", naming.RPCServer, method.Name, request.Alias, request.Type, response.Alias, response.Type, method.Name)
 	}
 	var b strings.Builder
 	b.WriteString(GeneratedApplicationMarker + "\n\npackage rpc\n\nimport (\n\t\"context\"\n")
 	b.WriteString(imports.render())
 	b.WriteString(")\n\n")
-	fmt.Fprintf(&b, "type %sServer struct {\n\t%s.Unimplemented%sServer\n\tapplication %s.%s\n}\n\n", service.Name, servicePackage.Alias, service.Name, applicationAlias, service.Name)
-	fmt.Fprintf(&b, "func Register(registrar grpc.ServiceRegistrar, application %s.%s) {\n\t%s.Register%sServer(registrar, &%sServer{application: application})\n}\n\n", applicationAlias, service.Name, servicePackage.Alias, service.Name, service.Name)
+	fmt.Fprintf(&b, "type %s struct {\n\t%s.Unimplemented%sServer\n\tapplication %s.%s\n}\n\n", naming.RPCServer, servicePackage.Alias, service.Name, applicationAlias, naming.ApplicationInterface)
+	fmt.Fprintf(&b, "func %s(registrar grpc.ServiceRegistrar, application %s.%s) {\n\t%s.Register%sServer(registrar, &%s{application: application})\n}\n\n", naming.RPCRegister, applicationAlias, naming.ApplicationInterface, servicePackage.Alias, service.Name, naming.RPCServer)
 	b.WriteString(methods.String())
 	return b.String(), nil
 }
 
-func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[string]Message, rootImport string) (string, error) {
+func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[string]Message, rootImport string, naming serviceCodegenNaming) (string, error) {
 	imports := newImportSet()
 	applicationAlias := imports.add(rootImport+"/"+service.Domain+"/application", "application")
 	imports.add("yunka.io/gateway/authz", "authz")
@@ -252,7 +459,7 @@ func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[
 			}
 			pattern := strings.ToUpper(binding.Method) + " " + binding.Path
 			fmt.Fprintf(&registrations, "\tmux.HandleFunc(%q, handler.%s)\n", pattern, handlerName)
-			fmt.Fprintf(&handlers, "func (handler *Handler) %s(writer http.ResponseWriter, request *http.Request) {\n", handlerName)
+			fmt.Fprintf(&handlers, "func (handler *%s) %s(writer http.ResponseWriter, request *http.Request) {\n", naming.RESTHandler, handlerName)
 			fmt.Fprintf(&handlers, "\twire := &%s.%s{}\n", requestRef.Alias, requestRef.Type)
 			pathFields, _ := simplePathFields(binding.Path)
 			if binding.Body == "*" {
@@ -292,7 +499,7 @@ func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[
 			}
 			fullMethod := "/" + strings.TrimPrefix(service.FullName, ".") + "/" + method.Name
 			fmt.Fprintf(&handlers, "\tsecured, err := handler.runtime.Prepare(request.Context(), %q, wire)\n", fullMethod)
-			handlers.WriteString("\tif err != nil { writeSecurityError(writer, err); return }\n")
+			fmt.Fprintf(&handlers, "\tif err != nil { %s(writer, err); return }\n", naming.SecurityError)
 			fmt.Fprintf(&handlers, "\toutput, err := handler.application.%s(secured, wire)\n", method.Name)
 			handlers.WriteString("\tif err != nil { http.Error(writer, \"application request failed\", http.StatusBadRequest); return }\n\tpayload, err := protojson.Marshal(output)\n\tif err != nil { http.Error(writer, \"response encoding failed\", http.StatusInternalServerError); return }\n\twriter.Header().Set(\"Content-Type\", \"application/json\")\n\t_, _ = writer.Write(payload)\n}\n\n")
 		}
@@ -305,15 +512,15 @@ func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[
 	b.WriteString(GeneratedApplicationMarker + "\n\npackage rest\n\nimport (\n\t\"errors\"\n\t\"net/http\"\n")
 	b.WriteString(imports.render())
 	b.WriteString(")\n\n")
-	fmt.Fprintf(&b, "type Handler struct { application %s.%s; runtime authz.OperationRuntime }\n\n", applicationAlias, service.Name)
-	fmt.Fprintf(&b, "func Register(mux *http.ServeMux, application %s.%s, runtime authz.OperationRuntime) error {\n", applicationAlias, service.Name)
+	fmt.Fprintf(&b, "type %s struct { application %s.%s; runtime authz.OperationRuntime }\n\n", naming.RESTHandler, applicationAlias, naming.ApplicationInterface)
+	fmt.Fprintf(&b, "func %s(mux *http.ServeMux, application %s.%s, runtime authz.OperationRuntime) error {\n", naming.RESTRegister, applicationAlias, naming.ApplicationInterface)
 	b.WriteString("\tif mux == nil { return errors.New(\"contract REST adapter: mux is required\") }\n")
 	b.WriteString("\tif application == nil { return errors.New(\"contract REST adapter: application is required\") }\n")
 	b.WriteString("\tif runtime == nil { return errors.New(\"contract REST adapter: operation runtime is required\") }\n")
-	b.WriteString("\thandler := &Handler{application: application, runtime: runtime}\n")
+	fmt.Fprintf(&b, "\thandler := &%s{application: application, runtime: runtime}\n", naming.RESTHandler)
 	b.WriteString(registrations.String())
 	b.WriteString("\treturn nil\n}\n\n")
-	b.WriteString("func writeSecurityError(writer http.ResponseWriter, err error) {\n")
+	fmt.Fprintf(&b, "func %s(writer http.ResponseWriter, err error) {\n", naming.SecurityError)
 	b.WriteString("\tif !authz.IsDenied(err) { http.Error(writer, \"authorization unavailable\", http.StatusInternalServerError); return }\n")
 	b.WriteString("\tstatusCode := http.StatusForbidden\n\tvar denied *authz.DeniedError\n")
 	b.WriteString("\tif errors.As(err, &denied) && (denied.Decision.Reason == authz.ReasonUnauthenticated || denied.Decision.Reason == authz.ReasonAuthenticationMethod) { statusCode = http.StatusUnauthorized }\n")

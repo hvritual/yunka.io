@@ -125,7 +125,7 @@ domain-check: architecture-check
 	@cd app && $(GO) test -count=10 ./cmd/domain
 
 dsl-check: toolchain-check architecture-check rpc-tools rpc-toolchain-check
-	@set -eu; protoc_path="$$(command -v "$(PROTOC)")"; cd pkg && YUNKA_REQUIRE_C84_RUNTIME=1 PROTOC="$$protoc_path" PROTOC_GEN_GO="$(PROTOC_GEN_GO)" PROTOC_GEN_GO_GRPC="$(PROTOC_GEN_GO_GRPC)" $(GO) test -count=1 ./contract -run '^TestC84GeneratedApplicationRuntime$$'
+	@set -eu; protoc_path="$$(command -v "$(PROTOC)")"; cd pkg && YUNKA_REQUIRE_C84_RUNTIME=1 YUNKA_REQUIRE_C86_RUNTIME=1 PROTOC="$$protoc_path" PROTOC_GEN_GO="$(PROTOC_GEN_GO)" PROTOC_GEN_GO_GRPC="$(PROTOC_GEN_GO_GRPC)" $(GO) test -count=1 ./contract -run '^TestC8(4GeneratedApplication|6GeneratedMultiApplication)Runtime$$'
 	@cd pkg && $(GO) test -count=10 ./contract ./applicationgraph ./architecturepolicy
 	@cd framework && $(GO) test -count=10 ./applicationgraph
 	@cd app && PROTOC="$(PROTOC)" $(GO) run ./cmd contract lint \
