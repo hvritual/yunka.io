@@ -1,0 +1,65 @@
+name: c8-5-apply
+
+on:
+  push:
+    branches:
+      - agent/c8-5-operation-security-boundary
+    paths:
+      - tools/c8_5_apply.py
+      - .github/workflows/c8-5-apply.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Load locked toolchain
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          echo "go_version=${GO_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache: true
+          cache-dependency-path: |
+            app/go.sum
+            framework/go.sum
+            gateway/go.sum
+            pkg/go.sum
+
+      - name: Apply C8.5 framework changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/c8_5_apply.py
+          gofmt -w gateway/authz/operation_runtime.go gateway/authz/operation_runtime_test.go gateway/authz/types.go gateway/rpc/transport/grpc/authz.go pkg/contract/application_codegen.go pkg/contract/application_runtime_test.go
+          rm tools/c8_5_apply.py
+
+      - name: Targeted tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./gateway/authz ./gateway/rpc/transport/grpc ./pkg/contract
+          go test -race ./gateway/authz ./gateway/rpc/transport/grpc
+          go vet ./gateway/authz ./gateway/rpc/transport/grpc ./pkg/contract
+
+      - name: Publish C8.5 framework implementation with local git
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "yunka-c8-5-builder"
+          git config user.email "yunka-c8-5-builder@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: add C8.5 operation security boundary"
+          git push origin HEAD:agent/c8-5-operation-security-boundary
