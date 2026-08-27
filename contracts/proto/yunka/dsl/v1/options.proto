@@ -38,6 +38,14 @@ message DTODeclaration {
 
 message ApplicationDeclaration {
   string name = 1;
+  // Stable application capability keys in <domain>/<application> form.
+  repeated string requires = 2;
+}
+
+enum CompositionBoundary {
+  COMPOSITION_UNSPECIFIED = 0;
+  COMPOSITION_LOCAL = 1;
+  COMPOSITION_REMOTE_SAGA = 2;
 }
 
 message OperationDeclaration {
@@ -48,6 +56,9 @@ message OperationDeclaration {
   bool tenant_required = 5;
   repeated Authentication authentication = 6;
   bool public = 7;
+  // Stable operation IDs invoked as internal capabilities by this use case.
+  repeated string requires_operations = 8;
+  CompositionBoundary composition = 9;
 }
 
 extend google.protobuf.FileOptions {

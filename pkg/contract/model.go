@@ -33,17 +33,20 @@ type DTODeclaration struct {
 }
 
 type ApplicationDeclaration struct {
-	Name string `json:"name"`
+	Name     string   `json:"name"`
+	Requires []string `json:"requires,omitempty"`
 }
 
 type OperationDeclaration struct {
-	ID             string   `json:"id"`
-	UseCase        string   `json:"useCase"`
-	Permissions    []string `json:"permissions,omitempty"`
-	PermissionMode string   `json:"permissionMode,omitempty"`
-	TenantRequired bool     `json:"tenantRequired,omitempty"`
-	Authentication []string `json:"authentication,omitempty"`
-	Public         bool     `json:"public,omitempty"`
+	ID                 string   `json:"id"`
+	UseCase            string   `json:"useCase"`
+	Permissions        []string `json:"permissions,omitempty"`
+	PermissionMode     string   `json:"permissionMode,omitempty"`
+	TenantRequired     bool     `json:"tenantRequired,omitempty"`
+	Authentication     []string `json:"authentication,omitempty"`
+	Public             bool     `json:"public,omitempty"`
+	RequiresOperations []string `json:"requiresOperations,omitempty"`
+	Composition        string   `json:"composition,omitempty"`
 }
 
 type Message struct {
@@ -148,6 +151,7 @@ func (manifest *Manifest) Normalize() {
 		manifest.Services[i].Domain = strings.TrimSpace(manifest.Services[i].Domain)
 		if manifest.Services[i].Application != nil {
 			manifest.Services[i].Application.Name = strings.TrimSpace(manifest.Services[i].Application.Name)
+			manifest.Services[i].Application.Requires = stableStrings(manifest.Services[i].Application.Requires)
 		}
 		for j := range manifest.Services[i].Methods {
 			method := &manifest.Services[i].Methods[j]
@@ -165,6 +169,8 @@ func (manifest *Manifest) Normalize() {
 				method.Operation.PermissionMode = strings.TrimSpace(method.Operation.PermissionMode)
 				method.Operation.Permissions = stableStrings(method.Operation.Permissions)
 				method.Operation.Authentication = stableStrings(method.Operation.Authentication)
+				method.Operation.RequiresOperations = stableStrings(method.Operation.RequiresOperations)
+				method.Operation.Composition = strings.TrimSpace(method.Operation.Composition)
 			}
 			if method.Authorization != nil {
 				method.Authorization.Permissions = stableStrings(method.Authorization.Permissions)

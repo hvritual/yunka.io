@@ -236,13 +236,17 @@ func parseApplicationDeclaration(data []byte) (*ApplicationDeclaration, error) {
 	}
 	result := &ApplicationDeclaration{}
 	if err := scanWire(data, func(field wireField) error {
-		if field.Number == 1 {
+		switch field.Number {
+		case 1:
 			result.Name = string(field.Bytes)
+		case 2:
+			result.Requires = append(result.Requires, string(field.Bytes))
 		}
 		return nil
 	}); err != nil {
 		return nil, err
 	}
+	result.Requires = stableStrings(result.Requires)
 	return result, nil
 }
 
@@ -288,6 +292,12 @@ func parseOperationDeclaration(data []byte) (*OperationDeclaration, error) {
 			if field.Type == 0 {
 				result.Public = field.Varint != 0
 			}
+		case 8:
+			result.RequiresOperations = append(result.RequiresOperations, string(field.Bytes))
+		case 9:
+			if field.Type == 0 {
+				result.Composition = compositionBoundaryName(field.Varint)
+			}
 		}
 		return nil
 	}); err != nil {
@@ -295,7 +305,19 @@ func parseOperationDeclaration(data []byte) (*OperationDeclaration, error) {
 	}
 	result.Permissions = stableStrings(result.Permissions)
 	result.Authentication = stableStrings(result.Authentication)
+	result.RequiresOperations = stableStrings(result.RequiresOperations)
 	return result, nil
+}
+
+func compositionBoundaryName(value uint64) string {
+	switch value {
+	case 1:
+		return "local"
+	case 2:
+		return "remote_saga"
+	default:
+		return ""
+	}
 }
 
 func dtoKindName(value uint64) string {
@@ -354,6 +376,7 @@ func applyDSLDeclarations(manifest *Manifest, data []byte) error {
 			manifest.Services[i].Domain = declaration.Domain
 			if declaration.Application != nil {
 				copy := *declaration.Application
+				copy.Requires = append([]string(nil), declaration.Application.Requires...)
 				manifest.Services[i].Application = &copy
 			}
 		}
@@ -363,6 +386,7 @@ func applyDSLDeclarations(manifest *Manifest, data []byte) error {
 				copy := *operation
 				copy.Permissions = append([]string(nil), operation.Permissions...)
 				copy.Authentication = append([]string(nil), operation.Authentication...)
+				copy.RequiresOperations = append([]string(nil), operation.RequiresOperations...)
 				typedPolicy := authorizationFromOperation(&copy)
 				if legacyPolicy := authorizationFromDirectives(method.Directives); legacyPolicy != nil && authorizationKey(legacyPolicy) != authorizationKey(typedPolicy) {
 					return fmt.Errorf("contract: %s typed operation conflicts with legacy @yunka authorization directives", method.FullName)
@@ -462,6 +486,7 @@ func operationKey(operation *OperationDeclaration) string {
 	}
 	permissions := stableStrings(operation.Permissions)
 	authentication := stableStrings(operation.Authentication)
+	requires := stableStrings(operation.RequiresOperations)
 	return strings.Join([]string{
 		operation.ID,
 		operation.UseCase,
@@ -470,6 +495,8 @@ func operationKey(operation *OperationDeclaration) string {
 		fmt.Sprint(operation.Public),
 		strings.Join(permissions, ","),
 		strings.Join(authentication, ","),
+		strings.Join(requires, ","),
+		operation.Composition,
 	}, "|")
 }
 
