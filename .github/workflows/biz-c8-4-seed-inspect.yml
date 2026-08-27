@@ -1,0 +1,25 @@
+name: biz-c8-4-seed-inspect
+
+on:
+  push:
+    branches:
+      - agent/biz-c8-4-builder
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/biz-c8-4-builder
+      - name: Inspect failing integration source
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/seed"
+          mkdir -p "$work"
+          python3 -c 'import base64,glob,sys; data=b"".join(open(path,"rb").read() for path in sorted(glob.glob("tools/biz-c8-4-seed.part-*"))); sys.stdout.buffer.write(base64.b64decode(data, validate=True))' | tar -xz -C "$work"
+          nl -ba "$work/biz_seed/integration/deviceops_mysql_test.go" | sed -n '60,100p'
