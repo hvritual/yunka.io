@@ -1,0 +1,12 @@
+primaryKey;size:64"`
++	UserID    string    `gorm:"column:user_id;primaryKey;size:64"`
++	Status    string    `gorm:"column:status;size:32;not null;index"`
++	CreatedAt time.Time `gorm:"column:created_at;not null"`
++}
++
++func (membershipRecord) TableName() string { return "biz_memberships" }
++
++type roleRecord struct {
++	ID       string `gorm:"column:id;primaryKey;size:160"`
++	TenantID string `gorm:"column:tenant_id;size:64;not null;index:idx_role_tenant;uniqueIndex:uniq_role_name,priority:1"`
++	Na

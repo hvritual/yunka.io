@@ -1,0 +1,12 @@
+ncipal{}, ErrUnauthorized
++		}
++		return identity.Principal{}, err
++	}
++	if token.ExpiresAt != nil && !token.ExpiresAt.After(time.Now()) {
++		return identity.Principal{}, ErrUnauthorized
++	}
++	var membership membershipRecord
++	if err := store.database.WithContext(ctx).Where("tenant_id = ? AND user_id = ? AND status = ?", token.TenantID, token.UserID, "active").First(&membership).Error; err != nil {
++		if errors.Is(err, gorm.ErrRecordNotFound) {
++			return identity.Principal{}, ErrUnauthorized
++	

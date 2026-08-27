@@ -1,0 +1,9 @@
+mber_roles" }
++
++// permissionGrantRecord is the authoritative role permission + scope fact.
++// Scope cannot exist independently from the permission grant.
++type permissionGrantRecord struct {
++	TenantID   string                 `gorm:"column:tenant_id;primaryKey;size:64"`
++	RoleID     string                 `gorm:"column:role_id;primaryKey;size:160"`
++	Permission string                 `gorm:"column:permission;primaryKey;size:120"`
++	Scope      accessdomain.DataScope `gorm:"column:scope;size:1

@@ -1,0 +1,13 @@
+me     string `gorm:"column:name;size:100;not null;uniqueIndex:uniq_role_name,priority:2"`
++	Status   string `gorm:"column:status;size:32;not null"`
++}
++
++func (roleRecord) TableName() string { return "biz_roles" }
++
++type memberRoleRecord struct {
++	TenantID string `gorm:"column:tenant_id;primaryKey;size:64"`
++	UserID   string `gorm:"column:user_id;primaryKey;size:64"`
++	RoleID   string `gorm:"column:role_id;primaryKey;size:160"`
++}
++
++func (memberRoleRecord) TableName() string { return "biz_me

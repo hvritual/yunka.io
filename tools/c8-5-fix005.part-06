@@ -1,0 +1,11 @@
+String(sum[:])
++}
++
++func (store *Store) Authenticate(ctx context.Context, rawToken string) (identity.Principal, error) {
++	if store == nil || store.database == nil || strings.TrimSpace(rawToken) == "" {
++		return identity.Principal{}, ErrUnauthorized
++	}
++	var token apiTokenRecord
++	if err := store.database.WithContext(ctx).Where("token_hash = ? AND disabled = ?", TokenHash(rawToken), false).First(&token).Error; err != nil {
++		if errors.Is(err, gorm.ErrRecordNotFound) {
++			return identity.Pri

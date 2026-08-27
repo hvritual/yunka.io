@@ -1,0 +1,14 @@
+
++	TenantID  string     `gorm:"column:tenant_id;size:64;not null;index"`
++	UserID    string     `gorm:"column:user_id;size:64;not null;index"`
++	ExpiresAt *time.Time `gorm:"column:expires_at"`
++	Disabled  bool       `gorm:"column:disabled;not null;default:false"`
++	CreatedAt time.Time  `gorm:"column:created_at;not null"`
++}
++
++func (apiTokenRecord) TableName() string { return "biz_api_tokens" }
++
++type Store struct{ database *gorm.DB }
++
++func New(database *gorm.DB) (*Store, error) {
++	if databa

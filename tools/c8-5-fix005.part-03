@@ -1,0 +1,15 @@
+6;not null"`
++}
++
++func (permissionGrantRecord) TableName() string { return "biz_permission_grants" }
++
++type memberSiteRecord struct {
++	TenantID string `gorm:"column:tenant_id;primaryKey;size:64"`
++	UserID   string `gorm:"column:user_id;primaryKey;size:64"`
++	SiteID   string `gorm:"column:site_id;primaryKey;size:64"`
++}
++
++func (memberSiteRecord) TableName() string { return "biz_member_sites" }
++
++type apiTokenRecord struct {
++	TokenHash string     `gorm:"column:token_hash;primaryKey;size:64"`
