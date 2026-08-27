@@ -1,0 +1,67 @@
+name: c8-7-yunka-toolchain-export
+
+on:
+  push:
+    branches:
+      - agent/c8-7-biz-export
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+      - name: Load toolchain lock
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          echo "go=${GO_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "protoc_release=${PROTOC_RELEASE}" >> "$GITHUB_OUTPUT"
+          echo "protoc_sha=${PROTOC_LINUX_X86_64_SHA256}" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go }}
+          cache: true
+          cache-dependency-path: |
+            app/go.sum
+            framework/go.sum
+            gateway/go.sum
+            pkg/go.sum
+      - name: Install locked protoc and generators
+        shell: bash
+        env:
+          PROTOC_RELEASE: ${{ steps.lock.outputs.protoc_release }}
+          PROTOC_SHA: ${{ steps.lock.outputs.protoc_sha }}
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/protoc.zip"
+          protoc_root="$RUNNER_TEMP/protoc"
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" --output "$archive"
+          echo "${PROTOC_SHA}  ${archive}" | sha256sum -c -
+          mkdir -p "$protoc_root"
+          unzip -q "$archive" -d "$protoc_root"
+          export PATH="$protoc_root/bin:$PATH"
+          make rpc-tools
+          make rpc-toolchain-check
+          test "$(go version | awk '{print $3}')" = "go1.25.13"
+          test "$(protoc --version | awk '{print $2}')" = "3.21.12"
+          goroot="$(go env GOROOT)"
+          tar -C "$(dirname "$goroot")" -czf "$RUNNER_TEMP/go1.25.13.tar.gz" "$(basename "$goroot")"
+          tar -C "$protoc_root" -czf "$RUNNER_TEMP/protoc-3.21.12.tar.gz" .
+          tar -C . -czf "$RUNNER_TEMP/yunka-rpc-tools.tar.gz" .yunka/bin
+          sha256sum "$RUNNER_TEMP/go1.25.13.tar.gz" "$RUNNER_TEMP/protoc-3.21.12.tar.gz" "$RUNNER_TEMP/yunka-rpc-tools.tar.gz" > "$RUNNER_TEMP/toolchain.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yunka-c8-7-locked-toolchain
+          path: |
+            ${{ runner.temp }}/go1.25.13.tar.gz
+            ${{ runner.temp }}/protoc-3.21.12.tar.gz
+            ${{ runner.temp }}/yunka-rpc-tools.tar.gz
+            ${{ runner.temp }}/toolchain.sha256
+          if-no-files-found: error
