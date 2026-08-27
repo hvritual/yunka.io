@@ -9,6 +9,7 @@ on:
       - tools/c8-5-biz-seed.sha256
       - tools/c8-5-biz-seed.meta
       - tools/c8_5_biz_patch.py
+      - tools/c8_5_biz_fix_makefile.py
       - .github/workflows/c8-5-biz-builder.yml
 
 permissions:
@@ -106,6 +107,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/c8_5_biz_patch.py "$BIZ_ROOT"
+          python3 tools/c8_5_biz_fix_makefile.py "$BIZ_ROOT"
           find "$BIZ_ROOT/internal" "$BIZ_ROOT/modules" "$BIZ_ROOT/integration" -name '*.go' -print0 | xargs -0 gofmt -w
 
       - name: Generate from Yunka C8.5 main
