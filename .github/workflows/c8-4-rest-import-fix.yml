@@ -1,0 +1,28 @@
+name: c8-4-rest-import-fix
+
+on:
+  push:
+    branches:
+      - agent/c8-4-pb-dsl-domain-convergence
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/c8-4-pb-dsl-domain-convergence
+          fetch-depth: 0
+      - run: python3 tools/c8_4_fix_rest_import.py
+      - run: gofmt -w pkg/contract/application_codegen.go
+      - run: git diff --check
+      - run: |
+          rm tools/c8_4_fix_rest_import.py .github/workflows/c8-4-rest-import-fix.yml
+          git config user.name hvritual
+          git config user.email 460657446@qq.com
+          git add -A
+          git commit -m 'fix: generate REST strconv imports on demand'
+          git push origin HEAD:agent/c8-4-pb-dsl-domain-convergence
