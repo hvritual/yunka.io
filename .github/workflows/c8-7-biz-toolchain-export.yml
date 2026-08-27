@@ -33,7 +33,7 @@ jobs:
             framework/go.sum
             gateway/go.sum
             pkg/go.sum
-      - name: Install locked protoc and generators
+      - name: Install locked protoc, generators and dependencies
         shell: bash
         env:
           PROTOC_RELEASE: ${{ steps.lock.outputs.protoc_release }}
@@ -49,19 +49,29 @@ jobs:
           export PATH="$protoc_root/bin:$PATH"
           make rpc-tools
           make rpc-toolchain-check
+          for module in app framework gateway pkg compat/go-kit-kit-log; do
+            (cd "$module" && go mod download)
+          done
           test "$(go version | awk '{print $3}')" = "go1.25.13"
           test "$(protoc --version | awk '{print $2}')" = "3.21.12"
           goroot="$(go env GOROOT)"
+          gomodcache="$(go env GOMODCACHE)"
           tar -C "$(dirname "$goroot")" -czf "$RUNNER_TEMP/go1.25.13.tar.gz" "$(basename "$goroot")"
           tar -C "$protoc_root" -czf "$RUNNER_TEMP/protoc-3.21.12.tar.gz" .
           tar -C . -czf "$RUNNER_TEMP/yunka-rpc-tools.tar.gz" .yunka/bin
-          sha256sum "$RUNNER_TEMP/go1.25.13.tar.gz" "$RUNNER_TEMP/protoc-3.21.12.tar.gz" "$RUNNER_TEMP/yunka-rpc-tools.tar.gz" > "$RUNNER_TEMP/toolchain.sha256"
+          tar -C "$(dirname "$gomodcache")" -czf "$RUNNER_TEMP/gomodcache.tar.gz" "$(basename "$gomodcache")"
+          sha256sum "$RUNNER_TEMP/go1.25.13.tar.gz" "$RUNNER_TEMP/protoc-3.21.12.tar.gz" "$RUNNER_TEMP/yunka-rpc-tools.tar.gz" "$RUNNER_TEMP/gomodcache.tar.gz" > "$RUNNER_TEMP/toolchain.sha256"
       - uses: actions/upload-artifact@v4
         with:
-          name: yunka-c8-7-locked-toolchain
+          name: yunka-c8-7-locked-toolchain-v2
           path: |
             ${{ runner.temp }}/go1.25.13.tar.gz
             ${{ runner.temp }}/protoc-3.21.12.tar.gz
             ${{ runner.temp }}/yunka-rpc-tools.tar.gz
             ${{ runner.temp }}/toolchain.sha256
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yunka-c8-7-gomodcache
+          path: ${{ runner.temp }}/gomodcache.tar.gz
           if-no-files-found: error
