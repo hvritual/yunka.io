@@ -124,7 +124,8 @@ c7-check: architecture-check
 domain-check: architecture-check
 	@cd app && $(GO) test -count=10 ./cmd/domain
 
-dsl-check: toolchain-check architecture-check
+dsl-check: toolchain-check architecture-check rpc-tools rpc-toolchain-check
+	@cd pkg && YUNKA_REQUIRE_C84_RUNTIME=1 PROTOC="$(PROTOC)" PROTOC_GEN_GO="$(PROTOC_GEN_GO)" PROTOC_GEN_GO_GRPC="$(PROTOC_GEN_GO_GRPC)" $(GO) test -count=1 ./contract -run '^TestC84GeneratedApplicationRuntime$$'
 	@cd pkg && $(GO) test -count=10 ./contract ./applicationgraph ./architecturepolicy
 	@cd framework && $(GO) test -count=10 ./applicationgraph
 	@cd app && PROTOC="$(PROTOC)" $(GO) run ./cmd contract lint \

@@ -245,15 +245,6 @@ func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[
 			fmt.Fprintf(&handlers, "\tif err := handler.authorize(request, %q); err != nil { writeAuthorizationError(writer, err); return }\n", fullMethod)
 			fmt.Fprintf(&handlers, "\twire := &%s.%s{}\n", requestRef.Alias, requestRef.Type)
 			pathFields, _ := simplePathFields(binding.Path)
-			for _, fieldName := range pathFields {
-				field, ok := findMessageField(requestMessage, fieldName)
-				if !ok {
-					return "", fmt.Errorf("contract application codegen: %s path field %q not found in %s", method.FullName, fieldName, method.Request)
-				}
-				if err := writeScalarAssignment(&handlers, "wire", field, "request.PathValue("+strconv.Quote(fieldName)+")", true); err != nil {
-					return "", fmt.Errorf("contract application codegen: %s: %w", method.FullName, err)
-				}
-			}
 			if binding.Body == "*" {
 				imports.add("io", "io")
 				handlers.WriteString("\tbody, err := io.ReadAll(request.Body)\n\tif err != nil { http.Error(writer, \"invalid request body\", http.StatusBadRequest); return }\n\tif len(body) > 0 { if err := protojson.Unmarshal(body, wire); err != nil { http.Error(writer, \"invalid request body\", http.StatusBadRequest); return } }\n")
@@ -272,6 +263,16 @@ func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[
 						return "", err
 					}
 					handlers.WriteString("\t}\n")
+				}
+			}
+			// HTTP path bindings are authoritative over body/query values. Apply them last.
+			for _, fieldName := range pathFields {
+				field, ok := findMessageField(requestMessage, fieldName)
+				if !ok {
+					return "", fmt.Errorf("contract application codegen: %s path field %q not found in %s", method.FullName, fieldName, method.Request)
+				}
+				if err := writeScalarAssignment(&handlers, "wire", field, "request.PathValue("+strconv.Quote(fieldName)+")", true); err != nil {
+					return "", fmt.Errorf("contract application codegen: %s: %w", method.FullName, err)
 				}
 			}
 			fmt.Fprintf(&handlers, "\toutput, err := handler.application.%s(request.Context(), wire)\n", method.Name)
