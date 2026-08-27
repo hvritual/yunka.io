@@ -77,7 +77,6 @@ GitHub connector authorization and local Git authorization are separate. The con
 - Gateway JWT/API-key authentication establishes a Principal. Role authorization reads only that trusted Principal; query-supplied `oid`/`uid`/`rid` values are compatibility data and are not authorization inputs.
 - Generated RPC files remain immutable. RPC middleware must be attached through transport-neutral client wrappers or non-generated gRPC interceptors.
 - Remote RPC identity metadata is not automatically trusted; a downstream service must validate its own service/caller credentials before marking a Principal authenticated.
-
 ### 2026-08-18 — Resilience baseline
 
 - Resilience policies are transport-neutral middleware and must not be embedded directly in business services.
@@ -177,7 +176,7 @@ GitHub connector authorization and local Git authorization are separate. The con
 ### 2026-08-20 — C2 toolchain-determinism baseline
 
 - `tools/toolchain.env` is the canonical repository tool lock. C2 pins Go `1.25.13`, protobuf release `21.12` / `libprotoc 3.21.12`, the Linux x86_64 protoc archive SHA-256, and `govulncheck v1.7.0`.
-- Normal GitHub Actions CI is read-only (`contents: read`). It must never run `git commit`, `git push`, or auto-repair dependency/generated state; drift is a blocking signal for the ordinary local development workflow.
+- Normal GitHub Actions CI is read-only (`contents: read`). It must never run `git commit`, `git push`, or auto-repair dependency/generated state; drift is a blocking signal for the ordinary local developer workflow.
 - Third-party GitHub Actions used by CI are pinned to immutable commit SHAs. CI installs protoc from the locked release archive and verifies its SHA-256 before use; package-manager-selected protoc versions are not accepted for contract verification.
 - `make toolchain-check`, contract generation/checking, `make verify`, and `yunka doctor` enforce exact Go/protoc agreement with the lock. Newer compilers are intentionally rejected until the lock is deliberately updated and reviewed.
 - CI proves determinism twice: `make tidy` must leave workspace dependency metadata unchanged, contract regeneration must leave `contracts/generated` unchanged, and the final worktree must be clean. C2 changes tooling/governance only and does not start C3 contract-source convergence.
@@ -278,3 +277,12 @@ GitHub connector authorization and local Git authorization are separate. The con
 - PB method declarations are the authorization source of truth. Stable operation/permission identities must not be derived from API UUID, HTTP path, Button UUID, or database identifiers.
 - Gateway enforcement is fail-closed and must converge on one Authorizer at every execution boundary, including composite child operations. Resource/data-scope evaluation remains a separate seam and must not be encoded as SQL in PB.
 - Existing `AuthBit`, `api_module_button`, and `role_module_button` are migration compatibility inputs only; they must not be expanded as the new authorization model.
+
+### 2026-08-27 — C8.4 PB DSL and domain compiler responsibility decision
+
+- Protobuf is the canonical writable DSL for RPC, explicit REST bindings, DTOs, Domain/Application declarations, stable Operation IDs, authentication/tenant requirements, and Permission requirements. Typed protobuf options are the target authoring form; existing `@yunka.*` comments are a bounded migration bridge only.
+- Developer-owned PO structs are the persistence-schema source. The domain compiler may reverse PO into generated Entity, basic Repository CRUD interface, GORM record/mapping, and Repository CRUD implementation, then it must stop.
+- `yunka domain` must not generate Application `DefaultService` behavior, REST/RPC adapters, protobuf sources or generated protobuf, gRPC bridges, runtime registration, or wiring. Business invariants, use-case orchestration, DTO/domain mapping, state machines, complex queries, and cross-domain workflows remain handwritten.
+- PB DTO, Domain Entity, and PO are separate models. The framework must not infer their equivalence or generate business-semantic mappings from matching field names.
+- REST and RPC adapters generated from PB must invoke the same Application Port and the same Gateway `Authorizer` policy. C8.3 Role-to-Permission storage and fail-closed authorization semantics remain unchanged; data-scope predicates remain outside PB.
+- Migration follows expand → shadow → cutover → contract. Contract Manifest V2 and Domain Manifest V3 retain read compatibility during migration, while new generation writes only the new canonical forms. Destructive legacy full-stack generator removal is isolated after deterministic, architecture, authorization, race, compatibility, and MySQL integration gates pass.
