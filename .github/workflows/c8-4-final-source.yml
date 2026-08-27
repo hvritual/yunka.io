@@ -2,14 +2,14 @@ name: c8-4-final-source
 
 on:
   push:
-    branches: [agent/c8-4-pb-dsl-domain-convergence]
+    branches:
+      - agent/c8-4-pb-dsl-domain-convergence
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: github.event.head_commit.message == 'ci: apply final C8.4 source patch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
