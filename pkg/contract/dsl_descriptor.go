@@ -363,13 +363,84 @@ func applyDSLDeclarations(manifest *Manifest, data []byte) error {
 				copy := *operation
 				copy.Permissions = append([]string(nil), operation.Permissions...)
 				copy.Authentication = append([]string(nil), operation.Authentication...)
+				typedPolicy := authorizationFromOperation(&copy)
+				if legacyPolicy := authorizationFromDirectives(method.Directives); legacyPolicy != nil && authorizationKey(legacyPolicy) != authorizationKey(typedPolicy) {
+					return fmt.Errorf("contract: %s typed operation conflicts with legacy @yunka authorization directives", method.FullName)
+				}
 				method.Operation = &copy
-				method.Authorization = authorizationFromOperation(&copy)
+				method.Authorization = typedPolicy
 			}
 		}
 	}
+	inferTypedDTOs(manifest)
 	manifest.Normalize()
 	return nil
+}
+
+func inferTypedDTOs(manifest *Manifest) {
+	if manifest == nil {
+		return
+	}
+	index := make(map[string]int, len(manifest.Messages))
+	for i := range manifest.Messages {
+		index[manifest.Messages[i].FullName] = i
+	}
+	type dtoUsage uint8
+	const (
+		dtoInput dtoUsage = 1 << iota
+		dtoOutput
+	)
+	usage := make(map[string]dtoUsage)
+	var visit func(string, dtoUsage, map[string]struct{})
+	visit = func(name string, role dtoUsage, active map[string]struct{}) {
+		if knownExternalType(name) {
+			return
+		}
+		position, ok := index[name]
+		if !ok {
+			return
+		}
+		usage[name] |= role
+		if _, cycle := active[name]; cycle {
+			return
+		}
+		next := make(map[string]struct{}, len(active)+1)
+		for key := range active {
+			next[key] = struct{}{}
+		}
+		next[name] = struct{}{}
+		for _, field := range manifest.Messages[position].Fields {
+			if field.Kind == "message" {
+				visit(field.Type, role, next)
+			}
+			if field.Map && field.MapValueKind == "message" {
+				visit(field.MapValueType, role, next)
+			}
+		}
+	}
+	for _, service := range manifest.Services {
+		if service.Application == nil || service.Domain == "" {
+			continue
+		}
+		for _, method := range service.Methods {
+			visit(method.Request, dtoInput, map[string]struct{}{})
+			visit(method.Response, dtoOutput, map[string]struct{}{})
+		}
+	}
+	for name, role := range usage {
+		position := index[name]
+		if manifest.Messages[position].DTO != nil {
+			continue
+		}
+		kind := "shared"
+		switch role {
+		case dtoInput:
+			kind = "input"
+		case dtoOutput:
+			kind = "output"
+		}
+		manifest.Messages[position].DTO = &DTODeclaration{Kind: kind}
+	}
 }
 
 func authorizationFromOperation(operation *OperationDeclaration) *AuthorizationPolicy {
