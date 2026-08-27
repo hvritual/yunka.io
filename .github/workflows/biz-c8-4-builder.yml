@@ -25,7 +25,7 @@ jobs:
           --health-timeout=5s
           --health-retries=30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
           ref: agent/biz-c8-4-builder
@@ -40,7 +40,7 @@ jobs:
           echo "protoc_release=${PROTOC_RELEASE}" >> "$GITHUB_OUTPUT"
           echo "protoc_sha256=${PROTOC_LINUX_X86_64_SHA256}" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version: ${{ steps.lock.outputs.go_version }}
           cache: true
@@ -88,7 +88,7 @@ jobs:
           rm -rf "$WORK"
           mkdir -p "$WORK"
           ln -s "$GITHUB_WORKSPACE" "$WORK/yunka.io"
-          base64 -d tools/biz-c8-4-seed.tar.gz.b64 | tar -xz -C "$WORK"
+          cat tools/biz-c8-4-seed.part-* | base64 -d | tar -xz -C "$WORK"
           mv "$WORK/biz_seed" "$WORK/biz"
           BIZ="$WORK/biz"
 
@@ -173,15 +173,23 @@ jobs:
           git diff --exit-code
           rm -rf .git
 
-          tar -czf "$RUNNER_TEMP/biz-c8-4-result.tar.gz" -C "$WORK" biz
-          base64 -w0 "$RUNNER_TEMP/biz-c8-4-result.tar.gz" > "$GITHUB_WORKSPACE/tools/biz-c8-4-result.tar.gz.b64"
-          sha256sum "$RUNNER_TEMP/biz-c8-4-result.tar.gz" | awk '{print $1}' > "$GITHUB_WORKSPACE/tools/biz-c8-4-result.sha256"
+          RESULT_TAR="$RUNNER_TEMP/biz-c8-4-result.tar.gz"
+          RESULT_B64="$RUNNER_TEMP/biz-c8-4-result.b64"
+          tar -czf "$RESULT_TAR" -C "$WORK" biz
+          base64 -w0 "$RESULT_TAR" > "$RESULT_B64"
+          rm -f "$GITHUB_WORKSPACE"/tools/biz-c8-4-result.part-*
+          split -b 4000 -d -a 3 "$RESULT_B64" "$GITHUB_WORKSPACE/tools/biz-c8-4-result.part-"
+          sha256sum "$RESULT_TAR" | awk '{print $1}' > "$GITHUB_WORKSPACE/tools/biz-c8-4-result.sha256"
+          FILES="$(find "$BIZ" -type f | wc -l | tr -d ' ')"
+          PARTS="$(find "$GITHUB_WORKSPACE/tools" -maxdepth 1 -name 'biz-c8-4-result.part-*' | wc -l | tr -d ' ')"
           cat > "$GITHUB_WORKSPACE/tools/biz-c8-4-result.meta" <<META
           framework_main=$YUNKA_BASE
           framework_tree=0cb7ec037a4cb25379a1d870785980b76e6141da
           mysql=8.4
           go=$($(go env GOROOT)/bin/go version | awk '{print $3}')
           protoc=$($PROTOC --version | awk '{print $2}')
+          files=$FILES
+          parts=$PARTS
           validation=domain-check,module-check,contract-check,test,race,vet,build,mysql-integration,determinism
           META
 
@@ -189,10 +197,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -f tools/biz-c8-4-seed.tar.gz.b64
-          rm -f .github/workflows/biz-c8-4-builder.yml
+          rm -f tools/biz-c8-4-seed.part-* tools/biz-c8-4-seed.sha256
           git config user.name "yunka-builder"
           git config user.email "yunka-builder@users.noreply.github.com"
-          git add -A tools/biz-c8-4-result.tar.gz.b64 tools/biz-c8-4-result.sha256 tools/biz-c8-4-result.meta tools/biz-c8-4-seed.tar.gz.b64 .github/workflows/biz-c8-4-builder.yml
+          git add -A tools/biz-c8-4-result.part-* tools/biz-c8-4-result.sha256 tools/biz-c8-4-result.meta tools/biz-c8-4-seed.part-* tools/biz-c8-4-seed.sha256
           git commit -m "ci: publish verified biz C8.4 rebuild"
           git push origin HEAD:agent/biz-c8-4-builder
