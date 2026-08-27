@@ -136,6 +136,7 @@ func RenderApplicationCode(manifest Manifest, options ApplicationCodeOptions) ([
 	}
 	messages := messageIndex(manifest)
 	typedByDomain := make(map[string][]Service)
+	serviceByApplication := make(map[string]Service)
 	for _, service := range manifest.Services {
 		if service.Application == nil {
 			continue
@@ -144,6 +145,7 @@ func RenderApplicationCode(manifest Manifest, options ApplicationCodeOptions) ([
 			return nil, fmt.Errorf("contract application codegen: service %s has no domain", service.FullName)
 		}
 		typedByDomain[service.Domain] = append(typedByDomain[service.Domain], service)
+		serviceByApplication[service.Domain+"/"+service.Application.Name] = service
 	}
 	domains := make([]string, 0, len(typedByDomain))
 	for domain := range typedByDomain {
@@ -212,6 +214,17 @@ func RenderApplicationCode(manifest Manifest, options ApplicationCodeOptions) ([
 					return renderRESTAdapter(service, packages, messages, rootImport, naming)
 				}},
 			}
+			if len(service.Application.Requires) > 0 {
+				artifacts = append(artifacts, struct {
+					path   string
+					render func() (string, error)
+				}{
+					filepath.ToSlash(filepath.Join(domainDir, "application", "zz_yunka_"+naming.FileStem+"_capability_ports_gen.go")),
+					func() (string, error) {
+						return renderCapabilityPorts(service, naming, serviceByApplication, typedByDomain, rootImport)
+					},
+				})
+			}
 			for _, artifact := range artifacts {
 				source, err := artifact.render()
 				if err != nil {
@@ -241,6 +254,38 @@ func RenderApplicationCode(manifest Manifest, options ApplicationCodeOptions) ([
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	return files, nil
+}
+
+func renderCapabilityPorts(service Service, naming serviceCodegenNaming, services map[string]Service, typedByDomain map[string][]Service, rootImport string) (string, error) {
+	imports := newImportSet()
+	var methods strings.Builder
+	seenMethods := map[string]string{}
+	for _, dependency := range stableStrings(service.Application.Requires) {
+		target, ok := services[dependency]
+		if !ok || target.Application == nil {
+			return "", fmt.Errorf("contract application codegen: unknown capability dependency %s for %s", dependency, service.FullName)
+		}
+		targetNaming := namingForService(target, len(typedByDomain[target.Domain]) > 1)
+		methodName := exportedApplicationSymbol(strings.ReplaceAll(dependency, "/", "_"))
+		if owner, duplicate := seenMethods[methodName]; duplicate && owner != dependency {
+			return "", fmt.Errorf("contract application codegen: capability dependencies %s and %s collapse to method %s", owner, dependency, methodName)
+		}
+		seenMethods[methodName] = dependency
+		returnType := targetNaming.ApplicationInterface
+		if target.Domain != service.Domain {
+			alias := imports.add(rootImport+"/"+target.Domain+"/application", safeFileName(target.Domain)+"application")
+			returnType = alias + "." + returnType
+		}
+		fmt.Fprintf(&methods, "\t%s() %s\n", methodName, returnType)
+	}
+	var b strings.Builder
+	b.WriteString(GeneratedApplicationMarker + "\n\npackage application\n\n")
+	if rendered := imports.render(); rendered != "" {
+		b.WriteString("import (\n" + rendered + ")\n\n")
+	}
+	fmt.Fprintf(&b, "// %sCapabilities is the typed internal composition port declared by PB application.requires.\n", naming.Symbol)
+	fmt.Fprintf(&b, "type %sCapabilities interface {\n%s}\n", naming.Symbol, methods.String())
+	return b.String(), nil
 }
 
 func renderApplicationPort(service Service, packages []protoGoPackage, naming serviceCodegenNaming) (string, error) {

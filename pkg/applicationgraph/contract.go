@@ -74,6 +74,11 @@ func AddContract(builder *Builder, manifest contract.Manifest) error {
 			if err := builder.AddEdge(Edge{From: domainID, To: applicationID, Kind: EdgeContains, Evidence: evidence}); err != nil {
 				return err
 			}
+			for _, dependency := range service.Application.Requires {
+				if err := builder.AddEdge(Edge{From: applicationID, To: ID(NodeApplication, dependency), Kind: EdgeDependsOn, Evidence: evidence}); err != nil {
+					return err
+				}
+			}
 		}
 
 		for _, method := range service.Methods {
@@ -95,6 +100,9 @@ func AddContract(builder *Builder, manifest contract.Manifest) error {
 				attrs["public"] = strconv.FormatBool(method.Operation.Public)
 				attrs["tenantRequired"] = strconv.FormatBool(method.Operation.TenantRequired)
 				attrs["permissionMode"] = method.Operation.PermissionMode
+				if method.Operation.Composition != "" {
+					attrs["composition"] = method.Operation.Composition
+				}
 				if service.Domain != "" {
 					attrs["domain"] = service.Domain
 				}
@@ -143,6 +151,11 @@ func AddContract(builder *Builder, manifest contract.Manifest) error {
 				}
 			}
 			if typedOperation {
+				for _, dependency := range method.Operation.RequiresOperations {
+					if err := builder.AddEdge(Edge{From: operationID, To: ID(NodeOperation, dependency), Kind: EdgeDependsOn, Evidence: evidence}); err != nil {
+						return err
+					}
+				}
 				for _, permission := range method.Operation.Permissions {
 					permission = strings.TrimSpace(permission)
 					if permission == "" {
@@ -208,6 +221,7 @@ func cloneManifest(manifest contract.Manifest) contract.Manifest {
 		clone.Services[i] = service
 		if service.Application != nil {
 			value := *service.Application
+			value.Requires = append([]string(nil), service.Application.Requires...)
 			clone.Services[i].Application = &value
 		}
 		clone.Services[i].Methods = make([]contract.Method, len(service.Methods))
@@ -224,6 +238,7 @@ func cloneManifest(manifest contract.Manifest) contract.Manifest {
 				value := *method.Operation
 				value.Permissions = append([]string(nil), method.Operation.Permissions...)
 				value.Authentication = append([]string(nil), method.Operation.Authentication...)
+				value.RequiresOperations = append([]string(nil), method.Operation.RequiresOperations...)
 				clone.Services[i].Methods[j].Operation = &value
 			}
 			if method.Authorization != nil {

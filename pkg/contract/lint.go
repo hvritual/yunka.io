@@ -201,6 +201,8 @@ func Lint(manifest Manifest) []Diagnostic {
 		}
 	}
 
+	diagnostics = append(diagnostics, lintComposition(manifest)...)
+
 	sort.Slice(diagnostics, func(i, j int) bool {
 		if diagnostics[i].Severity == diagnostics[j].Severity {
 			if diagnostics[i].Path == diagnostics[j].Path {
@@ -264,4 +266,183 @@ func validPolicyKey(value string) bool {
 		return false
 	}
 	return true
+}
+
+type compositionOperationOwner struct {
+	method         Method
+	applicationKey string
+}
+
+func lintComposition(manifest Manifest) []Diagnostic {
+	manifest.Normalize()
+	applications := map[string]Service{}
+	operations := map[string]compositionOperationOwner{}
+	var diagnostics []Diagnostic
+	for _, service := range manifest.Services {
+		if service.Application == nil || service.Domain == "" {
+			continue
+		}
+		key := service.Domain + "/" + service.Application.Name
+		if owner, exists := applications[key]; exists && owner.FullName != service.FullName {
+			diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: "service." + service.FullName + ".application", Message: "duplicate application capability key also owned by " + owner.FullName + ": " + key})
+		} else {
+			applications[key] = service
+		}
+		for _, method := range service.Methods {
+			if method.Operation == nil || method.Operation.ID == "" {
+				continue
+			}
+			operations[method.Operation.ID] = compositionOperationOwner{method: method, applicationKey: key}
+		}
+	}
+
+	appDeps := map[string][]string{}
+	for key, service := range applications {
+		declared := map[string]struct{}{}
+		for _, dependency := range service.Application.Requires {
+			path := "service." + service.FullName + ".application"
+			if !validApplicationDependency(dependency) {
+				diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "application dependency must be <domain>/<application>: " + dependency})
+				continue
+			}
+			if dependency == key {
+				diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "application cannot depend on itself: " + dependency})
+				continue
+			}
+			if _, ok := applications[dependency]; !ok {
+				diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "unknown application capability dependency: " + dependency})
+				continue
+			}
+			declared[dependency] = struct{}{}
+			appDeps[key] = append(appDeps[key], dependency)
+		}
+		for _, method := range service.Methods {
+			if method.Operation == nil {
+				continue
+			}
+			opPath := "service." + service.FullName + ".method." + method.Name
+			if method.Operation.Composition != "" && method.Operation.Composition != "local" && method.Operation.Composition != "remote_saga" {
+				diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: opPath, Message: "composition must be local or remote_saga"})
+			}
+			for _, required := range method.Operation.RequiresOperations {
+				owner, ok := operations[required]
+				if !ok {
+					diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: opPath, Message: "unknown required operation: " + required})
+					continue
+				}
+				if required == method.Operation.ID {
+					diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: opPath, Message: "operation cannot depend on itself: " + required})
+				}
+				if owner.applicationKey != key {
+					if _, ok := declared[owner.applicationKey]; !ok {
+						diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: opPath, Message: "required operation belongs to undeclared application capability: " + owner.applicationKey})
+					}
+				}
+			}
+		}
+	}
+	for _, cycle := range dependencyCycles(appDeps) {
+		diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: "application." + cycle[0], Message: "application dependency cycle: " + strings.Join(cycle, " -> ")})
+	}
+
+	opDeps := map[string][]string{}
+	for id, owner := range operations {
+		opDeps[id] = append([]string(nil), owner.method.Operation.RequiresOperations...)
+	}
+	for _, cycle := range dependencyCycles(opDeps) {
+		diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: "operation." + cycle[0], Message: "operation dependency cycle: " + strings.Join(cycle, " -> ")})
+	}
+	for id, owner := range operations {
+		closure := map[string]struct{}{}
+		collectRequiredPermissions(id, operations, map[string]bool{}, closure)
+		declared := map[string]struct{}{}
+		for _, permission := range owner.method.Operation.Permissions {
+			declared[permission] = struct{}{}
+		}
+		missing := make([]string, 0)
+		for permission := range closure {
+			if _, ok := declared[permission]; !ok {
+				missing = append(missing, permission)
+			}
+		}
+		sort.Strings(missing)
+		if len(missing) > 0 {
+			diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: "operation." + id, Message: "composite permission closure missing: " + strings.Join(missing, ",")})
+		}
+	}
+	return diagnostics
+}
+
+func validApplicationDependency(value string) bool {
+	parts := strings.Split(strings.TrimSpace(value), "/")
+	return len(parts) == 2 && validPolicyKey(parts[0]) && validPolicyKey(parts[1])
+}
+
+func dependencyCycles(graph map[string][]string) [][]string {
+	state := map[string]uint8{}
+	stack := []string{}
+	position := map[string]int{}
+	seen := map[string]struct{}{}
+	var cycles [][]string
+	var visit func(string)
+	visit = func(node string) {
+		if state[node] == 2 {
+			return
+		}
+		if state[node] == 1 {
+			start := position[node]
+			cycle := append(append([]string(nil), stack[start:]...), node)
+			key := strings.Join(cycle, "\x00")
+			if _, ok := seen[key]; !ok {
+				seen[key] = struct{}{}
+				cycles = append(cycles, cycle)
+			}
+			return
+		}
+		state[node] = 1
+		position[node] = len(stack)
+		stack = append(stack, node)
+		deps := append([]string(nil), graph[node]...)
+		sort.Strings(deps)
+		for _, next := range deps {
+			if _, exists := graph[next]; exists {
+				visit(next)
+			}
+		}
+		stack = stack[:len(stack)-1]
+		delete(position, node)
+		state[node] = 2
+	}
+	nodes := make([]string, 0, len(graph))
+	for node := range graph {
+		nodes = append(nodes, node)
+	}
+	sort.Strings(nodes)
+	for _, node := range nodes {
+		visit(node)
+	}
+	return cycles
+}
+
+func collectRequiredPermissions(id string, operations map[string]compositionOperationOwner, active map[string]bool, result map[string]struct{}) {
+	if active[id] {
+		return
+	}
+	active[id] = true
+	owner, ok := operations[id]
+	if !ok {
+		delete(active, id)
+		return
+	}
+	for _, required := range owner.method.Operation.RequiresOperations {
+		target, ok := operations[required]
+		if !ok {
+			continue
+		}
+		for _, permission := range target.method.Operation.Permissions {
+			result[permission] = struct{}{}
+		}
+		collectRequiredPermissions(required, operations, active, result)
+	}
+	delete(active, id)
 }
