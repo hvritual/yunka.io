@@ -1,4 +1,4 @@
-name: biz-c8-4-seed-inspect
+name: biz-c8-4-seed-patch
 
 on:
   push:
@@ -6,20 +6,51 @@ on:
       - agent/biz-c8-4-builder
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  inspect:
+  patch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          fetch-depth: 0
           ref: agent/biz-c8-4-builder
-      - name: Inspect failing integration source
+      - name: Patch integration test and rebuild seed
         shell: bash
         run: |
           set -euo pipefail
           work="$RUNNER_TEMP/seed"
           mkdir -p "$work"
           python3 -c 'import base64,glob,sys; data=b"".join(open(path,"rb").read() for path in sorted(glob.glob("tools/biz-c8-4-seed.part-*"))); sys.stdout.buffer.write(base64.b64decode(data, validate=True))' | tar -xz -C "$work"
-          nl -ba "$work/biz_seed/integration/deviceops_mysql_test.go" | sed -n '60,100p'
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          path = Path(os.environ['RUNNER_TEMP']) / 'seed' / 'biz_seed' / 'integration' / 'deviceops_mysql_test.go'
+          text = path.read_text()
+          old = '''\taccess, err := store.New(db)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f'expected exactly one dead access initialization, found {text.count(old)}')
+          path.write_text(text.replace(old, ''))
+          PY
+          tarball="$RUNNER_TEMP/biz-c8-4-seed-fixed.tar.gz"
+          tar -czf "$tarball" -C "$work" biz_seed
+          python3 - <<'PY'
+          import base64, glob, hashlib, os
+          from pathlib import Path
+          root = Path(os.environ['GITHUB_WORKSPACE']) / 'tools'
+          payload = (Path(os.environ['RUNNER_TEMP']) / 'biz-c8-4-seed-fixed.tar.gz').read_bytes()
+          encoded = base64.b64encode(payload)
+          for old in glob.glob(str(root / 'biz-c8-4-seed.part-*')):
+              Path(old).unlink()
+          for index, offset in enumerate(range(0, len(encoded), 4000)):
+              (root / f'biz-c8-4-seed.part-{index:02d}').write_bytes(encoded[offset:offset+4000])
+          digest = hashlib.sha256(payload).hexdigest()
+          (root / 'biz-c8-4-seed.sha256').write_text(digest + '\n')
+          print(f'seed_fixed bytes={len(payload)} parts={(len(encoded)+3999)//4000} sha256={digest}')
+          PY
+          git config user.name yunka-builder
+          git config user.email yunka-builder@users.noreply.github.com
+          git add -A tools/biz-c8-4-seed.part-* tools/biz-c8-4-seed.sha256
+          git commit -m "test: remove dead access initialization from biz seed"
+          git push origin HEAD:agent/biz-c8-4-builder
