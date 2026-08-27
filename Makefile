@@ -185,6 +185,8 @@ build:
 integration:
 	@set -eu; \
 	: "$${YUNKA_TEST_MYSQL_DSN:?YUNKA_TEST_MYSQL_DSN is required for MySQL integration tests}"; \
+	echo "==> MySQL 8 C8.4 generated repository tenant/version integration"; \
+	(cd app && $(GO) test -timeout=5m -count=1 -tags=integration ./cmd/domain); \
 	echo "==> MySQL 8 transactional outbox and request-scope integration"; \
 	(cd framework && $(GO) test -timeout=5m -count=1 -tags=integration ./event/outbox ./requestscope)
 
