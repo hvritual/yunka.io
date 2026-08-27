@@ -16,7 +16,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: agent/biz-c8-4-builder
-      - name: Repair seed transport
+      - name: Split verified seed payload
         shell: bash
         run: |
           set -euo pipefail
@@ -25,35 +25,21 @@ jobs:
           source = pathlib.Path('tools/biz-c8-4-seed.tar.gz.b64')
           raw = source.read_bytes()
           clean = b''.join(raw.split())
-          print(f'raw={len(raw)} clean={len(clean)} mod4={len(clean)%4}')
           payload = base64.b64decode(clean, validate=True)
           if payload[:2] != b'\x1f\x8b':
               raise SystemExit('seed payload is not gzip')
-          print(f'decoded={len(payload)} sha256={hashlib.sha256(payload).hexdigest()}')
+          digest = hashlib.sha256(payload).hexdigest()
+          print(f'raw={len(raw)} clean={len(clean)} decoded={len(payload)} sha256={digest}')
           for old in glob.glob('tools/biz-c8-4-seed.part-*'):
               pathlib.Path(old).unlink()
           for index, offset in enumerate(range(0, len(clean), 4000)):
               pathlib.Path(f'tools/biz-c8-4-seed.part-{index:02d}').write_bytes(clean[offset:offset+4000])
-          pathlib.Path('tools/biz-c8-4-seed.sha256').write_text(hashlib.sha256(payload).hexdigest() + '\n')
+          pathlib.Path('tools/biz-c8-4-seed.sha256').write_text(digest + '\n')
           print(f'parts={(len(clean)+3999)//4000}')
           PY
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('.github/workflows/biz-c8-4-builder.yml')
-          text = path.read_text()
-          old = 'base64 -d tools/biz-c8-4-seed.tar.gz.b64 | tar -xz -C "$WORK"'
-          new = 'cat tools/biz-c8-4-seed.part-* | base64 -d | tar -xz -C "$WORK"'
-          if old not in text:
-              raise SystemExit('builder seed decode command not found')
-          text = text.replace(old, new)
-          text = text.replace('rm -f tools/biz-c8-4-seed.tar.gz.b64\n', 'rm -f tools/biz-c8-4-seed.part-* tools/biz-c8-4-seed.sha256\n')
-          text = text.replace('tools/biz-c8-4-seed.tar.gz.b64 .github/workflows/biz-c8-4-builder.yml', 'tools/biz-c8-4-seed.part-00 tools/biz-c8-4-seed.part-01 tools/biz-c8-4-seed.part-02 tools/biz-c8-4-seed.part-03 tools/biz-c8-4-seed.part-04 tools/biz-c8-4-seed.sha256 .github/workflows/biz-c8-4-builder.yml')
-          path.write_text(text)
-          PY
           rm -f tools/biz-c8-4-seed.tar.gz.b64
-          rm -f .github/workflows/biz-c8-4-seed-repair.yml
           git config user.name yunka-builder
           git config user.email yunka-builder@users.noreply.github.com
-          git add -A tools/biz-c8-4-seed.part-* tools/biz-c8-4-seed.sha256 tools/biz-c8-4-seed.tar.gz.b64 .github/workflows/biz-c8-4-builder.yml .github/workflows/biz-c8-4-seed-repair.yml
+          git add -A tools/biz-c8-4-seed.part-* tools/biz-c8-4-seed.sha256 tools/biz-c8-4-seed.tar.gz.b64
           git commit -m "ci: split biz C8.4 seed transport"
           git push origin HEAD:agent/biz-c8-4-builder
