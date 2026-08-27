@@ -13,7 +13,7 @@ import (
 const (
 	AppName      = "domain"
 	ManifestName = "domain.json"
-	SpecVersion  = 2
+	SpecVersion  = 3
 )
 
 var (
@@ -21,35 +21,36 @@ var (
 	tablePrefixPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
 )
 
+// Field is persistence-derived domain metadata. Protobuf numbering and
+// transport metadata intentionally do not belong to the domain manifest.
 type Field struct {
-	Name        string `json:"name"`
-	GoName      string `json:"-"`
-	Type        string `json:"type"`
-	Column      string `json:"column,omitempty"`
-	ProtoNumber int    `json:"protoNumber,omitempty"`
-	POOwned     bool   `json:"poOwned,omitempty"`
+	Name    string `json:"name"`
+	GoName  string `json:"-"`
+	Type    string `json:"type"`
+	Column  string `json:"column,omitempty"`
+	POOwned bool   `json:"poOwned,omitempty"`
 }
 
 type ObjectSpec struct {
-	Name                 string   `json:"name"`
-	GoName               string   `json:"-"`
-	File                 string   `json:"file"`
-	TableName            string   `json:"tableName"`
-	Fields               []Field  `json:"fields,omitempty"`
-	POEmbedsBase         bool     `json:"poEmbedsBase,omitempty"`
-	ReservedProtoNumbers []int    `json:"reservedProtoNumbers,omitempty"`
-	ReservedProtoNames   []string `json:"reservedProtoNames,omitempty"`
+	Name         string  `json:"name"`
+	GoName       string  `json:"-"`
+	File         string  `json:"file"`
+	TableName    string  `json:"tableName"`
+	Fields       []Field `json:"fields,omitempty"`
+	POEmbedsBase bool    `json:"poEmbedsBase,omitempty"`
 }
 
-type RESTSpec struct {
+// Legacy transport fields exist only so V1/V2 manifests can be read and
+// deterministically upgraded. Canonical V3 manifests never write them.
+type legacyRESTSpec struct {
 	Enabled  bool   `json:"enabled"`
 	Prefix   string `json:"prefix,omitempty"`
-	BasePath string `json:"basePath,omitempty"` // legacy single-object manifest compatibility
+	BasePath string `json:"basePath,omitempty"`
 }
 
-type RPCSpec struct {
+type legacyRPCSpec struct {
 	Enabled bool   `json:"enabled"`
-	Service string `json:"service,omitempty"` // legacy single-object manifest compatibility
+	Service string `json:"service,omitempty"`
 }
 
 type Spec struct {
@@ -58,14 +59,13 @@ type Spec struct {
 	TablePrefix  string       `json:"tablePrefix"`
 	TenantScoped bool         `json:"tenantScoped"`
 	Objects      []ObjectSpec `json:"objects,omitempty"`
-	REST         RESTSpec     `json:"rest"`
-	RPC          RPCSpec      `json:"rpc"`
 
-	// Version-1 single-object manifest compatibility. Regenerate upgrades these
-	// fields into Objects and rewrites the manifest deterministically.
-	Object    string  `json:"object,omitempty"`
-	TableName string  `json:"tableName,omitempty"`
-	Fields    []Field `json:"fields,omitempty"`
+	// Version-1/2 compatibility inputs. canonicalizeSpec always clears them.
+	REST      *legacyRESTSpec `json:"rest,omitempty"`
+	RPC       *legacyRPCSpec  `json:"rpc,omitempty"`
+	Object    string          `json:"object,omitempty"`
+	TableName string          `json:"tableName,omitempty"`
+	Fields    []Field         `json:"fields,omitempty"`
 }
 
 type Options struct {
@@ -73,11 +73,8 @@ type Options struct {
 	Object      string
 	Root        string
 	TablePrefix string
-	RESTPrefix  string
 	Fields      []string
 	Global      bool
-	NoREST      bool
-	NoRPC       bool
 }
 
 var reservedFields = map[string]struct{}{
@@ -100,30 +97,16 @@ func newDomainSpec(options Options, tablePrefix string) (Spec, string, error) {
 	if !tablePrefixPattern.MatchString(tablePrefix) {
 		return Spec{}, "", fmt.Errorf("domain: table prefix %q must match %s", tablePrefix, tablePrefixPattern)
 	}
-	restPrefix := strings.TrimSpace(options.RESTPrefix)
-	if restPrefix == "" {
-		restPrefix = "/v1"
-	}
-	if !strings.HasPrefix(restPrefix, "/") {
-		return Spec{}, "", fmt.Errorf("domain: REST prefix %q must start with /", restPrefix)
-	}
-	restPrefix = strings.TrimRight(restPrefix, "/")
-	if restPrefix == "" {
-		restPrefix = "/"
-	}
 	return Spec{
 		Version:      SpecVersion,
 		Domain:       domainName,
 		TablePrefix:  tablePrefix,
 		TenantScoped: !options.Global,
-		REST:         RESTSpec{Enabled: !options.NoREST, Prefix: restPrefix},
-		RPC:          RPCSpec{Enabled: !options.NoRPC},
 	}, absoluteRoot, nil
 }
 
 // normalizeOptions remains as a compatibility helper for tests/callers that
-// construct a single object from flags. New generation treats PO files as the
-// authoritative object/field inventory.
+// construct a single object from flags. New generation scans developer POs.
 func normalizeOptions(options Options) (Spec, string, error) {
 	tablePrefix := strings.TrimSpace(options.TablePrefix)
 	if tablePrefix == "" {
@@ -144,7 +127,6 @@ func normalizeOptions(options Options) (Spec, string, error) {
 	if err != nil {
 		return Spec{}, "", err
 	}
-	fields = assignMissingProtoNumbers(fields, nil)
 	spec.Objects = []ObjectSpec{{
 		Name:      object,
 		GoName:    exportedIdentifier(object),
@@ -188,9 +170,6 @@ func parseFields(values []string) ([]Field, error) {
 }
 
 func validateSpec(spec Spec) error {
-	if spec.Version == 1 && len(spec.Objects) == 0 {
-		return validateLegacySpec(spec)
-	}
 	if spec.Version != SpecVersion {
 		return fmt.Errorf("domain: spec version %d is unsupported", spec.Version)
 	}
@@ -225,63 +204,15 @@ func validateSpec(spec Spec) error {
 			return fmt.Errorf("domain: duplicate table %q", object.TableName)
 		}
 		seenTables[object.TableName] = struct{}{}
-		reservedNumbers := map[int]struct{}{}
-		for _, number := range object.ReservedProtoNumbers {
-			if number <= 0 {
-				return fmt.Errorf("domain: object %q has invalid reserved proto number %d", object.Name, number)
-			}
-			if _, duplicate := reservedNumbers[number]; duplicate {
-				return fmt.Errorf("domain: object %q duplicates reserved proto number %d", object.Name, number)
-			}
-			reservedNumbers[number] = struct{}{}
-		}
 		if err := validateFields(object.Fields); err != nil {
 			return fmt.Errorf("domain: object %s: %w", object.Name, err)
 		}
-		for _, field := range object.Fields {
-			if _, collision := reservedNumbers[field.ProtoNumber]; collision {
-				return fmt.Errorf("domain: object %q live field %q reuses reserved proto number %d", object.Name, field.Name, field.ProtoNumber)
-			}
-		}
-	}
-	if spec.REST.Enabled {
-		prefix := spec.REST.Prefix
-		if prefix == "" {
-			prefix = inferLegacyRESTPrefix(spec)
-		}
-		if !strings.HasPrefix(prefix, "/") {
-			return errors.New("domain: REST prefix must start with /")
-		}
-	}
-	return nil
-}
-
-func validateLegacySpec(spec Spec) error {
-	if !namePattern.MatchString(spec.Domain) || !namePattern.MatchString(spec.Object) {
-		return errors.New("domain: invalid domain or object name")
-	}
-	if !tablePrefixPattern.MatchString(spec.TablePrefix) {
-		return errors.New("domain: invalid table prefix")
-	}
-	expectedTable := tableName(spec.TablePrefix, spec.Domain, spec.Object)
-	if spec.TableName != expectedTable {
-		return fmt.Errorf("domain: tableName=%q want %q (prefix_domain_object)", spec.TableName, expectedTable)
-	}
-	if err := validateFields(spec.Fields); err != nil {
-		return err
-	}
-	if spec.REST.Enabled && !strings.HasPrefix(spec.REST.BasePath, "/") {
-		return errors.New("domain: REST basePath must start with /")
-	}
-	if spec.RPC.Enabled && strings.TrimSpace(spec.RPC.Service) == "" {
-		return errors.New("domain: RPC service name is required")
 	}
 	return nil
 }
 
 func validateFields(fields []Field) error {
 	seenNames := map[string]struct{}{}
-	seenNumbers := map[int]struct{}{}
 	for _, field := range fields {
 		if !namePattern.MatchString(field.Name) {
 			return fmt.Errorf("invalid field name %q", field.Name)
@@ -299,151 +230,71 @@ func validateFields(fields []Field) error {
 		if field.Column == "" {
 			return fmt.Errorf("field %q has no persistence column", field.Name)
 		}
-		if field.ProtoNumber <= 0 {
-			return fmt.Errorf("field %q has invalid proto number %d", field.Name, field.ProtoNumber)
-		}
-		if _, duplicate := seenNumbers[field.ProtoNumber]; duplicate {
-			return fmt.Errorf("duplicate proto field number %d", field.ProtoNumber)
-		}
-		seenNumbers[field.ProtoNumber] = struct{}{}
 	}
 	return nil
 }
 
+// upgradeSpec accepts historical V1/V2 manifests as migration inputs and
+// projects them onto the persistence-only V3 model. New generation never
+// writes transport or protobuf metadata back into domain.json.
 func upgradeSpec(spec Spec) Spec {
-	if spec.Version != 1 || len(spec.Objects) > 0 {
+	if spec.Version == SpecVersion {
 		return spec
 	}
-	fields := assignMissingProtoNumbers(spec.Fields, nil)
-	for i := range fields {
-		if fields[i].Column == "" {
-			fields[i].Column = fields[i].Name
+	if spec.Version == 1 && len(spec.Objects) == 0 && spec.Object != "" {
+		fields := append([]Field(nil), spec.Fields...)
+		for i := range fields {
+			if fields[i].Column == "" {
+				fields[i].Column = fields[i].Name
+			}
+			if fields[i].GoName == "" {
+				fields[i].GoName = exportedIdentifier(fields[i].Name)
+			}
 		}
-	}
-	prefix := inferLegacyRESTPrefix(spec)
-	return Spec{
-		Version:      SpecVersion,
-		Domain:       spec.Domain,
-		TablePrefix:  spec.TablePrefix,
-		TenantScoped: spec.TenantScoped,
-		Objects: []ObjectSpec{{
+		spec.Objects = []ObjectSpec{{
 			Name:         spec.Object,
 			GoName:       exportedIdentifier(spec.Object),
 			File:         snakeCase(spec.Object) + ".go",
 			TableName:    spec.TableName,
 			Fields:       fields,
 			POEmbedsBase: true,
-		}},
-		REST: RESTSpec{Enabled: spec.REST.Enabled, Prefix: prefix},
-		RPC:  RPCSpec{Enabled: spec.RPC.Enabled},
+		}}
 	}
-}
-
-func inferLegacyRESTPrefix(spec Spec) string {
-	if spec.REST.Prefix != "" {
-		return spec.REST.Prefix
-	}
-	base := strings.TrimRight(spec.REST.BasePath, "/")
-	if base == "" {
-		return "/v1"
-	}
-	object := spec.Object
-	if object == "" && len(spec.Objects) == 1 {
-		object = spec.Objects[0].Name
-	}
-	if object != "" {
-		suffix := "/" + pluralize(object)
-		if strings.HasSuffix(base, suffix) {
-			base = strings.TrimSuffix(base, suffix)
-		}
-	}
-	if base == "" {
-		return "/"
-	}
-	return base
-}
-
-func canonicalizeSpec(spec Spec) Spec {
-	spec = upgradeSpec(spec)
-	spec.Object = ""
-	spec.TableName = ""
-	spec.Fields = nil
-	spec.REST.BasePath = ""
-	spec.RPC.Service = ""
-	sort.Slice(spec.Objects, func(i, j int) bool { return spec.Objects[i].Name < spec.Objects[j].Name })
-	for objectIndex := range spec.Objects {
-		fields := spec.Objects[objectIndex].Fields
-		sort.Slice(fields, func(i, j int) bool {
-			if fields[i].ProtoNumber == fields[j].ProtoNumber {
-				return fields[i].Name < fields[j].Name
-			}
-			return fields[i].ProtoNumber < fields[j].ProtoNumber
-		})
-		spec.Objects[objectIndex].Fields = fields
-		sort.Ints(spec.Objects[objectIndex].ReservedProtoNumbers)
-		sort.Strings(spec.Objects[objectIndex].ReservedProtoNames)
+	if spec.Version == 1 || spec.Version == 2 {
+		spec.Version = SpecVersion
 	}
 	return spec
 }
 
-func assignMissingProtoNumbers(fields []Field, prior []Field) []Field {
-	priorByName := make(map[string]Field, len(prior))
-	maxNumber := 0
-	for _, field := range prior {
-		priorByName[field.Name] = field
-		if field.ProtoNumber > maxNumber {
-			maxNumber = field.ProtoNumber
+func canonicalizeSpec(spec Spec) Spec {
+	spec = upgradeSpec(spec)
+	spec.REST = nil
+	spec.RPC = nil
+	spec.Object = ""
+	spec.TableName = ""
+	spec.Fields = nil
+	sort.Slice(spec.Objects, func(i, j int) bool { return spec.Objects[i].Name < spec.Objects[j].Name })
+	for objectIndex := range spec.Objects {
+		if spec.Objects[objectIndex].GoName == "" {
+			spec.Objects[objectIndex].GoName = exportedIdentifier(spec.Objects[objectIndex].Name)
 		}
-	}
-	result := append([]Field(nil), fields...)
-	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
-	for i := range result {
-		if result[i].GoName == "" {
-			result[i].GoName = exportedIdentifier(result[i].Name)
-		}
-		if previous, ok := priorByName[result[i].Name]; ok && previous.ProtoNumber > 0 {
-			result[i].ProtoNumber = previous.ProtoNumber
-			if result[i].Column == "" {
-				result[i].Column = previous.Column
+		fields := spec.Objects[objectIndex].Fields
+		for i := range fields {
+			if fields[i].GoName == "" {
+				fields[i].GoName = exportedIdentifier(fields[i].Name)
 			}
-			continue
+			if fields[i].Column == "" {
+				fields[i].Column = fields[i].Name
+			}
 		}
-		if result[i].ProtoNumber <= 0 {
-			maxNumber++
-			result[i].ProtoNumber = maxNumber
-		}
-		if result[i].Column == "" {
-			result[i].Column = result[i].Name
-		}
+		sort.Slice(fields, func(i, j int) bool { return fields[i].Name < fields[j].Name })
+		spec.Objects[objectIndex].Fields = fields
 	}
-	sort.Slice(result, func(i, j int) bool { return result[i].ProtoNumber < result[j].ProtoNumber })
-	return result
+	return spec
 }
 
 func tableName(prefix, domain, object string) string {
 	return prefix + "_" + domain + "_" + object
-}
-
-func restBasePath(spec Spec, object ObjectSpec) string {
-	prefix := spec.REST.Prefix
-	if prefix == "" {
-		prefix = inferLegacyRESTPrefix(spec)
-	}
-	prefix = strings.TrimRight(prefix, "/")
-	if prefix == "" {
-		return "/" + pluralize(object.Name)
-	}
-	return prefix + "/" + pluralize(object.Name)
-}
-
-func pluralize(value string) string {
-	if strings.HasSuffix(value, "s") {
-		return value
-	}
-	if strings.HasSuffix(value, "y") && len(value) > 1 {
-		return value[:len(value)-1] + "ies"
-	}
-	return value + "s"
 }
 
 func exportedIdentifier(value string) string {
@@ -470,13 +321,7 @@ func snakeCase(value string) string {
 	var builder strings.Builder
 	runes := []rune(value)
 	for i, current := range runes {
-		if current == '-' || current == ' ' || current == '.' {
-			if builder.Len() > 0 && !strings.HasSuffix(builder.String(), "_") {
-				builder.WriteRune('_')
-			}
-			continue
-		}
-		if current == '_' {
+		if current == '-' || current == ' ' || current == '.' || current == '_' {
 			if builder.Len() > 0 && !strings.HasSuffix(builder.String(), "_") {
 				builder.WriteRune('_')
 			}
@@ -513,23 +358,6 @@ func goType(kind string) (string, bool) {
 		return "time.Time", true
 	default:
 		return "", false
-	}
-}
-
-func protoType(kind string) string {
-	switch kind {
-	case "int64":
-		return "int64"
-	case "uint64":
-		return "uint64"
-	case "bool":
-		return "bool"
-	case "float64":
-		return "double"
-	case "time":
-		return "google.protobuf.Timestamp"
-	default:
-		return "string"
 	}
 }
 

@@ -9,10 +9,7 @@ import (
 	"testing"
 )
 
-func TestPOFirstDomainCompilesPinnedGRPCDownstream(t *testing.T) {
-	if _, err := exec.LookPath("protoc"); err != nil {
-		t.Skip("locked protoc is not available")
-	}
+func TestPOFirstDomainCompilesPersistenceOnlyDownstream(t *testing.T) {
 	repositoryRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
 		t.Fatal(err)
@@ -23,8 +20,6 @@ func TestPOFirstDomainCompilesPinnedGRPCDownstream(t *testing.T) {
 go 1.25.0
 
 require (
-	google.golang.org/grpc v1.82.1
-	google.golang.org/protobuf v1.36.11
 	gorm.io/gorm v1.25.5
 	yunka.io/framework v0.0.0
 )
@@ -52,23 +47,24 @@ type CoffeeMachinePO struct {
 
 type DeviceGroupPO struct { Name string }
 `)
-	writeTestPO(t, persistence, "api_token.go", `package persistence
-
-type APITokenPO struct { TokenHash string }
-`)
-	t.Setenv("YUNKA_DOMAIN_TOOL_DIR", filepath.Join(repositoryRoot, ".yunka", "bin"))
 	if err := Generate(Options{Name: "device", Root: filepath.Join(root, "internal")}); err != nil {
 		t.Fatal(err)
 	}
 	domainRoot := filepath.Join(root, "internal", "device")
-	for _, relative := range []string{"transport/rpc/domain.proto", "transport/rpc/pb/domain.pb.go", "transport/rpc/pb/domain_grpc.pb.go", "transport/rpc/zz_yunka_grpc_bridge_gen.go"} {
+	for _, relative := range []string{
+		"domain/zz_yunka_coffee_machine_entity_gen.go",
+		"ports/zz_yunka_repositories_gen.go",
+		"infrastructure/persistence/zz_yunka_coffee_machine_record_gen.go",
+		"infrastructure/persistence/zz_yunka_repositories_gen.go",
+	} {
 		if _, err := os.Stat(filepath.Join(domainRoot, filepath.FromSlash(relative))); err != nil {
 			t.Fatalf("missing %s: %v", relative, err)
 		}
 	}
-	bridge, _ := os.ReadFile(filepath.Join(domainRoot, "transport", "rpc", "zz_yunka_grpc_bridge_gen.go"))
-	if !strings.Contains(string(bridge), "pb.RegisterDeviceServiceServer") {
-		t.Fatalf("typed grpc registration was not generated: %s", bridge)
+	for _, forbidden := range []string{"application", "transport", "wire"} {
+		if _, err := os.Stat(filepath.Join(domainRoot, forbidden)); !os.IsNotExist(err) {
+			t.Fatalf("forbidden generated path exists: %s", forbidden)
+		}
 	}
 	if err := Check(filepath.Join(root, "internal")); err != nil {
 		t.Fatal(err)
@@ -84,19 +80,14 @@ type APITokenPO struct { TokenHash string }
 	}
 }
 
-func TestDomainToolPinsMatchRepositoryLock(t *testing.T) {
-	repositoryRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
-	if err != nil {
-		t.Fatal(err)
-	}
-	contents, err := os.ReadFile(filepath.Join(repositoryRoot, "tools", "toolchain.env"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(contents)
-	for _, expected := range []string{"PROTOC_VERSION=" + domainProtocVersion, "PROTOC_GEN_GO_VERSION=v" + domainProtocGenGoVersion, "PROTOC_GEN_GO_GRPC_VERSION=v" + domainProtocGenGRPCVersion} {
-		if !strings.Contains(text, expected) {
-			t.Fatalf("domain pin %q not aligned with repository lock", expected)
+func TestDomainCompilerHasNoProtobufOrTransportGenerationSurface(t *testing.T) {
+	command := Command()
+	for _, sub := range command.Subcommands {
+		for _, flag := range sub.Flags {
+			name := flag.GetName()
+			if strings.Contains(name, "rpc") || strings.Contains(name, "rest") || strings.Contains(name, "proto") {
+				t.Fatalf("domain command exposes transport/protobuf flag %q", name)
+			}
 		}
 	}
 }

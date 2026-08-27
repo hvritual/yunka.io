@@ -44,6 +44,8 @@ func artifactFlags() []cli.Flag {
 		cli.StringFlag{Name: "out", Value: "./contracts/generated", Usage: "generated contract artifact directory"},
 		cli.StringFlag{Name: "title", Value: "yunka API", Usage: "OpenAPI document title"},
 		cli.StringFlag{Name: "version", Value: "1.0.0", Usage: "OpenAPI document version"},
+		cli.StringFlag{Name: "application-out", Usage: "root directory for generated PB Application Ports/adapters/policies; required when typed applications exist"},
+		cli.StringFlag{Name: "application-import", Usage: "Go import path corresponding to --application-out; required when typed applications exist"},
 	}
 }
 
@@ -73,17 +75,24 @@ func generateCommand() cli.Command {
 	flags := append(sourceFlags(), artifactFlags()...)
 	return cli.Command{
 		Name:  "generate",
-		Usage: "generate manifest.json, openapi.json, and client.ts from protobuf contracts",
+		Usage: "generate contract artifacts and typed PB application boundaries",
 		Flags: flags,
 		Action: func(c *cli.Context) error {
 			result, artifacts, err := compileArtifacts(c)
 			if err != nil {
 				return err
 			}
+			applicationFiles, err := renderApplicationArtifacts(result.Manifest, c)
+			if err != nil {
+				return err
+			}
 			if err := contractcore.WriteArtifacts(c.String("out"), artifacts); err != nil {
 				return err
 			}
-			fmt.Printf("contract generated: out=%s services=%d messages=%d descriptor=%s\n", c.String("out"), len(result.Manifest.Services), len(result.Manifest.Messages), result.DescriptorSHA)
+			if err := contractcore.WriteApplicationCode(c.String("application-out"), applicationFiles); err != nil {
+				return err
+			}
+			fmt.Printf("contract generated: out=%s services=%d messages=%d applicationFiles=%d descriptor=%s\n", c.String("out"), len(result.Manifest.Services), len(result.Manifest.Messages), len(applicationFiles), result.DescriptorSHA)
 			return nil
 		},
 	}
@@ -101,10 +110,19 @@ func checkCommand() cli.Command {
 			if err != nil {
 				return err
 			}
+			applicationFiles, err := renderApplicationArtifacts(result.Manifest, c)
+			if err != nil {
+				return err
+			}
 			drift, err := contractcore.CheckArtifacts(c.String("out"), artifacts)
 			if err != nil {
 				return err
 			}
+			applicationDrift, err := contractcore.CheckApplicationCode(c.String("application-out"), applicationFiles)
+			if err != nil {
+				return err
+			}
+			drift = append(drift, applicationDrift...)
 			for _, item := range drift {
 				fmt.Printf("DRIFT %s: %s\n", item.File, item.Reason)
 			}
@@ -123,7 +141,7 @@ func checkCommand() cli.Command {
 					return errors.New("contract guard rejected breaking changes")
 				}
 			}
-			fmt.Printf("contract check ok: out=%s descriptor=%s\n", c.String("out"), result.DescriptorSHA)
+			fmt.Printf("contract check ok: out=%s applicationFiles=%d descriptor=%s\n", c.String("out"), len(applicationFiles), result.DescriptorSHA)
 			return nil
 		},
 	}
@@ -180,9 +198,16 @@ func inspectCommand() cli.Command {
 			fmt.Printf("descriptorSHA256: %s\n", result.DescriptorSHA)
 			fmt.Printf("files: %d\nmessages: %d\nenums: %d\nservices: %d\n", len(result.Manifest.Files), len(result.Manifest.Messages), len(result.Manifest.Enums), len(result.Manifest.Services))
 			for _, service := range result.Manifest.Services {
-				fmt.Printf("- %s (%d methods)\n", service.FullName, len(service.Methods))
+				fmt.Printf("- %s (%d methods)", service.FullName, len(service.Methods))
+				if service.Application != nil {
+					fmt.Printf(" [domain=%s application=%s]", service.Domain, service.Application.Name)
+				}
+				fmt.Println()
 				for _, method := range service.Methods {
 					fmt.Printf("  - %s: %s -> %s", method.Name, method.Request, method.Response)
+					if method.Operation != nil {
+						fmt.Printf(" [operation=%s useCase=%s]", method.Operation.ID, method.Operation.UseCase)
+					}
 					if len(method.HTTP) > 0 {
 						fmt.Printf(" [%s %s]", method.HTTP[0].Method, method.HTTP[0].Path)
 					}
@@ -226,6 +251,18 @@ func compileArtifacts(c *cli.Context) (contractcore.CompileResult, contractcore.
 		OpenAPI: contractcore.OpenAPIOptions{Title: c.String("title"), Version: c.String("version")},
 	})
 	return result, artifacts, err
+}
+
+func renderApplicationArtifacts(manifest contractcore.Manifest, c *cli.Context) ([]contractcore.GeneratedApplicationFile, error) {
+	if !contractcore.HasTypedApplications(manifest) {
+		return nil, nil
+	}
+	out := strings.TrimSpace(c.String("application-out"))
+	rootImport := strings.TrimSpace(c.String("application-import"))
+	if out == "" || rootImport == "" {
+		return nil, contractcore.ErrApplicationOutputRequired
+	}
+	return contractcore.RenderApplicationCode(manifest, contractcore.ApplicationCodeOptions{RootImport: rootImport})
 }
 
 func printDiagnostics(diagnostics []contractcore.Diagnostic) {

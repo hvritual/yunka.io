@@ -34,6 +34,12 @@ type Drift struct {
 
 func RenderArtifacts(manifest Manifest, options ArtifactOptions) (Artifacts, error) {
 	manifest.Normalize()
+	// Expand/cutover compatibility: pure legacy/control-plane inventories keep
+	// their byte-stable V1 artifact until a typed Domain/Application declaration
+	// enters that inventory. Typed business inventories always write V2.
+	if !hasTypedDSL(manifest) {
+		manifest.SchemaVersion = 1
+	}
 	manifestBytes, err := marshalJSON(manifest)
 	if err != nil {
 		return Artifacts{}, err
@@ -47,6 +53,30 @@ func RenderArtifacts(manifest Manifest, options ArtifactOptions) (Artifacts, err
 		return Artifacts{}, err
 	}
 	return Artifacts{Manifest: manifestBytes, OpenAPI: openAPI, TypeScript: typeScript}, nil
+}
+
+func hasTypedDSL(manifest Manifest) bool {
+	for _, file := range manifest.Files {
+		if file.Domain != nil {
+			return true
+		}
+	}
+	for _, message := range manifest.Messages {
+		if message.DTO != nil {
+			return true
+		}
+	}
+	for _, service := range manifest.Services {
+		if service.Domain != "" || service.Application != nil {
+			return true
+		}
+		for _, method := range service.Methods {
+			if method.Operation != nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func WriteArtifacts(dir string, artifacts Artifacts) error {
@@ -100,7 +130,7 @@ func LoadManifest(path string) (Manifest, error) {
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		return Manifest{}, fmt.Errorf("contract: decode manifest %s: %w", path, err)
 	}
-	if manifest.SchemaVersion != ManifestVersion {
+	if manifest.SchemaVersion != 1 && manifest.SchemaVersion != ManifestVersion {
 		return Manifest{}, fmt.Errorf("contract: unsupported manifest schemaVersion %d", manifest.SchemaVersion)
 	}
 	manifest.Normalize()

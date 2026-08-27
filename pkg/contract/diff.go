@@ -39,6 +39,8 @@ func Compare(baseline, current Manifest) Diff {
 	current.Normalize()
 	var changes []Change
 
+	changes = append(changes, compareFileDeclarations(baseline, current)...)
+
 	baseMessages := messageIndex(baseline)
 	currentMessages := messageIndex(current)
 	for name, oldMessage := range baseMessages {
@@ -103,8 +105,54 @@ func Compare(baseline, current Manifest) Diff {
 	return Diff{Changes: changes}
 }
 
+func compareFileDeclarations(baseline, current Manifest) []Change {
+	base := make(map[string]File, len(baseline.Files))
+	now := make(map[string]File, len(current.Files))
+	for _, file := range baseline.Files {
+		base[file.Name] = file
+	}
+	for _, file := range current.Files {
+		now[file.Name] = file
+	}
+	var changes []Change
+	for name, oldFile := range base {
+		newFile, ok := now[name]
+		if !ok {
+			if oldFile.Domain != nil {
+				changes = append(changes, breaking("domain_file_removed", "file."+name, "file owning typed domain declaration removed"))
+			}
+			continue
+		}
+		path := "file." + name + ".domain"
+		switch {
+		case oldFile.Domain == nil && newFile.Domain != nil:
+			changes = append(changes, info("domain_declared", path, "typed domain declaration added"))
+		case oldFile.Domain != nil && newFile.Domain == nil:
+			changes = append(changes, breaking("domain_removed", path, "typed domain declaration removed"))
+		case oldFile.Domain != nil && newFile.Domain != nil:
+			if oldFile.Domain.Name != newFile.Domain.Name {
+				changes = append(changes, breaking("domain_identity_changed", path, fmt.Sprintf("domain identity changed from %s to %s", oldFile.Domain.Name, newFile.Domain.Name)))
+			}
+			if oldFile.Domain.Version != newFile.Domain.Version {
+				changes = append(changes, warning("domain_version_changed", path, fmt.Sprintf("domain version changed from %s to %s", oldFile.Domain.Version, newFile.Domain.Version)))
+			}
+		}
+	}
+	return changes
+}
+
 func compareMessage(oldMessage, newMessage Message) []Change {
 	var changes []Change
+	pathRoot := "message." + oldMessage.FullName
+	switch {
+	case oldMessage.DTO == nil && newMessage.DTO != nil:
+		changes = append(changes, info("dto_declared", pathRoot+".dto", "DTO classification added: "+newMessage.DTO.Kind))
+	case oldMessage.DTO != nil && newMessage.DTO == nil:
+		changes = append(changes, breaking("dto_removed", pathRoot+".dto", "DTO classification removed"))
+	case oldMessage.DTO != nil && newMessage.DTO != nil && oldMessage.DTO.Kind != newMessage.DTO.Kind:
+		changes = append(changes, breaking("dto_kind_changed", pathRoot+".dto", fmt.Sprintf("DTO kind changed from %s to %s", oldMessage.DTO.Kind, newMessage.DTO.Kind)))
+	}
+
 	oldByNumber := make(map[int32]Field)
 	newByNumber := make(map[int32]Field)
 	newByName := make(map[string]Field)
@@ -116,7 +164,7 @@ func compareMessage(oldMessage, newMessage Message) []Change {
 		newByName[field.Name] = field
 	}
 	for _, oldField := range oldMessage.Fields {
-		path := "message." + oldMessage.FullName + ".field." + oldField.Name
+		path := pathRoot + ".field." + oldField.Name
 		newField, sameNumber := newByNumber[oldField.Number]
 		if !sameNumber {
 			if byName, sameName := newByName[oldField.Name]; sameName {
@@ -188,6 +236,18 @@ func compareEnum(oldEnum, newEnum Enum) []Change {
 
 func compareService(oldService, newService Service) []Change {
 	var changes []Change
+	servicePath := "service." + oldService.FullName
+	if oldService.Domain != newService.Domain {
+		if oldService.Domain == "" {
+			changes = append(changes, info("service_domain_declared", servicePath, "typed domain ownership added: "+newService.Domain))
+		} else if newService.Domain == "" {
+			changes = append(changes, breaking("service_domain_removed", servicePath, "typed domain ownership removed"))
+		} else {
+			changes = append(changes, breaking("service_domain_changed", servicePath, fmt.Sprintf("domain changed from %s to %s", oldService.Domain, newService.Domain)))
+		}
+	}
+	changes = append(changes, compareApplicationDeclaration(servicePath, oldService.Application, newService.Application)...)
+
 	oldMethods := make(map[string]Method)
 	newMethods := make(map[string]Method)
 	for _, method := range oldService.Methods {
@@ -197,7 +257,7 @@ func compareService(oldService, newService Service) []Change {
 		newMethods[method.Name] = method
 	}
 	for name, oldMethod := range oldMethods {
-		path := "service." + oldService.FullName + ".method." + name
+		path := servicePath + ".method." + name
 		newMethod, ok := newMethods[name]
 		if !ok {
 			changes = append(changes, breaking("method_removed", path, "RPC method removed"))
@@ -213,13 +273,14 @@ func compareService(oldService, newService Service) []Change {
 			changes = append(changes, breaking("method_streaming_changed", path, "streaming mode changed"))
 		}
 		if directivesKey(oldMethod.Directives) != directivesKey(newMethod.Directives) {
-			changes = append(changes, warning("method_directives_changed", path, "yunka method directives changed; review runtime policy impact"))
+			changes = append(changes, warning("method_directives_changed", path, "yunka method directives changed; review migration metadata"))
 		}
-		if authorizationKey(oldMethod.Authorization) != authorizationKey(newMethod.Authorization) {
+		changes = append(changes, compareOperationDeclaration(path, oldMethod.Operation, newMethod.Operation)...)
+		if oldMethod.Operation == nil && newMethod.Operation == nil && authorizationKey(oldMethod.Authorization) != authorizationKey(newMethod.Authorization) {
 			if oldMethod.Authorization != nil && newMethod.Authorization != nil && oldMethod.Authorization.OperationID != newMethod.Authorization.OperationID {
 				changes = append(changes, breaking("operation_id_changed", path, "stable authorization operation id changed"))
 			} else {
-				changes = append(changes, warning("authorization_policy_changed", path, "authorization policy changed; review permission impact"))
+				changes = append(changes, warning("authorization_policy_changed", path, "legacy authorization policy changed; review permission impact"))
 			}
 		}
 		changes = append(changes, compareHTTPBindings(path, oldMethod.HTTP, newMethod.HTTP)...)
@@ -228,6 +289,54 @@ func compareService(oldService, newService Service) []Change {
 		if _, ok := oldMethods[name]; !ok {
 			changes = append(changes, info("method_added", "service."+newService.FullName+".method."+name, "RPC method added"))
 		}
+	}
+	return changes
+}
+
+func compareApplicationDeclaration(path string, oldValue, newValue *ApplicationDeclaration) []Change {
+	switch {
+	case oldValue == nil && newValue != nil:
+		return []Change{info("application_declared", path+".application", "typed application declaration added: "+newValue.Name)}
+	case oldValue != nil && newValue == nil:
+		return []Change{breaking("application_removed", path+".application", "typed application declaration removed")}
+	case oldValue != nil && newValue != nil && oldValue.Name != newValue.Name:
+		return []Change{breaking("application_identity_changed", path+".application", fmt.Sprintf("application identity changed from %s to %s", oldValue.Name, newValue.Name))}
+	default:
+		return nil
+	}
+}
+
+func compareOperationDeclaration(path string, oldValue, newValue *OperationDeclaration) []Change {
+	switch {
+	case oldValue == nil && newValue != nil:
+		return []Change{info("operation_declared", path+".operation", "typed operation declaration added: "+newValue.ID)}
+	case oldValue != nil && newValue == nil:
+		return []Change{breaking("operation_removed", path+".operation", "typed operation declaration removed")}
+	case oldValue == nil || newValue == nil:
+		return nil
+	}
+	var changes []Change
+	operationPath := path + ".operation"
+	if oldValue.ID != newValue.ID {
+		changes = append(changes, breaking("operation_id_changed", operationPath, fmt.Sprintf("operation id changed from %s to %s", oldValue.ID, newValue.ID)))
+	}
+	if oldValue.UseCase != newValue.UseCase {
+		changes = append(changes, breaking("use_case_changed", operationPath, fmt.Sprintf("use case changed from %s to %s", oldValue.UseCase, newValue.UseCase)))
+	}
+	if oldValue.PermissionMode != newValue.PermissionMode {
+		changes = append(changes, breaking("permission_mode_changed", operationPath, fmt.Sprintf("permission mode changed from %s to %s", oldValue.PermissionMode, newValue.PermissionMode)))
+	}
+	if strings.Join(stableStrings(oldValue.Permissions), ",") != strings.Join(stableStrings(newValue.Permissions), ",") {
+		changes = append(changes, breaking("permissions_changed", operationPath, "permission requirements changed"))
+	}
+	if strings.Join(stableStrings(oldValue.Authentication), ",") != strings.Join(stableStrings(newValue.Authentication), ",") {
+		changes = append(changes, breaking("authentication_changed", operationPath, "authentication requirements changed"))
+	}
+	if oldValue.TenantRequired != newValue.TenantRequired {
+		changes = append(changes, breaking("tenant_requirement_changed", operationPath, fmt.Sprintf("tenant requirement changed from %v to %v", oldValue.TenantRequired, newValue.TenantRequired)))
+	}
+	if oldValue.Public != newValue.Public {
+		changes = append(changes, breaking("public_policy_changed", operationPath, fmt.Sprintf("public changed from %v to %v", oldValue.Public, newValue.Public)))
 	}
 	return changes
 }

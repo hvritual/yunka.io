@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-const ManifestVersion = 1
+const ManifestVersion = 2
 
 type Manifest struct {
 	SchemaVersion int       `json:"schemaVersion"`
@@ -16,16 +16,41 @@ type Manifest struct {
 }
 
 type File struct {
-	Name      string `json:"name"`
-	Package   string `json:"package,omitempty"`
-	Syntax    string `json:"syntax,omitempty"`
-	GoPackage string `json:"goPackage,omitempty"`
+	Name      string             `json:"name"`
+	Package   string             `json:"package,omitempty"`
+	Syntax    string             `json:"syntax,omitempty"`
+	GoPackage string             `json:"goPackage,omitempty"`
+	Domain    *DomainDeclaration `json:"domain,omitempty"`
+}
+
+type DomainDeclaration struct {
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
+}
+
+type DTODeclaration struct {
+	Kind string `json:"kind"`
+}
+
+type ApplicationDeclaration struct {
+	Name string `json:"name"`
+}
+
+type OperationDeclaration struct {
+	ID             string   `json:"id"`
+	UseCase        string   `json:"useCase"`
+	Permissions    []string `json:"permissions,omitempty"`
+	PermissionMode string   `json:"permissionMode,omitempty"`
+	TenantRequired bool     `json:"tenantRequired,omitempty"`
+	Authentication []string `json:"authentication,omitempty"`
+	Public         bool     `json:"public,omitempty"`
 }
 
 type Message struct {
-	Name     string  `json:"name"`
-	FullName string  `json:"fullName"`
-	Fields   []Field `json:"fields"`
+	Name     string          `json:"name"`
+	FullName string          `json:"fullName"`
+	Fields   []Field         `json:"fields"`
+	DTO      *DTODeclaration `json:"dto,omitempty"`
 }
 
 type Field struct {
@@ -55,21 +80,24 @@ type EnumValue struct {
 }
 
 type Service struct {
-	Name     string   `json:"name"`
-	FullName string   `json:"fullName"`
-	Methods  []Method `json:"methods"`
+	Name        string                  `json:"name"`
+	FullName    string                  `json:"fullName"`
+	Domain      string                  `json:"domain,omitempty"`
+	Application *ApplicationDeclaration `json:"application,omitempty"`
+	Methods     []Method                `json:"methods"`
 }
 
 type Method struct {
-	Name            string               `json:"name"`
-	FullName        string               `json:"fullName"`
-	Request         string               `json:"request"`
-	Response        string               `json:"response"`
-	ClientStreaming bool                 `json:"clientStreaming,omitempty"`
-	ServerStreaming bool                 `json:"serverStreaming,omitempty"`
-	HTTP            []HTTPBinding        `json:"http,omitempty"`
-	Directives      map[string]string    `json:"directives,omitempty"`
-	Authorization   *AuthorizationPolicy `json:"authorization,omitempty"`
+	Name            string                `json:"name"`
+	FullName        string                `json:"fullName"`
+	Request         string                `json:"request"`
+	Response        string                `json:"response"`
+	ClientStreaming bool                  `json:"clientStreaming,omitempty"`
+	ServerStreaming bool                  `json:"serverStreaming,omitempty"`
+	HTTP            []HTTPBinding         `json:"http,omitempty"`
+	Directives      map[string]string     `json:"directives,omitempty"`
+	Operation       *OperationDeclaration `json:"operation,omitempty"`
+	Authorization   *AuthorizationPolicy  `json:"authorization,omitempty"`
 }
 
 type AuthorizationPolicy struct {
@@ -88,8 +116,14 @@ type HTTPBinding struct {
 }
 
 func (manifest *Manifest) Normalize() {
-	if manifest.SchemaVersion == 0 {
+	if manifest.SchemaVersion == 0 || manifest.SchemaVersion == 1 {
 		manifest.SchemaVersion = ManifestVersion
+	}
+	for i := range manifest.Files {
+		if manifest.Files[i].Domain != nil {
+			manifest.Files[i].Domain.Name = strings.TrimSpace(manifest.Files[i].Domain.Name)
+			manifest.Files[i].Domain.Version = strings.TrimSpace(manifest.Files[i].Domain.Version)
+		}
 	}
 	sort.Slice(manifest.Files, func(i, j int) bool { return manifest.Files[i].Name < manifest.Files[j].Name })
 	for i := range manifest.Messages {
@@ -111,21 +145,55 @@ func (manifest *Manifest) Normalize() {
 	}
 	sort.Slice(manifest.Enums, func(i, j int) bool { return manifest.Enums[i].FullName < manifest.Enums[j].FullName })
 	for i := range manifest.Services {
+		manifest.Services[i].Domain = strings.TrimSpace(manifest.Services[i].Domain)
+		if manifest.Services[i].Application != nil {
+			manifest.Services[i].Application.Name = strings.TrimSpace(manifest.Services[i].Application.Name)
+		}
 		for j := range manifest.Services[i].Methods {
-			sort.Slice(manifest.Services[i].Methods[j].HTTP, func(a, b int) bool {
-				left := manifest.Services[i].Methods[j].HTTP[a]
-				right := manifest.Services[i].Methods[j].HTTP[b]
+			method := &manifest.Services[i].Methods[j]
+			sort.Slice(method.HTTP, func(a, b int) bool {
+				left := method.HTTP[a]
+				right := method.HTTP[b]
 				if left.Method == right.Method {
 					return left.Path < right.Path
 				}
 				return left.Method < right.Method
 			})
+			if method.Operation != nil {
+				method.Operation.ID = strings.TrimSpace(method.Operation.ID)
+				method.Operation.UseCase = strings.TrimSpace(method.Operation.UseCase)
+				method.Operation.PermissionMode = strings.TrimSpace(method.Operation.PermissionMode)
+				method.Operation.Permissions = stableStrings(method.Operation.Permissions)
+				method.Operation.Authentication = stableStrings(method.Operation.Authentication)
+			}
+			if method.Authorization != nil {
+				method.Authorization.Permissions = stableStrings(method.Authorization.Permissions)
+				method.Authorization.Authentication = stableStrings(method.Authorization.Authentication)
+			}
 		}
 		sort.Slice(manifest.Services[i].Methods, func(a, b int) bool {
 			return manifest.Services[i].Methods[a].Name < manifest.Services[i].Methods[b].Name
 		})
 	}
 	sort.Slice(manifest.Services, func(i, j int) bool { return manifest.Services[i].FullName < manifest.Services[j].FullName })
+}
+
+func stableStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, duplicate := seen[value]; duplicate {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func fullName(pkg, parent, name string) string {

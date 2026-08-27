@@ -287,3 +287,13 @@ GitHub connector authorization and local Git authorization are separate. The con
 - PB DTO, Domain Entity, and PO are separate models. The framework must not infer their equivalence or generate business-semantic mappings from matching field names.
 - REST and RPC adapters generated from PB must invoke the same Application Port and the same Gateway `Authorizer` policy. C8.3 Role-to-Permission storage and fail-closed authorization semantics remain unchanged; data-scope predicates remain outside PB.
 - Migration follows expand → shadow → cutover → contract. Contract Manifest V2 and Domain Manifest V3 retain read compatibility during migration, while new generation writes only the new canonical forms. Destructive legacy full-stack generator removal is isolated after deterministic, architecture, authorization, race, compatibility, and MySQL integration gates pass.
+
+## 2026-08-27 — C8.4 implementation complete
+
+- C8.4 PB DSL and Domain Compiler Responsibility Convergence is complete via PR #26.
+- PB is the canonical DSL for RPC, REST, DTO, Domain, Application, Operation and Permission declarations.
+- Domain Manifest V3 is persistence-only; `yunka domain` generates PO -> Entity -> basic Repository CRUD interface/implementation and stops before Application/transport behavior.
+- PB-driven codegen emits Application Port, static policy, RPC adapter and REST adapter but never a default business implementation.
+- Gateway Authorizer remains the sole RBAC decision boundary; REST and gRPC consume the same Operation/Permission policy.
+- Permanent `domain-check`, `dsl-check` and C8.4 architecture guards are part of `make verify`.
+- Standard CI #136 passed and MySQL 8.4 production run `33038910058` passed `make verify-production`, including generated Repository tenant/version behavior plus requestscope/outbox integration.

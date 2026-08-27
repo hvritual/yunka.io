@@ -68,9 +68,10 @@ func developerPOFileTemplate(object string, fields []Field) string {
 	if usesTime {
 		builder.WriteString("import \"time\"\n\n")
 	}
-	fmt.Fprintf(&builder, "// %sPO is the developer-owned persistence object.\n", objectType)
-	builder.WriteString("// Exported supported scalar fields automatically become Domain/Service/REST/RPC fields.\n")
-	builder.WriteString("// Add `yunka:\"-\"` to keep a field persistence-only while still allowing GORM AutoMigrate.\n")
+	fmt.Fprintf(&builder, "// %sPO is the developer-owned persistence schema.\n", objectType)
+	builder.WriteString("// Exported supported scalar fields are mirrored only into the generated Domain Entity and basic Repository CRUD.\n")
+	builder.WriteString("// API DTO/RPC/REST/Application declarations belong to protobuf, never to this PO.\n")
+	builder.WriteString("// Add `yunka:\"-\"` to keep a field persistence-only while retaining it in the GORM record.\n")
 	fmt.Fprintf(&builder, "type %sPO struct {\n", objectType)
 	for _, field := range fields {
 		typeName, _ := goType(field.Type)

@@ -11,7 +11,8 @@
         "legacy/api.proto",
         "legacy/api_common.proto",
         "legacy/common.proto",
-        "legacy/unit.proto"
+        "legacy/unit.proto",
+        "yunka/dsl/v1/options.proto"
       ]
     }
   ]

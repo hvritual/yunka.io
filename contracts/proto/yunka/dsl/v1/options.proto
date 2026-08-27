@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package yunka.dsl.v1;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "yunka.io/pkg/contractdsl/v1;contractdslv1";
+
+enum DTOKind {
+  DTO_UNSPECIFIED = 0;
+  DTO_INPUT = 1;
+  DTO_OUTPUT = 2;
+  DTO_SHARED = 3;
+  DTO_EVENT = 4;
+  DTO_VALUE_OBJECT = 5;
+}
+
+enum PermissionMode {
+  PERMISSION_ALL = 0;
+  PERMISSION_ANY = 1;
+}
+
+enum Authentication {
+  AUTHENTICATION_UNSPECIFIED = 0;
+  AUTHENTICATION_JWT = 1;
+  AUTHENTICATION_API_KEY = 2;
+  AUTHENTICATION_SERVICE = 3;
+}
+
+message DomainDeclaration {
+  string name = 1;
+  string version = 2;
+}
+
+message DTODeclaration {
+  DTOKind kind = 1;
+}
+
+message ApplicationDeclaration {
+  string name = 1;
+}
+
+message OperationDeclaration {
+  string id = 1;
+  string use_case = 2;
+  repeated string permissions = 3;
+  PermissionMode permission_mode = 4;
+  bool tenant_required = 5;
+  repeated Authentication authentication = 6;
+  bool public = 7;
+}
+
+extend google.protobuf.FileOptions {
+  DomainDeclaration domain = 51001;
+}
+
+extend google.protobuf.MessageOptions {
+  DTODeclaration dto = 51002;
+}
+
+extend google.protobuf.ServiceOptions {
+  ApplicationDeclaration application = 51003;
+}
+
+extend google.protobuf.MethodOptions {
+  OperationDeclaration operation = 51004;
+}

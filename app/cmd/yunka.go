@@ -15,7 +15,6 @@ import (
 	"yunka.io/app/cmd/graph"
 	"yunka.io/app/cmd/inspect"
 	"yunka.io/app/cmd/module"
-	"yunka.io/app/cmd/po"
 	"yunka.io/app/cmd/project"
 )
 
@@ -32,23 +31,6 @@ func main() {
 		graph.Command(),
 		project.Command(),
 		inspect.Command(),
-		{
-			Name:        po.AppName,
-			Usage:       "scan package po",
-			Subcommands: []cli.Command{},
-
-			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name:  "generate",
-					Usage: `generate po attribute operate`,
-					Value: "",
-				},
-			},
-			Action: func(c *cli.Context) error {
-				return po.Main(c.String(`generate`))
-			},
-		},
-
 		module.Command(),
 		{
 			Name:    api.AppName,

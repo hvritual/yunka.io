@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestDomainNewScansMultipleSnakeCasePOs(t *testing.T) {
+func TestDomainNewScansMultipleSnakeCasePOsIntoV3(t *testing.T) {
 	root := newPOFirstTestProject(t)
 	persistence := filepath.Join(root, "internal", "device", "infrastructure", "persistence")
 	writeTestPO(t, persistence, "coffee_machine.go", `package persistence
@@ -22,10 +22,11 @@ type CoffeeMachinePO struct {
 
 type DeviceGroupPO struct { Name string `+"`gorm:\"column:name;type:varchar(128)\"`"+` }
 `)
-	if err := Generate(Options{Name: "device", Root: filepath.Join(root, "internal"), NoRPC: true}); err != nil {
+	if err := Generate(Options{Name: "device", Root: filepath.Join(root, "internal")}); err != nil {
 		t.Fatal(err)
 	}
-	spec, err := readManifest(filepath.Join(root, "internal", "device"))
+	domainRoot := filepath.Join(root, "internal", "device")
+	spec, err := readManifest(domainRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,17 +37,28 @@ type DeviceGroupPO struct { Name string `+"`gorm:\"column:name;type:varchar(128)
 		t.Fatalf("unexpected first object: %+v", spec.Objects[0])
 	}
 	if len(spec.Objects[0].Fields) != 2 {
-		t.Fatalf("persistence-only field leaked into API contract: %+v", spec.Objects[0].Fields)
+		t.Fatalf("persistence-only field leaked into generated entity contract: %+v", spec.Objects[0].Fields)
 	}
-	if spec.Objects[0].Fields[0].ProtoNumber <= 0 || spec.Objects[0].Fields[1].ProtoNumber <= spec.Objects[0].Fields[0].ProtoNumber {
-		t.Fatalf("proto numbers not stable/ordered: %+v", spec.Objects[0].Fields)
+	raw, err := os.ReadFile(filepath.Join(domainRoot, ManifestName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{`"rest"`, `"rpc"`, "protoNumber", "reservedProto"} {
+		if strings.Contains(string(raw), forbidden) {
+			t.Fatalf("V3 manifest retained transport/protobuf metadata %q:\n%s", forbidden, raw)
+		}
+	}
+	for _, forbiddenPath := range []string{"application", "transport", "wire"} {
+		if _, err := os.Stat(filepath.Join(domainRoot, forbiddenPath)); !os.IsNotExist(err) {
+			t.Fatalf("domain compiler generated forbidden %s path", forbiddenPath)
+		}
 	}
 	if err := Check(filepath.Join(root, "internal")); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestRegeneratePreservesProtoNumberAndReservesRemovedField(t *testing.T) {
+func TestRegenerateTracksPOFieldsWithoutProtobufState(t *testing.T) {
 	root := newPOFirstTestProject(t)
 	persistence := filepath.Join(root, "internal", "device", "infrastructure", "persistence")
 	path := filepath.Join(persistence, "coffee_machine.go")
@@ -57,24 +69,14 @@ type CoffeeMachinePO struct {
 	Enabled bool
 }
 `)
-	if err := Generate(Options{Name: "device", Root: filepath.Join(root, "internal"), NoRPC: true}); err != nil {
+	if err := Generate(Options{Name: "device", Root: filepath.Join(root, "internal")}); err != nil {
 		t.Fatal(err)
-	}
-	before, _ := readManifest(filepath.Join(root, "internal", "device"))
-	var serialNumber, enabledNumber int
-	for _, field := range before.Objects[0].Fields {
-		if field.Name == "serial" {
-			serialNumber = field.ProtoNumber
-		}
-		if field.Name == "enabled" {
-			enabledNumber = field.ProtoNumber
-		}
 	}
 	contents := `package persistence
 
 type CoffeeMachinePO struct {
 	Serial string
-	FirmwareVersion string `+"`gorm:\"column:firmware_version\"`"+`
+	FirmwareVersion string ` + "`gorm:\"column:firmware_version\"`" + `
 }
 `
 	if err := os.WriteFile(path, []byte(contents), 0o640); err != nil {
@@ -83,24 +85,83 @@ type CoffeeMachinePO struct {
 	if err := Regenerate(filepath.Join(root, "internal", "device")); err != nil {
 		t.Fatal(err)
 	}
-	after, _ := readManifest(filepath.Join(root, "internal", "device"))
-	var gotSerial, gotFirmware int
-	for _, field := range after.Objects[0].Fields {
-		if field.Name == "serial" {
-			gotSerial = field.ProtoNumber
+	after, err := readManifest(filepath.Join(root, "internal", "device"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := []string{after.Objects[0].Fields[0].Name, after.Objects[0].Fields[1].Name}; got[0] != "firmware_version" || got[1] != "serial" {
+		t.Fatalf("unexpected V3 fields: %v", got)
+	}
+	raw, _ := os.ReadFile(filepath.Join(root, "internal", "device", ManifestName))
+	if strings.Contains(string(raw), "proto") || strings.Contains(string(raw), "reserved") {
+		t.Fatalf("protobuf state leaked into V3 domain manifest:\n%s", raw)
+	}
+}
+
+func TestRegenerateUpgradesV2AndRemovesGeneratedFullStack(t *testing.T) {
+	root := newPOFirstTestProject(t)
+	domainRoot := filepath.Join(root, "internal", "device")
+	persistence := filepath.Join(domainRoot, "infrastructure", "persistence")
+	writeTestPO(t, persistence, "coffee_machine.go", `package persistence
+
+type CoffeeMachinePO struct { Serial string }
+`)
+	legacy := `{
+  "version": 2,
+  "domain": "device",
+  "tablePrefix": "yk",
+  "tenantScoped": true,
+  "objects": [{
+    "name": "coffee_machine",
+    "file": "coffee_machine.go",
+    "tableName": "yk_device_coffee_machine",
+    "fields": [{"name":"serial","type":"string","column":"serial","protoNumber":1,"poOwned":true}],
+    "reservedProtoNumbers": [2],
+    "reservedProtoNames": ["enabled"]
+  }],
+  "rest": {"enabled": true, "prefix": "/v1"},
+  "rpc": {"enabled": true}
+}`
+	if err := os.MkdirAll(domainRoot, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(domainRoot, ManifestName), []byte(legacy), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	for _, relative := range []string{
+		"application/zz_yunka_service_gen.go",
+		"transport/rest/zz_yunka_rest_gen.go",
+		"transport/rpc/domain.proto",
+		"transport/rpc/zz_yunka_grpc_bridge_gen.go",
+		"wire/zz_yunka_wiring_gen.go",
+	} {
+		path := filepath.Join(domainRoot, filepath.FromSlash(relative))
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+			t.Fatal(err)
 		}
-		if field.Name == "firmware_version" {
-			gotFirmware = field.ProtoNumber
+		if err := os.WriteFile(path, []byte(generatedDomainMarker+"\nlegacy\n"), 0o640); err != nil {
+			t.Fatal(err)
 		}
 	}
-	if gotSerial != serialNumber {
-		t.Fatalf("serial proto number changed: before=%d after=%d", serialNumber, gotSerial)
+	if err := Regenerate(domainRoot); err != nil {
+		t.Fatal(err)
 	}
-	if gotFirmware <= enabledNumber {
-		t.Fatalf("new field reused historical number: firmware=%d removed=%d", gotFirmware, enabledNumber)
+	raw, err := os.ReadFile(filepath.Join(domainRoot, ManifestName))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !containsInt(after.Objects[0].ReservedProtoNumbers, enabledNumber) || !containsString(after.Objects[0].ReservedProtoNames, "enabled") {
-		t.Fatalf("removed field was not reserved: %+v", after.Objects[0])
+	if !strings.Contains(string(raw), `"version": 3`) {
+		t.Fatalf("manifest not upgraded:\n%s", raw)
+	}
+	for _, forbidden := range []string{`"rest"`, `"rpc"`, "protoNumber", "reservedProto"} {
+		if strings.Contains(string(raw), forbidden) {
+			t.Fatalf("legacy key %q remains:\n%s", forbidden, raw)
+		}
+	}
+	for _, relative := range []string{"application/zz_yunka_service_gen.go", "transport/rest/zz_yunka_rest_gen.go", "transport/rpc/domain.proto", "transport/rpc/zz_yunka_grpc_bridge_gen.go", "wire/zz_yunka_wiring_gen.go"} {
+		if _, err := os.Stat(filepath.Join(domainRoot, filepath.FromSlash(relative))); !os.IsNotExist(err) {
+			t.Fatalf("stale generated full-stack file remains: %s", relative)
+		}
 	}
 }
 
@@ -111,7 +172,7 @@ func TestPOFilenameMustMatchSnakeCaseType(t *testing.T) {
 
 type CoffeeMachinePO struct { Serial string }
 `)
-	err := Generate(Options{Name: "device", Root: filepath.Join(root, "internal"), NoRPC: true})
+	err := Generate(Options{Name: "device", Root: filepath.Join(root, "internal")})
 	if err == nil || !strings.Contains(err.Error(), "coffee_machine.go") {
 		t.Fatalf("expected snake_case filename error, got %v", err)
 	}
@@ -134,21 +195,4 @@ func writeTestPO(t *testing.T, root, name, contents string) {
 	if err := os.WriteFile(filepath.Join(root, name), []byte(contents), 0o640); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func containsInt(values []int, value int) bool {
-	for _, current := range values {
-		if current == value {
-			return true
-		}
-	}
-	return false
-}
-func containsString(values []string, value string) bool {
-	for _, current := range values {
-		if current == value {
-			return true
-		}
-	}
-	return false
 }

@@ -14,8 +14,10 @@ import tempfile
 MANAGED_ROOTS = (
     Path("gateway/rpc/meta"),
     Path("pkg/rpcmeta/legacy"),
+    Path("pkg/contractdsl/v1"),
 )
 PROTO_FILES = (
+    "yunka/dsl/v1/options.proto",
     "gateway/api_common.proto",
     "gateway/common.proto",
     "gateway/gateway.proto",
@@ -44,6 +46,17 @@ def resolve_executable(value: str, label: str) -> Path:
     if resolved:
         return Path(resolved).resolve()
     raise RuntimeError(f"{label} is not executable or discoverable on PATH: {value}")
+
+
+def protoc_include(protoc: Path) -> Path:
+    candidates = (
+        protoc.parent.parent / "include",
+        protoc.parent / "include",
+    )
+    for candidate in candidates:
+        if (candidate / "google" / "protobuf" / "descriptor.proto").is_file():
+            return candidate.resolve()
+    raise RuntimeError(f"locked protoc standard include directory not found next to {protoc}")
 
 
 def require_file(path: Path, label: str) -> None:
@@ -100,6 +113,7 @@ def main() -> int:
     repo = Path(args.repo_root).resolve()
     proto_root = repo / "contracts" / "proto"
     protoc = resolve_executable(args.protoc, "protoc")
+    include_root = protoc_include(protoc)
     protoc_gen_go = resolve_executable(args.protoc_gen_go, "protoc-gen-go")
     protoc_gen_go_grpc = resolve_executable(args.protoc_gen_go_grpc, "protoc-gen-go-grpc")
     for name in PROTO_FILES:
@@ -110,6 +124,7 @@ def main() -> int:
         command = [
             str(protoc),
             f"-I{proto_root}",
+            f"-I{include_root}",
             f"--plugin=protoc-gen-go={protoc_gen_go}",
             f"--plugin=protoc-gen-go-grpc={protoc_gen_go_grpc}",
             f"--go_out={staged}",

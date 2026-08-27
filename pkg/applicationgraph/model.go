@@ -13,6 +13,8 @@ type NodeKind string
 
 const (
 	NodeApplication     NodeKind = "application"
+	NodeDomain          NodeKind = "domain"
+	NodePermission      NodeKind = "permission"
 	NodeProcess         NodeKind = "process"
 	NodeModule          NodeKind = "module"
 	NodeService         NodeKind = "service"
@@ -35,6 +37,7 @@ const (
 	EdgeAccepts    EdgeKind = "accepts"
 	EdgeReturns    EdgeKind = "returns"
 	EdgeRoutesTo   EdgeKind = "routes_to"
+	EdgeRequires   EdgeKind = "requires"
 	EdgeSelects    EdgeKind = "selects"
 	EdgeGovernedBy EdgeKind = "governed_by"
 	EdgePublishes  EdgeKind = "publishes"
