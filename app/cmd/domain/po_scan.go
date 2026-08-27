@@ -105,39 +105,16 @@ func scanPOFile(path, filename string, priorByName map[string]ObjectSpec) (Objec
 	if err != nil {
 		return ObjectSpec{}, false, fmt.Errorf("domain: %s: %w", filename, err)
 	}
-	reservedNumbers := append([]int(nil), prior.ReservedProtoNumbers...)
-	reservedNames := append([]string(nil), prior.ReservedProtoNames...)
-	if !embedsBase {
-		live := make(map[string]struct{}, len(fields))
-		for _, field := range fields {
-			live[field.Name] = struct{}{}
-		}
-		for _, previous := range prior.Fields {
-			if _, stillLive := live[previous.Name]; stillLive {
-				continue
-			}
-			reservedNumbers = appendUniqueInt(reservedNumbers, previous.ProtoNumber)
-			reservedNames = appendUniqueString(reservedNames, previous.Name)
-		}
-	}
-	sort.Ints(reservedNumbers)
-	sort.Strings(reservedNames)
 	return ObjectSpec{
-		Name:                 objectName,
-		GoName:               foundName,
-		File:                 expectedFile,
-		Fields:               fields,
-		POEmbedsBase:         embedsBase,
-		ReservedProtoNumbers: reservedNumbers,
-		ReservedProtoNames:   reservedNames,
+		Name:         objectName,
+		GoName:       foundName,
+		File:         expectedFile,
+		Fields:       fields,
+		POEmbedsBase: embedsBase,
 	}, true, nil
 }
 
 func scanPOFields(structure *ast.StructType, objectType string, prior ObjectSpec) ([]Field, bool, error) {
-	priorByName := make(map[string]Field, len(prior.Fields))
-	for _, field := range prior.Fields {
-		priorByName[field.Name] = field
-	}
 	direct := make([]Field, 0)
 	embedsBase := false
 	seen := map[string]struct{}{}
@@ -169,7 +146,7 @@ func scanPOFields(structure *ast.StructType, objectType string, prior ObjectSpec
 			}
 			kind, ok := astBusinessType(rawField.Type)
 			if !ok {
-				return nil, false, fmt.Errorf("field %s has unsupported API type; use a supported scalar or tag it `yunka:\"-\"` for persistence-only use", name.Name)
+				return nil, false, fmt.Errorf("field %s has unsupported domain type; use a supported scalar or tag it `yunka:\"-\"` for persistence-only use", name.Name)
 			}
 			if _, duplicate := seen[fieldName]; duplicate {
 				return nil, false, fmt.Errorf("duplicate scanned field %q", fieldName)
@@ -179,14 +156,13 @@ func scanPOFields(structure *ast.StructType, objectType string, prior ObjectSpec
 			if column == "" {
 				column = fieldName
 			}
-			field := Field{Name: fieldName, GoName: name.Name, Type: kind, Column: column, POOwned: true}
-			if previous, ok := priorByName[fieldName]; ok {
-				field.ProtoNumber = previous.ProtoNumber
-			}
-			direct = append(direct, field)
+			direct = append(direct, Field{Name: fieldName, GoName: name.Name, Type: kind, Column: column, POOwned: true})
 		}
 	}
 	if embedsBase {
+		// V1/V2 scaffolds embedded a generated POBase. During deterministic
+		// migration retain those already-declared persistence fields until the
+		// developer rewrites the PO as a standalone V3 persistence object.
 		merged := make(map[string]Field, len(prior.Fields)+len(direct))
 		for _, field := range prior.Fields {
 			merged[field.Name] = field
@@ -199,56 +175,8 @@ func scanPOFields(structure *ast.StructType, objectType string, prior ObjectSpec
 			direct = append(direct, field)
 		}
 	}
-	return assignScannedProtoNumbers(direct, prior), embedsBase, nil
-}
-
-func assignScannedProtoNumbers(fields []Field, prior ObjectSpec) []Field {
-	priorByName := make(map[string]Field, len(prior.Fields))
-	maxNumber := 0
-	for _, field := range prior.Fields {
-		priorByName[field.Name] = field
-		if field.ProtoNumber > maxNumber {
-			maxNumber = field.ProtoNumber
-		}
-	}
-	for _, number := range prior.ReservedProtoNumbers {
-		if number > maxNumber {
-			maxNumber = number
-		}
-	}
-	result := append([]Field(nil), fields...)
-	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
-	for i := range result {
-		if previous, ok := priorByName[result[i].Name]; ok && previous.ProtoNumber > 0 {
-			result[i].ProtoNumber = previous.ProtoNumber
-		} else {
-			maxNumber++
-			result[i].ProtoNumber = maxNumber
-		}
-	}
-	sort.Slice(result, func(i, j int) bool { return result[i].ProtoNumber < result[j].ProtoNumber })
-	return result
-}
-
-func appendUniqueInt(values []int, value int) []int {
-	if value <= 0 {
-		return values
-	}
-	for _, current := range values {
-		if current == value {
-			return values
-		}
-	}
-	return append(values, value)
-}
-
-func appendUniqueString(values []string, value string) []string {
-	for _, current := range values {
-		if current == value {
-			return values
-		}
-	}
-	return append(values, value)
+	sort.Slice(direct, func(i, j int) bool { return direct[i].Name < direct[j].Name })
+	return direct, embedsBase, nil
 }
 
 func parseStructTag(literal *ast.BasicLit) (reflect.StructTag, error) {
@@ -337,22 +265,12 @@ func poContractEqual(left, right []ObjectSpec) bool {
 		return false
 	}
 	for i := range left {
-		if left[i].Name != right[i].Name || left[i].File != right[i].File || left[i].TableName != right[i].TableName || left[i].POEmbedsBase != right[i].POEmbedsBase || len(left[i].Fields) != len(right[i].Fields) || len(left[i].ReservedProtoNumbers) != len(right[i].ReservedProtoNumbers) || len(left[i].ReservedProtoNames) != len(right[i].ReservedProtoNames) {
+		if left[i].Name != right[i].Name || left[i].File != right[i].File || left[i].TableName != right[i].TableName || left[i].POEmbedsBase != right[i].POEmbedsBase || len(left[i].Fields) != len(right[i].Fields) {
 			return false
 		}
 		for j := range left[i].Fields {
 			l, r := left[i].Fields[j], right[i].Fields[j]
-			if l.Name != r.Name || l.Type != r.Type || l.Column != r.Column || l.ProtoNumber != r.ProtoNumber || l.POOwned != r.POOwned {
-				return false
-			}
-		}
-		for j := range left[i].ReservedProtoNumbers {
-			if left[i].ReservedProtoNumbers[j] != right[i].ReservedProtoNumbers[j] {
-				return false
-			}
-		}
-		for j := range left[i].ReservedProtoNames {
-			if left[i].ReservedProtoNames[j] != right[i].ReservedProtoNames[j] {
+			if l.Name != r.Name || l.Type != r.Type || l.Column != r.Column || l.POOwned != r.POOwned {
 				return false
 			}
 		}
