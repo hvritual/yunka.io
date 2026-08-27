@@ -320,9 +320,9 @@ func authenticationName(value uint64) string {
 	case 1:
 		return "jwt"
 	case 2:
-		return "api_key"
+		return "api-key"
 	case 3:
-		return "service"
+		return "service-token"
 	default:
 		return ""
 	}
