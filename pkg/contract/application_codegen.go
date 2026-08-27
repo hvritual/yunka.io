@@ -259,6 +259,9 @@ func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[
 					}
 					queryExpr := "request.URL.Query().Get(" + strconv.Quote(field.Name) + ")"
 					fmt.Fprintf(&handlers, "\tif raw := %s; raw != \"\" {\n", queryExpr)
+					if scalarAssignmentNeedsStrconv(field) {
+						imports.add("strconv", "strconv")
+					}
 					if err := writeScalarAssignment(&handlers, "wire", field, "raw", false); err != nil {
 						return "", err
 					}
@@ -270,6 +273,9 @@ func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[
 				field, ok := findMessageField(requestMessage, fieldName)
 				if !ok {
 					return "", fmt.Errorf("contract application codegen: %s path field %q not found in %s", method.FullName, fieldName, method.Request)
+				}
+				if scalarAssignmentNeedsStrconv(field) {
+					imports.add("strconv", "strconv")
 				}
 				if err := writeScalarAssignment(&handlers, "wire", field, "request.PathValue("+strconv.Quote(fieldName)+")", true); err != nil {
 					return "", fmt.Errorf("contract application codegen: %s: %w", method.FullName, err)
@@ -284,7 +290,7 @@ func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[
 	}
 
 	var b strings.Builder
-	b.WriteString(GeneratedApplicationMarker + "\n\npackage rest\n\nimport (\n\t\"errors\"\n\t\"net/http\"\n\t\"strconv\"\n")
+	b.WriteString(GeneratedApplicationMarker + "\n\npackage rest\n\nimport (\n\t\"errors\"\n\t\"net/http\"\n")
 	b.WriteString(imports.render())
 	b.WriteString(")\n\n")
 	fmt.Fprintf(&b, "type Handler struct { application %s.%s; authorizer authz.Authorizer; resolver authz.PolicyResolver }\n\n", applicationAlias, service.Name)
@@ -304,6 +310,15 @@ func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[
 
 func (policy *AuthorizationPolicy) ProtectedLike() bool {
 	return policy != nil && (len(policy.Authentication) > 0 || len(policy.Permissions) > 0 || policy.TenantRequired)
+}
+
+func scalarAssignmentNeedsStrconv(field Field) bool {
+	switch field.Type {
+	case "bool", "int32", "int64", "sint32", "sint64", "sfixed32", "sfixed64", "uint32", "uint64", "fixed32", "fixed64", "float", "double":
+		return true
+	default:
+		return false
+	}
 }
 
 func writeScalarAssignment(builder *strings.Builder, receiver string, field Field, rawExpression string, path bool) error {
