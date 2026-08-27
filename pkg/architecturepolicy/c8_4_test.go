@@ -31,7 +31,7 @@ func TestC84DomainCompilerStopsAtRepositoryCRUD(t *testing.T) {
 	}
 
 	model := read("app/cmd/domain/model.go")
-	for _, forbidden := range []string{"ProtoNumber", "ReservedProtoNumbers", "ReservedProtoNames", "RESTSpec", "RPCSpec", "NoREST", "NoRPC", "RESTPrefix"} {
+	for _, forbidden := range []string{"ProtoNumber", "ReservedProtoNumbers", "ReservedProtoNames", "NoREST", "NoRPC", "RESTPrefix"} {
 		if strings.Contains(model, forbidden) {
 			t.Errorf("Domain Manifest V3 must not own protobuf/transport state %q", forbidden)
 		}
@@ -39,15 +39,27 @@ func TestC84DomainCompilerStopsAtRepositoryCRUD(t *testing.T) {
 	if !strings.Contains(model, "SpecVersion  = 3") {
 		t.Error("Domain Manifest canonical writer must be version 3")
 	}
+	for _, required := range []string{"type legacyRESTSpec struct", "type legacyRPCSpec struct", "Canonical V3 manifests never write them"} {
+		if !strings.Contains(model, required) {
+			t.Errorf("V1/V2 transport compatibility must remain explicitly read-only; missing %q", required)
+		}
+	}
 
 	generator := read("app/cmd/domain/generator.go")
-	for _, forbidden := range []string{"protoc", "transport/rpc", "transport/rest", "wire/", "application/"} {
-		if strings.Contains(generator, forbidden) {
-			t.Errorf("domain generator crossed persistence-only boundary with %q", forbidden)
+	if strings.Contains(generator, "exec.Command") || strings.Contains(generator, "os/exec") {
+		t.Error("domain generator must not invoke protoc or any external transport generator")
+	}
+	for _, required := range []string{
+		"return renderMultiStructural(spec, packageImport), nil",
+		"spec = canonicalizeSpec(spec)",
+		"C8.4 cleanup explicitly recognizes historical generated protobuf output",
+	} {
+		if !strings.Contains(generator, required) {
+			t.Errorf("domain generator lost persistence-only canonicalization/legacy cleanup seam %q", required)
 		}
 	}
 	templates := read("app/cmd/domain/multi_templates.go")
-	for _, forbidden := range []string{"multiApplicationTemplate", "multiRESTTemplate", "multiProtoTemplate", "multiGRPCBridgeTemplate", "multiWireTemplate", "DefaultService"} {
+	for _, forbidden := range []string{"multiApplicationTemplate", "multiRESTTemplate", "multiProtoTemplate", "multiGRPCBridgeTemplate", "multiWireTemplate", "DefaultService", "transport/rest", "transport/rpc", "wire/", ".proto"} {
 		if strings.Contains(templates, forbidden) {
 			t.Errorf("domain templates crossed persistence-only boundary with %q", forbidden)
 		}
