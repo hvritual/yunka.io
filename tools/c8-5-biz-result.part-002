@@ -1,0 +1,82 @@
+: config, Logger: logExt.NewBaseLogger(), PrimaryDatabase: db})
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+ 	ctx, cancel := context.WithCancel(context.Background())
+-	defer cancel()
+ 	if err := module.Start(ctx); err != nil {
++		cancel()
+ 		t.Fatal(err)
+ 	}
+ 	t.Cleanup(func() {
++		cancel()
+ 		shutdown, done := context.WithTimeout(context.Background(), 5*time.Second)
+ 		defer done()
+ 		_ = module.Shutdown(shutdown)
+ 	})
+-	base := "http://" + module.HTTPAddress()
+-	client := &http.Client{Timeout: 5 * time.Second}
+-	post := func(site, name, serial string) map[string]any {
+-		payload, _ := json.Marshal(map[string]any{"siteId": site, "name": name, "serial": serial})
+-		req, _ := http.NewRequest(http.MethodPost, base+"/v1/devices", bytes.NewReader(payload))
+-		req.Header.Set("Authorization", "Bearer "+token)
+-		req.Header.Set("Content-Type", "application/json")
+-		resp, err := client.Do(req)
+-		if err != nil {
+-			t.Fatal(err)
+-		}
+-		defer resp.Body.Close()
+-		body, _ := io.ReadAll(resp.Body)
+-		if resp.StatusCode != http.StatusOK {
+-			t.Fatalf("POST status=%d body=%s", resp.StatusCode, body)
+-		}
+-		var out map[string]any
+-		_ = json.Unmarshal(body, &out)
+-		return out
++	return module
++}
++
++func postDevice(t *testing.T, base, token, site, name, serial string) map[string]any {
++	t.Helper()
++	payload, _ := json.Marshal(map[string]any{"siteId": site, "name": name, "serial": serial})
++	req, _ := http.NewRequest(http.MethodPost, base+"/v1/devices", bytes.NewReader(payload))
++	req.Header.Set("Authorization", "Bearer "+token)
++	req.Header.Set("Content-Type", "application/json")
++	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
++	if err != nil {
++		t.Fatal(err)
+ 	}
+-	first := post("site-1", "A", "SN-A")
+-	if first["serial"] != "SN-A" {
+-		t.Fatalf("first=%v", first)
++	defer resp.Body.Close()
++	body, _ := io.ReadAll(resp.Body)
++	if resp.StatusCode != http.StatusOK {
++		t.Fatalf("POST status=%d body=%s", resp.StatusCode, body)
++	}
++	var out map[string]any
++	if err := json.Unmarshal(body, &out); err != nil {
++		t.Fatal(err)
+ 	}
++	return out
++}
+ 
+-	roleID := "tenant-a:reader"
+-	readerToken := "reader-token"
+-	records := []any{&store.User{ID: "reader", Email: "reader@example.invalid", Status: "active"}, &store.Membership{TenantID: "tenant-a", UserID: "reader", Status: "active"}, &store.Role{ID: roleID, TenantID: "tenant-a", Name: "reader", Status: "active"}, &store.MemberRole{TenantID: "tenant-a", UserID: "reader", RoleID: roleID}, &store.RolePermission{TenantID: "tenant-a", RoleID: roleID, Permission: application.PermissionDeviceRead}, &store.RoleDataScope{TenantID: "tenant-a", RoleID: roleID, Permission: application.PermissionDeviceRead, Scope: store.DataScopeSites}, &store.MemberSite{TenantID: "tenant-a", UserID: "reader", SiteID: "site-1"}, &store.APIToken{TokenHash: store.TokenHash(readerToken), TenantID: "tenant-a", UserID: "reader"}}
+-	for _, record := range records {
+-		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(record).Error; err != nil {
++func seedReader(t *testing.T, db *gorm.DB, tenant, user, token, site, roleID, roleName, permission, scope string) {
++	t.Helper()
++	exec := func(query string, args ...any) {
++		if err := db.Exec(query, args...).Error; err != nil {
+ 			t.Fatal(err)
+ 		}
+ 	}
++	exec("INSERT IGNORE INTO biz_users (id,email,status,created_at) VALUES (?,?,?,NOW(3))", user, user+"@example.invalid", "active")
++	exec("INSERT IGNORE INTO biz_memberships (tenant_id,user_id,status,created_at) VALUES (?,?,?,NOW(3))", tenant, user, "active")
++	exec("INSERT IGNORE INTO biz_roles (id,tenant_id,name,status) VALUES (?,?,?,?)", roleID, tenant, roleName, "active")
++	exec("INSERT IGNORE INTO biz_member_roles (tenant_id,user_id,role_id) VALUES (?,?,?)", tenant, user, roleID)
++	exec("INSERT IGNORE INTO biz_permission_grants (tenant_id,role_id,permission,scope) VALUES (?,?,?,?)", tenant, roleID, permission, scope)
++	if site != "" {
++		exec("INSERT IGNORE INTO biz_member_sites (tenant_id,user_id,site_id) VALUES

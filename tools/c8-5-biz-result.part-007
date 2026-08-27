@@ -1,0 +1,128 @@
+rn nil
++}
+diff --git a/internal/access/ports/security.go b/internal/access/ports/security.go
+new file mode 100644
+index 0000000..fa4345c
+--- /dev/null
++++ b/internal/access/ports/security.go
+@@ -0,0 +1,20 @@
++package ports
++
++import (
++	"context"
++
++	"yunka.io/framework/core/identity"
++	"yunka.io/gateway/authz"
++)
++
++type Authenticator interface {
++	Authenticate(context.Context, string) (identity.Principal, error)
++}
++
++type GrantResolver interface {
++	ResolveGrants(context.Context, string, []string, []authz.PermissionKey) ([]authz.Grant, error)
++}
++
++type MemberSiteResolver interface {
++	ResolveMemberSites(context.Context, string, string) ([]string, error)
++}
+diff --git a/internal/access/store/store.go b/internal/access/store/store.go
+deleted file mode 100644
+index 83af83b..0000000
+--- a/internal/access/store/store.go
++++ /dev/null
+@@ -1,255 +0,0 @@
+-package store
+-
+-import (
+-	"context"
+-	"crypto/sha256"
+-	"encoding/hex"
+-	"errors"
+-	"sort"
+-	"strings"
+-	"time"
+-
+-	"github.com/hvritual/biz/internal/deviceops/ports"
+-	"gorm.io/gorm"
+-	"gorm.io/gorm/clause"
+-	"yunka.io/framework/core/identity"
+-	"yunka.io/gateway/authz"
+-)
+-
+-var ErrUnauthorized = errors.New("access: unauthorized")
+-
+-type DataScope string
+-
+-const (
+-	DataScopeNone  DataScope = "none"
+-	DataScopeSelf  DataScope = "self"
+-	DataScopeSites DataScope = "sites"
+-	DataScopeAll   DataScope = "all"
+-)
+-
+-type Tenant struct {
+-	ID        string    `gorm:"column:id;primaryKey;size:64"`
+-	Name      string    `gorm:"column:name;size:200;not null"`
+-	Status    string    `gorm:"column:status;size:32;not null;index"`
+-	CreatedAt time.Time `gorm:"column:created_at;not null"`
+-}
+-
+-func (Tenant) TableName() string { return "biz_tenants" }
+-
+-type User struct {
+-	ID        string    `gorm:"column:id;primaryKey;size:64"`
+-	Email     string    `gorm:"column:email;size:320;not null;uniqueIndex"`
+-	Status    string    `gorm:"column:status;size:32;not null;index"`
+-	CreatedAt time.Time `gorm:"column:created_at;not null"`
+-}
+-
+-func (User) TableName() string { return "biz_users" }
+-
+-type Membership struct {
+-	TenantID  string    `gorm:"column:tenant_id;primaryKey;size:64"`
+-	UserID    string    `gorm:"column:user_id;primaryKey;size:64"`
+-	Status    string    `gorm:"column:status;size:32;not null;index"`
+-	CreatedAt time.Time `gorm:"column:created_at;not null"`
+-}
+-
+-func (Membership) TableName() string { return "biz_memberships" }
+-
+-type Role struct {
+-	ID       string `gorm:"column:id;primaryKey;size:160"`
+-	TenantID string `gorm:"column:tenant_id;size:64;not null;index:idx_role_tenant;uniqueIndex:uniq_role_name,priority:1"`
+-	Name     string `gorm:"column:name;size:100;not null;uniqueIndex:uniq_role_name,priority:2"`
+-	Status   string `gorm:"column:status;size:32;not null"`
+-}
+-
+-func (Role) TableName() string { return "biz_roles" }
+-
+-type MemberRole struct {
+-	TenantID string `gorm:"column:tenant_id;primaryKey;size:64"`
+-	UserID   string `gorm:"column:user_id;primaryKey;size:64"`
+-	RoleID   string `gorm:"column:role_id;primaryKey;size:160"`
+-}
+-
+-func (MemberRole) TableName() string { return "biz_member_roles" }
+-
+-type RolePermission struct {
+-	TenantID   string `gorm:"column:tenant_id;primaryKey;size:64"`
+-	RoleID     string `gorm:"column:role_id;primaryKey;size:160"`
+-	Permission string `gorm:"column:permission;primaryKey;size:120"`
+-}
+-
+-func (RolePermission) TableName() string { return "biz_role_permissions" }
+-
+-type RoleDataScope struct {
+-	TenantID   string    `gorm:"column:tenant_id;primaryKey;size:64"`
+-	RoleID     string    `gorm:"column:role_id;primaryKey;size:160"`
+-	Permission string    `gorm:"column:permission;primaryKey;size:120"`
+-	Scope      DataScope `gorm:"column:scope;size:16;not null"`
+-}
+-
+-func (RoleDataScope) TableName() string { return "biz_role_data_scopes" }
+-
+-type MemberSite struct {
+-	TenantID string `gorm:"column:tenant_id;primaryKey;size:64"`
+-	UserID   string `gorm:"column:user_id;primaryKey;size:64"`
+-	SiteID   string `gorm:"column:site_id;pr

@@ -1,0 +1,102 @@
+lveDeviceScope(ctx context.Context, principal identity.Principal, permission string) (ports.DeviceScope, error) {
+-	scope := ports.DeviceScope{UserID: principal.UserID}
+-	if !principal.Authenticated || principal.TenantID == "" || len(principal.Roles) == 0 {
+-		return scope, nil
+-	}
+-	var values []DataScope
+-	if err := store.database.WithContext(ctx).Table("biz_roles r").Select("rds.scope").Joins("JOIN biz_role_data_scopes rds ON rds.role_id = r.id AND rds.tenant_id = r.tenant_id").Where("r.tenant_id = ? AND r.status = ? AND r.name IN ? AND rds.permission = ?", principal.TenantID, "active", principal.Roles, permission).Scan(&values).Error; err != nil {
+-		return scope, err
+-	}
+-	for _, value := range values {
+-		switch value {
+-		case DataScopeAll:
+-			scope.All = true
+-		case DataScopeSites:
+-			scope.Sites = true
+-		case DataScopeSelf:
+-			scope.Self = true
+-		}
+-	}
+-	if scope.Sites {
+-		var rows []MemberSite
+-		if err := store.database.WithContext(ctx).Where("tenant_id = ? AND user_id = ?", principal.TenantID, principal.UserID).Find(&rows).Error; err != nil {
+-			return scope, err
+-		}
+-		scope.SiteIDs = make([]string, 0, len(rows))
+-		for _, row := range rows {
+-			scope.SiteIDs = append(scope.SiteIDs, row.SiteID)
+-		}
+-		sort.Strings(scope.SiteIDs)
+-	}
+-	return scope, nil
+-}
+-
+-type Bootstrap struct{ TenantID, TenantName, UserID, Email, Token string }
+-
+-func (store *Store) Bootstrap(ctx context.Context, config Bootstrap, permissions []string) error {
+-	if strings.TrimSpace(config.Token) == "" {
+-		return nil
+-	}
+-	roleID := config.TenantID + ":owner"
+-	values := []any{
+-		&Tenant{ID: config.TenantID, Name: config.TenantName, Status: "active"},
+-		&User{ID: config.UserID, Email: config.Email, Status: "active"},
+-		&Membership{TenantID: config.TenantID, UserID: config.UserID, Status: "active"},
+-		&Role{ID: roleID, TenantID: config.TenantID, Name: "owner", Status: "active"},
+-		&MemberRole{TenantID: config.TenantID, UserID: config.UserID, RoleID: roleID},
+-		&APIToken{TokenHash: TokenHash(config.Token), TenantID: config.TenantID, UserID: config.UserID},
+-	}
+-	db := store.database.WithContext(ctx)
+-	for _, value := range values {
+-		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(value).Error; err != nil {
+-			return err
+-		}
+-	}
+-	for _, permission := range permissions {
+-		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&RolePermission{TenantID: config.TenantID, RoleID: roleID, Permission: permission}).Error; err != nil {
+-			return err
+-		}
+-		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&RoleDataScope{TenantID: config.TenantID, RoleID: roleID, Permission: permission, Scope: DataScopeAll}).Error; err != nil {
+-			return err
+-		}
+-	}
+-	return nil
+-}
+diff --git a/internal/deviceops/application/security_boundary_test.go b/internal/deviceops/application/security_boundary_test.go
+new file mode 100644
+index 0000000..c638740
+--- /dev/null
++++ b/internal/deviceops/application/security_boundary_test.go
+@@ -0,0 +1,24 @@
++package application
++
++import (
++	"os"
++	"strings"
++	"testing"
++)
++
++func TestApplicationContainsNoAuthorizationPolicy(t *testing.T) {
++	source, err := os.ReadFile("service.go")
++	if err != nil {
++		t.Fatal(err)
++	}
++	text := string(source)
++	for _, forbidden := range []string{
++		"device.read", "device.create", "device.update", "device.delete",
++		"ResolveGrants", "ResolveDeviceScope", "HasPermissions", "Authorize(",
++		"internal/access", "gateway/authz",
++	} {
++		if strings.Contains(text, forbidden) {
++			t.Fatalf("Application security boundary leak %q in service.go", forbidden)
++		}
++	}
++}
+diff --git a/internal/deviceops/application/service.go b/internal/deviceops/application/service.go
+index 51b5b8e..f7f06a0 100644
+--- a/internal/deviceops/application/service.go
++++ b/internal/deviceops/application/service.go
+@@ -10,60 +10,26 @@ import (
+ 	deviceopsv1 "github.com/hvritual/biz/contracts/gen/deviceops/v1"
+ 	"github.com/hvritual/biz/internal/deviceops/domain"
+ 	"g

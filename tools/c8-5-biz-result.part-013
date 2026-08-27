@@ -1,0 +1,115 @@
+cope Scope) context.Context {
++	return context.WithValue(ctx, scopeKey{}, scope)
++}
++
++func FromContext(ctx context.Context) (Scope, bool) {
++	if ctx == nil {
++		return Scope{}, false
++	}
++	scope, ok := ctx.Value(scopeKey{}).(Scope)
++	return scope, ok
++}
++
++func RequireScope(ctx context.Context) (Scope, error) {
++	scope, ok := FromContext(ctx)
++	if !ok {
++		return Scope{}, ErrAuthorizedScopeMissing
++	}
++	return scope, nil
++}
++
++type Guard struct {
++	sites accessports.MemberSiteResolver
++}
++
++func NewGuard(sites accessports.MemberSiteResolver) (*Guard, error) {
++	if sites == nil {
++		return nil, errors.New("deviceops security: member site resolver is required")
++	}
++	return &Guard{sites: sites}, nil
++}
++
++func (guard *Guard) Prepare(ctx context.Context, authorized authz.AuthorizedOperation, input any) (context.Context, error) {
++	scope := Scope{UserID: authorized.Principal.UserID}
++	for _, grant := range authorized.Decision.Grants {
++		switch accessdomain.DataScope(strings.TrimSpace(grant.Scope)) {
++		case accessdomain.DataScopeAll:
++			scope.All = true
++		case accessdomain.DataScopeSites:
++			scope.Sites = true
++		case accessdomain.DataScopeSelf:
++			scope.Self = true
++		}
++	}
++	if !scope.All && !scope.Sites && !scope.Self {
++		return nil, denied(authorized)
++	}
++	if (scope.Sites || scope.Self) && strings.TrimSpace(scope.UserID) == "" {
++		return nil, denied(authorized)
++	}
++	if scope.Sites {
++		sites, err := guard.sites.ResolveMemberSites(ctx, authorized.Principal.TenantID, authorized.Principal.UserID)
++		if err != nil {
++			return nil, err
++		}
++		scope.SiteIDs = append([]string(nil), sites...)
++		sort.Strings(scope.SiteIDs)
++	}
++	// Resource write scope is resolved before the Application boundary.
++	switch request := input.(type) {
++	case *deviceopsv1.CreateDeviceRequest:
++		if siteID := strings.TrimSpace(request.GetSiteId()); siteID != "" && !scope.AllowsSite(siteID) {
++			return nil, denied(authorized)
++		}
++	case *deviceopsv1.UpdateDeviceRequest:
++		if siteID := strings.TrimSpace(request.GetSiteId()); siteID != "" && !scope.AllowsSite(siteID) {
++			return nil, denied(authorized)
++		}
++	}
++	return WithScope(ctx, scope), nil
++}
++
++func denied(authorized authz.AuthorizedOperation) error {
++	decision := authorized.Decision
++	decision.Allowed = false
++	decision.Reason = authz.ReasonPermissionDenied
++	return authz.Denied(decision)
++}
+diff --git a/internal/deviceops/transport/rest/zz_yunka_device_management_rest_adapter_gen.go b/internal/deviceops/transport/rest/zz_yunka_device_management_rest_adapter_gen.go
+index 93b0a75..0acf7f3 100644
+--- a/internal/deviceops/transport/rest/zz_yunka_device_management_rest_adapter_gen.go
++++ b/internal/deviceops/transport/rest/zz_yunka_device_management_rest_adapter_gen.go
+@@ -6,32 +6,29 @@ import (
+ 	"errors"
+ 	deviceopsv1 "github.com/hvritual/biz/contracts/gen/deviceops/v1"
+ 	application "github.com/hvritual/biz/internal/deviceops/application"
+-	policy "github.com/hvritual/biz/internal/deviceops/policy"
+ 	protojson "google.golang.org/protobuf/encoding/protojson"
+ 	io "io"
+ 	"net/http"
+ 	strconv "strconv"
+-	identity "yunka.io/framework/core/identity"
+ 	authz "yunka.io/gateway/authz"
+ )
+ 
+ type Handler struct {
+ 	application application.DeviceApplication
+-	authorizer  authz.Authorizer
+-	resolver    authz.PolicyResolver
++	runtime     authz.OperationRuntime
+ }
+ 
+-func Register(mux *http.ServeMux, application application.DeviceApplication, authorizer authz.Authorizer) error {
++func Register(mux *http.ServeMux, application application.DeviceApplication, runtime authz.OperationRuntime) error {
+ 	if mux == nil {
+ 		return errors.New("contract REST adapter: mux is required")
+ 	}
+ 	if application == nil {
+ 		return errors.New("contract REST adapter: application is required")
+ 	}
+-	if authorizer == nil {
+-		return errors.New("contract REST adapter: authorizer is required for protected operations")
++	if runtime == nil {
++		return errors.New("contract REST adapter: operation runtime is required")
+ 	}
+-	

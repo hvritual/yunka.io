@@ -1,0 +1,99 @@
+imaryKey;size:64"`
+-}
+-
+-func (MemberSite) TableName() string { return "biz_member_sites" }
+-
+-type APIToken struct {
+-	TokenHash string     `gorm:"column:token_hash;primaryKey;size:64"`
+-	TenantID  string     `gorm:"column:tenant_id;size:64;not null;index"`
+-	UserID    string     `gorm:"column:user_id;size:64;not null;index"`
+-	ExpiresAt *time.Time `gorm:"column:expires_at"`
+-	Disabled  bool       `gorm:"column:disabled;not null;default:false"`
+-	CreatedAt time.Time  `gorm:"column:created_at;not null"`
+-}
+-
+-func (APIToken) TableName() string { return "biz_api_tokens" }
+-
+-type Store struct{ database *gorm.DB }
+-
+-func New(database *gorm.DB) (*Store, error) {
+-	if database == nil {
+-		return nil, errors.New("access: database is required")
+-	}
+-	return &Store{database: database}, nil
+-}
+-
+-func (store *Store) AutoMigrate(ctx context.Context) error {
+-	return store.database.WithContext(ctx).AutoMigrate(&Tenant{}, &User{}, &Membership{}, &Role{}, &MemberRole{}, &RolePermission{}, &RoleDataScope{}, &MemberSite{}, &APIToken{})
+-}
+-
+-func TokenHash(raw string) string {
+-	sum := sha256.Sum256([]byte(raw))
+-	return hex.EncodeToString(sum[:])
+-}
+-
+-func (store *Store) Authenticate(ctx context.Context, rawToken string) (identity.Principal, error) {
+-	if store == nil || store.database == nil || strings.TrimSpace(rawToken) == "" {
+-		return identity.Principal{}, ErrUnauthorized
+-	}
+-	var token APIToken
+-	if err := store.database.WithContext(ctx).Where("token_hash = ? AND disabled = ?", TokenHash(rawToken), false).First(&token).Error; err != nil {
+-		if errors.Is(err, gorm.ErrRecordNotFound) {
+-			return identity.Principal{}, ErrUnauthorized
+-		}
+-		return identity.Principal{}, err
+-	}
+-	if token.ExpiresAt != nil && !token.ExpiresAt.After(time.Now()) {
+-		return identity.Principal{}, ErrUnauthorized
+-	}
+-	var membership Membership
+-	if err := store.database.WithContext(ctx).Where("tenant_id = ? AND user_id = ? AND status = ?", token.TenantID, token.UserID, "active").First(&membership).Error; err != nil {
+-		if errors.Is(err, gorm.ErrRecordNotFound) {
+-			return identity.Principal{}, ErrUnauthorized
+-		}
+-		return identity.Principal{}, err
+-	}
+-	var roles []string
+-	if err := store.database.WithContext(ctx).Table("biz_member_roles mr").Select("r.name").Joins("JOIN biz_roles r ON r.id = mr.role_id AND r.tenant_id = mr.tenant_id AND r.status = ?", "active").Where("mr.tenant_id = ? AND mr.user_id = ?", token.TenantID, token.UserID).Scan(&roles).Error; err != nil {
+-		return identity.Principal{}, err
+-	}
+-	sort.Strings(roles)
+-	return identity.Principal{Subject: "user:" + token.UserID, TenantID: token.TenantID, UserID: token.UserID, Roles: roles, AuthMethod: identity.AuthMethodAPIKey, Authenticated: true}, nil
+-}
+-
+-func (store *Store) HasPermissions(ctx context.Context, tenantID string, roles []string, permissions []authz.PermissionKey, mode authz.PermissionMode) (bool, error) {
+-	if len(permissions) == 0 {
+-		return true, nil
+-	}
+-	if strings.TrimSpace(tenantID) == "" || len(roles) == 0 {
+-		return false, nil
+-	}
+-	keys := make([]string, 0, len(permissions))
+-	for _, permission := range permissions {
+-		keys = append(keys, string(permission))
+-	}
+-	var granted []string
+-	if err := store.database.WithContext(ctx).Table("biz_roles r").Distinct("rp.permission").Select("rp.permission").Joins("JOIN biz_role_permissions rp ON rp.role_id = r.id AND rp.tenant_id = r.tenant_id").Where("r.tenant_id = ? AND r.status = ? AND r.name IN ? AND rp.permission IN ?", tenantID, "active", roles, keys).Scan(&granted).Error; err != nil {
+-		return false, err
+-	}
+-	set := make(map[string]struct{}, len(granted))
+-	for _, value := range granted {
+-		set[value] = struct{}{}
+-	}
+-	if mode == authz.PermissionAny {
+-		for _, key := range keys {
+-			if _, ok := set[key]; ok {
+-				return true, nil
+-			}
+-		}
+-		return false, nil
+-	}
+-	for _, key := range keys {
+-		if _, ok := set[key]; !ok {
+-			return false, nil
+-		}
+-	}
+-	return true, nil
+-}
+-
+-func (store *Store) Reso

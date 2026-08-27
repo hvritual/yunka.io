@@ -1,0 +1,88 @@
+-tags=integration ./integration
+ ```
+ 
+-The integration test proves authenticated multi-tenant access, Role -> Permission denial, and per-permission site scope against MySQL 8.4.
+-
+-## Rewrite note
+-
+-The pre-C8.4 `modules/deviceops` model/repository/service/http stack is intentionally removed. No compatibility migration is provided for those tables; this repository is a reference rebuild and existing development data is disposable.
++The integration gate proves that stale pre-C8.5 role scope cannot escalate a permission from another role and that REST/gRPC share the same allow/deny security pipeline.
+diff --git a/docs/waves/C8.5-operation-security-boundary.md b/docs/waves/C8.5-operation-security-boundary.md
+new file mode 100644
+index 0000000..589dce2
+--- /dev/null
++++ b/docs/waves/C8.5-operation-security-boundary.md
+@@ -0,0 +1,23 @@
++# C8.5 Operation Security Boundary
++
++State: **Complete**
++
++## Responsibility
++
++- Access/IAM is a business domain and owns Tenant/User/Membership/Role/Credential/PermissionGrant persistence.
++- Yunka owns the deterministic pre-Application security execution pipeline.
++- Permission + scope are one grant fact; scope cannot be sourced from an unrelated role.
++- DeviceOps owns the meaning of `all/sites/self` and converts opaque IAM grants into a typed request scope.
++- Application code contains no Permission literals, Authorizer calls, IAM lookups or repeated authorization decisions.
++- REST and gRPC invoke the same `authz.OperationRuntime` before Application.
++
++## Security boundary
++
++```text
++credential -> Principal -> PB policy -> GrantAuthorizer -> Device OperationGuard
++           -> AuthorizedOperation + typed DeviceScope -> Application -> Domain/Repository
++```
++
++## Verification
++
++The C8.5 builder uses Yunka main `97b15d732269c4ec63f212cbf2deaecc2551e02e`, regenerates domain/contract artifacts, and requires test/race/vet/build, MySQL 8.4 integration, cross-role legacy-scope escalation denial, REST/gRPC parity, regeneration determinism and zero drift before producing the final Git patch.
+diff --git a/integration/deviceops_mysql_test.go b/integration/deviceops_mysql_test.go
+index f1d31c1..41303c5 100644
+--- a/integration/deviceops_mysql_test.go
++++ b/integration/deviceops_mysql_test.go
+@@ -12,16 +12,21 @@ import (
+ 	"testing"
+ 	"time"
+ 
+-	"github.com/hvritual/biz/internal/access/store"
+-	"github.com/hvritual/biz/internal/deviceops/application"
++	deviceopsv1 "github.com/hvritual/biz/contracts/gen/deviceops/v1"
++	accesspersistence "github.com/hvritual/biz/internal/access/infrastructure/persistence"
+ 	"github.com/hvritual/biz/modules/deviceops"
++	"google.golang.org/grpc"
++	"google.golang.org/grpc/codes"
++	"google.golang.org/grpc/credentials/insecure"
++	"google.golang.org/grpc/metadata"
++	"google.golang.org/grpc/status"
+ 	"gorm.io/driver/mysql"
+ 	"gorm.io/gorm"
+-	"gorm.io/gorm/clause"
+ 	"yunka.io/pkg/logExt"
+ )
+ 
+-func TestMultiTenantRBACAndDataScope(t *testing.T) {
++func openDB(t *testing.T) *gorm.DB {
++	t.Helper()
+ 	dsn := os.Getenv("YUNKA_TEST_MYSQL_DSN")
+ 	if dsn == "" {
+ 		t.Fatal("YUNKA_TEST_MYSQL_DSN is required")
+@@ -30,90 +35,178 @@ func TestMultiTenantRBACAndDataScope(t *testing.T) {
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+-	token := "owner-token"
++	return db
++}
++
++func startModule(t *testing.T, db *gorm.DB, tenant, ownerToken, site string) *deviceops.Module {
++	t.Helper()
+ 	config := deviceops.DefaultConfig()
+ 	config.HTTPListenAddress = "127.0.0.1:0"
+ 	config.GRPCListenAddress = "127.0.0.1:0"
+ 	config.AutoMigrate = true
+-	config.Bootstrap = deviceops.BootstrapConfig{TenantID: "tenant-a", TenantName: "Tenant A", UserID: "owner", Email: "owner@example.invalid", Token: token, SiteID: "site-1", SiteName: "Site 1"}
++	config.Bootstrap = deviceops.BootstrapConfig{
++		TenantID: tenant, TenantName: tenant, UserID: tenant + "-owner",
++		Email: tenant + "-owner@example.invalid", Token: ownerToken, SiteID: site, SiteName: site,
++	}
+ 	module, err := deviceops.NewModule(deviceops.Dependencies{Config

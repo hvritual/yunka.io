@@ -1,0 +1,80 @@
+antName: config.TenantName, UserID: config.UserID, Email: config.Email, Token: config.Token}, devicepolicy.Permissions()); err != nil {
+ 			return fmt.Errorf("deviceops: bootstrap identity: %w", err)
+ 		}
+ 		principal, err := accessStore.Authenticate(ctx, config.Token)
+@@ -88,7 +89,22 @@ func (module *Module) Start(ctx context.Context) error {
+ 			}
+ 		}
+ 	}
+-	authorizer, err := authz.NewRBACAuthorizer(accessStore)
++	grantAuthorizer, err := authz.NewGrantAuthorizer(accessStore)
++	if err != nil {
++		return err
++	}
++	guard, err := devicesecurity.NewGuard(accessStore)
++	if err != nil {
++		return err
++	}
++	guards := authz.NewStaticGuardResolver(map[authz.OperationID]authz.OperationGuard{
++		devicepolicy.OperationListDevices:  guard,
++		devicepolicy.OperationGetDevice:    guard,
++		devicepolicy.OperationCreateDevice: guard,
++		devicepolicy.OperationUpdateDevice: guard,
++		devicepolicy.OperationDeleteDevice: guard,
++	})
++	operationRuntime, err := authz.NewOperationRuntime(devicepolicy.Resolver(), grantAuthorizer, guards)
+ 	if err != nil {
+ 		return err
+ 	}
+@@ -96,13 +112,13 @@ func (module *Module) Start(ctx context.Context) error {
+ 	if err != nil {
+ 		return err
+ 	}
+-	service, err := deviceapp.NewService(scopes, accessStore)
++	service, err := deviceapp.NewService(scopes)
+ 	if err != nil {
+ 		return err
+ 	}
+ 
+ 	apiMux := http.NewServeMux()
+-	if err := devicerest.Register(apiMux, service, authorizer); err != nil {
++	if err := devicerest.Register(apiMux, service, operationRuntime); err != nil {
+ 		return err
+ 	}
+ 	rootMux := http.NewServeMux()
+@@ -114,7 +130,7 @@ func (module *Module) Start(ctx context.Context) error {
+ 	}
+ 	httpServer := &http.Server{Handler: rootMux, ReadHeaderTimeout: 5 * time.Second}
+ 
+-	policyInterceptor, err := authzgrpc.AuthorizedUnaryServerInterceptor(authorizer, devicepolicy.Resolver())
++	securityInterceptor, err := authzgrpc.SecuredUnaryServerInterceptor(operationRuntime)
+ 	if err != nil {
+ 		_ = httpListener.Close()
+ 		return err
+@@ -124,7 +140,7 @@ func (module *Module) Start(ctx context.Context) error {
+ 		_ = httpListener.Close()
+ 		return fmt.Errorf("deviceops: gRPC listen: %w", err)
+ 	}
+-	grpcServer := grpc.NewServer(grpc.ChainUnaryInterceptor(grpcAuthentication(accessStore), policyInterceptor))
++	grpcServer := grpc.NewServer(grpc.ChainUnaryInterceptor(grpcAuthentication(accessStore), securityInterceptor))
+ 	devicerpc.Register(grpcServer, service)
+ 
+ 	module.mu.Lock()
+@@ -227,7 +243,7 @@ func parseBearer(value string) string {
+ 	}
+ 	return strings.TrimSpace(value[7:])
+ }
+-func httpAuthentication(accessStore *store.Store, next http.Handler) http.Handler {
++func httpAuthentication(accessStore *accesspersistence.Store, next http.Handler) http.Handler {
+ 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+ 		principal, err := accessStore.Authenticate(r.Context(), parseBearer(r.Header.Get("Authorization")))
+ 		if err != nil {
+@@ -237,7 +253,7 @@ func httpAuthentication(accessStore *store.Store, next http.Handler) http.Handle
+ 		next.ServeHTTP(w, r.WithContext(identity.WithPrincipal(r.Context(), principal)))
+ 	})
+ }
+-func grpcAuthentication(accessStore *store.Store) grpc.UnaryServerInterceptor {
++func grpcAuthentication(accessStore *accesspersistence.Store) grpc.UnaryServerInterceptor {
+ 	return func(ctx context.Context, request any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+ 		md, _ := metadata.FromIncomingContext(ctx)
+ 		raw := ""

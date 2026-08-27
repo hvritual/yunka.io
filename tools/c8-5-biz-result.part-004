@@ -1,0 +1,149 @@
+oken, site, "Owner", "SN-SCOPE-OWNER")
++	postDevice(t, base, ownerToken, site, "Reader", "SN-SCOPE-READER")
++	if err := db.Exec("UPDATE biz_deviceops_device SET created_by = ? WHERE tenant_id = ? AND serial = ?", "reader-scope", tenant, "SN-SCOPE-READER").Error; err != nil {
++		t.Fatal(err)
++	}
++
++	readerToken := "reader-scope-token"
++	seedReader(t, db, tenant, "reader-scope", readerToken, "", tenant+":reader", "reader", "device.read", "self")
++	seedReader(t, db, tenant, "reader-scope", readerToken, "", tenant+":other", "other", "device.create", "all")
++
++	// Simulate a stale pre-C8.5 scope row on a role that does NOT grant device.read.
++	if err := db.Exec(`CREATE TABLE IF NOT EXISTS biz_role_data_scopes (
++		tenant_id varchar(64) NOT NULL,
++		role_id varchar(160) NOT NULL,
++		permission varchar(120) NOT NULL,
++		scope varchar(16) NOT NULL,
++		PRIMARY KEY (tenant_id, role_id, permission)
++	)`).Error; err != nil {
++		t.Fatal(err)
++	}
++	if err := db.Exec("INSERT IGNORE INTO biz_role_data_scopes (tenant_id,role_id,permission,scope) VALUES (?,?,?,?)", tenant, tenant+":other", "device.read", "all").Error; err != nil {
++		t.Fatal(err)
++	}
++
++	devices := listHTTP(t, base, readerToken)
++	if len(devices) != 1 || devices[0]["serial"] != "SN-SCOPE-READER" {
++		t.Fatalf("cross-role scope escalation detected: devices=%v", devices)
+ 	}
+ }
+diff --git a/internal/access/domain/model.go b/internal/access/domain/model.go
+new file mode 100644
+index 0000000..2fc42f6
+--- /dev/null
++++ b/internal/access/domain/model.go
+@@ -0,0 +1,68 @@
++package domain
++
++import "time"
++
++type DataScope string
++
++const (
++	DataScopeNone  DataScope = "none"
++	DataScopeSelf  DataScope = "self"
++	DataScopeSites DataScope = "sites"
++	DataScopeAll   DataScope = "all"
++)
++
++type Tenant struct {
++	ID        string
++	Name      string
++	Status    string
++	CreatedAt time.Time
++}
++
++type User struct {
++	ID        string
++	Email     string
++	Status    string
++	CreatedAt time.Time
++}
++
++type Membership struct {
++	TenantID  string
++	UserID    string
++	Status    string
++	CreatedAt time.Time
++}
++
++type Role struct {
++	ID       string
++	TenantID string
++	Name     string
++	Status   string
++}
++
++type MemberRole struct {
++	TenantID string
++	UserID   string
++	RoleID   string
++}
++
++type PermissionGrant struct {
++	TenantID   string
++	RoleID     string
++	Permission string
++	Scope      DataScope
++}
++
++type MemberSite struct {
++	TenantID string
++	UserID   string
++	SiteID   string
++}
++
++type Credential struct {
++	TokenHash string
++	TenantID  string
++	UserID    string
++	ExpiresAt *time.Time
++	Disabled  bool
++	CreatedAt time.Time
++}
+diff --git a/internal/access/infrastructure/persistence/store.go b/internal/access/infrastructure/persistence/store.go
+new file mode 100644
+index 0000000..6ee4dca
+--- /dev/null
++++ b/internal/access/infrastructure/persistence/store.go
+@@ -0,0 +1,233 @@
++package persistence
++
++import (
++	"context"
++	"crypto/sha256"
++	"encoding/hex"
++	"errors"
++	"sort"
++	"strings"
++	"time"
++
++	accessdomain "github.com/hvritual/biz/internal/access/domain"
++	"gorm.io/gorm"
++	"gorm.io/gorm/clause"
++	"yunka.io/framework/core/identity"
++	"yunka.io/gateway/authz"
++)
++
++var ErrUnauthorized = errors.New("access: unauthorized")
++
++type tenantRecord struct {
++	ID        string    `gorm:"column:id;primaryKey;size:64"`
++	Name      string    `gorm:"column:name;size:200;not null"`
++	Status    string    `gorm:"column:status;size:32;not null;index"`
++	CreatedAt time.Time `gorm:"column:created_at;not null"`
++}
++
++func (tenantRecord) TableName() string { return "biz_tenants" }
++
++type userRecord struct {
++	ID        string    `gorm:"column:id;primaryKey;size:64"`
++	Email     string    `gorm:"column:email;size:320;not null;uniqueIndex"`
++	Status    string    `gorm:"column:status;size:32;not null;index"`
++	CreatedAt time.Time `gorm:"column:created_at;not null"`
++}
++
++func (userRecord) TableName() string { return "biz_users" }
++
++type membershipRecord struct {
++	TenantID  string    `gorm:"column:tenant_id;

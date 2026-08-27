@@ -1,0 +1,87 @@
+err := scope.Repositories().Site.Get(scope.Context(), siteID); err != nil {
+ 			return domain.Device{}, err
+ 		}
+-		value := domain.Device{ID: newID(), SiteID: siteID, Name: name, Serial: serial, CreatedBy: principal.UserID}
++		value := domain.Device{ID: newID(), SiteID: siteID, Name: name, Serial: serial, CreatedBy: access.UserID}
+ 		if err := scope.Repositories().Device.Create(scope.Context(), &value); err != nil {
+ 			return domain.Device{}, err
+ 		}
+@@ -135,16 +86,8 @@ func (service *Service) UpdateDevice(ctx context.Context, request *deviceopsv1.U
+ 	if request == nil || strings.TrimSpace(request.GetId()) == "" || request.GetVersion() == 0 {
+ 		return nil, ErrInvalid
+ 	}
+-	principal, err := trustedPrincipal(ctx)
+-	if err != nil {
+-		return nil, err
+-	}
+-	access, err := service.scopeResolver.ResolveDeviceScope(ctx, principal, PermissionDeviceUpdate)
+-	if err != nil {
+-		return nil, err
+-	}
+ 	device, err := requestscope.ExecuteValue(ctx, service.scopes, func(scope *requestscope.Scope[ports.ScopedRepositories]) (domain.Device, error) {
+-		current, err := scope.Repositories().Device.GetScoped(scope.Context(), access, strings.TrimSpace(request.GetId()))
++		current, err := scope.Repositories().Device.GetVisible(scope.Context(), strings.TrimSpace(request.GetId()))
+ 		if err != nil {
+ 			return domain.Device{}, err
+ 		}
+@@ -157,9 +100,6 @@ func (service *Service) UpdateDevice(ctx context.Context, request *deviceopsv1.U
+ 			siteID = current.SiteID
+ 		}
+ 		if siteID != current.SiteID {
+-			if !access.AllowsSite(siteID) {
+-				return domain.Device{}, ErrForbidden
+-			}
+ 			if _, err := scope.Repositories().Site.Get(scope.Context(), siteID); err != nil {
+ 				return domain.Device{}, err
+ 			}
+@@ -168,7 +108,7 @@ func (service *Service) UpdateDevice(ctx context.Context, request *deviceopsv1.U
+ 		if err := scope.Repositories().Device.Update(scope.Context(), &current, request.GetVersion()); err != nil {
+ 			return domain.Device{}, err
+ 		}
+-		return scope.Repositories().Device.GetScoped(scope.Context(), access, current.ID)
++		return scope.Repositories().Device.GetVisible(scope.Context(), current.ID)
+ 	})
+ 	if err != nil {
+ 		return nil, err
+@@ -180,16 +120,8 @@ func (service *Service) DeleteDevice(ctx context.Context, request *deviceopsv1.D
+ 	if request == nil || strings.TrimSpace(request.GetId()) == "" || request.GetVersion() == 0 {
+ 		return nil, ErrInvalid
+ 	}
+-	principal, err := trustedPrincipal(ctx)
+-	if err != nil {
+-		return nil, err
+-	}
+-	access, err := service.scopeResolver.ResolveDeviceScope(ctx, principal, PermissionDeviceDelete)
+-	if err != nil {
+-		return nil, err
+-	}
+-	err = requestscope.Execute(ctx, service.scopes, func(scope *requestscope.Scope[ports.ScopedRepositories]) error {
+-		current, err := scope.Repositories().Device.GetScoped(scope.Context(), access, strings.TrimSpace(request.GetId()))
++	err := requestscope.Execute(ctx, service.scopes, func(scope *requestscope.Scope[ports.ScopedRepositories]) error {
++		current, err := scope.Repositories().Device.GetVisible(scope.Context(), strings.TrimSpace(request.GetId()))
+ 		if err != nil {
+ 			return err
+ 		}
+diff --git a/internal/deviceops/infrastructure/persistence/scoped.go b/internal/deviceops/infrastructure/persistence/scoped.go
+index 77014b8..07ea894 100644
+--- a/internal/deviceops/infrastructure/persistence/scoped.go
++++ b/internal/deviceops/infrastructure/persistence/scoped.go
+@@ -6,11 +6,12 @@ import (
+ 
+ 	"github.com/hvritual/biz/internal/deviceops/domain"
+ 	"github.com/hvritual/biz/internal/deviceops/ports"
++	devicesecurity "github.com/hvritual/biz/internal/deviceops/security"
+ 	"gorm.io/gorm"
+ 	"yunka.io/framework/requestscope"
+ )
+ 
+-func applyDeviceDataScope(query *gorm.DB, scope ports.DeviceScope) *gorm.DB {
++func applyDeviceDataScope(query *gorm.DB, scope devicesecurity.Scope) *gorm.DB {
+ 	if scope.All {
+ 		return query
+ 	}
+@@ -32,7 +33,11 @@ func applyDeviceDataScope(query *gorm.DB, scope ports.DeviceScope) *gorm.DB {
+ 	return query.Where("1 = 0")
+ }
+ 
+-func 

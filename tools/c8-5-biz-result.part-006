@@ -1,0 +1,99 @@
+	}
++		return identity.Principal{}, err
++	}
++	var roles []string
++	if err := store.database.WithContext(ctx).Table("biz_member_roles mr").
++		Select("r.name").
++		Joins("JOIN biz_roles r ON r.id = mr.role_id AND r.tenant_id = mr.tenant_id AND r.status = ?", "active").
++		Where("mr.tenant_id = ? AND mr.user_id = ?", token.TenantID, token.UserID).
++		Scan(&roles).Error; err != nil {
++		return identity.Principal{}, err
++	}
++	sort.Strings(roles)
++	return identity.Principal{
++		Subject: "user:" + token.UserID, TenantID: token.TenantID, UserID: token.UserID,
++		Roles: roles, AuthMethod: identity.AuthMethodAPIKey, Authenticated: true,
++	}, nil
++}
++
++// ResolveGrants is the C8.5 unified authorization decision input. The JOIN binds
++// permission and scope to the exact same active role grant and ignores legacy
++// role_data_scopes rows entirely.
++func (store *Store) ResolveGrants(ctx context.Context, tenantID string, roles []string, permissions []authz.PermissionKey) ([]authz.Grant, error) {
++	if strings.TrimSpace(tenantID) == "" || len(roles) == 0 || len(permissions) == 0 {
++		return nil, nil
++	}
++	keys := make([]string, 0, len(permissions))
++	for _, permission := range permissions {
++		if value := strings.TrimSpace(string(permission)); value != "" {
++			keys = append(keys, value)
++		}
++	}
++	if len(keys) == 0 {
++		return nil, nil
++	}
++	type grantRow struct {
++		RoleID     string
++		Permission string
++		Scope      accessdomain.DataScope
++	}
++	var rows []grantRow
++	if err := store.database.WithContext(ctx).Table("biz_roles r").
++		Select("r.id AS role_id, pg.permission, pg.scope").
++		Joins("JOIN biz_permission_grants pg ON pg.role_id = r.id AND pg.tenant_id = r.tenant_id").
++		Where("r.tenant_id = ? AND r.status = ? AND r.name IN ? AND pg.permission IN ?", tenantID, "active", roles, keys).
++		Scan(&rows).Error; err != nil {
++		return nil, err
++	}
++	result := make([]authz.Grant, 0, len(rows))
++	for _, row := range rows {
++		result = append(result, authz.Grant{Permission: authz.PermissionKey(row.Permission), RoleID: row.RoleID, Scope: string(row.Scope)})
++	}
++	return result, nil
++}
++
++func (store *Store) ResolveMemberSites(ctx context.Context, tenantID, userID string) ([]string, error) {
++	if strings.TrimSpace(tenantID) == "" || strings.TrimSpace(userID) == "" {
++		return nil, nil
++	}
++	var rows []memberSiteRecord
++	if err := store.database.WithContext(ctx).Where("tenant_id = ? AND user_id = ?", tenantID, userID).Find(&rows).Error; err != nil {
++		return nil, err
++	}
++	result := make([]string, 0, len(rows))
++	for _, row := range rows {
++		result = append(result, row.SiteID)
++	}
++	sort.Strings(result)
++	return result, nil
++}
++
++type Bootstrap struct{ TenantID, TenantName, UserID, Email, Token string }
++
++func (store *Store) Bootstrap(ctx context.Context, config Bootstrap, permissions []authz.PermissionKey) error {
++	if strings.TrimSpace(config.Token) == "" {
++		return nil
++	}
++	roleID := config.TenantID + ":owner"
++	values := []any{
++		&tenantRecord{ID: config.TenantID, Name: config.TenantName, Status: "active"},
++		&userRecord{ID: config.UserID, Email: config.Email, Status: "active"},
++		&membershipRecord{TenantID: config.TenantID, UserID: config.UserID, Status: "active"},
++		&roleRecord{ID: roleID, TenantID: config.TenantID, Name: "owner", Status: "active"},
++		&memberRoleRecord{TenantID: config.TenantID, UserID: config.UserID, RoleID: roleID},
++		&apiTokenRecord{TokenHash: TokenHash(config.Token), TenantID: config.TenantID, UserID: config.UserID},
++	}
++	db := store.database.WithContext(ctx)
++	for _, value := range values {
++		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(value).Error; err != nil {
++			return err
++		}
++	}
++	for _, permission := range permissions {
++		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&permissionGrantRecord{
++			TenantID: config.TenantID, RoleID: roleID, Permission: string(permission), Scope: accessdomain.DataScopeAll,
++		}).Error; err != nil {
++			return err
++		}
++	}
++	retu

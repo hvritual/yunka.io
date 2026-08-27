@@ -1,0 +1,125 @@
+(repository *DeviceRepository) ListScoped(ctx context.Context, scope ports.DeviceScope) ([]domain.Device, error) {
++func (repository *DeviceRepository) ListVisible(ctx context.Context) ([]domain.Device, error) {
++	scope, err := devicesecurity.RequireScope(ctx)
++	if err != nil {
++		return nil, err
++	}
+ 	query, err := repository.scoped(ctx)
+ 	if err != nil {
+ 		return nil, err
+@@ -48,7 +53,11 @@ func (repository *DeviceRepository) ListScoped(ctx context.Context, scope ports.
+ 	return result, nil
+ }
+ 
+-func (repository *DeviceRepository) GetScoped(ctx context.Context, scope ports.DeviceScope, id string) (domain.Device, error) {
++func (repository *DeviceRepository) GetVisible(ctx context.Context, id string) (domain.Device, error) {
++	scope, err := devicesecurity.RequireScope(ctx)
++	if err != nil {
++		return domain.Device{}, err
++	}
+ 	query, err := repository.scoped(ctx)
+ 	if err != nil {
+ 		return domain.Device{}, err
+diff --git a/internal/deviceops/policy/zz_yunka_device_management_operation_policy_gen.go b/internal/deviceops/policy/zz_yunka_device_management_operation_policy_gen.go
+index 2c185b7..fdba9fa 100644
+--- a/internal/deviceops/policy/zz_yunka_device_management_operation_policy_gen.go
++++ b/internal/deviceops/policy/zz_yunka_device_management_operation_policy_gen.go
+@@ -10,6 +10,10 @@ const OperationGetDevice authz.OperationID = "device.get"
+ const OperationListDevices authz.OperationID = "device.list"
+ const OperationUpdateDevice authz.OperationID = "device.update"
+ 
++func Permissions() []authz.PermissionKey {
++	return []authz.PermissionKey{"device.create", "device.delete", "device.read", "device.update"}
++}
++
+ func Resolver() authz.StaticResolver {
+ 	return authz.NewStaticResolver(map[string]authz.Policy{
+ 		"/deviceops.v1.DeviceApplication/CreateDevice": {Operation: OperationCreateDevice, Permissions: []authz.PermissionKey{"device.create"}, Mode: authz.PermissionAll, TenantRequired: true, Authentication: []string{"api-key"}},
+diff --git a/internal/deviceops/ports/scoped.go b/internal/deviceops/ports/scoped.go
+index a97819e..7535ac7 100644
+--- a/internal/deviceops/ports/scoped.go
++++ b/internal/deviceops/ports/scoped.go
+@@ -6,33 +6,10 @@ import (
+ 	"github.com/hvritual/biz/internal/deviceops/domain"
+ )
+ 
+-type DeviceScope struct {
+-	All     bool
+-	Self    bool
+-	Sites   bool
+-	UserID  string
+-	SiteIDs []string
+-}
+-
+-func (scope DeviceScope) AllowsSite(siteID string) bool {
+-	if scope.All {
+-		return true
+-	}
+-	if !scope.Sites {
+-		return false
+-	}
+-	for _, allowed := range scope.SiteIDs {
+-		if allowed == siteID {
+-			return true
+-		}
+-	}
+-	return false
+-}
+-
+ type ScopedDeviceRepository interface {
+ 	DeviceRepository
+-	ListScoped(context.Context, DeviceScope) ([]domain.Device, error)
+-	GetScoped(context.Context, DeviceScope, string) (domain.Device, error)
++	ListVisible(context.Context) ([]domain.Device, error)
++	GetVisible(context.Context, string) (domain.Device, error)
+ }
+ 
+ type ScopedRepositories struct {
+diff --git a/internal/deviceops/security/scope.go b/internal/deviceops/security/scope.go
+new file mode 100644
+index 0000000..fb52644
+--- /dev/null
++++ b/internal/deviceops/security/scope.go
+@@ -0,0 +1,118 @@
++package security
++
++import (
++	"context"
++	"errors"
++	"sort"
++	"strings"
++
++	deviceopsv1 "github.com/hvritual/biz/contracts/gen/deviceops/v1"
++	accessdomain "github.com/hvritual/biz/internal/access/domain"
++	accessports "github.com/hvritual/biz/internal/access/ports"
++	"yunka.io/gateway/authz"
++)
++
++var ErrAuthorizedScopeMissing = errors.New("deviceops security: authorized scope missing")
++
++type Scope struct {
++	All     bool
++	Self    bool
++	Sites   bool
++	UserID  string
++	SiteIDs []string
++}
++
++func (scope Scope) AllowsSite(siteID string) bool {
++	if scope.All || scope.Self {
++		return true
++	}
++	if !scope.Sites {
++		return false
++	}
++	for _, allowed := range scope.SiteIDs {
++		if allowed == siteID {
++			return true
++		}
++	}
++	return false
++}
++
++type scopeKey struct{}
++
++func WithScope(ctx context.Context, s

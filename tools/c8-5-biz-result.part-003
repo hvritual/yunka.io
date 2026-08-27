@@ -1,0 +1,93 @@
+ (?,?,?)", tenant, user, site)
++	}
++	exec("INSERT IGNORE INTO biz_api_tokens (token_hash,tenant_id,user_id,disabled,created_at) VALUES (?,?,?,?,NOW(3))", accesspersistence.TokenHash(token), tenant, user, false)
++}
++
++func listHTTP(t *testing.T, base, token string) []map[string]any {
++	t.Helper()
+ 	req, _ := http.NewRequest(http.MethodGet, base+"/v1/devices", nil)
+-	req.Header.Set("Authorization", "Bearer "+readerToken)
+-	resp, err := client.Do(req)
++	req.Header.Set("Authorization", "Bearer "+token)
++	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
++	defer resp.Body.Close()
+ 	body, _ := io.ReadAll(resp.Body)
+-	_ = resp.Body.Close()
+ 	if resp.StatusCode != http.StatusOK {
+-		t.Fatalf("reader list status=%d body=%s", resp.StatusCode, body)
++		t.Fatalf("list status=%d body=%s", resp.StatusCode, body)
+ 	}
+-	var list struct {
++	var out struct {
+ 		Devices []map[string]any `json:"devices"`
+ 	}
+-	if err := json.Unmarshal(body, &list); err != nil {
++	if err := json.Unmarshal(body, &out); err != nil {
+ 		t.Fatal(err)
+ 	}
+-	if len(list.Devices) != 1 || list.Devices[0]["serial"] != "SN-A" {
+-		t.Fatalf("reader list=%s", body)
++	return out.Devices
++}
++
++func TestRESTAndGRPCShareOperationSecurityRuntime(t *testing.T) {
++	db := openDB(t)
++	tenant, ownerToken, site := "tenant-parity", "owner-parity-token", "site-parity"
++	module := startModule(t, db, tenant, ownerToken, site)
++	base := "http://" + module.HTTPAddress()
++	postDevice(t, base, ownerToken, site, "A", "SN-PARITY-A")
++
++	readerToken := "reader-parity-token"
++	seedReader(t, db, tenant, "reader-parity", readerToken, site, tenant+":reader", "reader", "device.read", "sites")
++	if devices := listHTTP(t, base, readerToken); len(devices) != 1 || devices[0]["serial"] != "SN-PARITY-A" {
++		t.Fatalf("REST reader devices=%v", devices)
+ 	}
+-	payload, _ := json.Marshal(map[string]any{"siteId": "site-1", "name": "Denied", "serial": "SN-D"})
++
++	payload, _ := json.Marshal(map[string]any{"siteId": site, "name": "Denied", "serial": "SN-PARITY-DENIED"})
+ 	denied, _ := http.NewRequest(http.MethodPost, base+"/v1/devices", bytes.NewReader(payload))
+ 	denied.Header.Set("Authorization", "Bearer "+readerToken)
+ 	denied.Header.Set("Content-Type", "application/json")
+-	deniedResp, err := client.Do(denied)
++	deniedResp, err := (&http.Client{Timeout: 5 * time.Second}).Do(denied)
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+-	deniedBody, _ := io.ReadAll(deniedResp.Body)
+ 	_ = deniedResp.Body.Close()
+ 	if deniedResp.StatusCode != http.StatusForbidden {
+-		t.Fatalf("reader create status=%d body=%s", deniedResp.StatusCode, deniedBody)
++		t.Fatalf("REST create deny status=%d", deniedResp.StatusCode)
++	}
++
++	dialCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
++	defer cancel()
++	conn, err := grpc.DialContext(dialCtx, module.GRPCAddress(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer conn.Close()
++	client := deviceopsv1.NewDeviceApplicationClient(conn)
++	grpcCtx := metadata.AppendToOutgoingContext(context.Background(), "authorization", "Bearer "+readerToken)
++	grpcList, err := client.ListDevices(grpcCtx, &deviceopsv1.ListDevicesRequest{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(grpcList.GetDevices()) != 1 || grpcList.GetDevices()[0].GetSerial() != "SN-PARITY-A" {
++		t.Fatalf("gRPC reader devices=%v", grpcList.GetDevices())
++	}
++	_, err = client.CreateDevice(grpcCtx, &deviceopsv1.CreateDeviceRequest{SiteId: site, Name: "Denied", Serial: "SN-GRPC-DENIED"})
++	if status.Code(err) != codes.PermissionDenied {
++		t.Fatalf("gRPC create deny err=%v code=%s", err, status.Code(err))
++	}
++}
++
++func TestCrossRoleLegacyScopeCannotEscalateGrant(t *testing.T) {
++	db := openDB(t)
++	tenant, ownerToken, site := "tenant-scope", "owner-scope-token", "site-scope"
++	module := startModule(t, db, tenant, ownerToken, site)
++	base := "http://" + module.HTTPAddress()
++	postDevice(t, base, ownerT

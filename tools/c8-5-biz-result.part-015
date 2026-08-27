@@ -1,0 +1,85 @@
+plication/GetDevice", wire)
++	if err != nil {
++		writeSecurityError(writer, err)
++		return
++	}
++	output, err := handler.application.GetDevice(secured, wire)
+ 	if err != nil {
+ 		http.Error(writer, "application request failed", http.StatusBadRequest)
+ 		return
+@@ -154,12 +135,13 @@ func (handler *Handler) handleGetDevice(writer http.ResponseWriter, request *htt
+ }
+ 
+ func (handler *Handler) handleListDevices(writer http.ResponseWriter, request *http.Request) {
+-	if err := handler.authorize(request, "/deviceops.v1.DeviceApplication/ListDevices"); err != nil {
+-		writeAuthorizationError(writer, err)
++	wire := &deviceopsv1.ListDevicesRequest{}
++	secured, err := handler.runtime.Prepare(request.Context(), "/deviceops.v1.DeviceApplication/ListDevices", wire)
++	if err != nil {
++		writeSecurityError(writer, err)
+ 		return
+ 	}
+-	wire := &deviceopsv1.ListDevicesRequest{}
+-	output, err := handler.application.ListDevices(request.Context(), wire)
++	output, err := handler.application.ListDevices(secured, wire)
+ 	if err != nil {
+ 		http.Error(writer, "application request failed", http.StatusBadRequest)
+ 		return
+@@ -174,10 +156,6 @@ func (handler *Handler) handleListDevices(writer http.ResponseWriter, request *h
+ }
+ 
+ func (handler *Handler) handleUpdateDevice(writer http.ResponseWriter, request *http.Request) {
+-	if err := handler.authorize(request, "/deviceops.v1.DeviceApplication/UpdateDevice"); err != nil {
+-		writeAuthorizationError(writer, err)
+-		return
+-	}
+ 	wire := &deviceopsv1.UpdateDeviceRequest{}
+ 	body, err := io.ReadAll(request.Body)
+ 	if err != nil {
+@@ -191,7 +169,12 @@ func (handler *Handler) handleUpdateDevice(writer http.ResponseWriter, request *
+ 		}
+ 	}
+ 	wire.Id = request.PathValue("id")
+-	output, err := handler.application.UpdateDevice(request.Context(), wire)
++	secured, err := handler.runtime.Prepare(request.Context(), "/deviceops.v1.DeviceApplication/UpdateDevice", wire)
++	if err != nil {
++		writeSecurityError(writer, err)
++		return
++	}
++	output, err := handler.application.UpdateDevice(secured, wire)
+ 	if err != nil {
+ 		http.Error(writer, "application request failed", http.StatusBadRequest)
+ 		return
+diff --git a/modules/deviceops/module.go b/modules/deviceops/module.go
+index 11fef5e..6653598 100644
+--- a/modules/deviceops/module.go
++++ b/modules/deviceops/module.go
+@@ -10,11 +10,12 @@ import (
+ 	"sync"
+ 	"time"
+ 
+-	"github.com/hvritual/biz/internal/access/store"
++	accesspersistence "github.com/hvritual/biz/internal/access/infrastructure/persistence"
+ 	deviceapp "github.com/hvritual/biz/internal/deviceops/application"
+ 	"github.com/hvritual/biz/internal/deviceops/domain"
+ 	devicepersistence "github.com/hvritual/biz/internal/deviceops/infrastructure/persistence"
+ 	devicepolicy "github.com/hvritual/biz/internal/deviceops/policy"
++	devicesecurity "github.com/hvritual/biz/internal/deviceops/security"
+ 	devicerest "github.com/hvritual/biz/internal/deviceops/transport/rest"
+ 	devicerpc "github.com/hvritual/biz/internal/deviceops/transport/rpc"
+ 	"google.golang.org/grpc"
+@@ -53,7 +54,7 @@ func NewModule(dependencies Dependencies) (*Module, error) {
+ func (*Module) Name() string { return ModuleName }
+ 
+ func (module *Module) Start(ctx context.Context) error {
+-	accessStore, err := store.New(module.dependencies.PrimaryDatabase)
++	accessStore, err := accesspersistence.New(module.dependencies.PrimaryDatabase)
+ 	if err != nil {
+ 		return err
+ 	}
+@@ -69,7 +70,7 @@ func (module *Module) Start(ctx context.Context) error {
+ 		}
+ 	}
+ 	if config := module.dependencies.Config.Bootstrap; config.Token != "" {
+-		if err := accessStore.Bootstrap(ctx, store.Bootstrap{TenantID: config.TenantID, TenantName: config.TenantName, UserID: config.UserID, Email: config.Email, Token: config.Token}, []string{deviceapp.PermissionDeviceRead, deviceapp.PermissionDeviceCreate, deviceapp.PermissionDeviceUpdate, deviceapp.PermissionDeviceDelete}); err != nil {
++		if err := accessStore.Bootstrap(ctx, accesspersistence.Bootstrap{TenantID: config.TenantID, Ten

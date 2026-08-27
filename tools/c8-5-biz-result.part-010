@@ -1,0 +1,102 @@
+ithub.com/hvritual/biz/internal/deviceops/ports"
+-	"yunka.io/framework/core/identity"
++	devicesecurity "github.com/hvritual/biz/internal/deviceops/security"
+ 	"yunka.io/framework/requestscope"
+ )
+ 
+-const (
+-	PermissionDeviceRead   = "device.read"
+-	PermissionDeviceCreate = "device.create"
+-	PermissionDeviceUpdate = "device.update"
+-	PermissionDeviceDelete = "device.delete"
+-)
+-
+-var (
+-	ErrInvalid   = errors.New("deviceops: invalid request")
+-	ErrForbidden = errors.New("deviceops: data scope denied")
+-)
+-
+-type ScopeResolver interface {
+-	ResolveDeviceScope(context.Context, identity.Principal, string) (ports.DeviceScope, error)
+-}
++var ErrInvalid = errors.New("deviceops: invalid request")
+ 
+ type Service struct {
+-	scopes        requestscope.ScopeFactory[ports.ScopedRepositories]
+-	scopeResolver ScopeResolver
++	scopes requestscope.ScopeFactory[ports.ScopedRepositories]
+ }
+ 
+-func NewService(scopes requestscope.ScopeFactory[ports.ScopedRepositories], resolver ScopeResolver) (*Service, error) {
++func NewService(scopes requestscope.ScopeFactory[ports.ScopedRepositories]) (*Service, error) {
+ 	if scopes == nil {
+ 		return nil, errors.New("deviceops: request scope factory is required")
+ 	}
+-	if resolver == nil {
+-		return nil, errors.New("deviceops: data scope resolver is required")
+-	}
+-	return &Service{scopes: scopes, scopeResolver: resolver}, nil
+-}
+-
+-func trustedPrincipal(ctx context.Context) (identity.Principal, error) {
+-	principal, ok := identity.FromContext(ctx)
+-	if !ok || !principal.Authenticated || principal.TenantID == "" || principal.UserID == "" {
+-		return identity.Principal{}, ErrForbidden
+-	}
+-	return principal, nil
++	return &Service{scopes: scopes}, nil
+ }
+ 
+ func (service *Service) ListDevices(ctx context.Context, _ *deviceopsv1.ListDevicesRequest) (*deviceopsv1.ListDevicesResponse, error) {
+-	principal, err := trustedPrincipal(ctx)
+-	if err != nil {
+-		return nil, err
+-	}
+-	access, err := service.scopeResolver.ResolveDeviceScope(ctx, principal, PermissionDeviceRead)
+-	if err != nil {
+-		return nil, err
+-	}
+ 	devices, err := requestscope.ExecuteValue(ctx, service.scopes, func(scope *requestscope.Scope[ports.ScopedRepositories]) ([]domain.Device, error) {
+-		return scope.Repositories().Device.ListScoped(scope.Context(), access)
++		return scope.Repositories().Device.ListVisible(scope.Context())
+ 	})
+ 	if err != nil {
+ 		return nil, err
+@@ -79,16 +45,8 @@ func (service *Service) GetDevice(ctx context.Context, request *deviceopsv1.GetD
+ 	if request == nil || strings.TrimSpace(request.GetId()) == "" {
+ 		return nil, ErrInvalid
+ 	}
+-	principal, err := trustedPrincipal(ctx)
+-	if err != nil {
+-		return nil, err
+-	}
+-	access, err := service.scopeResolver.ResolveDeviceScope(ctx, principal, PermissionDeviceRead)
+-	if err != nil {
+-		return nil, err
+-	}
+ 	device, err := requestscope.ExecuteValue(ctx, service.scopes, func(scope *requestscope.Scope[ports.ScopedRepositories]) (domain.Device, error) {
+-		return scope.Repositories().Device.GetScoped(scope.Context(), access, strings.TrimSpace(request.GetId()))
++		return scope.Repositories().Device.GetVisible(scope.Context(), strings.TrimSpace(request.GetId()))
+ 	})
+ 	if err != nil {
+ 		return nil, err
+@@ -104,22 +62,15 @@ func (service *Service) CreateDevice(ctx context.Context, request *deviceopsv1.C
+ 	if siteID == "" || name == "" || serial == "" {
+ 		return nil, ErrInvalid
+ 	}
+-	principal, err := trustedPrincipal(ctx)
+-	if err != nil {
+-		return nil, err
+-	}
+-	access, err := service.scopeResolver.ResolveDeviceScope(ctx, principal, PermissionDeviceCreate)
+-	if err != nil {
+-		return nil, err
+-	}
+-	if !access.AllowsSite(siteID) {
+-		return nil, ErrForbidden
++	access, err := devicesecurity.RequireScope(ctx)
++	if err != nil || strings.TrimSpace(access.UserID) == "" {
++		return nil, devicesecurity.ErrAuthorizedScopeMissing
+ 	}
+ 	device, err := requestscope.ExecuteValue(ctx, service.scopes, func(scope *requestscope.Scope[ports.ScopedRepositories]) (domain.Device, error) {
+ 		if _, 
