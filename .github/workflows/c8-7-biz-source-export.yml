@@ -1,0 +1,32 @@
+name: c8-7-yunka-source-export
+
+on:
+  push:
+    branches:
+      - agent/c8-7-biz-export
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+      - name: Pack exact Yunka C8.7 source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse ed3c73b7899cd4a818d2a771006befa7bf9a5085^{tree})" = "ac08a52a593719246734801fe5aa86dc827a0310"
+          tar --exclude=.git --exclude=.github/workflows/c8-7-biz-source-export.yml -czf "$RUNNER_TEMP/yunka-c8-7-source.tar.gz" .
+          sha256sum "$RUNNER_TEMP/yunka-c8-7-source.tar.gz" | tee "$RUNNER_TEMP/yunka-c8-7-source.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yunka-c8-7-source
+          path: |
+            ${{ runner.temp }}/yunka-c8-7-source.tar.gz
+            ${{ runner.temp }}/yunka-c8-7-source.sha256
+          if-no-files-found: error
