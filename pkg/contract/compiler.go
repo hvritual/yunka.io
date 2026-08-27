@@ -62,6 +62,9 @@ func Compile(ctx context.Context, options CompileOptions) (CompileResult, error)
 	defer os.Remove(descriptorPath)
 
 	args := []string{"--include_imports", "--include_source_info", "--descriptor_set_out=" + descriptorPath, "-I", absDir}
+	if include := standardProtoInclude(protoc); include != "" && filepath.Clean(include) != filepath.Clean(absDir) {
+		args = append(args, "-I", include)
+	}
 	for _, protoPath := range options.ProtoPaths {
 		if protoPath == "" {
 			continue
@@ -108,7 +111,7 @@ func ManifestFromDescriptorSet(data []byte, roots []string) (Manifest, error) {
 	mapEntries := make(map[string]messageDescriptor)
 
 	for _, file := range set.Files {
-		if !isRootFile(file.Name, rootSet, len(roots) == 0) {
+		if !isRootFile(file.Name, rootSet, len(roots) == 0) || isDSLSupportFile(file.Name) {
 			continue
 		}
 		manifest.Files = append(manifest.Files, File{
@@ -121,7 +124,7 @@ func ManifestFromDescriptorSet(data []byte, roots []string) (Manifest, error) {
 	}
 
 	for _, file := range set.Files {
-		if !isRootFile(file.Name, rootSet, len(roots) == 0) {
+		if !isRootFile(file.Name, rootSet, len(roots) == 0) || isDSLSupportFile(file.Name) {
 			continue
 		}
 		appendMessages(&manifest, file.Package, "", file.Messages, messageDescriptors, mapEntries)
@@ -157,6 +160,9 @@ func ManifestFromDescriptorSet(data []byte, roots []string) (Manifest, error) {
 			}
 			manifest.Services = append(manifest.Services, contractService)
 		}
+	}
+	if err := applyDSLDeclarations(&manifest, data); err != nil {
+		return Manifest{}, err
 	}
 	manifest.Normalize()
 	return manifest, nil
@@ -308,4 +314,25 @@ func resolveProtoc(explicit string) (string, error) {
 		return path, nil
 	}
 	return "", fmt.Errorf("contract: protoc not found; install protoc or set PROTOC")
+}
+
+func standardProtoInclude(protoc string) string {
+	resolved := protoc
+	if path, err := exec.LookPath(protoc); err == nil {
+		resolved = path
+	}
+	if path, err := filepath.EvalSymlinks(resolved); err == nil {
+		resolved = path
+	}
+	candidates := []string{
+		filepath.Join(filepath.Dir(filepath.Dir(resolved)), "include"),
+		"/usr/local/include",
+		"/usr/include",
+	}
+	for _, candidate := range candidates {
+		if info, err := os.Stat(filepath.Join(candidate, "google", "protobuf", "descriptor.proto")); err == nil && !info.IsDir() {
+			return candidate
+		}
+	}
+	return ""
 }
