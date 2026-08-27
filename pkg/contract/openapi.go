@@ -117,7 +117,7 @@ func GenerateOpenAPI(manifest Manifest, options OpenAPIOptions) ([]byte, error) 
 		"components": map[string]any{
 			"schemas": components,
 		},
-		"x-yunka-contract-version": ManifestVersion,
+		"x-yunka-contract-version": manifest.SchemaVersion,
 		"x-yunka-rpc-methods":      unbound,
 	}
 	return marshalJSON(document)
