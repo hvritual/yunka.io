@@ -82,6 +82,7 @@ func Lint(manifest Manifest) []Diagnostic {
 	operationOwners := make(map[string]string)
 	for _, service := range manifest.Services {
 		servicePath := "service." + service.FullName
+		typedService := service.Application != nil || service.Domain != ""
 		if service.Application != nil {
 			if !validPolicyKey(service.Domain) {
 				diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: servicePath, Message: "typed application requires a file-level domain declaration"})
@@ -100,11 +101,28 @@ func Lint(manifest Manifest) []Diagnostic {
 				diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "duplicate method name"})
 			}
 			seenMethods[method.Name] = struct{}{}
-			if _, ok := messages[method.Request]; !ok && !knownExternalType(method.Request) {
+			requestMessage, requestKnown := messages[method.Request]
+			responseMessage, responseKnown := messages[method.Response]
+			if !requestKnown && !knownExternalType(method.Request) {
 				diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "unresolved request type " + method.Request})
 			}
-			if _, ok := messages[method.Response]; !ok && !knownExternalType(method.Response) {
+			if !responseKnown && !knownExternalType(method.Response) {
 				diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "unresolved response type " + method.Response})
+			}
+			if typedService {
+				if method.Operation == nil {
+					diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "typed application method must declare a typed operation"})
+				}
+				if requestKnown && requestMessage.DTO == nil {
+					diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "typed application request must be classified as a DTO"})
+				}
+				if responseKnown && responseMessage.DTO == nil {
+					diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "typed application response must be classified as a DTO"})
+				}
+			}
+
+			if legacyHTTP, ok := directiveHTTPBinding(method.Directives); ok && len(method.HTTP) > 0 && bindingKey(legacyHTTP) != bindingKey(method.HTTP[0]) {
+				diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "google.api.http binding conflicts with legacy @yunka.http declaration"})
 			}
 
 			if operation := method.Operation; operation != nil {
@@ -129,16 +147,23 @@ func Lint(manifest Manifest) []Diagnostic {
 						diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "invalid permission key " + permission})
 					}
 				}
+				legacyPolicy := authorizationFromDirectives(method.Directives)
+				typedPolicy := authorizationFromOperation(operation)
+				if legacyPolicy != nil && authorizationKey(legacyPolicy) != authorizationKey(typedPolicy) {
+					diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "typed operation conflicts with legacy @yunka authorization directives"})
+				}
 				if operation.Public {
 					if len(operation.Permissions) > 0 || len(operation.Authentication) > 0 || operation.TenantRequired {
 						diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "public operation cannot declare permissions, authentication, or tenant requirement"})
+					}
+					if method.Authorization != nil {
+						diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "public typed operation must not normalize to an authorization policy"})
 					}
 				} else {
 					if len(operation.Permissions) == 0 {
 						diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "protected typed operation requires at least one permission"})
 					}
-					expected := authorizationFromOperation(operation)
-					if authorizationKey(expected) != authorizationKey(method.Authorization) {
+					if authorizationKey(typedPolicy) != authorizationKey(method.Authorization) {
 						diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "typed operation and normalized authorization policy differ"})
 					}
 				}
