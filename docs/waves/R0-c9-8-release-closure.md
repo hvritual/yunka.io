@@ -7,6 +7,7 @@
 - Baseline tree: `d2454c393e9c19379a71980154d4e354bb4fce22`
 - Tracking: GitHub issue #36
 - Delivery branch: `agent/r0-c9-8-release-closure`
+- Delivery PR: #37
 - Planned release candidate: `v0.9.0-rc.1`
 
 ## Objective
@@ -75,16 +76,20 @@ The final cleanup after the C9.8 production-verification candidate removed only 
 
 ## Current hosted-runner validation debt
 
-The exact final C9.8 tree has not yet received a successful hosted-runner closeout because GitHub-hosted jobs are currently failing before any workflow step executes.
+The exact final C9.8/R0 tree has not yet received a successful hosted-runner closeout because GitHub-hosted jobs are currently failing before any workflow step executes.
 
 Observed during R0:
 
-- final PR CI run `33187074493`, attempt 2: `verify` failed with `steps=null`;
-- final `main` CI run `33187119857`, attempt 2: `verify` failed with `steps=null`;
+- final C9.8 PR CI run `33187074493`, attempt 2: `verify` failed with `steps=null`;
+- final C9.8 `main` CI run `33187119857`, attempt 2: `verify` failed with `steps=null`;
 - C9.8 production run `33185292431`, attempt 2: `verify-production` failed with `steps=null`;
-- `hvritual/biz` C9.8 source-export run `33185310303`, attempt 2: `export` failed with `steps=null`.
+- R0 PR-head CI run `33201911506`: explicit re-run still failed with `steps=null`;
+- R0 PR-head production run `33201911509`: explicit re-run still failed with `steps=null`;
+- `hvritual/biz` C9.8 source-export run `33185310303`, attempt 3: `export` failed with `steps=null`.
 
-These are unresolved release gates. They are not treated as passing evidence and are not interpreted as code-test failures because no test or setup step executed.
+The workflow files are registered and runs/jobs are created, but no executable step/log is produced. These are unresolved release gates. They are not treated as passing evidence and are not interpreted as code-test failures because no test or setup step executed.
+
+GitHub public status currently reports Actions operational. Its recent incident history nevertheless records Aug 24-27 failures/delays in Actions job startup. Private repositories can also be blocked before runner execution when Actions billing/minute/budget entitlement is exhausted. Repository tooling available to R0 cannot read the account billing state, so the present root cause remains classified only as an external runner/Actions-entitlement blocker rather than a proven billing or GitHub-service incident.
 
 ## Durable production gate
 
@@ -142,7 +147,7 @@ At R0 start the following were closed as completed/superseded:
 - C9.8 real cross-Application pressure tracker;
 - the obsolete generated use-case policy PR whose framework-level resource taxonomy conflicts with the current domain-owned opaque-scope boundary.
 
-Issue #36 is the sole release-closure tracker for this baseline.
+Issue #36 is the release-closure tracker and PR #37 is the isolated R0 delivery branch review surface.
 
 ## Completion gates
 
