@@ -73,10 +73,11 @@ Every new repository task must:
 - `framework/platform.Provider` is the App-owned capability owner for named shared infrastructure such as DB and RPC resources.
 - Shared resources are prepared once, exposed only through a module's declared capability view, and participate in deterministic Start/Health/Shutdown ownership.
 - Process-level DB/RPC connection configuration, DSNs, TLS material, and factories are not exposed to business modules.
-- `framework/requestscope` owns fresh request-level Scope/UoW/repository views.
-- Request Scope snapshots trusted Principal/runtime metadata/trace state and owns exactly one request transaction lifecycle when configured.
-- Request success commits; error or panic rolls back; cleanup is idempotent and panic-safe.
-- The App-owned DB connection pool is never owned or closed by a request scope.
+- `framework/requestscope` provides a fresh typed Scope/repository view per operation and snapshots trusted Principal/runtime metadata/trace state.
+- Under the active C9.7+ execution model, the root `framework/execution.ExecutionScope` owns the Operation UnitOfWork and commit/rollback lifecycle.
+- Requestscope join views bind typed repositories to the active root UoW; they do not independently begin/finalize a second root transaction.
+- Local child Operations join that same root ExecutionScope/UoW and may not silently open nested transactions or escalate transaction mode.
+- The App-owned DB connection pool is never owned or closed by a request scope or ExecutionScope.
 
 ## Lifecycle and health
 
@@ -230,20 +231,19 @@ Every new repository task must:
 - Local runtime state is secret-free local evidence, not committed source of truth.
 - Child processes shut down in reverse dependency order with bounded graceful shutdown and kill fallback; no implicit restart policy is assumed.
 
-## R0 — C9.8 Release Closure decision
+## C9.9 — Baseline & Conformance Closure decision
 
-- R0 is a **release qualification wave**, not a framework feature wave.
-- Product baseline under closure: `main@407193d0b53f5fdbe2aad5c4ab152aba92d61097`, tree `d2454c393e9c19379a71980154d4e354bb4fce22`.
-- C10/new framework-surface work is frozen until R0 closes.
-- During R0, do not add new ExecutionPolicy mechanisms, generic resource/data-scope taxonomies, SQL-scope DSL, BPMN/workflow engine, distributed transaction/2PC, or business-semantic inference.
-- A product-code change is allowed only when an actual R0 closure gate proves a concrete release defect; fix the smallest proven defect and rerun the full gate.
-- The historical branch-specific `c9-production` workflow is replaced by a permanent read-only `production` workflow for PRs to `main`, pushes to `main`, and manual revalidation.
-- Permanent production verification uses the locked toolchain, MySQL 8.4, canonical `make verify-production`, and clean-worktree enforcement.
-- Normal `ci` remains the read-only deterministic standard gate; `production` is the real-MySQL release gate.
-- The current private personal repository tier does not provide usable GitHub rulesets/required-check enforcement; do not represent `main` as platform-protected. Until account capability changes, enforce release policy through `ci`, `production`, the release checklist, and the rule that no RC is published without exact-tree green evidence.
+- C9.9 is a **fact/release qualification wave**, not a framework feature wave.
+- Product baseline under reconciliation: `main@407193d0b53f5fdbe2aad5c4ab152aba92d61097`, tree `d2454c393e9c19379a71980154d4e354bb4fce22`.
+- C9.9 absorbs the useful R0/C9.8 release-closure work from issue #36 / PR #37 so there is one active closure track rather than parallel truth sources.
+- C10/new framework-surface work remains frozen until C9.9 closes.
+- During C9.9, do not add new ExecutionPolicy mechanisms, generic resource/data-scope taxonomies, SQL-scope DSL, BPMN/workflow engine, distributed transaction/2PC, Saga topology expansion, or business-semantic inference.
+- A product-code change is allowed only when an executable C9.9 closure gate proves a concrete defect; fix the smallest proven defect and rerun the full gate.
+- Permanent `.github/workflows/production.yml` is the read-only MySQL 8.4 release gate for PRs to `main`, pushes to `main`, and manual revalidation.
+- Permanent production verification uses the locked toolchain, canonical `make verify-production`, and clean-worktree enforcement; normal `ci` remains the standard deterministic non-MySQL gate.
+- The current private personal repository tier does not provide usable GitHub rulesets/required-check enforcement; do not represent `main` as platform-protected. Until account capability changes, enforce release policy through `ci`, `production`, review/merge discipline, and explicit release rules.
 - Existing strong evidence includes successful C9.7 MySQL 8.4 production verification and successful real C9.8 `hvritual/biz` cross-Application MySQL 8.4 pressure.
-- Final C9.8 hosted-runner revalidation attempts have failed before workflow steps execute (`steps=null`); these are unresolved release gates, not passing evidence and not proven code-test failures.
-- R0 completion requires green exact-tree `ci`, green exact-tree `production`, green real `hvritual/biz` C9.8 consumer pressure against the exact framework release tree, and zero dependency/generated/worktree drift.
-- Only after all R0 closure gates are green may the first release candidate `v0.9.0-rc.1` be tagged/released.
-- The RC freezes the reviewed C9.8 DSL/OperationPlan/Application Port/Executor/authorization/composition ownership shape for release-candidate compatibility review; it does not yet promise v1 API stability.
-- R0 tracking lives in GitHub issue #36 and `docs/waves/R0-c9-8-release-closure.md`.
+- Final C9.8 hosted-runner revalidation attempts failed before workflow steps executed (`steps=null`); these remain unresolved verification debt, not passing evidence and not proven code-test failures.
+- C9.9 completion requires green exact-tree `make verify`, green exact-tree MySQL `make verify-production`, green real `hvritual/biz` regeneration/verify/pressure against the same framework tree, zero generated/worktree drift, and synchronized docs/Pressure/issues.
+- C9.8 pressure truth after reconciliation is: FP-C9-001 CLOSED, FP-C9-002 CLOSED, FP-C9-003 CLOSED, FP-C9-004 CLOSED for durable duplicate suppression with response replay deferred, FP-C9-005 OPEN/DEFERRED, FP-C9-006 CLOSED.
+- C9.9 tracking lives in GitHub issue #38 and `docs/waves/C9.9-baseline-conformance-closure.md`.
