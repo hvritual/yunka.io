@@ -24,8 +24,12 @@ func GenerateOpenAPI(manifest Manifest, options OpenAPIOptions) ([]byte, error) 
 	}
 	messages := messageIndex(manifest)
 	enums := enumIndex(manifest)
+	external := collectExternalContractTypes(manifest)
 	components := make(map[string]any)
 	for _, item := range manifest.Enums {
+		if _, visible := external.enums[item.FullName]; !visible {
+			continue
+		}
 		values := make([]string, 0, len(item.Values))
 		for _, value := range item.Values {
 			values = append(values, value.Name)
@@ -37,6 +41,9 @@ func GenerateOpenAPI(manifest Manifest, options OpenAPIOptions) ([]byte, error) 
 		}
 	}
 	for _, item := range manifest.Messages {
+		if _, visible := external.messages[item.FullName]; !visible {
+			continue
+		}
 		properties := make(map[string]any)
 		for _, field := range item.Fields {
 			properties[field.JSONName] = fieldSchema(field, enums)
