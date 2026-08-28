@@ -2,6 +2,8 @@ package execution
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -12,10 +14,12 @@ import (
 )
 
 var (
-	ErrIdempotencyUnavailable = errors.New("execution: idempotency coordinator unavailable")
-	ErrIdempotencyKeyRequired = errors.New("execution: idempotency key required")
-	ErrIdempotencyInProgress  = errors.New("execution: idempotent operation already in progress")
-	ErrIdempotencyCompleted   = errors.New("execution: idempotent operation already completed")
+	ErrIdempotencyUnavailable       = errors.New("execution: idempotency coordinator unavailable")
+	ErrIdempotencyKeyRequired       = errors.New("execution: idempotency key required")
+	ErrIdempotencyInProgress        = errors.New("execution: idempotent operation already in progress")
+	ErrIdempotencyCompleted         = errors.New("execution: idempotent operation already completed")
+	ErrIdempotencyAtomicUnavailable = errors.New("execution: atomic idempotency finalization unavailable")
+	ErrIdempotencyLeaseLost         = errors.New("execution: idempotency claim lease lost")
 )
 
 type idempotencyKeyContext struct{}
@@ -44,10 +48,14 @@ const (
 	IdempotencyFailed    IdempotencyState = "failed"
 )
 
+// IdempotencyIdentity is the stable operation identity plus one opaque claim
+// attempt used for fencing. Stores must key records by TenantID + OperationID +
+// Key and use Attempt only to reject stale workers after lease takeover.
 type IdempotencyIdentity struct {
 	TenantID    string
 	OperationID string
 	Key         string
+	Attempt     string
 }
 
 type IdempotencyStore interface {
@@ -56,10 +64,28 @@ type IdempotencyStore interface {
 	Lookup(context.Context, IdempotencyIdentity) (IdempotencyState, bool, error)
 }
 
+// TransactionalIdempotencyStore can stage a terminal idempotency state in the
+// same local transaction used by the business mutation and Outbox staging.
+// transaction is deliberately opaque to the execution core; adapter packages
+// own concrete database types.
+type TransactionalIdempotencyStore interface {
+	IdempotencyStore
+	MarkTx(context.Context, any, IdempotencyIdentity, IdempotencyState) error
+}
+
 type IdempotencyCoordinator interface {
 	Begin(context.Context, operationplan.Plan) (context.Context, error)
 	Complete(context.Context, operationplan.Plan) error
 	Fail(context.Context, operationplan.Plan, error) error
+}
+
+// AtomicIdempotencyCoordinator is an optional capability used by the Executor
+// when a required-idempotency Operation owns a local transaction. A successful
+// call only stages the success marker; transaction commit remains owned by the
+// root ExecutionScope.
+type AtomicIdempotencyCoordinator interface {
+	IdempotencyCoordinator
+	CompleteInTransaction(context.Context, operationplan.Plan, any) error
 }
 
 type coordinator struct{ store IdempotencyStore }
@@ -82,28 +108,52 @@ func (coordinator *coordinator) Begin(ctx context.Context, plan operationplan.Pl
 	if key == "" {
 		return nil, fmt.Errorf("%w: %s", ErrIdempotencyKeyRequired, plan.OperationID)
 	}
-	principal, _ := identity.FromContext(ctx)
-	identity := IdempotencyIdentity{TenantID: strings.TrimSpace(principal.TenantID), OperationID: strings.TrimSpace(plan.OperationID), Key: key}
-	if err := coordinator.store.Claim(ctx, identity); err != nil {
+	attempt, err := newIdempotencyAttempt()
+	if err != nil {
 		return nil, err
 	}
-	return context.WithValue(ctx, idempotencyIdentityContext{}, identity), nil
+	principal, _ := identity.FromContext(ctx)
+	claim := IdempotencyIdentity{
+		TenantID:    strings.TrimSpace(principal.TenantID),
+		OperationID: strings.TrimSpace(plan.OperationID),
+		Key:         key,
+		Attempt:     attempt,
+	}
+	if err := coordinator.store.Claim(ctx, claim); err != nil {
+		return nil, err
+	}
+	return context.WithValue(ctx, idempotencyIdentityContext{}, claim), nil
 }
 
 func (coordinator *coordinator) Complete(ctx context.Context, _ operationplan.Plan) error {
-	identity, ok := idempotencyIdentityFrom(ctx)
+	claim, ok := idempotencyIdentityFrom(ctx)
 	if !ok {
 		return ErrIdempotencyKeyRequired
 	}
-	return coordinator.store.Mark(ctx, identity, IdempotencySucceeded)
+	return coordinator.store.Mark(ctx, claim, IdempotencySucceeded)
+}
+
+func (coordinator *coordinator) CompleteInTransaction(ctx context.Context, _ operationplan.Plan, transaction any) error {
+	claim, ok := idempotencyIdentityFrom(ctx)
+	if !ok {
+		return ErrIdempotencyKeyRequired
+	}
+	store, ok := coordinator.store.(TransactionalIdempotencyStore)
+	if !ok {
+		return ErrIdempotencyAtomicUnavailable
+	}
+	if transaction == nil {
+		return ErrIdempotencyAtomicUnavailable
+	}
+	return store.MarkTx(ctx, transaction, claim, IdempotencySucceeded)
 }
 
 func (coordinator *coordinator) Fail(ctx context.Context, _ operationplan.Plan, _ error) error {
-	identity, ok := idempotencyIdentityFrom(ctx)
+	claim, ok := idempotencyIdentityFrom(ctx)
 	if !ok {
 		return nil
 	}
-	return coordinator.store.Mark(ctx, identity, IdempotencyFailed)
+	return coordinator.store.Mark(ctx, claim, IdempotencyFailed)
 }
 
 func idempotencyIdentityFrom(ctx context.Context) (IdempotencyIdentity, bool) {
@@ -111,16 +161,39 @@ func idempotencyIdentityFrom(ctx context.Context) (IdempotencyIdentity, bool) {
 		return IdempotencyIdentity{}, false
 	}
 	value, ok := ctx.Value(idempotencyIdentityContext{}).(IdempotencyIdentity)
-	return value, ok && value.OperationID != "" && value.Key != ""
+	return value, ok && value.OperationID != "" && value.Key != "" && value.Attempt != ""
+}
+
+func newIdempotencyAttempt() (string, error) {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", fmt.Errorf("execution: create idempotency attempt: %w", err)
+	}
+	return hex.EncodeToString(raw[:]), nil
+}
+
+type memoryIdempotencyKey struct {
+	TenantID    string
+	OperationID string
+	Key         string
+}
+
+type memoryIdempotencyRecord struct {
+	State   IdempotencyState
+	Attempt string
 }
 
 type MemoryIdempotencyStore struct {
 	mu      sync.Mutex
-	records map[IdempotencyIdentity]IdempotencyState
+	records map[memoryIdempotencyKey]memoryIdempotencyRecord
 }
 
 func NewMemoryIdempotencyStore() *MemoryIdempotencyStore {
-	return &MemoryIdempotencyStore{records: map[IdempotencyIdentity]IdempotencyState{}}
+	return &MemoryIdempotencyStore{records: map[memoryIdempotencyKey]memoryIdempotencyRecord{}}
+}
+
+func memoryKey(identity IdempotencyIdentity) memoryIdempotencyKey {
+	return memoryIdempotencyKey{TenantID: identity.TenantID, OperationID: identity.OperationID, Key: identity.Key}
 }
 
 func (store *MemoryIdempotencyStore) Claim(_ context.Context, identity IdempotencyIdentity) error {
@@ -130,15 +203,17 @@ func (store *MemoryIdempotencyStore) Claim(_ context.Context, identity Idempoten
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	if store.records == nil {
-		store.records = map[IdempotencyIdentity]IdempotencyState{}
+		store.records = map[memoryIdempotencyKey]memoryIdempotencyRecord{}
 	}
-	switch store.records[identity] {
+	key := memoryKey(identity)
+	record := store.records[key]
+	switch record.State {
 	case IdempotencyRunning:
 		return ErrIdempotencyInProgress
 	case IdempotencySucceeded:
 		return ErrIdempotencyCompleted
 	case IdempotencyFailed, "":
-		store.records[identity] = IdempotencyRunning
+		store.records[key] = memoryIdempotencyRecord{State: IdempotencyRunning, Attempt: identity.Attempt}
 		return nil
 	default:
 		return ErrIdempotencyUnavailable
@@ -155,12 +230,14 @@ func (store *MemoryIdempotencyStore) Mark(_ context.Context, identity Idempotenc
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	if store.records == nil {
-		store.records = map[IdempotencyIdentity]IdempotencyState{}
+		store.records = map[memoryIdempotencyKey]memoryIdempotencyRecord{}
 	}
-	if store.records[identity] != IdempotencyRunning {
-		return ErrIdempotencyUnavailable
+	key := memoryKey(identity)
+	record := store.records[key]
+	if record.State != IdempotencyRunning || record.Attempt != identity.Attempt {
+		return ErrIdempotencyLeaseLost
 	}
-	store.records[identity] = state
+	store.records[key] = memoryIdempotencyRecord{State: state, Attempt: identity.Attempt}
 	return nil
 }
 
@@ -170,6 +247,6 @@ func (store *MemoryIdempotencyStore) Lookup(_ context.Context, identity Idempote
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
-	state, ok := store.records[identity]
-	return state, ok, nil
+	record, ok := store.records[memoryKey(identity)]
+	return record.State, ok, nil
 }
