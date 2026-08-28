@@ -76,6 +76,8 @@ jobs:
           tar -xzf "$RUNNER_TEMP/biz-artifact/biz-c9-pressure.tar.gz" -C ../biz
           test -f ../biz/go.mod
           grep -q 'service DeviceTransferApplication' ../biz/contracts/proto/deviceops/v1/deviceops.proto
+          grep -q 'operations: {' ../biz/contracts/proto/deviceops/v1/deviceops.proto
+          ! grep -q 'rpc ValidateTransferTarget' ../biz/contracts/proto/deviceops/v1/deviceops.proto
           grep -q 'NewDeviceopsSiteManagementChildCapability' ../biz/modules/deviceops/module.go
 
       - name: Regenerate C9.8 biz with current Yunka
@@ -98,7 +100,10 @@ jobs:
           assert root['composition']['boundary']=='local', root['composition']
           assert root['composition']['requiresOperations']==['device.update','site.validate_transfer_target'], root['composition']
           assert root['composition']['permissionClosure']==['device.update','site.read'], root['composition']
-          assert by['site.validate_transfer_target']['application']=='site_management'
+          site=by['site.validate_transfer_target']
+          assert site['application']=='site_management', site
+          assert site['bindings'].get('rpc','')=='', site['bindings']
+          assert site['bindings'].get('http',[])==[], site['bindings']
           assert by['device.update']['application']=='device_management'
           PY
 
@@ -113,6 +118,8 @@ jobs:
           ! grep -R -n 'gateway/authz' internal/deviceops/application
           ! grep -R -n 'infrastructure/persistence' internal/deviceops/application
           grep -q 'DeviceopsSiteManagementChildCapability' internal/deviceops/application/cross_application_transfer.go
+          grep -R -q 'ValidateTransferTarget(context.Context' internal/deviceops/application
+          ! grep -R -n 'ValidateTransferTarget' contracts/gen/deviceops/v1/*_grpc.pb.go internal/deviceops/transport/rest internal/deviceops/transport/rpc contracts/generated/openapi.json contracts/generated/client.ts
           grep -q 'DeviceopsDeviceManagementChildCapability' internal/deviceops/application/cross_application_transfer.go
           YUNKA_ROOT="$GITHUB_WORKSPACE" PROTOC="$RUNNER_TEMP/protoc/bin/protoc" PROTOC_INCLUDE="$RUNNER_TEMP/protoc/include" make verify
 
