@@ -14,6 +14,8 @@ Before planning, analyzing, editing, or running task-specific commands:
 
 Do not skip this bootstrap for small, read-only, or follow-up tasks. When work is performed through the GitHub Connector because no local checkout is available, verify the target repository, base branch/ref, and current head commit through the Connector before mutating repository state.
 
+`AGENTS.md` is the current repository-governance authority. If an older historical entry in `PROJECT_MEMORY.md` conflicts with this file, follow this file and treat the older entry as superseded. In particular, the 2026-08-17 `Local Git commits only` decision is superseded by the current Repository and Git policy below, which explicitly authorizes the GitHub Connector write path.
+
 ## Repository and Git policy
 
 - The canonical repository is `https://github.com/hvritual/yunka.io`.
