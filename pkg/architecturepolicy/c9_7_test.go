@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"yunka.io/pkg/operationplan"
 )
 
 func TestC97ExecutionSemanticsBoundaries(t *testing.T) {
@@ -28,9 +30,9 @@ func TestC97ExecutionSemanticsBoundaries(t *testing.T) {
 	plan := read("pkg/operationplan/plan.go")
 
 	for name, source := range map[string]string{
-		"framework/operation": executor,
-		"framework/execution/scope": scope,
-		"framework/execution/idempotency": idempotency,
+		"framework/operation":              executor,
+		"framework/execution/scope":        scope,
+		"framework/execution/idempotency":  idempotency,
 	} {
 		for _, forbidden := range []string{"yunka.io/gateway", "gorm.io/", "database/sql"} {
 			if strings.Contains(source, forbidden) {
@@ -84,7 +86,36 @@ func TestC97ExecutionSemanticsBoundaries(t *testing.T) {
 	if !strings.Contains(plan, `case "none", "read_only", "local"`) || !strings.Contains(plan, `case "none", "required"`) {
 		t.Error("OperationPlan must validate explicit execution policy values")
 	}
-	if !strings.Contains(plan, `idempotency=required requires transaction=local`) {
-		t.Error("OperationPlan must reject non-atomic required idempotency declarations")
+}
+
+func TestC97RequiredIdempotencyRequiresLocalTransaction(t *testing.T) {
+	base := operationplan.Plan{
+		OperationID:  "architecture.c9_7.idempotency",
+		Domain:       "architecture",
+		Application:  "c9_7",
+		UseCase:      "Idempotency",
+		RequestType:  "architecture.Request",
+		ResponseType: "architecture.Response",
+		Security: operationplan.Security{
+			Public:         true,
+			PermissionMode: "all",
+		},
+		Execution: operationplan.Execution{
+			Transaction: "none",
+			Idempotency: "required",
+		},
+		Bindings: operationplan.Bindings{RPC: "/architecture.C97/Idempotency"},
+	}
+
+	if err := operationplan.Validate(operationplan.Set{SchemaVersion: operationplan.SchemaVersion, Operations: []operationplan.Plan{base}}); err == nil {
+		t.Fatal("required idempotency without local transaction must fail closed")
+	}
+	base.Execution.Transaction = "read_only"
+	if err := operationplan.Validate(operationplan.Set{SchemaVersion: operationplan.SchemaVersion, Operations: []operationplan.Plan{base}}); err == nil {
+		t.Fatal("required idempotency with read-only transaction must fail closed")
+	}
+	base.Execution.Transaction = "local"
+	if err := operationplan.Validate(operationplan.Set{SchemaVersion: operationplan.SchemaVersion, Operations: []operationplan.Plan{base}}); err != nil {
+		t.Fatalf("required idempotency with local transaction should validate: %v", err)
 	}
 }
