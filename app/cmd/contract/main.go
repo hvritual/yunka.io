@@ -64,6 +64,9 @@ func lintCommand() cli.Command {
 			if contractcore.HasErrors(diagnostics) {
 				return errors.New("contract lint failed")
 			}
+			if _, err := contractcore.CompileOperationPlans(result.Manifest); err != nil {
+				return err
+			}
 			fmt.Printf("contract lint ok: files=%d messages=%d enums=%d services=%d descriptor=%s\n",
 				len(result.Manifest.Files), len(result.Manifest.Messages), len(result.Manifest.Enums), len(result.Manifest.Services), result.DescriptorSHA)
 			return nil
@@ -194,9 +197,13 @@ func inspectCommand() cli.Command {
 			if err != nil {
 				return err
 			}
+			plans, err := contractcore.CompileOperationPlans(result.Manifest)
+			if err != nil {
+				return err
+			}
 			fmt.Printf("schemaVersion: %d\n", result.Manifest.SchemaVersion)
 			fmt.Printf("descriptorSHA256: %s\n", result.DescriptorSHA)
-			fmt.Printf("files: %d\nmessages: %d\nenums: %d\nservices: %d\n", len(result.Manifest.Files), len(result.Manifest.Messages), len(result.Manifest.Enums), len(result.Manifest.Services))
+			fmt.Printf("files: %d\nmessages: %d\nenums: %d\nservices: %d\noperationPlans: %d\n", len(result.Manifest.Files), len(result.Manifest.Messages), len(result.Manifest.Enums), len(result.Manifest.Services), len(plans.Operations))
 			for _, service := range result.Manifest.Services {
 				fmt.Printf("- %s (%d methods)", service.FullName, len(service.Methods))
 				if service.Application != nil {
@@ -262,7 +269,7 @@ func renderApplicationArtifacts(manifest contractcore.Manifest, c *cli.Context) 
 	if out == "" || rootImport == "" {
 		return nil, contractcore.ErrApplicationOutputRequired
 	}
-	return contractcore.RenderApplicationCode(manifest, contractcore.ApplicationCodeOptions{RootImport: rootImport})
+	return contractcore.RenderC9ApplicationCode(manifest, contractcore.ApplicationCodeOptions{RootImport: rootImport})
 }
 
 func printDiagnostics(diagnostics []contractcore.Diagnostic) {
