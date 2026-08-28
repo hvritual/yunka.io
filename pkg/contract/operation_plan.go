@@ -64,21 +64,24 @@ func CompileOperationPlans(manifest Manifest) (operationplan.Set, error) {
 			if method.Operation == nil {
 				return operationplan.Set{}, fmt.Errorf("contract operation plan: typed application method %s has no operation", method.FullName)
 			}
-			operation := method.Operation
+		}
+		bindings, err := serviceApplicationOperations(service)
+		if err != nil {
+			return operationplan.Set{}, fmt.Errorf("contract operation plan: %w", err)
+		}
+		for _, binding := range bindings {
+			operation := binding.Operation
 			id := strings.TrimSpace(operation.ID)
 			if id == "" {
-				return operationplan.Set{}, fmt.Errorf("contract operation plan: method %s has empty operation id", method.FullName)
+				return operationplan.Set{}, fmt.Errorf("contract operation plan: %s has empty operation id", binding.SourcePath)
 			}
 			if owner, exists := owners[id]; exists {
-				return operationplan.Set{}, fmt.Errorf("contract operation plan: duplicate operation id %s (%s and %s)", id, owner.plan.Bindings.RPC, method.FullName)
+				return operationplan.Set{}, fmt.Errorf("contract operation plan: duplicate operation id %s (%s and %s)", id, owner.plan.Application+"/"+owner.plan.UseCase, binding.SourcePath)
 			}
-			httpBindings := make([]operationplan.HTTPBinding, 0, len(method.HTTP))
-			for _, binding := range method.HTTP {
+			httpBindings := make([]operationplan.HTTPBinding, 0, len(binding.HTTP))
+			for _, item := range binding.HTTP {
 				httpBindings = append(httpBindings, operationplan.HTTPBinding{
-					Method:       binding.Method,
-					Path:         binding.Path,
-					Body:         binding.Body,
-					ResponseBody: binding.ResponseBody,
+					Method: item.Method, Path: item.Path, Body: item.Body, ResponseBody: item.ResponseBody,
 				})
 			}
 			execution := operationplan.Execution{Transaction: "none", Idempotency: "none"}
@@ -91,29 +94,20 @@ func CompileOperationPlans(manifest Manifest) (operationplan.Set, error) {
 				}
 			}
 			plan := operationplan.Plan{
-				OperationID:  id,
-				Domain:       service.Domain,
-				Application:  service.Application.Name,
-				UseCase:      operation.UseCase,
-				RequestType:  method.Request,
-				ResponseType: method.Response,
-				Execution:    execution,
+				OperationID: id, Domain: service.Domain, Application: service.Application.Name,
+				UseCase: operation.UseCase, RequestType: binding.RequestType, ResponseType: binding.ResponseType,
+				Execution: execution,
 				Security: operationplan.Security{
-					Public:         operation.Public,
-					TenantRequired: operation.TenantRequired,
+					Public: operation.Public, TenantRequired: operation.TenantRequired,
 					Authentication: append([]string(nil), operation.Authentication...),
-					Permissions:    append([]string(nil), operation.Permissions...),
-					PermissionMode: operation.PermissionMode,
+					Permissions:    append([]string(nil), operation.Permissions...), PermissionMode: operation.PermissionMode,
 				},
 				Composition: operationplan.Composition{
 					Boundary:           operation.Composition,
 					RequiresOperations: append([]string(nil), operation.RequiresOperations...),
 				},
 				ApplicationRequires: append([]string(nil), service.Application.Requires...),
-				Bindings: operationplan.Bindings{
-					RPC:  "/" + strings.TrimPrefix(service.FullName, ".") + "/" + method.Name,
-					HTTP: httpBindings,
-				},
+				Bindings:            operationplan.Bindings{RPC: binding.RPC, HTTP: httpBindings},
 			}
 			owners[id] = operationPlanOwner{plan: plan, applicationKey: applicationKey}
 		}

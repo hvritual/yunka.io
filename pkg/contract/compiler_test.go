@@ -182,7 +182,7 @@ service DeviceApplication {
 func TestLintRejectsShadowHTTPConflict(t *testing.T) {
 	manifest := Manifest{
 		SchemaVersion: ManifestVersion,
-		Messages: []Message{{Name: "Request", FullName: "demo.Request"}, {Name: "Response", FullName: "demo.Response"}},
+		Messages:      []Message{{Name: "Request", FullName: "demo.Request"}, {Name: "Response", FullName: "demo.Response"}},
 		Services: []Service{{
 			Name: "Demo", FullName: "demo.Demo",
 			Methods: []Method{{
@@ -202,5 +202,70 @@ func TestLintRejectsShadowHTTPConflict(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("missing HTTP conflict diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestCompileApplicationLevelInternalOperation(t *testing.T) {
+	protoc := testProtoc(t)
+	repositoryRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	proto := `syntax = "proto3";
+package site.v1;
+import "yunka/dsl/v1/options.proto";
+option go_package = "example/site/v1;sitev1";
+option (yunka.dsl.v1.domain) = { name: "site" version: "v1" };
+message ValidateRequest { string site_id = 1; }
+message SiteDTO { string id = 1; }
+service SiteApplication {
+  option (yunka.dsl.v1.application) = {
+    name: "site_management"
+    operations: {
+      id: "site.validate"
+      use_case: "validate_site"
+      permissions: "site.read"
+      permission_mode: PERMISSION_ALL
+      tenant_required: true
+      authentication: AUTHENTICATION_API_KEY
+      execution: { transaction: TRANSACTION_READ_ONLY idempotency: IDEMPOTENCY_NONE }
+      request_type: "site.v1.ValidateRequest"
+      response_type: "site.v1.SiteDTO"
+      application_method: "Validate"
+    }
+  };
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "site.proto"), []byte(proto), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Compile(context.Background(), CompileOptions{
+		Dir: dir, ProtoPaths: []string{filepath.Join(repositoryRoot, "contracts", "proto")},
+		Files: []string{"site.proto"}, Protoc: protoc,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Manifest.Services) != 1 {
+		t.Fatalf("services=%d", len(result.Manifest.Services))
+	}
+	service := result.Manifest.Services[0]
+	if len(service.Methods) != 0 || service.Application == nil || len(service.Application.Operations) != 1 {
+		t.Fatalf("internal application operation missing: %#v", service)
+	}
+	op := service.Application.Operations[0]
+	if op.ID != "site.validate" || op.ApplicationMethod != "Validate" || op.RequestType != "site.v1.ValidateRequest" || op.ResponseType != "site.v1.SiteDTO" {
+		t.Fatalf("internal operation=%#v", op)
+	}
+	if diagnostics := Lint(result.Manifest); HasErrors(diagnostics) {
+		t.Fatalf("internal operation lint failed: %#v", diagnostics)
+	}
+	plans, err := CompileOperationPlans(result.Manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plans.Operations) != 1 || plans.Operations[0].Bindings.RPC != "" || len(plans.Operations[0].Bindings.HTTP) != 0 {
+		t.Fatalf("internal plan must have no transport binding: %#v", plans.Operations)
 	}
 }

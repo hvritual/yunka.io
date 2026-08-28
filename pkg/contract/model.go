@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-const ManifestVersion = 2
+const ManifestVersion = 3
 
 type Manifest struct {
 	SchemaVersion int       `json:"schemaVersion"`
@@ -33,8 +33,9 @@ type DTODeclaration struct {
 }
 
 type ApplicationDeclaration struct {
-	Name     string   `json:"name"`
-	Requires []string `json:"requires,omitempty"`
+	Name       string                 `json:"name"`
+	Requires   []string               `json:"requires,omitempty"`
+	Operations []OperationDeclaration `json:"operations,omitempty"`
 }
 
 type ExecutionPolicy struct {
@@ -53,6 +54,9 @@ type OperationDeclaration struct {
 	RequiresOperations []string         `json:"requiresOperations,omitempty"`
 	Composition        string           `json:"composition,omitempty"`
 	Execution          *ExecutionPolicy `json:"execution,omitempty"`
+	RequestType        string           `json:"requestType,omitempty"`
+	ResponseType       string           `json:"responseType,omitempty"`
+	ApplicationMethod  string           `json:"applicationMethod,omitempty"`
 }
 
 type Message struct {
@@ -125,7 +129,7 @@ type HTTPBinding struct {
 }
 
 func (manifest *Manifest) Normalize() {
-	if manifest.SchemaVersion == 0 || manifest.SchemaVersion == 1 {
+	if manifest.SchemaVersion == 0 || manifest.SchemaVersion == 1 || manifest.SchemaVersion == 2 {
 		manifest.SchemaVersion = ManifestVersion
 	}
 	for i := range manifest.Files {
@@ -158,6 +162,17 @@ func (manifest *Manifest) Normalize() {
 		if manifest.Services[i].Application != nil {
 			manifest.Services[i].Application.Name = strings.TrimSpace(manifest.Services[i].Application.Name)
 			manifest.Services[i].Application.Requires = stableStrings(manifest.Services[i].Application.Requires)
+			for j := range manifest.Services[i].Application.Operations {
+				normalizeOperationDeclaration(&manifest.Services[i].Application.Operations[j])
+			}
+			sort.Slice(manifest.Services[i].Application.Operations, func(a, b int) bool {
+				left := manifest.Services[i].Application.Operations[a]
+				right := manifest.Services[i].Application.Operations[b]
+				if left.ID == right.ID {
+					return left.ApplicationMethod < right.ApplicationMethod
+				}
+				return left.ID < right.ID
+			})
 		}
 		for j := range manifest.Services[i].Methods {
 			method := &manifest.Services[i].Methods[j]
@@ -170,17 +185,7 @@ func (manifest *Manifest) Normalize() {
 				return left.Method < right.Method
 			})
 			if method.Operation != nil {
-				method.Operation.ID = strings.TrimSpace(method.Operation.ID)
-				method.Operation.UseCase = strings.TrimSpace(method.Operation.UseCase)
-				method.Operation.PermissionMode = strings.TrimSpace(method.Operation.PermissionMode)
-				method.Operation.Permissions = stableStrings(method.Operation.Permissions)
-				method.Operation.Authentication = stableStrings(method.Operation.Authentication)
-				method.Operation.RequiresOperations = stableStrings(method.Operation.RequiresOperations)
-				method.Operation.Composition = strings.TrimSpace(method.Operation.Composition)
-				if method.Operation.Execution != nil {
-					method.Operation.Execution.Transaction = strings.TrimSpace(method.Operation.Execution.Transaction)
-					method.Operation.Execution.Idempotency = strings.TrimSpace(method.Operation.Execution.Idempotency)
-				}
+				normalizeOperationDeclaration(method.Operation)
 			}
 			if method.Authorization != nil {
 				method.Authorization.Permissions = stableStrings(method.Authorization.Permissions)
@@ -192,6 +197,38 @@ func (manifest *Manifest) Normalize() {
 		})
 	}
 	sort.Slice(manifest.Services, func(i, j int) bool { return manifest.Services[i].FullName < manifest.Services[j].FullName })
+}
+
+func normalizeOperationDeclaration(operation *OperationDeclaration) {
+	if operation == nil {
+		return
+	}
+	operation.ID = strings.TrimSpace(operation.ID)
+	operation.UseCase = strings.TrimSpace(operation.UseCase)
+	operation.PermissionMode = strings.TrimSpace(operation.PermissionMode)
+	operation.Permissions = stableStrings(operation.Permissions)
+	operation.Authentication = stableStrings(operation.Authentication)
+	operation.RequiresOperations = stableStrings(operation.RequiresOperations)
+	operation.Composition = strings.TrimSpace(operation.Composition)
+	operation.RequestType = normalizeTypeName(operation.RequestType)
+	operation.ResponseType = normalizeTypeName(operation.ResponseType)
+	operation.ApplicationMethod = strings.TrimSpace(operation.ApplicationMethod)
+	if operation.Execution != nil {
+		operation.Execution.Transaction = strings.TrimSpace(operation.Execution.Transaction)
+		operation.Execution.Idempotency = strings.TrimSpace(operation.Execution.Idempotency)
+	}
+}
+
+func cloneOperationDeclaration(operation OperationDeclaration) OperationDeclaration {
+	clone := operation
+	clone.Permissions = append([]string(nil), operation.Permissions...)
+	clone.Authentication = append([]string(nil), operation.Authentication...)
+	clone.RequiresOperations = append([]string(nil), operation.RequiresOperations...)
+	if operation.Execution != nil {
+		execution := *operation.Execution
+		clone.Execution = &execution
+	}
+	return clone
 }
 
 func stableStrings(values []string) []string {

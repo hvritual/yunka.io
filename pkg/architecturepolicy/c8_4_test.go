@@ -107,8 +107,8 @@ func TestC84PBDSLIsCanonicalTypedDeclarationSurface(t *testing.T) {
 		}
 	}
 	contractModel := read("pkg/contract/model.go")
-	if !strings.Contains(contractModel, "const ManifestVersion = 2") {
-		t.Error("C8.4 Contract Manifest canonical schema must be V2")
+	if !strings.Contains(contractModel, "const ManifestVersion = 3") {
+		t.Error("Contract Manifest canonical schema must be V3")
 	}
 	codegen := read("pkg/contract/application_codegen.go")
 	for _, required := range []string{

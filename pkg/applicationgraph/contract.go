@@ -81,6 +81,71 @@ func AddContract(builder *Builder, manifest contract.Manifest) error {
 			}
 		}
 
+		if service.Application != nil && applicationID != "" {
+			for _, operation := range service.Application.Operations {
+				operationID := ID(NodeOperation, operation.ID)
+				attrs := map[string]string{
+					"operationId":       operation.ID,
+					"useCase":           operation.UseCase,
+					"public":            strconv.FormatBool(operation.Public),
+					"tenantRequired":    strconv.FormatBool(operation.TenantRequired),
+					"permissionMode":    operation.PermissionMode,
+					"domain":            service.Domain,
+					"application":       service.Application.Name,
+					"applicationMethod": operation.ApplicationMethod,
+				}
+				if operation.Composition != "" {
+					attrs["composition"] = operation.Composition
+				}
+				if err := builder.AddNode(Node{ID: operationID, Kind: NodeOperation, Name: operation.ID, Attributes: attrs, Evidence: evidence}); err != nil {
+					return err
+				}
+				if err := builder.AddEdge(Edge{From: applicationID, To: operationID, Kind: EdgeContains, Evidence: evidence}); err != nil {
+					return err
+				}
+				if operation.RequestType != "" {
+					requestID := ID(NodeMessage, operation.RequestType)
+					if !builder.HasNode(requestID) {
+						if err := builder.AddNode(Node{ID: requestID, Kind: NodeMessage, Name: operation.RequestType, Evidence: evidence}); err != nil {
+							return err
+						}
+					}
+					if err := builder.AddEdge(Edge{From: operationID, To: requestID, Kind: EdgeAccepts, Evidence: evidence}); err != nil {
+						return err
+					}
+				}
+				if operation.ResponseType != "" {
+					responseID := ID(NodeMessage, operation.ResponseType)
+					if !builder.HasNode(responseID) {
+						if err := builder.AddNode(Node{ID: responseID, Kind: NodeMessage, Name: operation.ResponseType, Evidence: evidence}); err != nil {
+							return err
+						}
+					}
+					if err := builder.AddEdge(Edge{From: operationID, To: responseID, Kind: EdgeReturns, Evidence: evidence}); err != nil {
+						return err
+					}
+				}
+				for _, dependency := range operation.RequiresOperations {
+					if err := builder.AddEdge(Edge{From: operationID, To: ID(NodeOperation, dependency), Kind: EdgeDependsOn, Evidence: evidence}); err != nil {
+						return err
+					}
+				}
+				for _, permission := range operation.Permissions {
+					permission = strings.TrimSpace(permission)
+					if permission == "" {
+						continue
+					}
+					permissionID := ID(NodePermission, permission)
+					if err := builder.AddNode(Node{ID: permissionID, Kind: NodePermission, Name: permission, Evidence: evidence}); err != nil {
+						return err
+					}
+					if err := builder.AddEdge(Edge{From: operationID, To: permissionID, Kind: EdgeRequires, Evidence: evidence}); err != nil {
+						return err
+					}
+				}
+			}
+		}
+
 		for _, method := range service.Methods {
 			typedOperation := method.Operation != nil && strings.TrimSpace(method.Operation.ID) != ""
 			operationName := method.FullName
@@ -222,6 +287,17 @@ func cloneManifest(manifest contract.Manifest) contract.Manifest {
 		if service.Application != nil {
 			value := *service.Application
 			value.Requires = append([]string(nil), service.Application.Requires...)
+			value.Operations = make([]contract.OperationDeclaration, len(service.Application.Operations))
+			for index, operation := range service.Application.Operations {
+				value.Operations[index] = operation
+				value.Operations[index].Permissions = append([]string(nil), operation.Permissions...)
+				value.Operations[index].Authentication = append([]string(nil), operation.Authentication...)
+				value.Operations[index].RequiresOperations = append([]string(nil), operation.RequiresOperations...)
+				if operation.Execution != nil {
+					execution := *operation.Execution
+					value.Operations[index].Execution = &execution
+				}
+			}
 			clone.Services[i].Application = &value
 		}
 		clone.Services[i].Methods = make([]contract.Method, len(service.Methods))
@@ -239,6 +315,10 @@ func cloneManifest(manifest contract.Manifest) contract.Manifest {
 				value.Permissions = append([]string(nil), method.Operation.Permissions...)
 				value.Authentication = append([]string(nil), method.Operation.Authentication...)
 				value.RequiresOperations = append([]string(nil), method.Operation.RequiresOperations...)
+				if method.Operation.Execution != nil {
+					execution := *method.Operation.Execution
+					value.Execution = &execution
+				}
 				clone.Services[i].Methods[j].Operation = &value
 			}
 			if method.Authorization != nil {

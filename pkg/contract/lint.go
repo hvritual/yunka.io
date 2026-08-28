@@ -94,6 +94,24 @@ func Lint(manifest Manifest) []Diagnostic {
 			diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: servicePath, Message: "service in a typed domain must declare a typed application"})
 		}
 
+		if service.Application != nil {
+			if _, err := serviceApplicationOperations(service); err != nil {
+				diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: servicePath + ".application", Message: err.Error()})
+			}
+			methodNames := make(map[string]struct{}, len(service.Methods))
+			for _, method := range service.Methods {
+				methodNames[method.Name] = struct{}{}
+			}
+			for index := range service.Application.Operations {
+				operation := &service.Application.Operations[index]
+				path := fmt.Sprintf("%s.application.operation.%s", servicePath, operation.ID)
+				diagnostics = append(diagnostics, lintInternalOperation(path, operation, messages, operationOwners)...)
+				if _, duplicate := methodNames[operation.ApplicationMethod]; duplicate && operation.ApplicationMethod != "" {
+					diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "application_method collides with RPC method " + operation.ApplicationMethod})
+				}
+			}
+		}
+
 		seenMethods := make(map[string]struct{})
 		for _, method := range service.Methods {
 			path := servicePath + ".method." + method.Name
@@ -237,6 +255,71 @@ func knownExternalType(name string) bool {
 	return strings.HasPrefix(name, "google.protobuf.")
 }
 
+func lintInternalOperation(path string, operation *OperationDeclaration, messages map[string]Message, operationOwners map[string]string) []Diagnostic {
+	if operation == nil {
+		return nil
+	}
+	var diagnostics []Diagnostic
+	if !validPolicyKey(operation.ID) {
+		diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "operation id must be a stable lowercase business key"})
+	} else if owner, duplicate := operationOwners[operation.ID]; duplicate && owner != path {
+		diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "duplicate operation id also owned by " + owner})
+	} else {
+		operationOwners[operation.ID] = path
+	}
+	if !validPolicyKey(operation.UseCase) {
+		diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "use_case must be a stable lowercase business key"})
+	}
+	if !validApplicationMethod(operation.ApplicationMethod) {
+		diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "application_method must be an exported Go method identifier"})
+	}
+	if operation.RequestType == "" {
+		diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "request_type is required for application-level operation"})
+	} else if message, ok := messages[operation.RequestType]; !ok && !knownExternalType(operation.RequestType) {
+		diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "unresolved request type " + operation.RequestType})
+	} else if ok && message.DTO == nil {
+		diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "application-level operation request must be classified as a DTO"})
+	}
+	if operation.ResponseType == "" {
+		diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "response_type is required for application-level operation"})
+	} else if message, ok := messages[operation.ResponseType]; !ok && !knownExternalType(operation.ResponseType) {
+		diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "unresolved response type " + operation.ResponseType})
+	} else if ok && message.DTO == nil {
+		diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "application-level operation response must be classified as a DTO"})
+	}
+	if operation.PermissionMode != "all" && operation.PermissionMode != "any" {
+		diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "typed permission mode must be all or any"})
+	}
+	for _, permission := range operation.Permissions {
+		if !validPolicyKey(permission) {
+			diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "invalid permission key " + permission})
+		}
+	}
+	if operation.Public {
+		if len(operation.Permissions) > 0 || len(operation.Authentication) > 0 || operation.TenantRequired {
+			diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "public operation cannot declare permissions, authentication, or tenant requirement"})
+		}
+	} else if len(operation.Permissions) == 0 {
+		diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "protected typed operation requires at least one permission"})
+	}
+	return diagnostics
+}
+
+func validApplicationMethod(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" || value[0] < 'A' || value[0] > 'Z' {
+		return false
+	}
+	for index := 1; index < len(value); index++ {
+		current := value[index]
+		if (current >= 'A' && current <= 'Z') || (current >= 'a' && current <= 'z') || (current >= '0' && current <= '9') || current == '_' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 func severityRank(severity Severity) int {
 	switch severity {
 	case SeverityError:
@@ -269,7 +352,8 @@ func validPolicyKey(value string) bool {
 }
 
 type compositionOperationOwner struct {
-	method         Method
+	operation      OperationDeclaration
+	path           string
 	applicationKey string
 }
 
@@ -288,11 +372,16 @@ func lintComposition(manifest Manifest) []Diagnostic {
 		} else {
 			applications[key] = service
 		}
-		for _, method := range service.Methods {
-			if method.Operation == nil || method.Operation.ID == "" {
+		bindings, err := serviceApplicationOperations(service)
+		if err != nil {
+			diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: "service." + service.FullName + ".application", Message: err.Error()})
+			continue
+		}
+		for _, binding := range bindings {
+			if binding.Operation.ID == "" {
 				continue
 			}
-			operations[method.Operation.ID] = compositionOperationOwner{method: method, applicationKey: key}
+			operations[binding.Operation.ID] = compositionOperationOwner{operation: binding.Operation, path: binding.SourcePath, applicationKey: key}
 		}
 	}
 
@@ -316,21 +405,23 @@ func lintComposition(manifest Manifest) []Diagnostic {
 			declared[dependency] = struct{}{}
 			appDeps[key] = append(appDeps[key], dependency)
 		}
-		for _, method := range service.Methods {
-			if method.Operation == nil {
-				continue
-			}
-			opPath := "service." + service.FullName + ".method." + method.Name
-			if method.Operation.Composition != "" && method.Operation.Composition != "local" && method.Operation.Composition != "remote_saga" {
+		bindings, err := serviceApplicationOperations(service)
+		if err != nil {
+			continue
+		}
+		for _, binding := range bindings {
+			operation := binding.Operation
+			opPath := binding.SourcePath
+			if operation.Composition != "" && operation.Composition != "local" && operation.Composition != "remote_saga" {
 				diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: opPath, Message: "composition must be local or remote_saga"})
 			}
-			for _, required := range method.Operation.RequiresOperations {
+			for _, required := range operation.RequiresOperations {
 				owner, ok := operations[required]
 				if !ok {
 					diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: opPath, Message: "unknown required operation: " + required})
 					continue
 				}
-				if required == method.Operation.ID {
+				if required == operation.ID {
 					diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: opPath, Message: "operation cannot depend on itself: " + required})
 				}
 				if owner.applicationKey != key {
@@ -347,7 +438,7 @@ func lintComposition(manifest Manifest) []Diagnostic {
 
 	opDeps := map[string][]string{}
 	for id, owner := range operations {
-		opDeps[id] = append([]string(nil), owner.method.Operation.RequiresOperations...)
+		opDeps[id] = append([]string(nil), owner.operation.RequiresOperations...)
 	}
 	for _, cycle := range dependencyCycles(opDeps) {
 		diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: "operation." + cycle[0], Message: "operation dependency cycle: " + strings.Join(cycle, " -> ")})
@@ -356,7 +447,7 @@ func lintComposition(manifest Manifest) []Diagnostic {
 		closure := map[string]struct{}{}
 		collectRequiredPermissions(id, operations, map[string]bool{}, closure)
 		declared := map[string]struct{}{}
-		for _, permission := range owner.method.Operation.Permissions {
+		for _, permission := range owner.operation.Permissions {
 			declared[permission] = struct{}{}
 		}
 		missing := make([]string, 0)
@@ -434,12 +525,12 @@ func collectRequiredPermissions(id string, operations map[string]compositionOper
 		delete(active, id)
 		return
 	}
-	for _, required := range owner.method.Operation.RequiresOperations {
+	for _, required := range owner.operation.RequiresOperations {
 		target, ok := operations[required]
 		if !ok {
 			continue
 		}
-		for _, permission := range target.method.Operation.Permissions {
+		for _, permission := range target.operation.Permissions {
 			result[permission] = struct{}{}
 		}
 		collectRequiredPermissions(required, operations, active, result)

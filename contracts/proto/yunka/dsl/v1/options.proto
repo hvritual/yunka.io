@@ -40,6 +40,10 @@ message ApplicationDeclaration {
   string name = 1;
   // Stable application capability keys in <domain>/<application> form.
   repeated string requires = 2;
+  // Canonical Operations that belong to this Application but have no
+  // transport binding. These operations are available to typed local child
+  // capabilities without becoming protobuf RPC methods.
+  repeated OperationDeclaration operations = 3;
 }
 
 enum CompositionBoundary {
@@ -80,6 +84,13 @@ message OperationDeclaration {
   repeated string requires_operations = 8;
   CompositionBoundary composition = 9;
   ExecutionPolicy execution = 10;
+  // Application-level Operations must declare their typed Application method
+  // and request/response protobuf types explicitly. Method-bound Operations
+  // may omit these fields; the compiler derives them from the RPC method and
+  // rejects explicit values that disagree.
+  string request_type = 11;
+  string response_type = 12;
+  string application_method = 13;
 }
 
 extend google.protobuf.FileOptions {

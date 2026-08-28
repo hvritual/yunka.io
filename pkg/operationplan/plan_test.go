@@ -158,3 +158,15 @@ func TestValidateRequiresLocalTransactionForDurableIdempotency(t *testing.T) {
 		t.Fatalf("local durable idempotency should validate: %v", err)
 	}
 }
+
+func TestValidateAllowsCanonicalInternalOperationWithoutTransportBinding(t *testing.T) {
+	plan := Plan{
+		OperationID: "site.validate", Domain: "site", Application: "management", UseCase: "validate_site",
+		RequestType: "site.v1.ValidateRequest", ResponseType: "site.v1.SiteDTO",
+		Security:  Security{Permissions: []string{"site.read"}, PermissionMode: "all"},
+		Execution: Execution{Transaction: "read_only", Idempotency: "none"},
+	}
+	if err := Validate(Set{Operations: []Plan{plan}}); err != nil {
+		t.Fatalf("internal operation without transport should validate: %v", err)
+	}
+}

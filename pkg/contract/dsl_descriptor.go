@@ -241,6 +241,16 @@ func parseApplicationDeclaration(data []byte) (*ApplicationDeclaration, error) {
 			result.Name = string(field.Bytes)
 		case 2:
 			result.Requires = append(result.Requires, string(field.Bytes))
+		case 3:
+			if field.Type == 2 {
+				operation, err := parseOperationDeclaration(field.Bytes)
+				if err != nil {
+					return err
+				}
+				if operation != nil {
+					result.Operations = append(result.Operations, *operation)
+				}
+			}
 		}
 		return nil
 	}); err != nil {
@@ -306,6 +316,12 @@ func parseOperationDeclaration(data []byte) (*OperationDeclaration, error) {
 				}
 				result.Execution = execution
 			}
+		case 11:
+			result.RequestType = string(field.Bytes)
+		case 12:
+			result.ResponseType = string(field.Bytes)
+		case 13:
+			result.ApplicationMethod = string(field.Bytes)
 		}
 		return nil
 	}); err != nil {
@@ -432,6 +448,10 @@ func applyDSLDeclarations(manifest *Manifest, data []byte) error {
 			if declaration.Application != nil {
 				copy := *declaration.Application
 				copy.Requires = append([]string(nil), declaration.Application.Requires...)
+				copy.Operations = make([]OperationDeclaration, len(declaration.Application.Operations))
+				for index, operation := range declaration.Application.Operations {
+					copy.Operations[index] = cloneOperationDeclaration(operation)
+				}
 				manifest.Services[i].Application = &copy
 			}
 		}
@@ -505,6 +525,10 @@ func inferTypedDTOs(manifest *Manifest) {
 			visit(method.Request, dtoInput, map[string]struct{}{})
 			visit(method.Response, dtoOutput, map[string]struct{}{})
 		}
+		for _, operation := range service.Application.Operations {
+			visit(operation.RequestType, dtoInput, map[string]struct{}{})
+			visit(operation.ResponseType, dtoOutput, map[string]struct{}{})
+		}
 	}
 	for name, role := range usage {
 		position := index[name]
@@ -552,12 +576,22 @@ func operationKey(operation *OperationDeclaration) string {
 		strings.Join(authentication, ","),
 		strings.Join(requires, ","),
 		operation.Composition,
+		operation.RequestType,
+		operation.ResponseType,
+		operation.ApplicationMethod,
 	}, "|")
 }
 
 func sortedOperationIDs(manifest Manifest) []string {
 	var ids []string
 	for _, service := range manifest.Services {
+		if service.Application != nil {
+			for _, operation := range service.Application.Operations {
+				if strings.TrimSpace(operation.ID) != "" {
+					ids = append(ids, strings.TrimSpace(operation.ID))
+				}
+			}
+		}
 		for _, method := range service.Methods {
 			if method.Operation != nil && strings.TrimSpace(method.Operation.ID) != "" {
 				ids = append(ids, strings.TrimSpace(method.Operation.ID))

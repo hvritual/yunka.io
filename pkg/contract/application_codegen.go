@@ -291,16 +291,20 @@ func renderCapabilityPorts(service Service, naming serviceCodegenNaming, service
 func renderApplicationPort(service Service, packages []protoGoPackage, naming serviceCodegenNaming) (string, error) {
 	imports := newImportSet()
 	var methods strings.Builder
-	for _, method := range service.Methods {
-		request, err := resolveGoType(method.Request, packages, imports)
+	operations, err := serviceApplicationOperations(service)
+	if err != nil {
+		return "", err
+	}
+	for _, operationBinding := range operations {
+		request, err := resolveGoType(operationBinding.RequestType, packages, imports)
 		if err != nil {
 			return "", err
 		}
-		response, err := resolveGoType(method.Response, packages, imports)
+		response, err := resolveGoType(operationBinding.ResponseType, packages, imports)
 		if err != nil {
 			return "", err
 		}
-		fmt.Fprintf(&methods, "\t%s(context.Context, *%s.%s) (*%s.%s, error)\n", method.Name, request.Alias, request.Type, response.Alias, response.Type)
+		fmt.Fprintf(&methods, "\t%s(context.Context, *%s.%s) (*%s.%s, error)\n", operationBinding.MethodName, request.Alias, request.Type, response.Alias, response.Type)
 	}
 	var b strings.Builder
 	b.WriteString(GeneratedApplicationMarker + "\n\npackage application\n\nimport (\n\t\"context\"\n")

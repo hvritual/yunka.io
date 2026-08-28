@@ -167,9 +167,6 @@ func Validate(set Set) error {
 		default:
 			return fmt.Errorf("operationplan: operation %s has invalid composition boundary %q", item.OperationID, item.Composition.Boundary)
 		}
-		if item.Bindings.RPC == "" {
-			return fmt.Errorf("operationplan: operation %s requires an RPC binding", item.OperationID)
-		}
 		index[item.OperationID] = item
 	}
 	for _, item := range set.Operations {
