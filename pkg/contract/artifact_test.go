@@ -21,7 +21,7 @@ func TestArtifactsAreDeterministicAndDriftAware(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(first.Manifest) != string(second.Manifest) || string(first.OpenAPI) != string(second.OpenAPI) || string(first.TypeScript) != string(second.TypeScript) {
+	if string(first.Manifest) != string(second.Manifest) || string(first.OpenAPI) != string(second.OpenAPI) || string(first.TypeScript) != string(second.TypeScript) || string(first.OperationPlans) != string(second.OperationPlans) {
 		t.Fatal("artifacts are not deterministic")
 	}
 	if !strings.Contains(string(first.OpenAPI), `"/v1/echo/{id}"`) {
@@ -29,6 +29,9 @@ func TestArtifactsAreDeterministicAndDriftAware(t *testing.T) {
 	}
 	if !strings.Contains(string(first.TypeScript), "class Demo_EchoServiceClient") {
 		t.Fatalf("typescript missing service client: %s", first.TypeScript)
+	}
+	if string(first.OperationPlans) != "{\n  \"schemaVersion\": 1,\n  \"operations\": []\n}\n" {
+		t.Fatalf("unexpected operation plans: %s", first.OperationPlans)
 	}
 	dir := t.TempDir()
 	if err := WriteArtifacts(dir, first); err != nil {
