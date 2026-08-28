@@ -6,6 +6,7 @@ on:
       - agent/c9-7-execution-semantics
     paths:
       - tools/c9_7_policy_builder.py
+      - tools/c9_7_policy_fix.py
       - .github/workflows/c9-7-policy-builder.yml
 
 permissions:
@@ -36,21 +37,23 @@ jobs:
           unzip -q "$archive" -d "$install_root"
           echo "$install_root/bin" >> "$GITHUB_PATH"
       - name: Apply C9.7.1-2 implementation
-        run: python3 tools/c9_7_policy_builder.py
+        run: |
+          python3 tools/c9_7_policy_builder.py
+          python3 tools/c9_7_policy_fix.py
       - name: Regenerate protobuf and contract artifacts
         run: make rpc-generate
       - name: Targeted validation
         shell: bash
         run: |
           set -euo pipefail
-          gofmt -w pkg/contract/model.go pkg/contract/dsl_descriptor.go pkg/contract/operation_plan.go pkg/contract/c9_application_codegen.go pkg/contract/operation_plan_test.go pkg/operationplan/plan.go pkg/operationplan/plan_test.go
+          gofmt -w pkg/contract/model.go pkg/contract/dsl_descriptor.go pkg/contract/operation_plan.go pkg/contract/c9_application_codegen.go pkg/contract/operation_plan_test.go pkg/contract/artifact_test.go pkg/operationplan/plan.go pkg/operationplan/plan_test.go
           (cd pkg && go test ./operationplan ./contract)
           git diff --check
       - name: Commit generated implementation and self-remove builder
         shell: bash
         run: |
           set -euo pipefail
-          rm -f tools/c9_7_policy_builder.py .github/workflows/c9-7-policy-builder.yml
+          rm -f tools/c9_7_policy_builder.py tools/c9_7_policy_fix.py .github/workflows/c9-7-policy-builder.yml
           git config user.name hvritual
           git config user.email 460657446@qq.com
           git add -A
