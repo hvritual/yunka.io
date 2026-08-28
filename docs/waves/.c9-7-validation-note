@@ -1,1 +1,0 @@
-Final validation is driven by stacked PR CI plus c9-production verify-production on the same branch head.
