@@ -106,3 +106,65 @@ func TestRenderC9TransportsEstablishIdempotencyContext(t *testing.T) {
 		t.Fatalf("gRPC idempotency context missing:\n%s", rpc)
 	}
 }
+
+func TestRenderC9InternalOperationIsCapabilityOnlyNotTransport(t *testing.T) {
+	manifest := Manifest{
+		SchemaVersion: ManifestVersion,
+		Files: []File{
+			{Name: "site.proto", Package: "site.v1", GoPackage: "example.com/biz/contracts/site/v1;sitev1", Domain: &DomainDeclaration{Name: "site"}},
+			{Name: "device.proto", Package: "device.v1", GoPackage: "example.com/biz/contracts/device/v1;devicev1", Domain: &DomainDeclaration{Name: "device"}},
+		},
+		Messages: []Message{
+			{Name: "ValidateRequest", FullName: "site.v1.ValidateRequest"},
+			{Name: "SiteDTO", FullName: "site.v1.SiteDTO"},
+			{Name: "TransferRequest", FullName: "device.v1.TransferRequest"},
+			{Name: "TransferResponse", FullName: "device.v1.TransferResponse"},
+		},
+		Services: []Service{
+			{
+				Name: "SiteApplication", FullName: "site.v1.SiteApplication", Domain: "site",
+				Application: &ApplicationDeclaration{
+					Name: "management",
+					Operations: []OperationDeclaration{{
+						ID: "site.validate", UseCase: "validate_site", Permissions: []string{"site.read"}, PermissionMode: "all",
+						RequestType: "site.v1.ValidateRequest", ResponseType: "site.v1.SiteDTO", ApplicationMethod: "Validate",
+						Execution: &ExecutionPolicy{Transaction: "read_only", Idempotency: "none"},
+					}},
+				},
+			},
+			{
+				Name: "DeviceApplication", FullName: "device.v1.DeviceApplication", Domain: "device",
+				Application: &ApplicationDeclaration{Name: "transfer", Requires: []string{"site/management"}},
+				Methods: []Method{{
+					Name: "Transfer", FullName: "device.v1.DeviceApplication.Transfer", Request: "device.v1.TransferRequest", Response: "device.v1.TransferResponse",
+					Operation: &OperationDeclaration{ID: "device.transfer", UseCase: "transfer_device", Permissions: []string{"device.update", "site.read"}, PermissionMode: "all", RequiresOperations: []string{"site.validate"}, Composition: "local", Execution: &ExecutionPolicy{Transaction: "local", Idempotency: "required"}},
+				}},
+			},
+		},
+	}
+	files, err := RenderC9ApplicationCode(manifest, ApplicationCodeOptions{RootImport: "example.com/biz/internal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	byPath := map[string]string{}
+	for _, file := range files {
+		byPath[file.Path] = string(file.Content)
+	}
+	sitePort := byPath["site/application/zz_yunka_management_application_port_gen.go"]
+	if !strings.Contains(sitePort, "Validate(context.Context") {
+		t.Fatalf("internal application method missing:\n%s", sitePort)
+	}
+	capability := byPath["device/application/zz_yunka_transfer_capability_ports_gen.go"]
+	if !strings.Contains(capability, "Validate(context.Context") || !strings.Contains(capability, "operation.ExecuteChildTyped") || !strings.Contains(capability, "sitepolicy.OperationPlanValidate()") {
+		t.Fatalf("internal child capability missing:\n%s", capability)
+	}
+	plan := byPath["site/policy/zz_yunka_management_operation_plan_gen.go"]
+	if !strings.Contains(plan, `OperationID: "site.validate"`) || !strings.Contains(plan, `RPC: ""`) {
+		t.Fatalf("internal operation plan missing or transport-bound:\n%s", plan)
+	}
+	for path, source := range byPath {
+		if strings.Contains(path, "site/transport/") {
+			t.Fatalf("internal-only application must not generate transport adapter: %s\n%s", path, source)
+		}
+	}
+}

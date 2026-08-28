@@ -111,3 +111,25 @@ func TestCompileOperationPlansCarriesExplicitExecutionPolicy(t *testing.T) {
 		t.Fatalf("execution=%#v", got)
 	}
 }
+
+func TestCompileOperationPlansIncludesApplicationLevelInternalOperation(t *testing.T) {
+	manifest := Manifest{SchemaVersion: ManifestVersion, Services: []Service{{
+		Name: "SiteApplication", FullName: "site.v1.SiteApplication", Domain: "site",
+		Application: &ApplicationDeclaration{Name: "management", Operations: []OperationDeclaration{{
+			ID: "site.validate", UseCase: "validate_site", Permissions: []string{"site.read"}, PermissionMode: "all",
+			RequestType: "site.v1.ValidateRequest", ResponseType: "site.v1.SiteDTO", ApplicationMethod: "Validate",
+			Execution: &ExecutionPolicy{Transaction: "read_only", Idempotency: "none"},
+		}}},
+	}}}
+	set, err := CompileOperationPlans(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(set.Operations) != 1 {
+		t.Fatalf("operations=%d", len(set.Operations))
+	}
+	got := set.Operations[0]
+	if got.OperationID != "site.validate" || got.RequestType != "site.v1.ValidateRequest" || got.ResponseType != "site.v1.SiteDTO" || got.Bindings.RPC != "" || len(got.Bindings.HTTP) != 0 {
+		t.Fatalf("internal plan=%#v", got)
+	}
+}

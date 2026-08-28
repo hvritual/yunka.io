@@ -47,7 +47,7 @@ func TestContractGraphAndImpact(t *testing.T) {
 func TestTypedContractGraphUsesDeclaredBusinessIdentities(t *testing.T) {
 	manifest := contract.Manifest{
 		SchemaVersion: contract.ManifestVersion,
-		Files: []contract.File{{Name: "device.proto", Domain: &contract.DomainDeclaration{Name: "device", Version: "v1"}}},
+		Files:         []contract.File{{Name: "device.proto", Domain: &contract.DomainDeclaration{Name: "device", Version: "v1"}}},
 		Messages: []contract.Message{
 			{Name: "GetMachineRequest", FullName: "device.v1.GetMachineRequest", DTO: &contract.DTODeclaration{Kind: "input"}},
 			{Name: "MachineDTO", FullName: "device.v1.MachineDTO", DTO: &contract.DTODeclaration{Kind: "output"}},
@@ -56,7 +56,7 @@ func TestTypedContractGraphUsesDeclaredBusinessIdentities(t *testing.T) {
 			Name: "DeviceApplication", FullName: "device.v1.DeviceApplication", Domain: "device", Application: &contract.ApplicationDeclaration{Name: "device_management"},
 			Methods: []contract.Method{{
 				Name: "GetMachine", FullName: "device.v1.DeviceApplication.GetMachine", Request: "device.v1.GetMachineRequest", Response: "device.v1.MachineDTO",
-				HTTP: []contract.HTTPBinding{{Method: "GET", Path: "/v1/machines/{id}"}},
+				HTTP:      []contract.HTTPBinding{{Method: "GET", Path: "/v1/machines/{id}"}},
 				Operation: &contract.OperationDeclaration{ID: "device.machine.get", UseCase: "get_machine", Permissions: []string{"device.machine.read"}, PermissionMode: "all", TenantRequired: true, Authentication: []string{"jwt"}},
 			}},
 		}},
@@ -89,13 +89,13 @@ func TestTypedContractGraphUsesDeclaredBusinessIdentities(t *testing.T) {
 		}
 	}
 	wantEdges := map[string]bool{
-		domainID + "|" + string(EdgeContains) + "|" + applicationID: false,
+		domainID + "|" + string(EdgeContains) + "|" + applicationID:    false,
 		applicationID + "|" + string(EdgeContains) + "|" + operationID: false,
-		serviceID + "|" + string(EdgeExposes) + "|" + operationID: false,
-		operationID + "|" + string(EdgeAccepts) + "|" + requestID: false,
-		operationID + "|" + string(EdgeReturns) + "|" + responseID: false,
-		operationID + "|" + string(EdgeRequires) + "|" + permissionID: false,
-		routeID + "|" + string(EdgeRoutesTo) + "|" + operationID: false,
+		serviceID + "|" + string(EdgeExposes) + "|" + operationID:      false,
+		operationID + "|" + string(EdgeAccepts) + "|" + requestID:      false,
+		operationID + "|" + string(EdgeReturns) + "|" + responseID:     false,
+		operationID + "|" + string(EdgeRequires) + "|" + permissionID:  false,
+		routeID + "|" + string(EdgeRoutesTo) + "|" + operationID:       false,
 	}
 	for _, edge := range graph.Edges {
 		key := edge.From + "|" + string(edge.Kind) + "|" + edge.To
@@ -178,9 +178,9 @@ func TestAddContractDoesNotMutateCallerManifest(t *testing.T) {
 
 func TestAddContractDoesNotMutateTypedPointers(t *testing.T) {
 	manifest := contract.Manifest{
-		Files: []contract.File{{Name: "device.proto", Domain: &contract.DomainDeclaration{Name: " device "}}},
+		Files:    []contract.File{{Name: "device.proto", Domain: &contract.DomainDeclaration{Name: " device "}}},
 		Messages: []contract.Message{{Name: "Request", FullName: "device.Request", DTO: &contract.DTODeclaration{Kind: "input"}}},
-		Services: []contract.Service{{Name: "Device", FullName: "device.Device", Domain: " device ", Application: &contract.ApplicationDeclaration{Name: " device_app ",}, Methods: []contract.Method{{Name: "Get", FullName: "device.Device.Get", Operation: &contract.OperationDeclaration{ID: " device.get ", UseCase: " get ", Permissions: []string{" device.read "}}}}}},
+		Services: []contract.Service{{Name: "Device", FullName: "device.Device", Domain: " device ", Application: &contract.ApplicationDeclaration{Name: " device_app "}, Methods: []contract.Method{{Name: "Get", FullName: "device.Device.Get", Operation: &contract.OperationDeclaration{ID: " device.get ", UseCase: " get ", Permissions: []string{" device.read "}}}}}},
 	}
 	builder := NewBuilder()
 	if err := AddContract(builder, manifest); err != nil {
@@ -238,5 +238,52 @@ func TestProcessGraphVocabularyIsAdditive(t *testing.T) {
 	}
 	if len(graph.Nodes) != 3 || len(graph.Edges) != 2 {
 		t.Fatalf("nodes=%d edges=%d", len(graph.Nodes), len(graph.Edges))
+	}
+}
+
+func TestInternalApplicationOperationHasNoTransportExposure(t *testing.T) {
+	manifest := contract.Manifest{
+		SchemaVersion: contract.ManifestVersion,
+		Files:         []contract.File{{Name: "site.proto", Domain: &contract.DomainDeclaration{Name: "site"}}},
+		Messages: []contract.Message{
+			{Name: "ValidateRequest", FullName: "site.v1.ValidateRequest", DTO: &contract.DTODeclaration{Kind: "input"}},
+			{Name: "SiteDTO", FullName: "site.v1.SiteDTO", DTO: &contract.DTODeclaration{Kind: "output"}},
+		},
+		Services: []contract.Service{{
+			Name: "SiteApplication", FullName: "site.v1.SiteApplication", Domain: "site",
+			Application: &contract.ApplicationDeclaration{
+				Name: "management",
+				Operations: []contract.OperationDeclaration{{
+					ID: "site.validate", UseCase: "validate_site", Permissions: []string{"site.read"}, PermissionMode: "all",
+					RequestType: "site.v1.ValidateRequest", ResponseType: "site.v1.SiteDTO", ApplicationMethod: "Validate",
+				}},
+			},
+		}},
+	}
+	builder := NewBuilder()
+	if err := AddContract(builder, manifest); err != nil {
+		t.Fatal(err)
+	}
+	graph, err := builder.Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	applicationID := ID(NodeApplication, "site/management")
+	operationID := ID(NodeOperation, "site.validate")
+	node, ok := graph.Node(operationID)
+	if !ok || node.Attributes["applicationMethod"] != "Validate" {
+		t.Fatalf("internal operation node missing: %+v", node)
+	}
+	contained := false
+	for _, edge := range graph.Edges {
+		if edge.From == applicationID && edge.To == operationID && edge.Kind == EdgeContains {
+			contained = true
+		}
+		if edge.To == operationID && edge.Kind == EdgeExposes {
+			t.Fatalf("internal operation unexpectedly exposed by transport: %+v", edge)
+		}
+	}
+	if !contained {
+		t.Fatalf("application does not contain internal operation: %+v", graph.Edges)
 	}
 }

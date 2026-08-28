@@ -299,11 +299,36 @@ func compareApplicationDeclaration(path string, oldValue, newValue *ApplicationD
 		return []Change{info("application_declared", path+".application", "typed application declaration added: "+newValue.Name)}
 	case oldValue != nil && newValue == nil:
 		return []Change{breaking("application_removed", path+".application", "typed application declaration removed")}
-	case oldValue != nil && newValue != nil && oldValue.Name != newValue.Name:
-		return []Change{breaking("application_identity_changed", path+".application", fmt.Sprintf("application identity changed from %s to %s", oldValue.Name, newValue.Name))}
-	default:
+	case oldValue == nil || newValue == nil:
 		return nil
 	}
+	var changes []Change
+	if oldValue.Name != newValue.Name {
+		changes = append(changes, breaking("application_identity_changed", path+".application", fmt.Sprintf("application identity changed from %s to %s", oldValue.Name, newValue.Name)))
+	}
+	oldOperations := make(map[string]OperationDeclaration, len(oldValue.Operations))
+	newOperations := make(map[string]OperationDeclaration, len(newValue.Operations))
+	for _, operation := range oldValue.Operations {
+		oldOperations[operation.ID] = operation
+	}
+	for _, operation := range newValue.Operations {
+		newOperations[operation.ID] = operation
+	}
+	for id, oldOperation := range oldOperations {
+		operationPath := path + ".application.operation." + id
+		newOperation, ok := newOperations[id]
+		if !ok {
+			changes = append(changes, breaking("internal_operation_removed", operationPath, "application-level operation removed"))
+			continue
+		}
+		changes = append(changes, compareOperationDeclaration(operationPath, &oldOperation, &newOperation)...)
+	}
+	for id := range newOperations {
+		if _, ok := oldOperations[id]; !ok {
+			changes = append(changes, info("internal_operation_added", path+".application.operation."+id, "application-level operation added"))
+		}
+	}
+	return changes
 }
 
 func compareOperationDeclaration(path string, oldValue, newValue *OperationDeclaration) []Change {
@@ -337,6 +362,15 @@ func compareOperationDeclaration(path string, oldValue, newValue *OperationDecla
 	}
 	if oldValue.Public != newValue.Public {
 		changes = append(changes, breaking("public_policy_changed", operationPath, fmt.Sprintf("public changed from %v to %v", oldValue.Public, newValue.Public)))
+	}
+	if oldValue.RequestType != newValue.RequestType {
+		changes = append(changes, breaking("operation_request_changed", operationPath, fmt.Sprintf("request type changed from %s to %s", oldValue.RequestType, newValue.RequestType)))
+	}
+	if oldValue.ResponseType != newValue.ResponseType {
+		changes = append(changes, breaking("operation_response_changed", operationPath, fmt.Sprintf("response type changed from %s to %s", oldValue.ResponseType, newValue.ResponseType)))
+	}
+	if oldValue.ApplicationMethod != newValue.ApplicationMethod {
+		changes = append(changes, breaking("application_method_changed", operationPath, fmt.Sprintf("application method changed from %s to %s", oldValue.ApplicationMethod, newValue.ApplicationMethod)))
 	}
 	return changes
 }

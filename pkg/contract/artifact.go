@@ -40,7 +40,7 @@ func RenderArtifacts(manifest Manifest, options ArtifactOptions) (Artifacts, err
 	manifest.Normalize()
 	// Expand/cutover compatibility: pure legacy/control-plane inventories keep
 	// their byte-stable V1 artifact until a typed Domain/Application declaration
-	// enters that inventory. Typed business inventories always write V2.
+	// enters that inventory. Typed business inventories always write the current manifest schema.
 	if !hasTypedDSL(manifest) {
 		manifest.SchemaVersion = 1
 	}
@@ -144,7 +144,7 @@ func LoadManifest(path string) (Manifest, error) {
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		return Manifest{}, fmt.Errorf("contract: decode manifest %s: %w", path, err)
 	}
-	if manifest.SchemaVersion != 1 && manifest.SchemaVersion != ManifestVersion {
+	if manifest.SchemaVersion != 1 && manifest.SchemaVersion != 2 && manifest.SchemaVersion != ManifestVersion {
 		return Manifest{}, fmt.Errorf("contract: unsupported manifest schemaVersion %d", manifest.SchemaVersion)
 	}
 	manifest.Normalize()

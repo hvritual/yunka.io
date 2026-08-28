@@ -66,12 +66,22 @@ func RenderC9ApplicationCode(manifest Manifest, options ApplicationCodeOptions) 
 				{filepath.ToSlash(filepath.Join(domain, "policy", "zz_yunka_"+naming.FileStem+"_operation_plan_gen.go")), func() (string, error) {
 					return renderC9OperationPlans(service, naming, planByID)
 				}},
-				{filepath.ToSlash(filepath.Join(domain, "transport", "rpc", "zz_yunka_"+naming.FileStem+"_operation_executor_gen.go")), func() (string, error) {
-					return renderC9RPCAdapter(service, packages, rootImport, naming)
-				}},
-				{filepath.ToSlash(filepath.Join(domain, "transport", "rest", "zz_yunka_"+naming.FileStem+"_operation_executor_gen.go")), func() (string, error) {
-					return renderC9RESTAdapter(service, packages, messages, rootImport, naming)
-				}},
+			}
+			if len(service.Methods) > 0 {
+				generated = append(generated,
+					struct {
+						path   string
+						render func() (string, error)
+					}{filepath.ToSlash(filepath.Join(domain, "transport", "rpc", "zz_yunka_"+naming.FileStem+"_operation_executor_gen.go")), func() (string, error) {
+						return renderC9RPCAdapter(service, packages, rootImport, naming)
+					}},
+					struct {
+						path   string
+						render func() (string, error)
+					}{filepath.ToSlash(filepath.Join(domain, "transport", "rest", "zz_yunka_"+naming.FileStem+"_operation_executor_gen.go")), func() (string, error) {
+						return renderC9RESTAdapter(service, packages, messages, rootImport, naming)
+					}},
+				)
 			}
 			if len(service.Application.Requires) > 0 {
 				generated = append(generated, struct {
@@ -113,11 +123,15 @@ func c9NonTransportCompatibilityFiles(files []GeneratedApplicationFile) []Genera
 	return result
 }
 
-func c9PlanFunction(naming serviceCodegenNaming, method Method) string {
+func c9PlanFunctionName(naming serviceCodegenNaming, methodName string) string {
 	if naming.Multi {
-		return "OperationPlan" + naming.OperationPrefix + method.Name
+		return "OperationPlan" + naming.OperationPrefix + methodName
 	}
-	return "OperationPlan" + method.Name
+	return "OperationPlan" + methodName
+}
+
+func c9PlanFunction(naming serviceCodegenNaming, method Method) string {
+	return c9PlanFunctionName(naming, method.Name)
 }
 
 func c9RegisterName(naming serviceCodegenNaming) string {
@@ -180,18 +194,22 @@ func renderC9CapabilityPorts(service Service, naming serviceCodegenNaming, servi
 
 		var interfaceMethods strings.Builder
 		var wrapperMethods strings.Builder
-		for _, method := range target.Methods {
-			request, err := resolveGoType(method.Request, packages, imports)
+		operations, err := serviceApplicationOperations(target)
+		if err != nil {
+			return "", err
+		}
+		for _, operationBinding := range operations {
+			request, err := resolveGoType(operationBinding.RequestType, packages, imports)
 			if err != nil {
 				return "", err
 			}
-			response, err := resolveGoType(method.Response, packages, imports)
+			response, err := resolveGoType(operationBinding.ResponseType, packages, imports)
 			if err != nil {
 				return "", err
 			}
-			fmt.Fprintf(&interfaceMethods, "\t%s(context.Context, *%s.%s) (*%s.%s, error)\n", method.Name, request.Alias, request.Type, response.Alias, response.Type)
-			fmt.Fprintf(&wrapperMethods, "func (capability *%s) %s(ctx context.Context, request *%s.%s) (*%s.%s, error) {\n", implementationName, method.Name, request.Alias, request.Type, response.Alias, response.Type)
-			fmt.Fprintf(&wrapperMethods, "\treturn operation.ExecuteChildTyped(ctx, capability.executor, %s.%s(), request, capability.application.%s)\n}\n\n", policyAlias, c9PlanFunction(targetNaming, method), method.Name)
+			fmt.Fprintf(&interfaceMethods, "\t%s(context.Context, *%s.%s) (*%s.%s, error)\n", operationBinding.MethodName, request.Alias, request.Type, response.Alias, response.Type)
+			fmt.Fprintf(&wrapperMethods, "func (capability *%s) %s(ctx context.Context, request *%s.%s) (*%s.%s, error) {\n", implementationName, operationBinding.MethodName, request.Alias, request.Type, response.Alias, response.Type)
+			fmt.Fprintf(&wrapperMethods, "\treturn operation.ExecuteChildTyped(ctx, capability.executor, %s.%s(), request, capability.application.%s)\n}\n\n", policyAlias, c9PlanFunctionName(targetNaming, operationBinding.MethodName), operationBinding.MethodName)
 		}
 		fmt.Fprintf(&declarations, "type %s interface {\n%s}\n\n", interfaceName, interfaceMethods.String())
 		fmt.Fprintf(&declarations, "type %s struct { application %s; executor operation.Executor }\n\n", implementationName, targetApplicationType)
@@ -215,15 +233,16 @@ func renderC9CapabilityPorts(service Service, naming serviceCodegenNaming, servi
 func renderC9OperationPlans(service Service, naming serviceCodegenNaming, plans map[string]operationplan.Plan) (string, error) {
 	var b strings.Builder
 	b.WriteString(GeneratedApplicationMarker + "\n\npackage policy\n\nimport \"yunka.io/pkg/operationplan\"\n\n")
-	for _, method := range service.Methods {
-		if method.Operation == nil {
-			return "", fmt.Errorf("contract C9 application codegen: %s has no operation", method.FullName)
-		}
-		plan, ok := plans[method.Operation.ID]
+	operations, err := serviceApplicationOperations(service)
+	if err != nil {
+		return "", err
+	}
+	for _, operationBinding := range operations {
+		plan, ok := plans[operationBinding.Operation.ID]
 		if !ok {
-			return "", fmt.Errorf("contract C9 application codegen: no compiled plan for %s", method.Operation.ID)
+			return "", fmt.Errorf("contract C9 application codegen: no compiled plan for %s", operationBinding.Operation.ID)
 		}
-		fmt.Fprintf(&b, "func %s() operationplan.Plan {\n\treturn ", c9PlanFunction(naming, method))
+		fmt.Fprintf(&b, "func %s() operationplan.Plan {\n\treturn ", c9PlanFunctionName(naming, operationBinding.MethodName))
 		writeOperationPlanLiteral(&b, plan)
 		b.WriteString("\n}\n\n")
 	}
