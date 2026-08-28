@@ -1,0 +1,117 @@
+name: c9-7-real-biz-control
+
+on:
+  push:
+    branches:
+      - agent/c9-7-biz-control
+
+permissions:
+  contents: read
+
+jobs:
+  conformance:
+    runs-on: ubuntu-24.04
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: biz
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/c9-7-biz-control
+          fetch-depth: 0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: 1.25.13
+          cache: false
+      - name: Install locked protoc and RPC tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/protoc.zip" https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-x86_64.zip
+          echo '3a4c1e5f2516c639d3079b1586e703fc7bcfa2136d58bda24d1d54f949c315e8  '"$RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/protoc"
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          "$RUNNER_TEMP/protoc/bin/protoc" --version
+          make PROTOC="$RUNNER_TEMP/protoc/bin/protoc" rpc-tools
+      - name: Fetch exact real biz source artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/biz-source.zip" 'https://sdmntpreastus.oaiusercontent.com/files/00000000-8204-81f9-9ada-c3dfae83af9d/raw?se=2026-08-28T12%3A44%3A24Z&sp=r&sv=2026-02-06&sr=b&scid=8ed6dc86-e303-5795-bd29-ae3d24d3d884&skoid=e5e3659d-4463-4dbf-b2ce-ee32bc0a0a8d&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-28T06%3A43%3A31Z&ske=2026-08-29T06%3A43%3A31Z&sks=b&skv=2026-02-06&sig=sQ7WIN3hK3qRgfh4ATzPt0PNy22mq4CdOCSLrYRYtBQ%3D'
+          mkdir -p "$RUNNER_TEMP/biz-artifact"
+          unzip -q "$RUNNER_TEMP/biz-source.zip" -d "$RUNNER_TEMP/biz-artifact"
+          echo '9af20f3126e58adb123df4290caa1b08b2217bbb61386d9a1b2a7f7d8f41f2d9  '"$RUNNER_TEMP/biz-artifact/biz-c9-pressure.tar.gz" | sha256sum -c -
+          rm -rf ../biz
+          mkdir -p ../biz
+          tar -xzf "$RUNNER_TEMP/biz-artifact/biz-c9-pressure.tar.gz" -C ../biz
+          test -f ../biz/go.mod
+          grep -q 'idempotencygorm.NewStore' ../biz/modules/deviceops/module.go
+          ! grep -R -n 'requestscope.Execute' ../biz/internal/deviceops/application
+          ! grep -R -n 'requestscope.GORMFrom' ../biz/internal/deviceops/application
+          ! grep -R -n 'gorm.io/gorm' ../biz/internal/deviceops/application
+      - name: Regenerate biz with C9.7 compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd ../biz
+          YUNKA_ROOT="$GITHUB_WORKSPACE" PROTOC="$RUNNER_TEMP/protoc/bin/protoc" PROTOC_INCLUDE="$RUNNER_TEMP/protoc/include" make generate
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('contracts/generated/operation-plans.json').read_text())
+          assert data['schemaVersion'] == 2, data['schemaVersion']
+          by_id = {item['operationId']: item for item in data['operations']}
+          assert by_id['device.list']['execution'] == {'transaction':'read_only','idempotency':'none'}
+          assert by_id['device.get']['execution'] == {'transaction':'read_only','idempotency':'none'}
+          for op in ('device.create','device.update','device.delete'):
+              assert by_id[op]['execution'] == {'transaction':'local','idempotency':'required'}, (op, by_id[op]['execution'])
+          PY
+          grep -q 'execution.WithIdempotencyKey' internal/deviceops/transport/rest/zz_yunka_device_management_operation_executor_gen.go
+          grep -q 'Idempotency-Key' internal/deviceops/transport/rest/zz_yunka_device_management_operation_executor_gen.go
+          grep -q 'execution.WithIdempotencyKey' internal/deviceops/transport/rpc/zz_yunka_device_management_operation_executor_gen.go
+          grep -q 'idempotency-key' internal/deviceops/transport/rpc/zz_yunka_device_management_operation_executor_gen.go
+      - name: Verify real biz source and compile
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd ../biz
+          YUNKA_ROOT="$GITHUB_WORKSPACE" PROTOC="$RUNNER_TEMP/protoc/bin/protoc" PROTOC_INCLUDE="$RUNNER_TEMP/protoc/include" make verify
+          ! grep -R -n 'requestscope.Execute' internal/deviceops/application
+          ! grep -R -n 'requestscope.GORMFrom' internal/deviceops/application
+          ! grep -R -n 'gorm.io/gorm' internal/deviceops/application
+          ! grep -R -n 'TransactionalStore' internal/deviceops/application
+          grep -q 'requestscope.Join' internal/deviceops/application/service.go
+          grep -q 'service.stager.Stage' internal/deviceops/application/remote_saga.go
+          grep -q 'idempotencygorm.NewStore' modules/deviceops/module.go
+      - name: Run real biz MySQL 8.4 pressure
+        shell: bash
+        env:
+          YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/biz?parseTime=true&charset=utf8mb4&loc=UTC
+        run: |
+          set -euo pipefail
+          cd ../biz
+          YUNKA_ROOT="$GITHUB_WORKSPACE" PROTOC="$RUNNER_TEMP/protoc/bin/protoc" PROTOC_INCLUDE="$RUNNER_TEMP/protoc/include" make pressure
+      - name: Export regenerated real biz
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar --exclude='.git' -czf "$RUNNER_TEMP/biz-c9-7-regenerated.tar.gz" -C ../biz .
+          sha256sum "$RUNNER_TEMP/biz-c9-7-regenerated.tar.gz" > "$RUNNER_TEMP/biz-c9-7-regenerated.tar.gz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: biz-c9-7-regenerated
+          path: |
+            ${{ runner.temp }}/biz-c9-7-regenerated.tar.gz
+            ${{ runner.temp }}/biz-c9-7-regenerated.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 1
