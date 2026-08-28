@@ -2,14 +2,14 @@
 
 ## Status
 
-- State: **Implementation / validation**
-- Baseline: `main@ed3c73b7899cd4a818d2a771006befa7bf9a5085`
-- Tracking: GitHub issue #30
-- Delivery branch: `agent/c9-operation-contract-runtime`
+- State: **Complete / merged**
+- Original tracking: GitHub issue #30
+- Original delivery: PR #31
+- C9.1-C9.6 are now part of the active `main` baseline and were subsequently extended by C9.7 execution semantics and C9.8 canonical internal Operations.
 
 ## Objective
 
-C9 turns the C8.4-C8.7 protobuf Operation declarations into one immutable execution contract and one transport-neutral execution path.
+C9 turns protobuf Operation declarations into one immutable execution contract and one transport-neutral execution path.
 
 ```text
 PB OperationDeclaration
@@ -38,68 +38,42 @@ REST / gRPC
 
 C9 does not move authorization into `framework`. `gateway/authz` remains the canonical authorization boundary. The framework owns deterministic execution orchestration only.
 
-## Final invariants
+## Final C9.1-C9.6 invariants
 
-1. Protobuf remains the writable source of Operation intent.
-2. Stable PB Operation ID is the canonical execution identity.
+1. Protobuf is the writable source of Operation intent.
+2. Stable Operation ID is the canonical execution identity.
 3. HTTP paths and gRPC full methods are transport bindings, never authorization identities.
 4. Runtime never interprets protobuf descriptors/comments per request.
 5. Protected Operations fail closed when the required security phase is unavailable.
-6. One Operation execution performs exactly one authorization decision.
+6. One root Operation execution performs exactly one authorization decision.
 7. Domain guards run after authorization and before Application; grant scope remains opaque to the framework.
 8. Canonical generated REST and gRPC adapters invoke the same `framework/operation.Executor` with the same immutable `OperationPlan`.
 9. Application code contains business use-case behavior only and does not repeat Permission/Role checks.
-10. C9 does not infer transactions, idempotency, audit, data predicates, or workflow semantics from method names or HTTP verbs.
+10. Execution semantics are explicit contract facts; they are not inferred from method names or HTTP verbs.
 11. C7 bans remain permanent: no reflection DI, service locator, global mutable runtime registry, request pooling, or singleton Runtime mutation.
 
 ## C9.1 — OperationPlan IR
 
-`pkg/operationplan` is a leaf-safe, data-only execution IR.
+`pkg/operationplan` is the leaf-safe, data-only execution IR. C9.1 established deterministic normalization, validation, canonical JSON, SHA-256 digest, encode/decode and file loading without importing runtime/gateway state.
 
-```text
-OperationPlan
-├── operationId
-├── domain
-├── application
-├── useCase
-├── requestType
-├── responseType
-├── security
-│   ├── public
-│   ├── tenantRequired
-│   ├── authentication[]
-│   ├── permissions[]
-│   └── permissionMode
-├── composition
-│   ├── boundary
-│   ├── requiresOperations[]
-│   └── permissionClosure[]
-├── applicationRequires[]
-└── bindings
-    ├── rpc
-    └── http[]
-```
-
-The package owns deterministic normalization, validation, canonical JSON, SHA-256 digest, encode/decode, and file loading. It imports neither `framework` nor `gateway` and contains no handlers, service instances, database types, or runtime state.
-
-Validation rejects duplicate/empty Operation IDs, unsupported permission/composition modes, unknown/self operation dependencies, dependency cycles, missing transitive permission closure, and incomplete execution identity/binding facts.
+The C9.1 shape contained stable operation/application identity, security, composition, Application dependencies and transport bindings. C9.7 later extended the IR with explicit transaction/idempotency execution policy; C9.8 later made transport bindings optional for canonical internal Operations.
 
 ## C9.2 — Operation Contract Compiler
 
-`pkg/contract.CompileOperationPlans` compiles normalized Contract Manifest facts into `operationplan.Set`.
+`pkg/contract.CompileOperationPlans` compiles normalized Contract Manifest facts into deterministic `operationplan.Set` evidence.
 
-It validates:
+The compiler validates:
 
 - unique `<domain>/<application>` capability identities;
 - valid and resolvable Application dependencies;
 - Application dependency cycles;
-- one typed Operation declaration for every typed Application method;
+- typed Operation/Application method consistency;
 - globally unique stable Operation IDs;
 - required Operation existence;
-- cross-Application Operation calls are covered by declared Application capability dependencies;
-- C8.7 transitive Permission closure.
+- cross-Application Operation calls covered by declared Application capability dependencies;
+- transitive Permission closure.
 
-The contract artifact pipeline now emits:
+The contract artifact pipeline emits:
 
 ```text
 contracts/generated/
@@ -109,61 +83,32 @@ contracts/generated/
 └── operation-plans.json
 ```
 
-`operation-plans.json` is deterministic derived evidence. PB remains the source of truth.
+These files are deterministic derived evidence. Protobuf remains the writable source of contract intent.
 
 ## C9.3 — Unified Operation Executor
 
-`framework/operation` introduces one executor with fixed semantic slots rather than a freely ordered middleware bag.
+`framework/operation` provides a fixed semantic executor rather than a freely ordered middleware bag. C9 established the shared transport-neutral execution boundary and stable Operation metadata; C9.7 later expanded the fixed phase machine to own idempotency and ExecutionScope/transaction semantics.
 
-Foundation order:
-
-```text
-plan
-  -> runtime metadata
-  -> security
-  -> application
-  -> outcome
-```
-
-The executor:
-
-- writes the stable Operation ID into `runtimecontext.Metadata.Operation`;
-- calls the configured SecurityPhase once;
-- fails closed for a protected plan when SecurityPhase is absent;
-- invokes Application once;
-- emits bounded phase/outcome observations;
-- contains observer panics;
-- observes and re-panics Application panics;
-- does not open transactions or infer persistence semantics.
-
-`ExecuteTyped` preserves generated compile-time Application request/response typing while the executor core remains transport-neutral.
+`ExecuteTyped` preserves generated compile-time request/response typing while the executor core remains transport-neutral.
 
 ## C9.4 — REST/gRPC convergence
 
-`RenderC9ApplicationCode` is the canonical typed Application generator used by `yunka contract generate`.
+Canonical generated REST and gRPC adapters enter the same Executor/OperationPlan path.
 
-It retains C8 non-transport compatibility artifacts such as Application Port, capability ports, and static policy metadata, but filters the old C8 REST/RPC runtime files. Canonical transport artifacts are now:
+Transport owns:
 
-```text
-<domain>/transport/rest/zz_yunka_<application>_operation_executor_gen.go
-<domain>/transport/rpc/zz_yunka_<application>_operation_executor_gen.go
-```
+- request decoding;
+- response encoding;
+- trusted credential establishment;
+- transport-specific metadata propagation.
 
-Both call:
+Transport does not own a second Permission/Tenant/Guard execution model.
 
-```go
-operation.ExecuteTyped(ctx, executor, policy.OperationPlanX(), request, application.X)
-```
-
-Transport remains responsible for request decoding, response encoding, and trusted credential establishment. It does not own Permission/Tenant/Guard sequencing.
-
-A real protoc fixture proves one Application invoked through REST and gRPC traverses the same Executor path and stable Operation identity. Denied calls do not reach Application.
+C9.8 additionally allows an Operation to have no REST/gRPC binding at all while remaining canonical and callable through typed local child capabilities.
 
 ## C9.5 — Gateway security cutover
 
-`gateway/authz.NewExecutionSecurity` adapts `OperationPlan.Security` to the existing canonical Gateway Authorizer.
-
-The phase performs:
+`gateway/authz.NewExecutionSecurity` adapts immutable OperationPlan security facts to the canonical Gateway Authorizer:
 
 ```text
 trusted Principal
@@ -174,20 +119,11 @@ trusted Principal
   -> Application context
 ```
 
-Permission Grants and opaque Scope values remain IAM/domain facts. The framework does not learn Customer/Site/Device or SQL scope semantics.
-
-C8 compatibility seams remain explicitly bounded:
-
-- `ExecutorFromOperationRuntime` allows an older caller to enter the Executor while it still supplies a C8 `OperationRuntime`;
-- `PreauthorizedExecutor` supports an existing secured gRPC interceptor without evaluating authorization a second time.
-
-They are compatibility adapters, not new composition APIs. New generated C9 transports use the direct Executor/SecurityPhase path.
+Permission Grants and opaque Scope values remain IAM/domain facts. Framework code does not learn Customer/Site/Device or SQL scope semantics.
 
 ## C9.6 — Plan-backed Graph and Diagnostics
 
-`pkg/applicationgraph.AddOperationPlans` consumes the compiled plan set as declared execution evidence.
-
-The graph receives deterministic facts for:
+OperationPlan contributes declared evidence for:
 
 - Domain -> Application containment;
 - Application dependencies;
@@ -195,68 +131,35 @@ The graph receives deterministic facts for:
 - Operation dependencies;
 - Operation -> Permission requirements;
 - request/response message edges;
-- explicit gRPC binding/service exposure;
+- explicit gRPC exposure;
 - explicit HTTP route bindings.
 
-Evidence is labeled `declared` with source `operation.plan`; no relationships are inferred from package names or grep.
+Evidence is labeled and deterministic; architecture is not inferred from package or method naming.
 
-`yunka graph build` loads `contracts/generated/operation-plans.json` in addition to the contract manifest.
+Diagnostics expose safe bounded execution metadata only and do not expose Permissions, auth methods, Principal, tenant IDs, grant scopes, request payloads, credentials or secrets.
 
-`framework/diagnostics.OperationSource` exposes only safe execution metadata:
+## Subsequent extensions
 
-- plan schema version and digest;
-- Operation ID, Domain, Application, composition class, protected/public classification;
-- whether an Executor is bound;
-- canonical executor phase list and observer count.
+### C9.7 — Execution Semantics Closure
 
-It does not expose Permissions, auth methods, Principal, Tenant IDs, grant scopes, request/response types, request payloads, credentials, or secrets.
+C9.7 added explicit transaction/idempotency policy, root ExecutionScope/UoW ownership, join-only request repository views, typed local child execution, Saga/Outbox transaction joining and durable MySQL-backed idempotency.
 
-## Explicit non-goals
+See `docs/waves/C9.7-execution-semantics-closure.md`.
 
-C9.1-C9.6 do not introduce:
+### C9.8 — Canonical Internal Operations
 
-- transaction policy declarations;
-- operation idempotency stores;
-- security audit persistence;
-- cache policy;
-- workflow/BPMN runtime;
-- distributed database transactions;
-- generic data-scope models;
-- SQL/data predicates in PB;
-- automatic business-semantic inference;
-- reflection dispatch or service location.
+C9.8 removed the false equivalence between Operation and RPC Method. Application-level internal Operations compile into the same OperationPlan/Application Graph/capability model without external transport exposure; internal-only DTOs do not leak into external OpenAPI/TypeScript projections unless transport-reachable.
 
-Those mechanisms may only enter later execution-policy extensions after real `biz` use cases prove the requirement.
+See `docs/waves/C9.8-canonical-internal-operations.md`.
 
 ## Permanent verification
 
-C9 adds `make operation-check` and extends `make dsl-check` / `make verify`.
+C9 established `make operation-check` and extended `make dsl-check` / `make verify`.
 
-Required regression coverage includes:
+The active repository gate also covers C9.7/C9.8 regressions through architecture, contract, OperationPlan, ApplicationGraph, RPC, race, vet, vulnerability and build checks. Real MySQL verification remains `make verify-production`.
 
-- deterministic OperationPlan canonical JSON/digest;
-- duplicate/unknown/cycle/permission-closure rejection;
-- compiler determinism and cross-Application capability validation;
-- fail-closed Executor behavior and exact phase sequencing;
-- Gateway Authz SecurityPhase with one authorization and one guard pass;
-- canonical C9 generator contains no legacy REST/RPC transport output;
-- real protoc REST/gRPC Executor parity fixture;
-- denied REST/gRPC requests never reach Application;
-- OperationPlan-backed Application Graph evidence;
-- diagnostics privacy boundary;
-- C7/C8 architecture/authz/composition regressions;
-- dependency, contract, RPC, test, race, vet, vuln, build, and determinism gates.
+## Current boundary
 
-## Production gate
+C9.1-C9.8 runtime/product semantics are implemented. C9.9 is now the closure wave that reconciles exact `main` verification, docs, durable memory, Framework Pressure, GitHub issues and the real `hvritual/biz` consumer before C10 introduces any new framework surface.
 
-The standard CI gate is `make verify`. Where MySQL 8.4 is available, final production verification remains:
-
-```bash
-make verify-production
-```
-
-C9.1-C9.6 do not change requestscope transaction or Saga/Outbox semantics, so the existing MySQL integration suites remain the production regression authority for those mechanisms.
-
-## Next boundary
-
-C9.7 may add explicit execution-policy declarations only after C9.1-C9.6 are stable and reference `biz` vertical slices demonstrate repeated framework-level pressure. Candidate mechanisms are transaction policy, operation idempotency, and security audit, but none may be inferred automatically.
+Remaining open pressure is not an excuse for speculative expansion. In particular, Saga step topology evidence (FP-C9-005) remains deferred until repeated real operational pressure proves the need.
