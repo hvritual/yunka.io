@@ -140,51 +140,27 @@ func renderC9OperationPlans(service Service, naming serviceCodegenNaming, plans 
 }
 
 func writeOperationPlanLiteral(b *strings.Builder, plan operationplan.Plan) {
-	fmt.Fprintf(b, "operationplan.Plan{OperationID:%q, Domain:%q, Application:%q, UseCase:%q, RequestType:%q, ResponseType:%q", plan.OperationID, plan.Domain, plan.Application, plan.UseCase, plan.RequestType, plan.ResponseType)
-	b.WriteString(", Security: operationplan.Security{")
-	if plan.Security.Public {
-		b.WriteString("Public:true,")
+	fmt.Fprintf(b, "operationplan.Plan{OperationID:%q, Domain:%q, Application:%q, UseCase:%q, RequestType:%q, ResponseType:%q, ", plan.OperationID, plan.Domain, plan.Application, plan.UseCase, plan.RequestType, plan.ResponseType)
+	fmt.Fprintf(b, "Security: operationplan.Security{Public:%t, TenantRequired:%t, Authentication:", plan.Security.Public, plan.Security.TenantRequired)
+	writeOperationPlanStrings(b, plan.Security.Authentication)
+	b.WriteString(", Permissions:")
+	writeOperationPlanStrings(b, plan.Security.Permissions)
+	fmt.Fprintf(b, ", PermissionMode:%q}, ", plan.Security.PermissionMode)
+	fmt.Fprintf(b, "Composition: operationplan.Composition{Boundary:%q, RequiresOperations:", plan.Composition.Boundary)
+	writeOperationPlanStrings(b, plan.Composition.RequiresOperations)
+	b.WriteString(", PermissionClosure:")
+	writeOperationPlanStrings(b, plan.Composition.PermissionClosure)
+	b.WriteString("}, ApplicationRequires:")
+	writeOperationPlanStrings(b, plan.ApplicationRequires)
+	fmt.Fprintf(b, ", Bindings: operationplan.Bindings{RPC:%q, HTTP:[]operationplan.HTTPBinding{", plan.Bindings.RPC)
+	for _, binding := range plan.Bindings.HTTP {
+		fmt.Fprintf(b, "{Method:%q, Path:%q, Body:%q, ResponseBody:%q},", binding.Method, binding.Path, binding.Body, binding.ResponseBody)
 	}
-	if plan.Security.TenantRequired {
-		b.WriteString("TenantRequired:true,")
-	}
-	writeStringSliceLiteral(b, "Authentication", plan.Security.Authentication)
-	writeStringSliceLiteral(b, "Permissions", plan.Security.Permissions)
-	fmt.Fprintf(b, "PermissionMode:%q}", plan.Security.PermissionMode)
-	b.WriteString(", Composition: operationplan.Composition{")
-	if plan.Composition.Boundary != "" {
-		fmt.Fprintf(b, "Boundary:%q,", plan.Composition.Boundary)
-	}
-	writeStringSliceLiteral(b, "RequiresOperations", plan.Composition.RequiresOperations)
-	writeStringSliceLiteral(b, "PermissionClosure", plan.Composition.PermissionClosure)
-	b.WriteString("}")
-	writeStringSliceLiteral(b, "ApplicationRequires", plan.ApplicationRequires)
-	b.WriteString(", Bindings: operationplan.Bindings{")
-	if plan.Bindings.RPC != "" {
-		fmt.Fprintf(b, "RPC:%q,", plan.Bindings.RPC)
-	}
-	if len(plan.Bindings.HTTP) > 0 {
-		b.WriteString("HTTP: []operationplan.HTTPBinding{")
-		for _, binding := range plan.Bindings.HTTP {
-			fmt.Fprintf(b, "{Method:%q,Path:%q", binding.Method, binding.Path)
-			if binding.Body != "" {
-				fmt.Fprintf(b, ",Body:%q", binding.Body)
-			}
-			if binding.ResponseBody != "" {
-				fmt.Fprintf(b, ",ResponseBody:%q", binding.ResponseBody)
-			}
-			b.WriteString("},")
-		}
-		b.WriteString("},")
-	}
-	b.WriteString("}}")
+	b.WriteString("}}}")
 }
 
-func writeStringSliceLiteral(b *strings.Builder, field string, values []string) {
-	if len(values) == 0 {
-		return
-	}
-	fmt.Fprintf(b, ", %s: []string{", field)
+func writeOperationPlanStrings(b *strings.Builder, values []string) {
+	b.WriteString("[]string{")
 	for _, value := range values {
 		fmt.Fprintf(b, "%q,", value)
 	}
