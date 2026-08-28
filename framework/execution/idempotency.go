@@ -88,6 +88,13 @@ type AtomicIdempotencyCoordinator interface {
 	CompleteInTransaction(context.Context, operationplan.Plan, any) error
 }
 
+// IdempotencyCapabilityReporter lets the Executor distinguish a durable store
+// that can join the business transaction from compatibility stores that only
+// support post-commit completion.
+type IdempotencyCapabilityReporter interface {
+	SupportsAtomicCompletion() bool
+}
+
 type coordinator struct{ store IdempotencyStore }
 
 func NewIdempotencyCoordinator(store IdempotencyStore) (IdempotencyCoordinator, error) {
@@ -131,6 +138,14 @@ func (coordinator *coordinator) Complete(ctx context.Context, _ operationplan.Pl
 		return ErrIdempotencyKeyRequired
 	}
 	return coordinator.store.Mark(ctx, claim, IdempotencySucceeded)
+}
+
+func (coordinator *coordinator) SupportsAtomicCompletion() bool {
+	if coordinator == nil || coordinator.store == nil {
+		return false
+	}
+	_, ok := coordinator.store.(TransactionalIdempotencyStore)
+	return ok
 }
 
 func (coordinator *coordinator) CompleteInTransaction(ctx context.Context, _ operationplan.Plan, transaction any) error {

@@ -216,6 +216,18 @@ func (runtime *executor) Execute(ctx context.Context, plan operationplan.Plan, i
 	runtime.observe(ctx, plan.OperationID, InvocationRoot, PhaseApplication, OutcomeSuccess)
 
 	runtime.observe(ctx, plan.OperationID, InvocationRoot, PhaseTransactionFinalize, OutcomeStarted)
+	atomicIdempotency, atomicErr := runtime.stageAtomicIdempotency(ctx, plan, idempotent)
+	if atomicErr != nil {
+		rollbackErr := root.Rollback(ctx)
+		runtime.observe(ctx, plan.OperationID, InvocationRoot, PhaseTransactionFinalize, OutcomeFailure)
+		var idempotencyErr error
+		if idempotent {
+			idempotencyErr = runtime.idempotency.Fail(ctx, plan, atomicErr)
+		}
+		runtime.observe(ctx, plan.OperationID, InvocationRoot, PhaseIdempotencyFinalize, outcomeFor(idempotencyErr))
+		runtime.observe(ctx, plan.OperationID, InvocationRoot, PhaseOutcome, OutcomeFailure)
+		return result, errors.Join(atomicErr, rollbackErr, idempotencyErr)
+	}
 	if commitErr := root.Commit(ctx); commitErr != nil {
 		runtime.observe(ctx, plan.OperationID, InvocationRoot, PhaseTransactionFinalize, OutcomeFailure)
 		var idempotencyErr error
@@ -229,7 +241,7 @@ func (runtime *executor) Execute(ctx context.Context, plan operationplan.Plan, i
 	runtime.observe(ctx, plan.OperationID, InvocationRoot, PhaseTransactionFinalize, OutcomeSuccess)
 
 	runtime.observe(ctx, plan.OperationID, InvocationRoot, PhaseIdempotencyFinalize, OutcomeStarted)
-	if idempotent {
+	if idempotent && !atomicIdempotency {
 		if completeErr := runtime.idempotency.Complete(ctx, plan); completeErr != nil {
 			runtime.observe(ctx, plan.OperationID, InvocationRoot, PhaseIdempotencyFinalize, OutcomeFailure)
 			runtime.observe(ctx, plan.OperationID, InvocationRoot, PhaseOutcome, OutcomeFailure)
@@ -239,6 +251,28 @@ func (runtime *executor) Execute(ctx context.Context, plan operationplan.Plan, i
 	runtime.observe(ctx, plan.OperationID, InvocationRoot, PhaseIdempotencyFinalize, OutcomeSuccess)
 	runtime.observe(ctx, plan.OperationID, InvocationRoot, PhaseOutcome, OutcomeSuccess)
 	return result, nil
+}
+
+func (runtime *executor) stageAtomicIdempotency(ctx context.Context, plan operationplan.Plan, idempotent bool) (bool, error) {
+	if !idempotent || plan.Execution.Transaction != "local" || runtime.idempotency == nil {
+		return false, nil
+	}
+	capabilities, ok := runtime.idempotency.(execution.IdempotencyCapabilityReporter)
+	if !ok || !capabilities.SupportsAtomicCompletion() {
+		return false, nil
+	}
+	atomic, ok := runtime.idempotency.(execution.AtomicIdempotencyCoordinator)
+	if !ok {
+		return false, execution.ErrIdempotencyAtomicUnavailable
+	}
+	transaction, err := execution.TransactionHandleFrom(ctx)
+	if err != nil {
+		return false, errors.Join(execution.ErrIdempotencyAtomicUnavailable, err)
+	}
+	if err := atomic.CompleteInTransaction(ctx, plan, transaction); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func outcomeFor(err error) Outcome {

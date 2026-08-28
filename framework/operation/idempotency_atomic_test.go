@@ -74,8 +74,8 @@ func TestExecutorStagesDurableIdempotencySuccessBeforeLocalCommit(t *testing.T) 
 	ctx = execution.WithIdempotencyKey(ctx, "request-1")
 	plan := operationplan.Plan{
 		OperationID: "device.create",
-		Execution: operationplan.Execution{Transaction: "local", Idempotency: "required"},
-		Security: operationplan.Security{Public: true, PermissionMode: "all"},
+		Execution:   operationplan.Execution{Transaction: "local", Idempotency: "required"},
+		Security:    operationplan.Security{Public: true, PermissionMode: "all"},
 	}
 	value, err := runtime.Execute(ctx, plan, nil, func(context.Context) (any, error) { return "ok", nil })
 	if err != nil {

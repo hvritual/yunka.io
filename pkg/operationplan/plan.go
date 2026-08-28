@@ -159,6 +159,9 @@ func Validate(set Set) error {
 		default:
 			return fmt.Errorf("operationplan: operation %s has invalid idempotency policy %q", item.OperationID, item.Execution.Idempotency)
 		}
+		if item.Execution.Idempotency == "required" && item.Execution.Transaction != "local" {
+			return fmt.Errorf("operationplan: operation %s requires local transaction for durable idempotency", item.OperationID)
+		}
 		switch item.Composition.Boundary {
 		case "", "local", "remote_saga":
 		default:

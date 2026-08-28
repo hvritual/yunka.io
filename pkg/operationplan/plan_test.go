@@ -141,3 +141,20 @@ func TestValidateRejectsUnknownExecutionPolicy(t *testing.T) {
 		t.Fatalf("idempotency policy err=%v", err)
 	}
 }
+
+func TestValidateRequiresLocalTransactionForDurableIdempotency(t *testing.T) {
+	plan := Plan{
+		OperationID: "command", Domain: "d", Application: "app", UseCase: "command",
+		RequestType: "d.CommandRequest", ResponseType: "d.CommandResponse",
+		Security:  Security{PermissionMode: "all"},
+		Execution: Execution{Transaction: "none", Idempotency: "required"},
+		Bindings:  Bindings{RPC: "/d.App/Command"},
+	}
+	if err := Validate(Set{Operations: []Plan{plan}}); err == nil || !strings.Contains(err.Error(), "requires local transaction") {
+		t.Fatalf("durable idempotency transaction err=%v", err)
+	}
+	plan.Execution.Transaction = "local"
+	if err := Validate(Set{Operations: []Plan{plan}}); err != nil {
+		t.Fatalf("local durable idempotency should validate: %v", err)
+	}
+}
