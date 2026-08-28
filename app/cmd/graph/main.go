@@ -13,6 +13,7 @@ import (
 	"github.com/urfave/cli"
 	applicationgraph "yunka.io/pkg/applicationgraph"
 	"yunka.io/pkg/contract"
+	"yunka.io/pkg/operationplan"
 )
 
 const AppName = "graph"
@@ -31,6 +32,7 @@ func buildCommand() cli.Command {
 		Usage: "compile contract and optional runtime diagnostics into an application graph",
 		Flags: []cli.Flag{
 			cli.StringFlag{Name: "manifest", Value: "contracts/generated/manifest.json"},
+			cli.StringFlag{Name: "operation-plans", Value: "contracts/generated/operation-plans.json"},
 			cli.StringFlag{Name: "diagnostics", Usage: "optional W07 diagnostics JSON file"},
 			cli.StringFlag{Name: "application", Value: "yunka"},
 			cli.StringFlag{Name: "out", Value: ".yunka/application-graph.json"},
@@ -40,8 +42,15 @@ func buildCommand() cli.Command {
 			if err != nil {
 				return err
 			}
+			plans, err := operationplan.Load(c.String("operation-plans"))
+			if err != nil {
+				return err
+			}
 			builder := applicationgraph.NewBuilder()
 			if err := applicationgraph.AddContract(builder, manifest); err != nil {
+				return err
+			}
+			if err := applicationgraph.AddOperationPlans(builder, plans); err != nil {
 				return err
 			}
 			if path := strings.TrimSpace(c.String("diagnostics")); path != "" {
