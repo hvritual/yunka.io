@@ -1,0 +1,44 @@
+name: c9-7-runtime-builder
+
+on:
+  push:
+    branches:
+      - agent/c9-7-execution-semantics
+    paths:
+      - tools/c9_7_runtime_builder.py
+      - .github/workflows/c9-7-runtime-builder.yml
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/c9-7-execution-semantics
+          fetch-depth: 0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: 1.25.13
+          cache: false
+      - name: Apply C9.7.3-5 and runtime phase implementation
+        run: python3 tools/c9_7_runtime_builder.py
+      - name: Format and targeted validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          gofmt -w framework/execution framework/requestscope framework/operation
+          (cd framework && go test ./execution ./requestscope ./operation)
+          git diff --check
+      - name: Commit runtime implementation and self-remove builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f tools/c9_7_runtime_builder.py .github/workflows/c9-7-runtime-builder.yml
+          git config user.name hvritual
+          git config user.email 460657446@qq.com
+          git add -A
+          git commit -m "feat: add C9.7 execution scope runtime"
+          git push origin HEAD:agent/c9-7-execution-semantics
