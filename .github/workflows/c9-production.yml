@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - agent/c9-operation-contract-runtime
+      - agent/c9-7-execution-semantics
 
 permissions:
   contents: read
