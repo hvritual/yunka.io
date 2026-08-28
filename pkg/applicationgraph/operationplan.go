@@ -37,13 +37,15 @@ func AddOperationPlans(builder *Builder, set operationplan.Set) error {
 			return err
 		}
 		operationAttrs := map[string]string{
-			"operationId":       plan.OperationID,
-			"useCase":           plan.UseCase,
-			"domain":            plan.Domain,
-			"application":       plan.Application,
-			"public":            strconv.FormatBool(plan.Security.Public),
-			"tenantRequired":    strconv.FormatBool(plan.Security.TenantRequired),
-			"permissionMode":    plan.Security.PermissionMode,
+			"operationId":         plan.OperationID,
+			"useCase":             plan.UseCase,
+			"domain":              plan.Domain,
+			"application":         plan.Application,
+			"public":              strconv.FormatBool(plan.Security.Public),
+			"tenantRequired":      strconv.FormatBool(plan.Security.TenantRequired),
+			"permissionMode":      plan.Security.PermissionMode,
+			"transaction":         plan.Execution.Transaction,
+			"idempotency":         plan.Execution.Idempotency,
 			"operationPlanSchema": strconv.Itoa(set.SchemaVersion),
 			"operationPlanDigest": digest,
 		}

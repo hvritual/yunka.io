@@ -74,8 +74,10 @@ func (unit *gormUnitOfWork) Commit(ctx context.Context) error {
 		return unit.finishErr
 	}
 	result := unit.transaction.WithContext(normalizeContext(ctx)).Commit()
-	unit.finished = true
 	unit.finishErr = result.Error
+	if result.Error == nil {
+		unit.finished = true
+	}
 	return unit.finishErr
 }
 
