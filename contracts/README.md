@@ -1,6 +1,6 @@
 # Contract artifacts
 
-W06 established protobuf-backed deterministic contract artifacts. C3 converges the repository's service-contract inputs through an explicit source inventory rather than treating one historical directory as the entire API surface.
+W06 established protobuf-backed deterministic contract artifacts. C3 converges the repository's service-contract inputs through an explicit source inventory rather than treating one historical directory as the entire API surface. C9 additionally compiles typed PB Operation declarations into immutable execution plans consumed by the unified runtime.
 
 ## Canonical sources
 
@@ -23,6 +23,7 @@ Committed outputs live under `contracts/generated/`:
 - `manifest.json` — normalized protobuf/API contract used by compatibility checks.
 - `openapi.json` — OpenAPI 3.1 document. Only explicitly HTTP-bound RPCs appear in `paths`; unbound RPCs are listed under `x-yunka-rpc-methods` rather than receiving invented HTTP routes.
 - `client.ts` — transport-neutral TypeScript RPC client. Applications provide the HTTP/gRPC/custom transport implementation.
+- `operation-plans.json` — C9 deterministic execution IR compiled from typed PB Domain/Application/Operation declarations. It contains stable Operation identity, security intent, composition/dependency closure, Application capability dependencies, and explicit transport bindings. It is derived evidence; protobuf remains the writable source of truth.
 
 Do not edit these files manually. Regenerate them with:
 
@@ -36,7 +37,15 @@ and verify drift with:
 make contract-check
 ```
 
-`make contract-check` also runs `make rpc-contract-check`, which verifies the committed modern generated descriptors against the canonical `contracts/proto/` inventory.
+`make contract-check` also runs `make rpc-contract-check`, which verifies the committed modern generated descriptors against the canonical `contracts/proto/` inventory. `operation-plans.json` participates in the same drift and determinism checks as the other committed artifacts.
+
+## Operation execution contract
+
+For a typed Application, C9 compiles PB declarations into `pkg/operationplan` and generates static Go OperationPlan accessors plus Executor-backed REST/gRPC adapters. Runtime code does not inspect descriptors or comments per request.
+
+The stable PB Operation ID is the execution identity. gRPC full method names and HTTP method/path pairs are bindings only. Gateway authorization remains the security authority; the framework Executor sequences the configured security phase before Application invocation.
+
+Canonical C9 generation does not emit the historical C8 REST/RPC transport adapters. The older `RenderApplicationCode` API remains only as a bounded compatibility/test surface while `yunka contract generate` uses the C9 generator.
 
 ## HTTP bindings
 
