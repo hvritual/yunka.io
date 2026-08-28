@@ -1,18 +1,21 @@
-name: c9-8-internal-operation-builder
+name: c9-8-framework-verify
 
 on:
   push:
     branches:
       - agent/c9-8-cross-application-pressure
     paths:
-      - tools/c9_8_internal_operation_builder.py
       - .github/workflows/c9-8-internal-operation-builder.yml
+      - pkg/contract/external_contract.go
+      - pkg/contract/external_contract_test.go
+      - pkg/contract/openapi.go
+      - pkg/contract/typescript.go
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -35,7 +38,7 @@ jobs:
           go-version: ${{ steps.lock.outputs.go_version }}
           cache: false
 
-      - name: Install locked protoc
+      - name: Install locked protoc and RPC tools
         shell: bash
         env:
           PROTOC_RELEASE: ${{ steps.lock.outputs.protoc_release }}
@@ -49,27 +52,14 @@ jobs:
           mkdir -p "$install_root"
           unzip -q "$archive" -d "$install_root"
           echo "$install_root/bin" >> "$GITHUB_PATH"
+          make PROTOC="$install_root/bin/protoc" rpc-tools
 
-      - name: Apply FP-C9-001 fix
+      - name: Targeted external projection tests
         shell: bash
         run: |
           set -euo pipefail
-          python3 tools/c9_8_internal_operation_builder.py
-          changed_go="$(git diff --name-only -- '*.go')"
-          if [ -n "$changed_go" ]; then gofmt -w $changed_go; fi
-          git diff --check
-
-      - name: Regenerate protobuf and canonical artifacts
-        shell: bash
-        run: |
-          set -euo pipefail
-          make PROTOC="$RUNNER_TEMP/protoc/bin/protoc" rpc-generate
-          git diff --check
-
-      - name: Targeted internal Operation tests
-        shell: bash
-        run: |
-          set -euo pipefail
+          gofmt -d pkg/contract/external_contract.go pkg/contract/external_contract_test.go pkg/contract/openapi.go pkg/contract/typescript.go | tee /tmp/gofmt.diff
+          test ! -s /tmp/gofmt.diff
           (cd pkg && go test ./contract ./operationplan ./applicationgraph ./architecturepolicy)
 
       - name: Full verify
@@ -77,14 +67,3 @@ jobs:
         run: |
           set -euo pipefail
           make PROTOC="$RUNNER_TEMP/protoc/bin/protoc" verify
-
-      - name: Commit verified source
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name hvritual
-          git config user.email 460657446@qq.com
-          git add contracts/proto/yunka/dsl/v1/options.proto pkg/contractdsl/v1/options.pb.go pkg/contract pkg/operationplan pkg/applicationgraph pkg/architecturepolicy contracts/generated
-          git diff --cached --check
-          git commit -m 'feat: support canonical internal application operations'
-          git push origin HEAD:agent/c9-8-cross-application-pressure
