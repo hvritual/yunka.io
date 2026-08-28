@@ -1,6 +1,7 @@
 package applicationgraph
 
 import (
+	"strconv"
 	"testing"
 
 	"yunka.io/pkg/operationplan"
@@ -10,8 +11,9 @@ func TestAddOperationPlansAddsDeclaredExecutionEvidence(t *testing.T) {
 	set := operationplan.Set{SchemaVersion: operationplan.SchemaVersion, Operations: []operationplan.Plan{{
 		OperationID: "device.get", Domain: "device", Application: "management", UseCase: "get_device",
 		RequestType: "device.v1.GetDeviceRequest", ResponseType: "device.v1.DeviceDTO",
-		Security: operationplan.Security{TenantRequired: true, Permissions: []string{"device.read"}, PermissionMode: "all"},
-		Bindings: operationplan.Bindings{RPC: "/device.v1.DeviceApplication/GetDevice", HTTP: []operationplan.HTTPBinding{{Method: "GET", Path: "/v1/devices/{id}"}}},
+		Security:  operationplan.Security{TenantRequired: true, Permissions: []string{"device.read"}, PermissionMode: "all"},
+		Execution: operationplan.Execution{Transaction: "read_only", Idempotency: "none"},
+		Bindings:  operationplan.Bindings{RPC: "/device.v1.DeviceApplication/GetDevice", HTTP: []operationplan.HTTPBinding{{Method: "GET", Path: "/v1/devices/{id}"}}},
 	}}}
 	builder := NewBuilder()
 	if err := AddOperationPlans(builder, set); err != nil {
@@ -29,8 +31,11 @@ func TestAddOperationPlansAddsDeclaredExecutionEvidence(t *testing.T) {
 			break
 		}
 	}
-	if operation.ID == "" || operation.Attributes["operationPlanSchema"] != "1" || operation.Attributes["operationPlanDigest"] == "" {
+	if operation.ID == "" || operation.Attributes["operationPlanSchema"] != strconv.Itoa(operationplan.SchemaVersion) || operation.Attributes["operationPlanDigest"] == "" {
 		t.Fatalf("operation=%+v", operation)
+	}
+	if operation.Attributes["transaction"] != "read_only" || operation.Attributes["idempotency"] != "none" {
+		t.Fatalf("execution evidence=%+v", operation.Attributes)
 	}
 	foundEvidence := false
 	for _, evidence := range operation.Evidence {
@@ -42,8 +47,8 @@ func TestAddOperationPlansAddsDeclaredExecutionEvidence(t *testing.T) {
 		t.Fatalf("operation evidence=%v", operation.Evidence)
 	}
 	wantEdges := map[string]bool{
-		ID(NodeApplication, "device/management") + "|" + string(EdgeContains) + "|" + operationID: false,
-		operationID + "|" + string(EdgeRequires) + "|" + ID(NodePermission, "device.read"): false,
+		ID(NodeApplication, "device/management") + "|" + string(EdgeContains) + "|" + operationID:  false,
+		operationID + "|" + string(EdgeRequires) + "|" + ID(NodePermission, "device.read"):         false,
 		ID(NodeHTTPRoute, "GET /v1/devices/{id}") + "|" + string(EdgeRoutesTo) + "|" + operationID: false,
 	}
 	for _, edge := range graph.Edges {

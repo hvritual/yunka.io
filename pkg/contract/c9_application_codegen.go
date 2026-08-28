@@ -36,9 +36,11 @@ func RenderC9ApplicationCode(manifest Manifest, options ApplicationCodeOptions) 
 	}
 	messages := messageIndex(manifest)
 	typedByDomain := make(map[string][]Service)
+	serviceByApplication := make(map[string]Service)
 	for _, service := range manifest.Services {
 		if service.Application != nil {
 			typedByDomain[service.Domain] = append(typedByDomain[service.Domain], service)
+			serviceByApplication[service.Domain+"/"+service.Application.Name] = service
 		}
 	}
 	rootImport := strings.TrimRight(strings.TrimSpace(options.RootImport), "/")
@@ -71,6 +73,17 @@ func RenderC9ApplicationCode(manifest Manifest, options ApplicationCodeOptions) 
 					return renderC9RESTAdapter(service, packages, messages, rootImport, naming)
 				}},
 			}
+			if len(service.Application.Requires) > 0 {
+				generated = append(generated, struct {
+					path   string
+					render func() (string, error)
+				}{
+					filepath.ToSlash(filepath.Join(domain, "application", "zz_yunka_"+naming.FileStem+"_capability_ports_gen.go")),
+					func() (string, error) {
+						return renderC9CapabilityPorts(service, naming, serviceByApplication, typedByDomain, packages, rootImport)
+					},
+				})
+			}
 			for _, artifact := range generated {
 				source, err := artifact.render()
 				if err != nil {
@@ -92,7 +105,7 @@ func c9NonTransportCompatibilityFiles(files []GeneratedApplicationFile) []Genera
 	result := make([]GeneratedApplicationFile, 0, len(files))
 	for _, file := range files {
 		path := filepath.ToSlash(file.Path)
-		if strings.Contains(path, "/transport/rest/") || strings.Contains(path, "/transport/rpc/") {
+		if strings.Contains(path, "/transport/rest/") || strings.Contains(path, "/transport/rpc/") || strings.HasSuffix(path, "_capability_ports_gen.go") {
 			continue
 		}
 		result = append(result, file)
@@ -135,6 +148,70 @@ func c9RESTErrorName(naming serviceCodegenNaming) string {
 	return "writeOperationError"
 }
 
+func renderC9CapabilityPorts(service Service, naming serviceCodegenNaming, services map[string]Service, typedByDomain map[string][]Service, packages []protoGoPackage, rootImport string) (string, error) {
+	imports := newImportSet()
+	imports.add("context", "context")
+	imports.add("errors", "errors")
+	imports.add("yunka.io/framework/operation", "operation")
+	var declarations strings.Builder
+	var providerMethods strings.Builder
+	seen := map[string]string{}
+	for _, dependency := range stableStrings(service.Application.Requires) {
+		target, ok := services[dependency]
+		if !ok || target.Application == nil {
+			return "", fmt.Errorf("contract C9 application codegen: unknown capability dependency %s for %s", dependency, service.FullName)
+		}
+		targetNaming := namingForService(target, len(typedByDomain[target.Domain]) > 1)
+		dependencySymbol := exportedApplicationSymbol(strings.ReplaceAll(dependency, "/", "_"))
+		if owner, duplicate := seen[dependencySymbol]; duplicate && owner != dependency {
+			return "", fmt.Errorf("contract C9 application codegen: capability dependencies %s and %s collapse to symbol %s", owner, dependency, dependencySymbol)
+		}
+		seen[dependencySymbol] = dependency
+		interfaceName := dependencySymbol + "ChildCapability"
+		implementationName := "c9" + dependencySymbol + "ChildCapability"
+		constructorName := "New" + dependencySymbol + "ChildCapability"
+
+		targetApplicationType := targetNaming.ApplicationInterface
+		if target.Domain != service.Domain {
+			alias := imports.add(rootImport+"/"+target.Domain+"/application", safeFileName(target.Domain)+"application")
+			targetApplicationType = alias + "." + targetNaming.ApplicationInterface
+		}
+		policyAlias := imports.add(rootImport+"/"+target.Domain+"/policy", safeFileName(target.Domain)+"policy")
+
+		var interfaceMethods strings.Builder
+		var wrapperMethods strings.Builder
+		for _, method := range target.Methods {
+			request, err := resolveGoType(method.Request, packages, imports)
+			if err != nil {
+				return "", err
+			}
+			response, err := resolveGoType(method.Response, packages, imports)
+			if err != nil {
+				return "", err
+			}
+			fmt.Fprintf(&interfaceMethods, "\t%s(context.Context, *%s.%s) (*%s.%s, error)\n", method.Name, request.Alias, request.Type, response.Alias, response.Type)
+			fmt.Fprintf(&wrapperMethods, "func (capability *%s) %s(ctx context.Context, request *%s.%s) (*%s.%s, error) {\n", implementationName, method.Name, request.Alias, request.Type, response.Alias, response.Type)
+			fmt.Fprintf(&wrapperMethods, "\treturn operation.ExecuteChildTyped(ctx, capability.executor, %s.%s(), request, capability.application.%s)\n}\n\n", policyAlias, c9PlanFunction(targetNaming, method), method.Name)
+		}
+		fmt.Fprintf(&declarations, "type %s interface {\n%s}\n\n", interfaceName, interfaceMethods.String())
+		fmt.Fprintf(&declarations, "type %s struct { application %s; executor operation.Executor }\n\n", implementationName, targetApplicationType)
+		fmt.Fprintf(&declarations, "func %s(application %s, executor operation.Executor) (%s, error) {\n", constructorName, targetApplicationType, interfaceName)
+		fmt.Fprintf(&declarations, "\tif application == nil { return nil, errors.New(%q) }\n", "contract C9 child capability: target application is required")
+		fmt.Fprintf(&declarations, "\tif executor == nil { return nil, errors.New(%q) }\n", "contract C9 child capability: operation executor is required")
+		fmt.Fprintf(&declarations, "\treturn &%s{application: application, executor: executor}, nil\n}\n\n", implementationName)
+		declarations.WriteString(wrapperMethods.String())
+		fmt.Fprintf(&providerMethods, "\t%s() %s\n", dependencySymbol, interfaceName)
+	}
+	var b strings.Builder
+	b.WriteString(GeneratedApplicationMarker + "\n\npackage application\n\nimport (\n")
+	b.WriteString(imports.render())
+	b.WriteString(")\n\n")
+	b.WriteString(declarations.String())
+	fmt.Fprintf(&b, "// %sCapabilities exposes only C9 child-Operation wrappers for declared application dependencies.\n", naming.Symbol)
+	fmt.Fprintf(&b, "type %sCapabilities interface {\n%s}\n", naming.Symbol, providerMethods.String())
+	return b.String(), nil
+}
+
 func renderC9OperationPlans(service Service, naming serviceCodegenNaming, plans map[string]operationplan.Plan) (string, error) {
 	var b strings.Builder
 	b.WriteString(GeneratedApplicationMarker + "\n\npackage policy\n\nimport \"yunka.io/pkg/operationplan\"\n\n")
@@ -155,6 +232,7 @@ func renderC9OperationPlans(service Service, naming serviceCodegenNaming, plans 
 
 func writeOperationPlanLiteral(b *strings.Builder, plan operationplan.Plan) {
 	fmt.Fprintf(b, "operationplan.Plan{OperationID:%q, Domain:%q, Application:%q, UseCase:%q, RequestType:%q, ResponseType:%q, ", plan.OperationID, plan.Domain, plan.Application, plan.UseCase, plan.RequestType, plan.ResponseType)
+	fmt.Fprintf(b, "Execution: operationplan.Execution{Transaction:%q, Idempotency:%q}, ", plan.Execution.Transaction, plan.Execution.Idempotency)
 	fmt.Fprintf(b, "Security: operationplan.Security{Public:%t, TenantRequired:%t, Authentication:", plan.Security.Public, plan.Security.TenantRequired)
 	writeOperationPlanStrings(b, plan.Security.Authentication)
 	b.WriteString(", Permissions:")
@@ -190,6 +268,8 @@ func renderC9RPCAdapter(service Service, packages []protoGoPackage, rootImport s
 	applicationAlias := imports.add(rootImport+"/"+service.Domain+"/application", "application")
 	policyAlias := imports.add(rootImport+"/"+service.Domain+"/policy", "policy")
 	imports.add("google.golang.org/grpc", "grpc")
+	imports.add("google.golang.org/grpc/metadata", "grpcmetadata")
+	imports.add("yunka.io/framework/execution", "execution")
 	imports.add("yunka.io/framework/operation", "operation")
 	imports.add("yunka.io/gateway/rpc/transport/grpc", "gatewaygrpc")
 	serverName := c9ServerName(naming)
@@ -205,6 +285,7 @@ func renderC9RPCAdapter(service Service, packages []protoGoPackage, rootImport s
 			return "", err
 		}
 		fmt.Fprintf(&methods, "func (server *%s) %s(ctx context.Context, request *%s.%s) (*%s.%s, error) {\n", serverName, method.Name, request.Alias, request.Type, response.Alias, response.Type)
+		methods.WriteString("\tif metadata, ok := grpcmetadata.FromIncomingContext(ctx); ok { if values := metadata.Get(\"idempotency-key\"); len(values) > 0 { ctx = execution.WithIdempotencyKey(ctx, values[0]) } }\n")
 		fmt.Fprintf(&methods, "\tresponse, err := operation.ExecuteTyped(ctx, server.executor, %s.%s(), request, server.application.%s)\n", policyAlias, c9PlanFunction(naming, method), method.Name)
 		methods.WriteString("\tif err != nil { return nil, gatewaygrpc.OperationError(err) }\n\treturn response, nil\n}\n\n")
 	}
@@ -226,6 +307,7 @@ func renderC9RESTAdapter(service Service, packages []protoGoPackage, messages ma
 	imports := newImportSet()
 	applicationAlias := imports.add(rootImport+"/"+service.Domain+"/application", "application")
 	policyAlias := imports.add(rootImport+"/"+service.Domain+"/policy", "policy")
+	imports.add("yunka.io/framework/execution", "execution")
 	imports.add("yunka.io/framework/operation", "operation")
 	imports.add("yunka.io/gateway/authz", "authz")
 	imports.add("google.golang.org/protobuf/encoding/protojson", "protojson")
@@ -288,7 +370,8 @@ func renderC9RESTAdapter(service Service, packages []protoGoPackage, messages ma
 					return "", fmt.Errorf("contract C9 application codegen: %s: %w", method.FullName, err)
 				}
 			}
-			fmt.Fprintf(&handlers, "\toutput, err := operation.ExecuteTyped(request.Context(), handler.executor, %s.%s(), wire, handler.application.%s)\n", policyAlias, c9PlanFunction(naming, method), method.Name)
+			handlers.WriteString("\tcallContext := execution.WithIdempotencyKey(request.Context(), request.Header.Get(\"Idempotency-Key\"))\n")
+			fmt.Fprintf(&handlers, "\toutput, err := operation.ExecuteTyped(callContext, handler.executor, %s.%s(), wire, handler.application.%s)\n", policyAlias, c9PlanFunction(naming, method), method.Name)
 			fmt.Fprintf(&handlers, "\tif err != nil { %s(writer, err); return }\n", errorName)
 			handlers.WriteString("\tpayload, err := protojson.Marshal(output)\n\tif err != nil { http.Error(writer, \"response encoding failed\", http.StatusInternalServerError); return }\n\twriter.Header().Set(\"Content-Type\", \"application/json\")\n\t_, _ = writer.Write(payload)\n}\n\n")
 		}
@@ -310,7 +393,9 @@ func renderC9RESTAdapter(service Service, packages []protoGoPackage, messages ma
 	b.WriteString("\treturn nil\n}\n\n")
 	fmt.Fprintf(&b, "func %s(writer http.ResponseWriter, err error) {\n", errorName)
 	b.WriteString("\tif authz.IsDenied(err) {\n\t\tstatusCode := http.StatusForbidden\n\t\tvar denied *authz.DeniedError\n\t\tif errors.As(err, &denied) && (denied.Decision.Reason == authz.ReasonUnauthenticated || denied.Decision.Reason == authz.ReasonAuthenticationMethod) { statusCode = http.StatusUnauthorized }\n\t\thttp.Error(writer, http.StatusText(statusCode), statusCode); return\n\t}\n")
-	b.WriteString("\tif errors.Is(err, operation.ErrExecutorUnavailable) || errors.Is(err, operation.ErrSecurityUnavailable) || errors.Is(err, operation.ErrSecurityNilContext) { http.Error(writer, \"operation execution unavailable\", http.StatusInternalServerError); return }\n")
+	b.WriteString("\tif errors.Is(err, execution.ErrIdempotencyKeyRequired) { http.Error(writer, \"idempotency key required\", http.StatusBadRequest); return }\n")
+	b.WriteString("\tif errors.Is(err, execution.ErrIdempotencyInProgress) || errors.Is(err, execution.ErrIdempotencyCompleted) { http.Error(writer, \"idempotency conflict\", http.StatusConflict); return }\n")
+	b.WriteString("\tif errors.Is(err, operation.ErrExecutorUnavailable) || errors.Is(err, operation.ErrSecurityUnavailable) || errors.Is(err, operation.ErrSecurityNilContext) || errors.Is(err, operation.ErrIdempotencyUnavailable) { http.Error(writer, \"operation execution unavailable\", http.StatusInternalServerError); return }\n")
 	b.WriteString("\thttp.Error(writer, \"application request failed\", http.StatusBadRequest)\n}\n\n")
 	b.WriteString(handlers.String())
 	return b.String(), nil

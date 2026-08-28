@@ -48,6 +48,26 @@ enum CompositionBoundary {
   COMPOSITION_REMOTE_SAGA = 2;
 }
 
+enum TransactionPolicy {
+  TRANSACTION_UNSPECIFIED = 0;
+  TRANSACTION_NONE = 1;
+  TRANSACTION_READ_ONLY = 2;
+  TRANSACTION_LOCAL = 3;
+}
+
+enum IdempotencyPolicy {
+  IDEMPOTENCY_UNSPECIFIED = 0;
+  IDEMPOTENCY_NONE = 1;
+  IDEMPOTENCY_REQUIRED = 2;
+}
+
+message ExecutionPolicy {
+  // Execution semantics are explicit contract facts. They must never be
+  // inferred from transport verbs or method names.
+  TransactionPolicy transaction = 1;
+  IdempotencyPolicy idempotency = 2;
+}
+
 message OperationDeclaration {
   string id = 1;
   string use_case = 2;
@@ -59,6 +79,7 @@ message OperationDeclaration {
   // Stable operation IDs invoked as internal capabilities by this use case.
   repeated string requires_operations = 8;
   CompositionBoundary composition = 9;
+  ExecutionPolicy execution = 10;
 }
 
 extend google.protobuf.FileOptions {

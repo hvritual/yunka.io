@@ -227,6 +227,107 @@ func (CompositionBoundary) EnumDescriptor() ([]byte, []int) {
 	return file_yunka_dsl_v1_options_proto_rawDescGZIP(), []int{3}
 }
 
+type TransactionPolicy int32
+
+const (
+	TransactionPolicy_TRANSACTION_UNSPECIFIED TransactionPolicy = 0
+	TransactionPolicy_TRANSACTION_NONE        TransactionPolicy = 1
+	TransactionPolicy_TRANSACTION_READ_ONLY   TransactionPolicy = 2
+	TransactionPolicy_TRANSACTION_LOCAL       TransactionPolicy = 3
+)
+
+// Enum value maps for TransactionPolicy.
+var (
+	TransactionPolicy_name = map[int32]string{
+		0: "TRANSACTION_UNSPECIFIED",
+		1: "TRANSACTION_NONE",
+		2: "TRANSACTION_READ_ONLY",
+		3: "TRANSACTION_LOCAL",
+	}
+	TransactionPolicy_value = map[string]int32{
+		"TRANSACTION_UNSPECIFIED": 0,
+		"TRANSACTION_NONE":        1,
+		"TRANSACTION_READ_ONLY":   2,
+		"TRANSACTION_LOCAL":       3,
+	}
+)
+
+func (x TransactionPolicy) Enum() *TransactionPolicy {
+	p := new(TransactionPolicy)
+	*p = x
+	return p
+}
+
+func (x TransactionPolicy) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TransactionPolicy) Descriptor() protoreflect.EnumDescriptor {
+	return file_yunka_dsl_v1_options_proto_enumTypes[4].Descriptor()
+}
+
+func (TransactionPolicy) Type() protoreflect.EnumType {
+	return &file_yunka_dsl_v1_options_proto_enumTypes[4]
+}
+
+func (x TransactionPolicy) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TransactionPolicy.Descriptor instead.
+func (TransactionPolicy) EnumDescriptor() ([]byte, []int) {
+	return file_yunka_dsl_v1_options_proto_rawDescGZIP(), []int{4}
+}
+
+type IdempotencyPolicy int32
+
+const (
+	IdempotencyPolicy_IDEMPOTENCY_UNSPECIFIED IdempotencyPolicy = 0
+	IdempotencyPolicy_IDEMPOTENCY_NONE        IdempotencyPolicy = 1
+	IdempotencyPolicy_IDEMPOTENCY_REQUIRED    IdempotencyPolicy = 2
+)
+
+// Enum value maps for IdempotencyPolicy.
+var (
+	IdempotencyPolicy_name = map[int32]string{
+		0: "IDEMPOTENCY_UNSPECIFIED",
+		1: "IDEMPOTENCY_NONE",
+		2: "IDEMPOTENCY_REQUIRED",
+	}
+	IdempotencyPolicy_value = map[string]int32{
+		"IDEMPOTENCY_UNSPECIFIED": 0,
+		"IDEMPOTENCY_NONE":        1,
+		"IDEMPOTENCY_REQUIRED":    2,
+	}
+)
+
+func (x IdempotencyPolicy) Enum() *IdempotencyPolicy {
+	p := new(IdempotencyPolicy)
+	*p = x
+	return p
+}
+
+func (x IdempotencyPolicy) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (IdempotencyPolicy) Descriptor() protoreflect.EnumDescriptor {
+	return file_yunka_dsl_v1_options_proto_enumTypes[5].Descriptor()
+}
+
+func (IdempotencyPolicy) Type() protoreflect.EnumType {
+	return &file_yunka_dsl_v1_options_proto_enumTypes[5]
+}
+
+func (x IdempotencyPolicy) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use IdempotencyPolicy.Descriptor instead.
+func (IdempotencyPolicy) EnumDescriptor() ([]byte, []int) {
+	return file_yunka_dsl_v1_options_proto_rawDescGZIP(), []int{5}
+}
+
 type DomainDeclaration struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -376,6 +477,60 @@ func (x *ApplicationDeclaration) GetRequires() []string {
 	return nil
 }
 
+type ExecutionPolicy struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Execution semantics are explicit contract facts. They must never be
+	// inferred from transport verbs or method names.
+	Transaction   TransactionPolicy `protobuf:"varint,1,opt,name=transaction,proto3,enum=yunka.dsl.v1.TransactionPolicy" json:"transaction,omitempty"`
+	Idempotency   IdempotencyPolicy `protobuf:"varint,2,opt,name=idempotency,proto3,enum=yunka.dsl.v1.IdempotencyPolicy" json:"idempotency,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExecutionPolicy) Reset() {
+	*x = ExecutionPolicy{}
+	mi := &file_yunka_dsl_v1_options_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExecutionPolicy) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecutionPolicy) ProtoMessage() {}
+
+func (x *ExecutionPolicy) ProtoReflect() protoreflect.Message {
+	mi := &file_yunka_dsl_v1_options_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecutionPolicy.ProtoReflect.Descriptor instead.
+func (*ExecutionPolicy) Descriptor() ([]byte, []int) {
+	return file_yunka_dsl_v1_options_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ExecutionPolicy) GetTransaction() TransactionPolicy {
+	if x != nil {
+		return x.Transaction
+	}
+	return TransactionPolicy_TRANSACTION_UNSPECIFIED
+}
+
+func (x *ExecutionPolicy) GetIdempotency() IdempotencyPolicy {
+	if x != nil {
+		return x.Idempotency
+	}
+	return IdempotencyPolicy_IDEMPOTENCY_UNSPECIFIED
+}
+
 type OperationDeclaration struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -388,13 +543,14 @@ type OperationDeclaration struct {
 	// Stable operation IDs invoked as internal capabilities by this use case.
 	RequiresOperations []string            `protobuf:"bytes,8,rep,name=requires_operations,json=requiresOperations,proto3" json:"requires_operations,omitempty"`
 	Composition        CompositionBoundary `protobuf:"varint,9,opt,name=composition,proto3,enum=yunka.dsl.v1.CompositionBoundary" json:"composition,omitempty"`
+	Execution          *ExecutionPolicy    `protobuf:"bytes,10,opt,name=execution,proto3" json:"execution,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
 
 func (x *OperationDeclaration) Reset() {
 	*x = OperationDeclaration{}
-	mi := &file_yunka_dsl_v1_options_proto_msgTypes[3]
+	mi := &file_yunka_dsl_v1_options_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -406,7 +562,7 @@ func (x *OperationDeclaration) String() string {
 func (*OperationDeclaration) ProtoMessage() {}
 
 func (x *OperationDeclaration) ProtoReflect() protoreflect.Message {
-	mi := &file_yunka_dsl_v1_options_proto_msgTypes[3]
+	mi := &file_yunka_dsl_v1_options_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -419,7 +575,7 @@ func (x *OperationDeclaration) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OperationDeclaration.ProtoReflect.Descriptor instead.
 func (*OperationDeclaration) Descriptor() ([]byte, []int) {
-	return file_yunka_dsl_v1_options_proto_rawDescGZIP(), []int{3}
+	return file_yunka_dsl_v1_options_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *OperationDeclaration) GetId() string {
@@ -483,6 +639,13 @@ func (x *OperationDeclaration) GetComposition() CompositionBoundary {
 		return x.Composition
 	}
 	return CompositionBoundary_COMPOSITION_UNSPECIFIED
+}
+
+func (x *OperationDeclaration) GetExecution() *ExecutionPolicy {
+	if x != nil {
+		return x.Execution
+	}
+	return nil
 }
 
 var file_yunka_dsl_v1_options_proto_extTypes = []protoimpl.ExtensionInfo{
@@ -556,7 +719,10 @@ const file_yunka_dsl_v1_options_proto_rawDesc = "" +
 	"\x04kind\x18\x01 \x01(\x0e2\x15.yunka.dsl.v1.DTOKindR\x04kind\"H\n" +
 	"\x16ApplicationDeclaration\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
-	"\brequires\x18\x02 \x03(\tR\brequires\"\xa7\x03\n" +
+	"\brequires\x18\x02 \x03(\tR\brequires\"\x97\x01\n" +
+	"\x0fExecutionPolicy\x12A\n" +
+	"\vtransaction\x18\x01 \x01(\x0e2\x1f.yunka.dsl.v1.TransactionPolicyR\vtransaction\x12A\n" +
+	"\vidempotency\x18\x02 \x01(\x0e2\x1f.yunka.dsl.v1.IdempotencyPolicyR\vidempotency\"\xe4\x03\n" +
 	"\x14OperationDeclaration\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
 	"\buse_case\x18\x02 \x01(\tR\auseCase\x12 \n" +
@@ -566,7 +732,9 @@ const file_yunka_dsl_v1_options_proto_rawDesc = "" +
 	"\x0eauthentication\x18\x06 \x03(\x0e2\x1c.yunka.dsl.v1.AuthenticationR\x0eauthentication\x12\x16\n" +
 	"\x06public\x18\a \x01(\bR\x06public\x12/\n" +
 	"\x13requires_operations\x18\b \x03(\tR\x12requiresOperations\x12C\n" +
-	"\vcomposition\x18\t \x01(\x0e2!.yunka.dsl.v1.CompositionBoundaryR\vcomposition*r\n" +
+	"\vcomposition\x18\t \x01(\x0e2!.yunka.dsl.v1.CompositionBoundaryR\vcomposition\x12;\n" +
+	"\texecution\x18\n" +
+	" \x01(\v2\x1d.yunka.dsl.v1.ExecutionPolicyR\texecution*r\n" +
 	"\aDTOKind\x12\x13\n" +
 	"\x0fDTO_UNSPECIFIED\x10\x00\x12\r\n" +
 	"\tDTO_INPUT\x10\x01\x12\x0e\n" +
@@ -587,7 +755,16 @@ const file_yunka_dsl_v1_options_proto_rawDesc = "" +
 	"\x13CompositionBoundary\x12\x1b\n" +
 	"\x17COMPOSITION_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11COMPOSITION_LOCAL\x10\x01\x12\x1b\n" +
-	"\x17COMPOSITION_REMOTE_SAGA\x10\x02:W\n" +
+	"\x17COMPOSITION_REMOTE_SAGA\x10\x02*x\n" +
+	"\x11TransactionPolicy\x12\x1b\n" +
+	"\x17TRANSACTION_UNSPECIFIED\x10\x00\x12\x14\n" +
+	"\x10TRANSACTION_NONE\x10\x01\x12\x19\n" +
+	"\x15TRANSACTION_READ_ONLY\x10\x02\x12\x15\n" +
+	"\x11TRANSACTION_LOCAL\x10\x03*`\n" +
+	"\x11IdempotencyPolicy\x12\x1b\n" +
+	"\x17IDEMPOTENCY_UNSPECIFIED\x10\x00\x12\x14\n" +
+	"\x10IDEMPOTENCY_NONE\x10\x01\x12\x18\n" +
+	"\x14IDEMPOTENCY_REQUIRED\x10\x02:W\n" +
 	"\x06domain\x12\x1c.google.protobuf.FileOptions\x18\xb9\x8e\x03 \x01(\v2\x1f.yunka.dsl.v1.DomainDeclarationR\x06domain:Q\n" +
 	"\x03dto\x12\x1f.google.protobuf.MessageOptions\x18\xba\x8e\x03 \x01(\v2\x1c.yunka.dsl.v1.DTODeclarationR\x03dto:i\n" +
 	"\vapplication\x12\x1f.google.protobuf.ServiceOptions\x18\xbb\x8e\x03 \x01(\v2$.yunka.dsl.v1.ApplicationDeclarationR\vapplication:b\n" +
@@ -605,40 +782,46 @@ func file_yunka_dsl_v1_options_proto_rawDescGZIP() []byte {
 	return file_yunka_dsl_v1_options_proto_rawDescData
 }
 
-var file_yunka_dsl_v1_options_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_yunka_dsl_v1_options_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_yunka_dsl_v1_options_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
+var file_yunka_dsl_v1_options_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_yunka_dsl_v1_options_proto_goTypes = []any{
 	(DTOKind)(0),                        // 0: yunka.dsl.v1.DTOKind
 	(PermissionMode)(0),                 // 1: yunka.dsl.v1.PermissionMode
 	(Authentication)(0),                 // 2: yunka.dsl.v1.Authentication
 	(CompositionBoundary)(0),            // 3: yunka.dsl.v1.CompositionBoundary
-	(*DomainDeclaration)(nil),           // 4: yunka.dsl.v1.DomainDeclaration
-	(*DTODeclaration)(nil),              // 5: yunka.dsl.v1.DTODeclaration
-	(*ApplicationDeclaration)(nil),      // 6: yunka.dsl.v1.ApplicationDeclaration
-	(*OperationDeclaration)(nil),        // 7: yunka.dsl.v1.OperationDeclaration
-	(*descriptorpb.FileOptions)(nil),    // 8: google.protobuf.FileOptions
-	(*descriptorpb.MessageOptions)(nil), // 9: google.protobuf.MessageOptions
-	(*descriptorpb.ServiceOptions)(nil), // 10: google.protobuf.ServiceOptions
-	(*descriptorpb.MethodOptions)(nil),  // 11: google.protobuf.MethodOptions
+	(TransactionPolicy)(0),              // 4: yunka.dsl.v1.TransactionPolicy
+	(IdempotencyPolicy)(0),              // 5: yunka.dsl.v1.IdempotencyPolicy
+	(*DomainDeclaration)(nil),           // 6: yunka.dsl.v1.DomainDeclaration
+	(*DTODeclaration)(nil),              // 7: yunka.dsl.v1.DTODeclaration
+	(*ApplicationDeclaration)(nil),      // 8: yunka.dsl.v1.ApplicationDeclaration
+	(*ExecutionPolicy)(nil),             // 9: yunka.dsl.v1.ExecutionPolicy
+	(*OperationDeclaration)(nil),        // 10: yunka.dsl.v1.OperationDeclaration
+	(*descriptorpb.FileOptions)(nil),    // 11: google.protobuf.FileOptions
+	(*descriptorpb.MessageOptions)(nil), // 12: google.protobuf.MessageOptions
+	(*descriptorpb.ServiceOptions)(nil), // 13: google.protobuf.ServiceOptions
+	(*descriptorpb.MethodOptions)(nil),  // 14: google.protobuf.MethodOptions
 }
 var file_yunka_dsl_v1_options_proto_depIdxs = []int32{
 	0,  // 0: yunka.dsl.v1.DTODeclaration.kind:type_name -> yunka.dsl.v1.DTOKind
-	1,  // 1: yunka.dsl.v1.OperationDeclaration.permission_mode:type_name -> yunka.dsl.v1.PermissionMode
-	2,  // 2: yunka.dsl.v1.OperationDeclaration.authentication:type_name -> yunka.dsl.v1.Authentication
-	3,  // 3: yunka.dsl.v1.OperationDeclaration.composition:type_name -> yunka.dsl.v1.CompositionBoundary
-	8,  // 4: yunka.dsl.v1.domain:extendee -> google.protobuf.FileOptions
-	9,  // 5: yunka.dsl.v1.dto:extendee -> google.protobuf.MessageOptions
-	10, // 6: yunka.dsl.v1.application:extendee -> google.protobuf.ServiceOptions
-	11, // 7: yunka.dsl.v1.operation:extendee -> google.protobuf.MethodOptions
-	4,  // 8: yunka.dsl.v1.domain:type_name -> yunka.dsl.v1.DomainDeclaration
-	5,  // 9: yunka.dsl.v1.dto:type_name -> yunka.dsl.v1.DTODeclaration
-	6,  // 10: yunka.dsl.v1.application:type_name -> yunka.dsl.v1.ApplicationDeclaration
-	7,  // 11: yunka.dsl.v1.operation:type_name -> yunka.dsl.v1.OperationDeclaration
-	12, // [12:12] is the sub-list for method output_type
-	12, // [12:12] is the sub-list for method input_type
-	8,  // [8:12] is the sub-list for extension type_name
-	4,  // [4:8] is the sub-list for extension extendee
-	0,  // [0:4] is the sub-list for field type_name
+	4,  // 1: yunka.dsl.v1.ExecutionPolicy.transaction:type_name -> yunka.dsl.v1.TransactionPolicy
+	5,  // 2: yunka.dsl.v1.ExecutionPolicy.idempotency:type_name -> yunka.dsl.v1.IdempotencyPolicy
+	1,  // 3: yunka.dsl.v1.OperationDeclaration.permission_mode:type_name -> yunka.dsl.v1.PermissionMode
+	2,  // 4: yunka.dsl.v1.OperationDeclaration.authentication:type_name -> yunka.dsl.v1.Authentication
+	3,  // 5: yunka.dsl.v1.OperationDeclaration.composition:type_name -> yunka.dsl.v1.CompositionBoundary
+	9,  // 6: yunka.dsl.v1.OperationDeclaration.execution:type_name -> yunka.dsl.v1.ExecutionPolicy
+	11, // 7: yunka.dsl.v1.domain:extendee -> google.protobuf.FileOptions
+	12, // 8: yunka.dsl.v1.dto:extendee -> google.protobuf.MessageOptions
+	13, // 9: yunka.dsl.v1.application:extendee -> google.protobuf.ServiceOptions
+	14, // 10: yunka.dsl.v1.operation:extendee -> google.protobuf.MethodOptions
+	6,  // 11: yunka.dsl.v1.domain:type_name -> yunka.dsl.v1.DomainDeclaration
+	7,  // 12: yunka.dsl.v1.dto:type_name -> yunka.dsl.v1.DTODeclaration
+	8,  // 13: yunka.dsl.v1.application:type_name -> yunka.dsl.v1.ApplicationDeclaration
+	10, // 14: yunka.dsl.v1.operation:type_name -> yunka.dsl.v1.OperationDeclaration
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	11, // [11:15] is the sub-list for extension type_name
+	7,  // [7:11] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_yunka_dsl_v1_options_proto_init() }
@@ -651,8 +834,8 @@ func file_yunka_dsl_v1_options_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_yunka_dsl_v1_options_proto_rawDesc), len(file_yunka_dsl_v1_options_proto_rawDesc)),
-			NumEnums:      4,
-			NumMessages:   4,
+			NumEnums:      6,
+			NumMessages:   5,
 			NumExtensions: 4,
 			NumServices:   0,
 		},

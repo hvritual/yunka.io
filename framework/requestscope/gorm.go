@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"gorm.io/gorm"
+	"yunka.io/framework/execution"
 )
 
 // GORMUnitOfWork is the typed repository seam for GORM-backed request scopes.
@@ -73,8 +74,10 @@ func (unit *gormUnitOfWork) Commit(ctx context.Context) error {
 		return unit.finishErr
 	}
 	result := unit.transaction.WithContext(normalizeContext(ctx)).Commit()
-	unit.finished = true
 	unit.finishErr = result.Error
+	if result.Error == nil {
+		unit.finished = true
+	}
 	return unit.finishErr
 }
 
@@ -131,4 +134,36 @@ func GORMRepositories[R any](build func(context.Context, *gorm.DB) (R, error)) R
 		}
 		return build(normalizeContext(ctx), database)
 	}
+}
+
+// GORMExecutionFactory is the C9.7 root transaction factory used by the
+// Operation Executor. Legacy GORMFactory remains available for pre-C9.7 callers.
+type GORMExecutionFactory struct{ database *gorm.DB }
+
+func NewGORMExecutionFactory(database *gorm.DB) (*GORMExecutionFactory, error) {
+	if database == nil {
+		return nil, errors.New("requestscope: GORM database is required")
+	}
+	return &GORMExecutionFactory{database: database}, nil
+}
+
+func (factory *GORMExecutionFactory) Begin(ctx context.Context, mode execution.TransactionMode) (execution.UnitOfWork, error) {
+	if factory == nil || factory.database == nil {
+		return nil, ErrFactoryUnavailable
+	}
+	if mode != execution.TransactionReadOnly && mode != execution.TransactionLocal {
+		return nil, fmt.Errorf("requestscope: unsupported execution transaction mode %q", mode)
+	}
+	options := &sql.TxOptions{ReadOnly: mode == execution.TransactionReadOnly}
+	transaction := factory.database.WithContext(normalizeContext(ctx)).Begin(options)
+	if transaction.Error != nil {
+		return nil, transaction.Error
+	}
+	return &gormUnitOfWork{transaction: transaction}, nil
+}
+
+// TransactionHandle lets framework mechanisms such as Saga/Outbox join the
+// exact root transaction without exposing *gorm.DB through Application APIs.
+func (unit *gormUnitOfWork) TransactionHandle() any {
+	return unit.GORM()
 }

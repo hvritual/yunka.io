@@ -81,6 +81,15 @@ func CompileOperationPlans(manifest Manifest) (operationplan.Set, error) {
 					ResponseBody: binding.ResponseBody,
 				})
 			}
+			execution := operationplan.Execution{Transaction: "none", Idempotency: "none"}
+			if operation.Execution != nil {
+				if value := strings.TrimSpace(operation.Execution.Transaction); value != "" {
+					execution.Transaction = value
+				}
+				if value := strings.TrimSpace(operation.Execution.Idempotency); value != "" {
+					execution.Idempotency = value
+				}
+			}
 			plan := operationplan.Plan{
 				OperationID:  id,
 				Domain:       service.Domain,
@@ -88,6 +97,7 @@ func CompileOperationPlans(manifest Manifest) (operationplan.Set, error) {
 				UseCase:      operation.UseCase,
 				RequestType:  method.Request,
 				ResponseType: method.Response,
+				Execution:    execution,
 				Security: operationplan.Security{
 					Public:         operation.Public,
 					TenantRequired: operation.TenantRequired,

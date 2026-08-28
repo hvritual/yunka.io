@@ -37,16 +37,22 @@ type ApplicationDeclaration struct {
 	Requires []string `json:"requires,omitempty"`
 }
 
+type ExecutionPolicy struct {
+	Transaction string `json:"transaction,omitempty"`
+	Idempotency string `json:"idempotency,omitempty"`
+}
+
 type OperationDeclaration struct {
-	ID                 string   `json:"id"`
-	UseCase            string   `json:"useCase"`
-	Permissions        []string `json:"permissions,omitempty"`
-	PermissionMode     string   `json:"permissionMode,omitempty"`
-	TenantRequired     bool     `json:"tenantRequired,omitempty"`
-	Authentication     []string `json:"authentication,omitempty"`
-	Public             bool     `json:"public,omitempty"`
-	RequiresOperations []string `json:"requiresOperations,omitempty"`
-	Composition        string   `json:"composition,omitempty"`
+	ID                 string           `json:"id"`
+	UseCase            string           `json:"useCase"`
+	Permissions        []string         `json:"permissions,omitempty"`
+	PermissionMode     string           `json:"permissionMode,omitempty"`
+	TenantRequired     bool             `json:"tenantRequired,omitempty"`
+	Authentication     []string         `json:"authentication,omitempty"`
+	Public             bool             `json:"public,omitempty"`
+	RequiresOperations []string         `json:"requiresOperations,omitempty"`
+	Composition        string           `json:"composition,omitempty"`
+	Execution          *ExecutionPolicy `json:"execution,omitempty"`
 }
 
 type Message struct {
@@ -171,6 +177,10 @@ func (manifest *Manifest) Normalize() {
 				method.Operation.Authentication = stableStrings(method.Operation.Authentication)
 				method.Operation.RequiresOperations = stableStrings(method.Operation.RequiresOperations)
 				method.Operation.Composition = strings.TrimSpace(method.Operation.Composition)
+				if method.Operation.Execution != nil {
+					method.Operation.Execution.Transaction = strings.TrimSpace(method.Operation.Execution.Transaction)
+					method.Operation.Execution.Idempotency = strings.TrimSpace(method.Operation.Execution.Idempotency)
+				}
 			}
 			if method.Authorization != nil {
 				method.Authorization.Permissions = stableStrings(method.Authorization.Permissions)
