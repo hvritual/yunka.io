@@ -8,6 +8,7 @@ import (
 
 	"yunka.io/framework/core/identity"
 	"yunka.io/framework/core/runtimecontext"
+	"yunka.io/framework/execution"
 	"yunka.io/pkg/logExt"
 )
 
@@ -18,14 +19,10 @@ var (
 	ErrScopeRolledBack    = errors.New("requestscope: scope is already rolled back")
 )
 
-// UnitOfWork is the request-owned transaction boundary. Implementations may
-// wrap GORM, database/sql, or another transactional store, but they must not be
-// shared between requests or retained by singleton services.
-type UnitOfWork interface {
-	Commit(context.Context) error
-	Rollback(context.Context) error
-	Close() error
-}
+// UnitOfWork is retained as a source-compatible alias. C9.7 moves ownership
+// of the root transaction lifecycle to framework/execution while requestscope
+// continues to build typed repository views over that unit.
+type UnitOfWork = execution.UnitOfWork
 
 // UnitOfWorkFactory begins one request-owned UnitOfWork.
 type UnitOfWorkFactory interface {
