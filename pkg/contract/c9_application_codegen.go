@@ -11,14 +11,16 @@ import (
 	"yunka.io/pkg/operationplan"
 )
 
-// RenderC9ApplicationCode extends the C8 application artifacts with the
-// immutable OperationPlan and Executor-backed transport path. C8 artifacts are
-// retained as bounded source-compatibility surfaces during the C9 cutover.
+// RenderC9ApplicationCode emits the canonical C9 application boundary.
+// C8 Application Ports, capability ports, and static policy metadata remain
+// source-compatible, but the legacy C8 REST/RPC transport files are filtered
+// out so generated runtime traffic has one canonical Executor path.
 func RenderC9ApplicationCode(manifest Manifest, options ApplicationCodeOptions) ([]GeneratedApplicationFile, error) {
 	base, err := RenderApplicationCode(manifest, options)
 	if err != nil {
 		return nil, err
 	}
+	base = c9NonTransportCompatibilityFiles(base)
 	manifest.Normalize()
 	plans, err := CompileOperationPlans(manifest)
 	if err != nil {
@@ -84,6 +86,18 @@ func RenderC9ApplicationCode(manifest Manifest, options ApplicationCodeOptions) 
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	return files, nil
+}
+
+func c9NonTransportCompatibilityFiles(files []GeneratedApplicationFile) []GeneratedApplicationFile {
+	result := make([]GeneratedApplicationFile, 0, len(files))
+	for _, file := range files {
+		path := filepath.ToSlash(file.Path)
+		if strings.Contains(path, "/transport/rest/") || strings.Contains(path, "/transport/rpc/") {
+			continue
+		}
+		result = append(result, file)
+	}
+	return result
 }
 
 func c9PlanFunction(naming serviceCodegenNaming, method Method) string {
