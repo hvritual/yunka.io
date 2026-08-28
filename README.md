@@ -73,13 +73,13 @@ C7.3 completes the migration: the reflective module container, package-global Ap
 
 C7.2 makes the C7.1 typed catalog operational without exposing infrastructure acquisition to modules. `framework/platform.Provider` opens only the sealed plan's named DB/RPC requirements, opens each name once, gives each module a restricted capability view and module-scoped logger, and participates in the existing App Start/Health/Shutdown lifecycle. `kernel.Options.Platform` is the single ergonomic entry; it cannot be mixed with a second context factory or direct capability set. MySQL pool configuration and gRPC transport credentials remain process-level platform inputs and are never visible to module code.
 
-`framework/requestscope` replaces request mutation of singleton Services with a fresh typed Scope per operation. A Scope snapshots trusted Principal/metadata/trace state, owns one Unit of Work and typed repository set, commits on success, rolls back on error or panic, and closes exactly once. GORM repositories receive the current transaction while the underlying connection pool remains App-owned. Request scopes, repositories, transactions, identities, and contexts are never managed by `sync.Pool`. See `docs/waves/C7.2-platform-request-scope.md`.
+`framework/requestscope` still provides a fresh typed Scope/repository view per operation and snapshots trusted Principal/metadata/trace state. Under the active C9.7+ execution model, however, the root `framework/execution.ExecutionScope` owns the Operation UnitOfWork and commit/rollback lifecycle. Requestscope join views bind typed repositories to that active UoW; they do not independently open or finalize a second root transaction. The underlying DB connection pool remains App-owned, and request scopes, repositories, transactions, identities, and contexts are never managed by `sync.Pool`. See `docs/waves/C7.2-platform-request-scope.md` for the historical introduction and `docs/waves/C9.7-execution-semantics-closure.md` for the current ownership model.
 
 ## Single typed runtime
 
 C7.3 removes the compatibility runtime. `core.App` owns typed catalog instances, the capability factory, logger, event bus, route inventory, and lifecycle state; there is no package-level default App, global configuration store, reflection container, generic Service lookup, or mutable Runtime attached to singleton services. Start/Health/Shutdown operate only on typed modules and App-owned capabilities.
 
-Gateway HTTP execution creates one concrete `request.Context` per request. The Context carries cancellation, trusted Principal, runtime metadata, trace ID, logger, and transport state without entering a `sync.Pool`. Composed HTTP calls create a fresh Context, copy request transport data, and inherit only the parent `context.Context`; response state and mutable request storage are not shared. Transaction and repository ownership remains in `framework/requestscope`.
+Gateway HTTP execution creates one concrete `request.Context` per request. The Context carries cancellation, trusted Principal, runtime metadata, trace ID, logger, and transport state without entering a `sync.Pool`. Composed HTTP calls create a fresh Context, copy request transport data, and inherit only the parent `context.Context`; response state and mutable request storage are not shared. Root Operation transaction/UoW ownership belongs to the active `ExecutionScope`; `framework/requestscope` supplies typed repository views joined to that execution state.
 
 The old local `GetModule → GetService → SetRuntime → PutService` path, `ModuleGatewayProvider`, runtime-mutating ORM hooks, `pkg/di`, and controller generator are deleted. `make architecture-check` permanently blocks their return while allowing reflection used for ordinary data binding and pools used for unrelated transport buffers. See `docs/waves/C7.3-legacy-runtime-removal.md`.
 
@@ -220,6 +220,12 @@ streaming, and HTTP-binding changes.
 
 See `contracts/README.md`, `docs/waves/W06-contract-pipeline.md`, and
 `docs/waves/C3-contract-convergence.md` for the contract model and convergence boundary.
+
+## C9 Operation contract and execution semantics
+
+C9 compiles protobuf Operation intent into deterministic `operation-plans.json` and executes canonical REST/gRPC adapters through one transport-neutral `framework/operation.Executor`. C9.7 adds explicit transaction/idempotency policy, root `ExecutionScope` ownership, typed local child execution, Saga/Outbox transaction joining and durable MySQL-backed idempotency. C9.8 allows canonical internal Operations without fake RPC/REST exposure and excludes internal-only DTOs from external OpenAPI/TypeScript projections unless transport-reachable.
+
+See `docs/waves/C9-operation-contract-runtime.md`, `docs/waves/C9.7-execution-semantics-closure.md`, and `docs/waves/C9.8-canonical-internal-operations.md`.
 
 ## Diagnostics and `yunka inspect`
 
