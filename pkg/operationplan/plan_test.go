@@ -9,25 +9,25 @@ import (
 func TestCanonicalJSONDeterministic(t *testing.T) {
 	set := Set{Operations: []Plan{
 		{
-			OperationID: "device.update",
-			Domain: "device",
-			Application: "management",
-			UseCase: "update_device",
-			RequestType: "device.v1.UpdateDeviceRequest",
+			OperationID:  "device.update",
+			Domain:       "device",
+			Application:  "management",
+			UseCase:      "update_device",
+			RequestType:  "device.v1.UpdateDeviceRequest",
 			ResponseType: "device.v1.DeviceDTO",
-			Security: Security{TenantRequired: true, Permissions: []string{"device.read", "device.write", "device.read"}, PermissionMode: "all", Authentication: []string{"jwt", "jwt"}},
-			Composition: Composition{Boundary: "local", RequiresOperations: []string{"device.get"}, PermissionClosure: []string{"device.read"}},
-			Bindings: Bindings{RPC: "/device.v1.DeviceApplication/UpdateDevice", HTTP: []HTTPBinding{{Method: "post", Path: "/v1/devices/{id}"}}},
+			Security:     Security{TenantRequired: true, Permissions: []string{"device.read", "device.write", "device.read"}, PermissionMode: "all", Authentication: []string{"jwt", "jwt"}},
+			Composition:  Composition{Boundary: "local", RequiresOperations: []string{"device.get"}, PermissionClosure: []string{"device.read"}},
+			Bindings:     Bindings{RPC: "/device.v1.DeviceApplication/UpdateDevice", HTTP: []HTTPBinding{{Method: "post", Path: "/v1/devices/{id}"}}},
 		},
 		{
-			OperationID: "device.get",
-			Domain: "device",
-			Application: "management",
-			UseCase: "get_device",
-			RequestType: "device.v1.GetDeviceRequest",
+			OperationID:  "device.get",
+			Domain:       "device",
+			Application:  "management",
+			UseCase:      "get_device",
+			RequestType:  "device.v1.GetDeviceRequest",
 			ResponseType: "device.v1.DeviceDTO",
-			Security: Security{TenantRequired: true, Permissions: []string{"device.read"}, PermissionMode: "all", Authentication: []string{"jwt"}},
-			Bindings: Bindings{RPC: "/device.v1.DeviceApplication/GetDevice"},
+			Security:     Security{TenantRequired: true, Permissions: []string{"device.read"}, PermissionMode: "all", Authentication: []string{"jwt"}},
+			Bindings:     Bindings{RPC: "/device.v1.DeviceApplication/GetDevice"},
 		},
 	}}
 	first, err := CanonicalJSON(set)
@@ -62,14 +62,14 @@ func TestCanonicalJSONDeterministic(t *testing.T) {
 
 func TestValidateRejectsUnknownDependencyCycleAndPermissionClosure(t *testing.T) {
 	base := Plan{
-		OperationID: "a",
-		Domain: "d",
-		Application: "app",
-		UseCase: "a",
-		RequestType: "d.ARequest",
+		OperationID:  "a",
+		Domain:       "d",
+		Application:  "app",
+		UseCase:      "a",
+		RequestType:  "d.ARequest",
 		ResponseType: "d.AResponse",
-		Security: Security{Permissions: []string{"a.read"}, PermissionMode: "all"},
-		Bindings: Bindings{RPC: "/d.App/A"},
+		Security:     Security{Permissions: []string{"a.read"}, PermissionMode: "all"},
+		Bindings:     Bindings{RPC: "/d.App/A"},
 	}
 
 	unknown := Set{Operations: []Plan{base}}
@@ -99,5 +99,45 @@ func TestValidateRejectsUnknownDependencyCycleAndPermissionClosure(t *testing.T)
 	closure.Operations[0].Composition.PermissionClosure = []string{"b.read"}
 	if err := Validate(closure); err == nil || !strings.Contains(err.Error(), "permission closure missing") {
 		t.Fatalf("closure err=%v", err)
+	}
+}
+
+func TestNormalizeUpgradesV1ExecutionDefaultsWithoutMutatingInput(t *testing.T) {
+	originalHTTP := []HTTPBinding{{Method: "post", Path: " /v1/a "}}
+	input := Set{SchemaVersion: 1, Operations: []Plan{{
+		OperationID: "a", Domain: "d", Application: "app", UseCase: "a",
+		RequestType: "d.ARequest", ResponseType: "d.AResponse",
+		Security: Security{PermissionMode: "all"},
+		Bindings: Bindings{RPC: "/d.App/A", HTTP: originalHTTP},
+	}}}
+	normalized := Normalize(input)
+	if normalized.SchemaVersion != SchemaVersion {
+		t.Fatalf("schemaVersion=%d want %d", normalized.SchemaVersion, SchemaVersion)
+	}
+	if got := normalized.Operations[0].Execution; got.Transaction != "none" || got.Idempotency != "none" {
+		t.Fatalf("execution=%#v", got)
+	}
+	if input.Operations[0].Bindings.HTTP[0].Method != "post" || input.Operations[0].Bindings.HTTP[0].Path != " /v1/a " {
+		t.Fatalf("Normalize mutated caller input: %#v", input.Operations[0].Bindings.HTTP)
+	}
+	if normalized.Operations[0].Bindings.HTTP[0].Method != "POST" || normalized.Operations[0].Bindings.HTTP[0].Path != "/v1/a" {
+		t.Fatalf("normalized HTTP=%#v", normalized.Operations[0].Bindings.HTTP)
+	}
+}
+
+func TestValidateRejectsUnknownExecutionPolicy(t *testing.T) {
+	plan := Plan{
+		OperationID: "a", Domain: "d", Application: "app", UseCase: "a",
+		RequestType: "d.ARequest", ResponseType: "d.AResponse",
+		Security:  Security{PermissionMode: "all"},
+		Execution: Execution{Transaction: "magic", Idempotency: "none"},
+		Bindings:  Bindings{RPC: "/d.App/A"},
+	}
+	if err := Validate(Set{Operations: []Plan{plan}}); err == nil || !strings.Contains(err.Error(), "invalid transaction policy") {
+		t.Fatalf("transaction policy err=%v", err)
+	}
+	plan.Execution = Execution{Transaction: "none", Idempotency: "magic"}
+	if err := Validate(Set{Operations: []Plan{plan}}); err == nil || !strings.Contains(err.Error(), "invalid idempotency policy") {
+		t.Fatalf("idempotency policy err=%v", err)
 	}
 }

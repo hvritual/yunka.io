@@ -1,10 +1,13 @@
 package contract
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"yunka.io/pkg/operationplan"
 )
 
 func TestArtifactsAreDeterministicAndDriftAware(t *testing.T) {
@@ -30,7 +33,8 @@ func TestArtifactsAreDeterministicAndDriftAware(t *testing.T) {
 	if !strings.Contains(string(first.TypeScript), "class Demo_EchoServiceClient") {
 		t.Fatalf("typescript missing service client: %s", first.TypeScript)
 	}
-	if string(first.OperationPlans) != "{\n  \"schemaVersion\": 1,\n  \"operations\": []\n}\n" {
+	wantOperationPlans := fmt.Sprintf("{\n  \"schemaVersion\": %d,\n  \"operations\": []\n}\n", operationplan.SchemaVersion)
+	if string(first.OperationPlans) != wantOperationPlans {
 		t.Fatalf("unexpected operation plans: %s", first.OperationPlans)
 	}
 	dir := t.TempDir()

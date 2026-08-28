@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 type Set struct {
 	SchemaVersion int    `json:"schemaVersion"`
@@ -25,6 +25,7 @@ type Plan struct {
 	RequestType         string      `json:"requestType"`
 	ResponseType        string      `json:"responseType"`
 	Security            Security    `json:"security"`
+	Execution           Execution   `json:"execution"`
 	Composition         Composition `json:"composition"`
 	ApplicationRequires []string    `json:"applicationRequires,omitempty"`
 	Bindings            Bindings    `json:"bindings"`
@@ -36,6 +37,11 @@ type Security struct {
 	Authentication []string `json:"authentication,omitempty"`
 	Permissions    []string `json:"permissions,omitempty"`
 	PermissionMode string   `json:"permissionMode,omitempty"`
+}
+
+type Execution struct {
+	Transaction string `json:"transaction"`
+	Idempotency string `json:"idempotency"`
 }
 
 type Composition struct {
@@ -58,7 +64,7 @@ type HTTPBinding struct {
 
 func Normalize(set Set) Set {
 	result := Set{SchemaVersion: set.SchemaVersion, Operations: make([]Plan, 0, len(set.Operations))}
-	if result.SchemaVersion == 0 {
+	if result.SchemaVersion == 0 || result.SchemaVersion == 1 {
 		result.SchemaVersion = SchemaVersion
 	}
 	for _, item := range set.Operations {
@@ -71,6 +77,14 @@ func Normalize(set Set) Set {
 		item.Security.Authentication = stableStrings(item.Security.Authentication)
 		item.Security.Permissions = stableStrings(item.Security.Permissions)
 		item.Security.PermissionMode = strings.TrimSpace(item.Security.PermissionMode)
+		item.Execution.Transaction = strings.TrimSpace(item.Execution.Transaction)
+		if item.Execution.Transaction == "" {
+			item.Execution.Transaction = "none"
+		}
+		item.Execution.Idempotency = strings.TrimSpace(item.Execution.Idempotency)
+		if item.Execution.Idempotency == "" {
+			item.Execution.Idempotency = "none"
+		}
 		if item.Security.PermissionMode == "" {
 			item.Security.PermissionMode = "all"
 		}
@@ -79,6 +93,7 @@ func Normalize(set Set) Set {
 		item.Composition.PermissionClosure = stableStrings(item.Composition.PermissionClosure)
 		item.ApplicationRequires = stableStrings(item.ApplicationRequires)
 		item.Bindings.RPC = strings.TrimSpace(item.Bindings.RPC)
+		item.Bindings.HTTP = append([]HTTPBinding(nil), item.Bindings.HTTP...)
 		for i := range item.Bindings.HTTP {
 			item.Bindings.HTTP[i].Method = strings.ToUpper(strings.TrimSpace(item.Bindings.HTTP[i].Method))
 			item.Bindings.HTTP[i].Path = strings.TrimSpace(item.Bindings.HTTP[i].Path)
@@ -133,6 +148,16 @@ func Validate(set Set) error {
 		case "all", "any":
 		default:
 			return fmt.Errorf("operationplan: operation %s has invalid permissionMode %q", item.OperationID, item.Security.PermissionMode)
+		}
+		switch item.Execution.Transaction {
+		case "none", "read_only", "local":
+		default:
+			return fmt.Errorf("operationplan: operation %s has invalid transaction policy %q", item.OperationID, item.Execution.Transaction)
+		}
+		switch item.Execution.Idempotency {
+		case "none", "required":
+		default:
+			return fmt.Errorf("operationplan: operation %s has invalid idempotency policy %q", item.OperationID, item.Execution.Idempotency)
 		}
 		switch item.Composition.Boundary {
 		case "", "local", "remote_saga":

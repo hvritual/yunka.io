@@ -16,7 +16,7 @@ func TestCompileOperationPlansDeterministicAndClosed(t *testing.T) {
 			Methods: []Method{{
 				Name: "GetDevice", FullName: "device.v1.DeviceQueryApplication.GetDevice", Request: "device.v1.GetDeviceRequest", Response: "device.v1.DeviceDTO",
 				Operation: &OperationDeclaration{ID: "device.get", UseCase: "get_device", Permissions: []string{"device.read"}, PermissionMode: "all", TenantRequired: true, Authentication: []string{"jwt"}},
-				HTTP: []HTTPBinding{{Method: "GET", Path: "/v1/devices/{id}"}},
+				HTTP:      []HTTPBinding{{Method: "GET", Path: "/v1/devices/{id}"}},
 			}},
 		},
 		{
@@ -25,7 +25,7 @@ func TestCompileOperationPlansDeterministicAndClosed(t *testing.T) {
 			Methods: []Method{{
 				Name: "UpdateDevice", FullName: "device.v1.DeviceCommandApplication.UpdateDevice", Request: "device.v1.UpdateDeviceRequest", Response: "device.v1.DeviceDTO",
 				Operation: &OperationDeclaration{ID: "device.update", UseCase: "update_device", Permissions: []string{"device.read", "device.write"}, PermissionMode: "all", TenantRequired: true, Authentication: []string{"jwt"}, RequiresOperations: []string{"device.get"}, Composition: "local"},
-				HTTP: []HTTPBinding{{Method: "PATCH", Path: "/v1/devices/{id}", Body: "*"}},
+				HTTP:      []HTTPBinding{{Method: "PATCH", Path: "/v1/devices/{id}", Body: "*"}},
 			}},
 		},
 	}}
@@ -83,5 +83,31 @@ func TestCompileOperationPlansRejectsDuplicateAndUndeclaredCapability(t *testing
 	}}
 	if _, err := CompileOperationPlans(undeclared); err == nil || !strings.Contains(err.Error(), "undeclared application capability") {
 		t.Fatalf("undeclared err=%v", err)
+	}
+}
+
+func TestCompileOperationPlansCarriesExplicitExecutionPolicy(t *testing.T) {
+	manifest := Manifest{Services: []Service{{
+		Name: "DeviceApplication", FullName: "device.v1.DeviceApplication", Domain: "device",
+		Application: &ApplicationDeclaration{Name: "management"},
+		Methods: []Method{{
+			Name: "UpdateDevice", FullName: "device.v1.DeviceApplication.UpdateDevice",
+			Request: "device.v1.UpdateDeviceRequest", Response: "device.v1.DeviceDTO",
+			Operation: &OperationDeclaration{
+				ID: "device.update", UseCase: "update_device", PermissionMode: "all",
+				Execution: &ExecutionPolicy{Transaction: "local", Idempotency: "required"},
+			},
+		}},
+	}}}
+	set, err := CompileOperationPlans(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(set.Operations) != 1 {
+		t.Fatalf("operations=%d", len(set.Operations))
+	}
+	got := set.Operations[0].Execution
+	if got.Transaction != "local" || got.Idempotency != "required" {
+		t.Fatalf("execution=%#v", got)
 	}
 }

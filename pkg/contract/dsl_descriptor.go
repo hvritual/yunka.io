@@ -298,6 +298,14 @@ func parseOperationDeclaration(data []byte) (*OperationDeclaration, error) {
 			if field.Type == 0 {
 				result.Composition = compositionBoundaryName(field.Varint)
 			}
+		case 10:
+			if field.Type == 2 {
+				execution, err := parseExecutionPolicy(field.Bytes)
+				if err != nil {
+					return err
+				}
+				result.Execution = execution
+			}
 		}
 		return nil
 	}); err != nil {
@@ -307,6 +315,53 @@ func parseOperationDeclaration(data []byte) (*OperationDeclaration, error) {
 	result.Authentication = stableStrings(result.Authentication)
 	result.RequiresOperations = stableStrings(result.RequiresOperations)
 	return result, nil
+}
+
+func parseExecutionPolicy(data []byte) (*ExecutionPolicy, error) {
+	if len(data) == 0 {
+		return &ExecutionPolicy{}, nil
+	}
+	result := &ExecutionPolicy{}
+	if err := scanWire(data, func(field wireField) error {
+		switch field.Number {
+		case 1:
+			if field.Type == 0 {
+				result.Transaction = transactionPolicyName(field.Varint)
+			}
+		case 2:
+			if field.Type == 0 {
+				result.Idempotency = idempotencyPolicyName(field.Varint)
+			}
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func transactionPolicyName(value uint64) string {
+	switch value {
+	case 1:
+		return "none"
+	case 2:
+		return "read_only"
+	case 3:
+		return "local"
+	default:
+		return ""
+	}
+}
+
+func idempotencyPolicyName(value uint64) string {
+	switch value {
+	case 1:
+		return "none"
+	case 2:
+		return "required"
+	default:
+		return ""
+	}
 }
 
 func compositionBoundaryName(value uint64) string {

@@ -155,6 +155,7 @@ func renderC9OperationPlans(service Service, naming serviceCodegenNaming, plans 
 
 func writeOperationPlanLiteral(b *strings.Builder, plan operationplan.Plan) {
 	fmt.Fprintf(b, "operationplan.Plan{OperationID:%q, Domain:%q, Application:%q, UseCase:%q, RequestType:%q, ResponseType:%q, ", plan.OperationID, plan.Domain, plan.Application, plan.UseCase, plan.RequestType, plan.ResponseType)
+	fmt.Fprintf(b, "Execution: operationplan.Execution{Transaction:%q, Idempotency:%q}, ", plan.Execution.Transaction, plan.Execution.Idempotency)
 	fmt.Fprintf(b, "Security: operationplan.Security{Public:%t, TenantRequired:%t, Authentication:", plan.Security.Public, plan.Security.TenantRequired)
 	writeOperationPlanStrings(b, plan.Security.Authentication)
 	b.WriteString(", Permissions:")
