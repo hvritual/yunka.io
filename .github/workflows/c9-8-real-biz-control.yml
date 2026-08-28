@@ -6,6 +6,7 @@ on:
       - agent/c9-8-cross-application-pressure
     paths:
       - .github/workflows/c9-8-real-biz-control.yml
+      - tools/c9-8-biz-source-url.txt
 
 permissions:
   contents: read
@@ -67,7 +68,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL -o "$RUNNER_TEMP/biz-source.zip" 'https://sdmntprcacentral.oaiusercontent.com/files/00000000-ac28-820d-b50b-6bffb4b81ba6/raw?se=2026-08-28T13%3A45%3A02Z&sp=r&sv=2026-02-06&sr=b&scid=e759e12b-f8f3-5b18-bf6e-2690eae53b51&skoid=e5e3659d-4463-4dbf-b2ce-ee32bc0a0a8d&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-28T07%3A48%3A16Z&ske=2026-08-29T07%3A48%3A16Z&sks=b&skv=2026-02-06&sig=ILwJn1dRku1racHBW7ZTz9IKz2D8vz7k994qPFWzymk%3D'
+          source_url="$(tr -d '\r\n' < tools/c9-8-biz-source-url.txt)"
+          test -n "$source_url"
+          curl -fsSL -o "$RUNNER_TEMP/biz-source.zip" "$source_url"
           mkdir -p "$RUNNER_TEMP/biz-artifact" ../biz
           unzip -q "$RUNNER_TEMP/biz-source.zip" -d "$RUNNER_TEMP/biz-artifact"
           tar -xzf "$RUNNER_TEMP/biz-artifact/biz-c9-pressure.tar.gz" -C ../biz
