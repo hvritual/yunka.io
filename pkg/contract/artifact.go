@@ -7,12 +7,15 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+
+	"yunka.io/pkg/operationplan"
 )
 
 const (
-	ManifestFilename   = "manifest.json"
-	OpenAPIFilename    = "openapi.json"
-	TypeScriptFilename = "client.ts"
+	ManifestFilename       = "manifest.json"
+	OpenAPIFilename        = "openapi.json"
+	TypeScriptFilename     = "client.ts"
+	OperationPlansFilename = "operation-plans.json"
 )
 
 type ArtifactOptions struct {
@@ -21,9 +24,10 @@ type ArtifactOptions struct {
 }
 
 type Artifacts struct {
-	Manifest   []byte
-	OpenAPI    []byte
-	TypeScript []byte
+	Manifest       []byte
+	OpenAPI        []byte
+	TypeScript     []byte
+	OperationPlans []byte
 }
 
 type Drift struct {
@@ -52,7 +56,15 @@ func RenderArtifacts(manifest Manifest, options ArtifactOptions) (Artifacts, err
 	if err != nil {
 		return Artifacts{}, err
 	}
-	return Artifacts{Manifest: manifestBytes, OpenAPI: openAPI, TypeScript: typeScript}, nil
+	plans, err := CompileOperationPlans(manifest)
+	if err != nil {
+		return Artifacts{}, err
+	}
+	operationPlans, err := operationplan.CanonicalJSON(plans)
+	if err != nil {
+		return Artifacts{}, err
+	}
+	return Artifacts{Manifest: manifestBytes, OpenAPI: openAPI, TypeScript: typeScript, OperationPlans: operationPlans}, nil
 }
 
 func hasTypedDSL(manifest Manifest) bool {
@@ -84,9 +96,10 @@ func WriteArtifacts(dir string, artifacts Artifacts) error {
 		return err
 	}
 	files := map[string][]byte{
-		ManifestFilename:   artifacts.Manifest,
-		OpenAPIFilename:    artifacts.OpenAPI,
-		TypeScriptFilename: artifacts.TypeScript,
+		ManifestFilename:       artifacts.Manifest,
+		OpenAPIFilename:        artifacts.OpenAPI,
+		TypeScriptFilename:     artifacts.TypeScript,
+		OperationPlansFilename: artifacts.OperationPlans,
 	}
 	for name, data := range files {
 		if err := writeFileAtomic(filepath.Join(dir, name), data, 0o644); err != nil {
@@ -98,9 +111,10 @@ func WriteArtifacts(dir string, artifacts Artifacts) error {
 
 func CheckArtifacts(dir string, artifacts Artifacts) ([]Drift, error) {
 	expected := map[string][]byte{
-		ManifestFilename:   artifacts.Manifest,
-		OpenAPIFilename:    artifacts.OpenAPI,
-		TypeScriptFilename: artifacts.TypeScript,
+		ManifestFilename:       artifacts.Manifest,
+		OpenAPIFilename:        artifacts.OpenAPI,
+		TypeScriptFilename:     artifacts.TypeScript,
+		OperationPlansFilename: artifacts.OperationPlans,
 	}
 	var drift []Drift
 	for name, want := range expected {
