@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"strings"
 
-	frameworkoperation "yunka.io/framework/operation"
 	"yunka.io/framework/core/identity"
+	frameworkoperation "yunka.io/framework/operation"
 	"yunka.io/pkg/operationplan"
 )
 
-var ErrExecutionSecurityUnavailable = errors.New("gateway authz: execution security unavailable")
+var (
+	ErrExecutionSecurityUnavailable = errors.New("gateway authz: execution security unavailable")
+	ErrExecutionAdapterUnsupported  = errors.New("gateway authz: unsupported execution adapter")
+)
 
 type executionSecurity struct {
 	authorizer Authorizer
@@ -82,4 +85,62 @@ func prepareAuthorized(ctx context.Context, policy Policy, input any, authorizer
 		}
 	}
 	return secured, nil
+}
+
+// ExecutorFromOperationRuntime is a bounded C8 compatibility adapter. It lets
+// generated C9 transports enter the unified Executor while an older caller
+// still supplies OperationRuntime. Policy lookup remains keyed by the canonical
+// RPC binding only inside this compatibility seam and must not be used by new
+// composition code.
+func ExecutorFromOperationRuntime(runtime OperationRuntime) (frameworkoperation.Executor, error) {
+	if runtime == nil {
+		return nil, ErrOperationRuntimeUnavailable
+	}
+	return frameworkoperation.NewExecutor(operationRuntimeSecurity{runtime: runtime}), nil
+}
+
+type operationRuntimeSecurity struct{ runtime OperationRuntime }
+
+func (security operationRuntimeSecurity) Prepare(ctx context.Context, plan operationplan.Plan, input any) (context.Context, error) {
+	if security.runtime == nil {
+		return nil, ErrOperationRuntimeUnavailable
+	}
+	binding := strings.TrimSpace(plan.Bindings.RPC)
+	if binding == "" {
+		return nil, fmt.Errorf("gateway authz: operation %s has no canonical RPC binding", plan.OperationID)
+	}
+	return security.runtime.Prepare(ctx, binding, input)
+}
+
+// PreauthorizedExecutor is a compatibility path for gRPC servers that still
+// run the C8 SecuredUnaryServerInterceptor. The interceptor performs the only
+// authorization decision; the Executor verifies the resulting operation marker
+// and never authorizes a second time.
+func PreauthorizedExecutor() frameworkoperation.Executor {
+	return frameworkoperation.NewExecutor(preauthorizedSecurity{})
+}
+
+type preauthorizedSecurity struct{}
+
+func (preauthorizedSecurity) Prepare(ctx context.Context, plan operationplan.Plan, _ any) (context.Context, error) {
+	if _, err := RequireAuthorizedOperation(ctx, OperationID(strings.TrimSpace(plan.OperationID))); err != nil {
+		return nil, err
+	}
+	return ctx, nil
+}
+
+// ResolveExecutor accepts the canonical C9 Executor or the bounded C8
+// OperationRuntime compatibility input used by generated REST registration.
+func ResolveExecutor(value any) (frameworkoperation.Executor, error) {
+	switch runtime := value.(type) {
+	case frameworkoperation.Executor:
+		if runtime == nil {
+			return nil, frameworkoperation.ErrExecutorUnavailable
+		}
+		return runtime, nil
+	case OperationRuntime:
+		return ExecutorFromOperationRuntime(runtime)
+	default:
+		return nil, fmt.Errorf("%w: %T", ErrExecutionAdapterUnsupported, value)
+	}
 }
