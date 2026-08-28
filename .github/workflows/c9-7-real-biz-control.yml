@@ -47,10 +47,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL -o "$RUNNER_TEMP/biz-source.zip" 'https://sdmntpreastus.oaiusercontent.com/files/00000000-8204-81f9-9ada-c3dfae83af9d/raw?se=2026-08-28T12%3A44%3A24Z&sp=r&sv=2026-02-06&sr=b&scid=8ed6dc86-e303-5795-bd29-ae3d24d3d884&skoid=e5e3659d-4463-4dbf-b2ce-ee32bc0a0a8d&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-28T06%3A43%3A31Z&ske=2026-08-29T06%3A43%3A31Z&sks=b&skv=2026-02-06&sig=sQ7WIN3hK3qRgfh4ATzPt0PNy22mq4CdOCSLrYRYtBQ%3D'
+          curl -fsSL -o "$RUNNER_TEMP/biz-source.zip" 'https://sdmntprbrazilsouth.oaiusercontent.com/files/00000000-4174-820e-ba2f-32dd04863989/raw?se=2026-08-28T12%3A50%3A39Z&sp=r&sv=2026-02-06&sr=b&scid=9ad94c07-96d3-5696-ac63-119377600aeb&skoid=e5e3659d-4463-4dbf-b2ce-ee32bc0a0a8d&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-28T08%3A31%3A18Z&ske=2026-08-29T08%3A31%3A18Z&sks=b&skv=2026-02-06&sig=R8lKCOeLSCwq1b8IqGGs3U8n0G4RjmWVm2pvR7VALIo%3D'
           mkdir -p "$RUNNER_TEMP/biz-artifact"
           unzip -q "$RUNNER_TEMP/biz-source.zip" -d "$RUNNER_TEMP/biz-artifact"
-          echo '9af20f3126e58adb123df4290caa1b08b2217bbb61386d9a1b2a7f7d8f41f2d9  '"$RUNNER_TEMP/biz-artifact/biz-c9-pressure.tar.gz" | sha256sum -c -
+          echo '7adbce36a43a1a87c5fb0ae7f7492b83c14b9aded1fe8a819a68962d99dc343e  '"$RUNNER_TEMP/biz-artifact/biz-c9-pressure.tar.gz" | sha256sum -c -
           rm -rf ../biz
           mkdir -p ../biz
           tar -xzf "$RUNNER_TEMP/biz-artifact/biz-c9-pressure.tar.gz" -C ../biz
