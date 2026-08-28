@@ -1,0 +1,58 @@
+name: c9-7-policy-builder
+
+on:
+  push:
+    branches:
+      - agent/c9-7-execution-semantics
+    paths:
+      - tools/c9_7_policy_builder.py
+      - .github/workflows/c9-7-policy-builder.yml
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/c9-7-execution-semantics
+          fetch-depth: 0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: 1.25.13
+          cache: false
+      - name: Install locked protoc
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/protoc.zip"
+          install_root="$RUNNER_TEMP/protoc"
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-x86_64.zip \
+            --output "$archive"
+          echo "3a4c1e5f2516c639d3079b1586e703fc7bcfa2136d58bda24d1d54f949c315e8  $archive" | sha256sum -c -
+          unzip -q "$archive" -d "$install_root"
+          echo "$install_root/bin" >> "$GITHUB_PATH"
+      - name: Apply C9.7.1-2 implementation
+        run: python3 tools/c9_7_policy_builder.py
+      - name: Regenerate protobuf and contract artifacts
+        run: make rpc-generate
+      - name: Targeted validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          gofmt -w pkg/contract/model.go pkg/contract/dsl_descriptor.go pkg/contract/operation_plan.go pkg/contract/c9_application_codegen.go pkg/contract/operation_plan_test.go pkg/operationplan/plan.go pkg/operationplan/plan_test.go
+          (cd pkg && go test ./operationplan ./contract)
+          git diff --check
+      - name: Commit generated implementation and self-remove builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f tools/c9_7_policy_builder.py .github/workflows/c9-7-policy-builder.yml
+          git config user.name hvritual
+          git config user.email 460657446@qq.com
+          git add -A
+          git commit -m "feat: add C9.7 execution policy contract"
+          git push origin HEAD:agent/c9-7-execution-semantics
