@@ -1,0 +1,47 @@
+name: c9-7-composition-v2
+
+on:
+  push:
+    branches:
+      - agent/c9-7-execution-semantics
+    paths:
+      - tools/c9_7_composition_builder_v2.py
+      - .github/workflows/c9-7-composition-v2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/c9-7-execution-semantics
+          fetch-depth: 0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: 1.25.13
+          cache: false
+      - name: Apply C9.7.6-10 implementation
+        run: python3 tools/c9_7_composition_builder_v2.py
+      - name: Format and targeted validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          gofmt -w pkg/contract/c9_application_codegen.go pkg/contract/c9_application_codegen_test.go pkg/applicationgraph/operationplan.go pkg/applicationgraph/operationplan_test.go framework/workflow/saga/stage.go framework/workflow/saga/stage_test.go framework/requestscope/gorm.go framework/diagnostics/operation.go framework/diagnostics/operation_test.go gateway/rpc/transport/grpc/operation_error.go
+          (cd pkg && go test ./contract ./applicationgraph ./operationplan)
+          (cd framework && go test ./operation ./execution ./requestscope ./workflow/saga ./diagnostics)
+          (cd gateway && go test ./authz ./rpc/transport/grpc)
+          git diff --check
+      - name: Commit composition implementation and self-remove builders
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f tools/c9_7_composition_builder.py tools/c9_7_composition_builder_v2.py
+          rm -f .github/workflows/c9-7-composition-builder.yml .github/workflows/c9-7-composition-v2.yml
+          git config user.name hvritual
+          git config user.email 460657446@qq.com
+          git add -A
+          git commit -m "feat: converge C9.7 child composition and idempotency"
+          git push origin HEAD:agent/c9-7-execution-semantics
