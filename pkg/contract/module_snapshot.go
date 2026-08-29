@@ -116,11 +116,16 @@ func parseGeneratedDescriptor(path, moduleName string) (assemblyplan.ModuleInput
 		return assemblyplan.ModuleInput{}, fmt.Errorf("contract module snapshot: %s has no GeneratedDescriptor literal", path)
 	}
 	result := assemblyplan.ModuleInput{Name: moduleName}
+	seen := map[string]bool{}
 	for _, element := range descriptor.Elts {
 		field, value, ok := keyedElement(element)
 		if !ok {
-			continue
+			return assemblyplan.ModuleInput{}, fmt.Errorf("contract module snapshot: %s descriptor must use keyed fields", path)
 		}
+		if seen[field] {
+			return assemblyplan.ModuleInput{}, fmt.Errorf("contract module snapshot: %s descriptor repeats field %s", path, field)
+		}
+		seen[field] = true
 		switch field {
 		case "Name":
 			identifier, ok := value.(*ast.Ident)
@@ -145,6 +150,19 @@ func parseGeneratedDescriptor(path, moduleName string) (assemblyplan.ModuleInput
 				return assemblyplan.ModuleInput{}, fmt.Errorf("contract module snapshot: %s Requirements: %w", path, err)
 			}
 			result.Requirements = requirements
+		case "Build":
+			// Build is intentionally runtime-only. The compiler validates that the
+			// generated descriptor has the field, but never executes or serializes it.
+			if _, ok := value.(*ast.Ident); !ok {
+				return assemblyplan.ModuleInput{}, fmt.Errorf("contract module snapshot: %s Build must be a generated function identifier", path)
+			}
+		default:
+			return assemblyplan.ModuleInput{}, fmt.Errorf("contract module snapshot: %s descriptor has unsupported field %s", path, field)
+		}
+	}
+	for _, required := range []string{"Name", "Version", "Requirements", "Build"} {
+		if !seen[required] {
+			return assemblyplan.ModuleInput{}, fmt.Errorf("contract module snapshot: %s descriptor is missing field %s", path, required)
 		}
 	}
 	return result, nil
@@ -156,11 +174,16 @@ func moduleRequirementsLiteral(expression ast.Expr) (assemblyplan.ModuleRequirem
 		return assemblyplan.ModuleRequirements{}, fmt.Errorf("expected composite literal")
 	}
 	var result assemblyplan.ModuleRequirements
+	seen := map[string]bool{}
 	for _, element := range composite.Elts {
 		field, value, ok := keyedElement(element)
 		if !ok {
-			continue
+			return result, fmt.Errorf("requirements must use keyed fields")
 		}
+		if seen[field] {
+			return result, fmt.Errorf("requirements repeat field %s", field)
+		}
+		seen[field] = true
 		switch field {
 		case "ConfigKey":
 			text, err := stringLiteral(value)
@@ -192,6 +215,8 @@ func moduleRequirementsLiteral(expression ast.Expr) (assemblyplan.ModuleRequirem
 				return result, err
 			}
 			result.RPC = values
+		default:
+			return result, fmt.Errorf("unsupported requirements field %s", field)
 		}
 	}
 	sort.Strings(result.Databases)
@@ -213,8 +238,14 @@ func namedRequirementSlice(expression ast.Expr) ([]string, error) {
 		found := false
 		for _, itemElement := range item.Elts {
 			field, value, ok := keyedElement(itemElement)
-			if !ok || field != "Name" {
-				continue
+			if !ok {
+				return nil, fmt.Errorf("requirement item must use keyed fields")
+			}
+			if field != "Name" {
+				return nil, fmt.Errorf("requirement item has unsupported field %s", field)
+			}
+			if found {
+				return nil, fmt.Errorf("requirement item repeats Name")
 			}
 			name, err := stringLiteral(value)
 			if err != nil {
