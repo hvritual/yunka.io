@@ -1,1 +1,0 @@
-Canonical module binding is compiler-local derived evidence from fixed generated module files: `<module>/module.go` supplies the explicit `ModuleName` literal and `<module>/autoload/register.go` supplies the explicit module import plus `module.GeneratedDescriptor()` call. Directory/package naming is not an identity source and runtime package scanning is forbidden.
