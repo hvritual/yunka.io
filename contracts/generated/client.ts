@@ -33,8 +33,6 @@ export type ModuleCanUse = "All" | "Mobile" | "Web";
 
 export type ModuleCommonStatus = "AllCanUse" | "KolCanUse" | "ServiceCanUse" | "NotCommon";
 
-export type Switch = "Close" | "Oopen";
-
 export type ViewRoleLevel = "GOD" | "Developer" | "Operater" | "Entrepreneur" | "User" | "Visitor" | "Employee";
 
 export type Io_Yunka_Gateway_Rpc_AuthBit = "AuthNot" | "AuthToken" | "AuthRole" | "AuthTimeLimit" | "AuthApi";
@@ -78,14 +76,6 @@ export interface BusinessFreeModule {
   apiUuids?: readonly string[];
 }
 
-export interface CircuitCfg {
-  CloseTime?: number;
-  CheckPeriod?: number;
-  LimitPercent?: number;
-  HalfOpen?: number;
-  HalfClose?: number;
-}
-
 export interface FindAllModuleSortResponse {
   modules?: readonly SimpleModule[];
   moduleSortName?: readonly BasicModuleSort[];
@@ -122,10 +112,6 @@ export interface FindModulesByModuleStatusRequest {
   status?: ModuleCommonStatus;
 }
 
-export interface FindModulesByStatusRequest {
-  status?: ModuleCommonStatus;
-}
-
 export interface GetApiReponse {
   apis?: readonly Api[];
 }
@@ -145,9 +131,6 @@ export interface ModulesApiResponse {
 export interface NotParamRequest {
 }
 
-export interface NotResponse {
-}
-
 export interface RuntimeApi {
   uuid?: string;
   serverUuid?: string;
@@ -162,13 +145,6 @@ export interface RuntimeApi {
   isCompose?: IsCompose;
   isCommon?: IsCommon;
   composes?: readonly RuntimeApi[];
-}
-
-export interface ServerNode {
-  ipPort?: string;
-  uuid?: string;
-  qps?: number;
-  Circuit?: CircuitCfg;
 }
 
 export interface SimpleModule {
@@ -190,28 +166,9 @@ export interface Io_Yunka_Gateway_Rpc_BatchRuntimeApiRequest {
   buttons?: readonly Io_Yunka_Gateway_Rpc_RuntimeApiModuleButton[];
 }
 
-export interface Io_Yunka_Gateway_Rpc_CircuitCfg {
-  CloseTime?: number;
-  CheckPeriod?: number;
-  LimitPercent?: number;
-  HalfOpen?: number;
-  HalfClose?: number;
-}
-
 export interface Io_Yunka_Gateway_Rpc_DeleteRuntimeApiRequest {
   uuid?: string;
   uri?: string;
-}
-
-export interface Io_Yunka_Gateway_Rpc_LockEnterpriseRequest {
-  enterpriseUUID?: string;
-}
-
-export interface Io_Yunka_Gateway_Rpc_NotParamRequest {
-}
-
-export interface Io_Yunka_Gateway_Rpc_NotResponse {
-  code?: Io_Yunka_Gateway_Rpc_ResponseCode;
 }
 
 export interface Io_Yunka_Gateway_Rpc_OperateRoleResponse {
@@ -259,14 +216,6 @@ export interface Io_Yunka_Gateway_Rpc_RuntimeAuthorization {
   mode?: Io_Yunka_Gateway_Rpc_PermissionMode;
   tenantRequired?: boolean;
   authentication?: readonly string[];
-}
-
-export interface Io_Yunka_Gateway_Rpc_ServerNode {
-  ipPort?: string;
-  uuid?: string;
-  qps?: number;
-  srvName?: string;
-  Circuit?: Io_Yunka_Gateway_Rpc_CircuitCfg;
 }
 
 export const operations = {
