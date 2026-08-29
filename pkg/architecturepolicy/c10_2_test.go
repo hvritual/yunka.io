@@ -19,14 +19,22 @@ func TestC102AssemblyCompilerRemainsStructuralAndOneWay(t *testing.T) {
 	}
 	compiler := read("pkg/contract/assembly_codegen.go")
 	join := read("pkg/contract/assembly_compiler.go")
+	moduleBinding := read("pkg/contract/module_binding.go")
+	moduleSnapshot := read("pkg/contract/module_snapshot.go")
+	moduleCodegen := read("pkg/contract/assembly_module_codegen.go")
+	cli := read("app/cmd/assembly/command.go")
 
 	for _, forbidden := range []string{
-		"reflect.", "plugin.Open", "go/packages", "filepath.Walk", "os.ReadDir",
-		"ServiceLocator", "serviceLocator", "map[string]any", "map[string]interface{}",
-		"kernel.New(", ".Start(", "exec.Command(",
+		"reflect.", "plugin.Open", "go/packages", "filepath.Walk", "ServiceLocator", "serviceLocator",
+		"map[string]any", "map[string]interface{}", "exec.Command(",
 	} {
-		if strings.Contains(compiler, forbidden) || strings.Contains(join, forbidden) {
+		if strings.Contains(compiler+join+moduleBinding+moduleSnapshot+moduleCodegen+cli, forbidden) {
 			t.Errorf("C10.2 compiler contains forbidden runtime/discovery token %q", forbidden)
+		}
+	}
+	for _, forbidden := range []string{"kernel.New(", ".Start("} {
+		if strings.Contains(compiler+join+moduleCodegen, forbidden) {
+			t.Errorf("C10.2 generated compiler surface crosses into C10.3 runtime closure with %q", forbidden)
 		}
 	}
 	for _, required := range []string{
@@ -37,12 +45,25 @@ func TestC102AssemblyCompilerRemainsStructuralAndOneWay(t *testing.T) {
 		"KernelOptions",
 		"CompileAssemblyPlan",
 		"AssemblyPlanFilename",
+		"DiscoverModuleSnapshot",
+		"ModuleName",
+		"autoload",
+		"GeneratedDescriptor",
+		"func NewCatalog()",
+		"CompileBoundAssembly",
+		"assembly check ok",
 	} {
-		if !strings.Contains(compiler+join, required) {
+		if !strings.Contains(compiler+join+moduleBinding+moduleSnapshot+moduleCodegen+cli, required) {
 			t.Errorf("C10.2 compiler is missing structural reuse marker %q", required)
 		}
 	}
-	if strings.Contains(compiler, `rootImport+"/"+module.Name`) || strings.Contains(compiler, "module.Name+\"/\"") {
+	if strings.Contains(compiler+moduleCodegen, `rootImport+"/"+module.Name`) || strings.Contains(compiler+moduleCodegen, "module.Name+\"/\"") {
 		t.Error("C10.2 must not infer module Go import paths from module names")
+	}
+	if strings.Contains(moduleBinding, "Name: entry.Name()") || strings.Contains(moduleSnapshot, "Name: entry.Name()") {
+		t.Error("C10.2 must not derive module identity from directory names")
+	}
+	if strings.Contains(moduleCodegen, "modulecatalog.Default()") {
+		t.Error("C10.2 generated module composition must construct an explicit catalog")
 	}
 }
