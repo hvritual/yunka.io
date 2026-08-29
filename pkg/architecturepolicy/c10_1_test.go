@@ -71,6 +71,9 @@ func TestC101AssemblyAdaptersRemainOneWay(t *testing.T) {
 	if !strings.Contains(contractAdapter, "OperationPlansFilename") || !strings.Contains(contractAdapter, "BindingInput") {
 		t.Error("contract adapter must project binding references from canonical OperationPlan facts")
 	}
+	if !strings.Contains(contractAdapter, "CompileOperationPlans") || !strings.Contains(contractAdapter, "operationplan.Digest") {
+		t.Error("contract adapter must reject Manifest/OperationPlan drift before producing AssemblyPlan")
+	}
 	if !strings.Contains(moduleAdapter, "assemblyplan.ModuleInput") {
 		t.Error("module catalog must snapshot descriptor facts into leaf-safe assembly input")
 	}
