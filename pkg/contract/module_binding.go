@@ -170,24 +170,36 @@ func parseGeneratedAutoloadBinding(path string) (ModuleBinding, error) {
 	if importPath == "" {
 		return ModuleBinding{}, fmt.Errorf("contract module binding: %s has no explicit module import alias", path)
 	}
-	called := false
+	registered := false
 	ast.Inspect(file, func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
+		outer, ok := node.(*ast.CallExpr)
+		if !ok || len(outer.Args) != 1 {
 			return true
 		}
-		selector, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok || selector.Sel.Name != "GeneratedDescriptor" {
+		outerSelector, ok := outer.Fun.(*ast.SelectorExpr)
+		if !ok || outerSelector.Sel.Name != "MustRegister" {
 			return true
 		}
-		identifier, ok := selector.X.(*ast.Ident)
-		if ok && identifier.Name == "module" && len(call.Args) == 0 {
-			called = true
+		outerPackage, ok := outerSelector.X.(*ast.Ident)
+		if !ok || outerPackage.Name != "modulecatalog" {
+			return true
+		}
+		inner, ok := outer.Args[0].(*ast.CallExpr)
+		if !ok || len(inner.Args) != 0 {
+			return true
+		}
+		innerSelector, ok := inner.Fun.(*ast.SelectorExpr)
+		if !ok || innerSelector.Sel.Name != "GeneratedDescriptor" {
+			return true
+		}
+		innerPackage, ok := innerSelector.X.(*ast.Ident)
+		if ok && innerPackage.Name == "module" {
+			registered = true
 		}
 		return true
 	})
-	if !called {
-		return ModuleBinding{}, fmt.Errorf("contract module binding: %s does not register module.GeneratedDescriptor()", path)
+	if !registered {
+		return ModuleBinding{}, fmt.Errorf("contract module binding: %s does not contain modulecatalog.MustRegister(module.GeneratedDescriptor())", path)
 	}
 	return ModuleBinding{ImportPath: importPath, DescriptorSymbol: "GeneratedDescriptor"}, nil
 }
