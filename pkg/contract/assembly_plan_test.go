@@ -57,13 +57,22 @@ func TestCompileAssemblyPlanReusesCanonicalApplicationAndBindingFacts(t *testing
 	}
 }
 
+func TestCompileAssemblyPlanFailsWithoutQualifiedModuleSnapshot(t *testing.T) {
+	manifest := Manifest{SchemaVersion: ManifestVersion}
+	operations := operationplan.Set{SchemaVersion: operationplan.SchemaVersion}
+	_, err := CompileAssemblyPlan(manifest, operations, nil)
+	if err == nil || !strings.Contains(err.Error(), "qualified module snapshot") {
+		t.Fatalf("expected qualified module snapshot failure, got %v", err)
+	}
+}
+
 func TestCompileAssemblyPlanFailsWhenOperationApplicationIsUnknown(t *testing.T) {
 	manifest := Manifest{SchemaVersion: ManifestVersion}
 	operations := operationplan.Set{SchemaVersion: operationplan.SchemaVersion, Operations: []operationplan.Plan{{
 		OperationID: "missing.operation", Domain: "missing", Application: "app", UseCase: "Missing", RequestType: "demo.Request", ResponseType: "demo.Response",
 		Security: operationplan.Security{PermissionMode: "all"}, Execution: operationplan.Execution{Transaction: "none", Idempotency: "none"},
 	}}}
-	_, err := CompileAssemblyPlan(manifest, operations, nil)
+	_, err := CompileAssemblyPlan(manifest, operations, []assemblyplan.ModuleInput{})
 	if err == nil || !strings.Contains(err.Error(), "unknown application") {
 		t.Fatalf("expected unknown application failure, got %v", err)
 	}
