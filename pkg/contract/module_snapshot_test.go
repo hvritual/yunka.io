@@ -3,6 +3,7 @@ package contract
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -40,6 +41,7 @@ func GeneratedDescriptor() modulecatalog.Descriptor {
             EventBus: true,
             RPC: []modulecatalog.RPCRequirement{{Name:"inventory"}},
         },
+        Build: generatedBuild,
     }
 }
 `)
@@ -59,5 +61,27 @@ func GeneratedDescriptor() modulecatalog.Descriptor {
 	}
 	if bindings[0].ImportPath != "example.com/product/modules/device" {
 		t.Fatalf("binding import lost: %#v", bindings[0])
+	}
+}
+
+func TestParseGeneratedDescriptorFailsClosedOnUnknownField(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "zz_yunka_module_gen.go")
+	if err := os.WriteFile(path, []byte(`package device
+import "yunka.io/framework/core/modulecatalog"
+func GeneratedDescriptor() modulecatalog.Descriptor {
+    return modulecatalog.Descriptor{
+        Name: ModuleName,
+        Version: "v0.1.0",
+        Requirements: modulecatalog.Requirements{},
+        Build: generatedBuild,
+        FutureCapability: true,
+    }
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := parseGeneratedDescriptor(path, "device")
+	if err == nil || !strings.Contains(err.Error(), "unsupported field FutureCapability") {
+		t.Fatalf("expected fail-closed descriptor schema error, got %v", err)
 	}
 }
