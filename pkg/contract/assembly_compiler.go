@@ -12,15 +12,15 @@ import (
 )
 
 type AssemblyCompilation struct {
-	Plan     assemblyplan.Plan
-	PlanJSON []byte
-	GoFiles  []GeneratedAssemblyFile
+	Plan          assemblyplan.Plan
+	PlanJSON      []byte
+	GoFiles       []GeneratedAssemblyFile
+	ModuleGoFiles []GeneratedAssemblyFile
 }
 
-// CompileAssembly is the C10.2 deterministic join point. Contract facts are
-// recompiled into the canonical OperationPlan, the caller supplies the already
-// qualified static module snapshot, and both the committed AssemblyPlan and
-// typed structural Go are produced from that exact joined fact set.
+// CompileAssembly is the C10.2 deterministic join point for the AssemblyPlan
+// and application/transport structural Go. Call CompileBoundAssembly when the
+// compiler also owns explicit generated module Go bindings.
 func CompileAssembly(manifest Manifest, modules []assemblyplan.ModuleInput, options AssemblyCodeOptions) (AssemblyCompilation, error) {
 	if modules == nil {
 		return AssemblyCompilation{}, fmt.Errorf("contract assembly compiler: qualified module snapshot is required")
@@ -49,6 +49,25 @@ func CompileAssembly(manifest Manifest, modules []assemblyplan.ModuleInput, opti
 	return compilation, nil
 }
 
+// CompileBoundAssembly extends CompileAssembly with canonical compiler-local Go
+// bindings discovered from generated module source. The bindings are never
+// guessed from module names and are used only to emit explicit catalog wiring.
+func CompileBoundAssembly(manifest Manifest, modules []assemblyplan.ModuleInput, bindings []ModuleBinding, options AssemblyCodeOptions) (AssemblyCompilation, error) {
+	compilation, err := CompileAssembly(manifest, modules, options)
+	if err != nil {
+		return AssemblyCompilation{}, err
+	}
+	moduleFiles, err := RenderAssemblyModuleCode(compilation.Plan, bindings)
+	if err != nil {
+		return AssemblyCompilation{}, err
+	}
+	compilation.ModuleGoFiles = moduleFiles
+	if err := validateAssemblyCompilation(compilation); err != nil {
+		return AssemblyCompilation{}, err
+	}
+	return compilation, nil
+}
+
 func WriteAssemblyCompilation(contractOut, codeRoot string, compilation AssemblyCompilation) error {
 	contractOut = strings.TrimSpace(contractOut)
 	if contractOut == "" {
@@ -63,7 +82,10 @@ func WriteAssemblyCompilation(contractOut, codeRoot string, compilation Assembly
 	if err := writeFileAtomic(filepath.Join(contractOut, AssemblyPlanFilename), compilation.PlanJSON, 0o644); err != nil {
 		return err
 	}
-	return WriteAssemblyCode(codeRoot, compilation.GoFiles)
+	if err := WriteAssemblyCode(codeRoot, compilation.GoFiles); err != nil {
+		return err
+	}
+	return WriteAssemblyModuleCode(codeRoot, compilation.ModuleGoFiles)
 }
 
 func CheckAssemblyCompilation(contractOut, codeRoot string, compilation AssemblyCompilation) ([]Drift, error) {
@@ -91,6 +113,11 @@ func CheckAssemblyCompilation(contractOut, codeRoot string, compilation Assembly
 		return nil, err
 	}
 	drift = append(drift, codeDrift...)
+	moduleDrift, err := CheckAssemblyModuleCode(codeRoot, compilation.ModuleGoFiles)
+	if err != nil {
+		return nil, err
+	}
+	drift = append(drift, moduleDrift...)
 	sort.Slice(drift, func(i, j int) bool { return drift[i].File < drift[j].File })
 	return drift, nil
 }
@@ -107,6 +134,9 @@ func validateAssemblyCompilation(compilation AssemblyCompilation) error {
 		return fmt.Errorf("contract assembly compiler: invalid plan artifact: %w", err)
 	}
 	if _, err := assemblyFileMap(compilation.GoFiles); err != nil {
+		return err
+	}
+	if _, err := assemblyModuleFileMap(compilation.ModuleGoFiles); err != nil {
 		return err
 	}
 	return nil
