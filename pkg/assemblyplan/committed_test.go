@@ -35,3 +35,32 @@ func TestLoadBytesRejectsRuntimeLocalEvidence(t *testing.T) {
 		t.Fatalf("expected load-time runtime-local evidence failure, got %v", err)
 	}
 }
+
+func TestCanonicalJSONRejectsStaleBindingEvidence(t *testing.T) {
+	plan, err := Compile(sampleInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index := range plan.Operations {
+		if plan.Operations[index].ID != "device.transfer" {
+			continue
+		}
+		plan.Operations[index].Bindings[0].Evidence.Ref = "operations/other/bindings/http/0"
+	}
+	_, err = CanonicalJSON(plan)
+	if err == nil || !strings.Contains(err.Error(), "stale or inconsistent canonical evidence") {
+		t.Fatalf("expected stale binding evidence failure, got %v", err)
+	}
+}
+
+func TestCanonicalJSONRejectsStaleDependencyEvidence(t *testing.T) {
+	plan, err := Compile(sampleInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.ApplicationDependencies[0].Evidence.Ref = "applications/device/transfer/requires/other/app"
+	_, err = CanonicalJSON(plan)
+	if err == nil || !strings.Contains(err.Error(), "stale or inconsistent canonical evidence") {
+		t.Fatalf("expected stale dependency evidence failure, got %v", err)
+	}
+}
