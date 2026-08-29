@@ -112,32 +112,6 @@
         "type": "string",
         "x-yunka-proto-full-name": "CallType"
       },
-      "CircuitCfg": {
-        "properties": {
-          "CheckPeriod": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "CloseTime": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "HalfClose": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "HalfOpen": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "LimitPercent": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "type": "object",
-        "x-yunka-proto-full-name": "CircuitCfg"
-      },
       "FindAllModuleSortResponse": {
         "properties": {
           "moduleSortName": {
@@ -235,15 +209,6 @@
         },
         "type": "object",
         "x-yunka-proto-full-name": "FindModulesByModuleStatusRequest"
-      },
-      "FindModulesByStatusRequest": {
-        "properties": {
-          "status": {
-            "$ref": "#/components/schemas/ModuleCommonStatus"
-          }
-        },
-        "type": "object",
-        "x-yunka-proto-full-name": "FindModulesByStatusRequest"
       },
       "ForceCheckStatus": {
         "enum": [
@@ -343,11 +308,6 @@
         "type": "object",
         "x-yunka-proto-full-name": "NotParamRequest"
       },
-      "NotResponse": {
-        "properties": {},
-        "type": "object",
-        "x-yunka-proto-full-name": "NotResponse"
-      },
       "RuntimeApi": {
         "properties": {
           "callType": {
@@ -396,25 +356,6 @@
         "type": "object",
         "x-yunka-proto-full-name": "RuntimeApi"
       },
-      "ServerNode": {
-        "properties": {
-          "Circuit": {
-            "$ref": "#/components/schemas/CircuitCfg"
-          },
-          "ipPort": {
-            "type": "string"
-          },
-          "qps": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "uuid": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "x-yunka-proto-full-name": "ServerNode"
-      },
       "SimpleModule": {
         "properties": {
           "basicFee": {
@@ -455,14 +396,6 @@
         },
         "type": "object",
         "x-yunka-proto-full-name": "SimpleModuleResponse"
-      },
-      "Switch": {
-        "enum": [
-          "Close",
-          "Oopen"
-        ],
-        "type": "string",
-        "x-yunka-proto-full-name": "Switch"
       },
       "ViewRoleLevel": {
         "enum": [
@@ -515,32 +448,6 @@
         "type": "string",
         "x-yunka-proto-full-name": "io.yunka.gateway.rpc.CallType"
       },
-      "io_yunka_gateway_rpc_CircuitCfg": {
-        "properties": {
-          "CheckPeriod": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "CloseTime": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "HalfClose": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "HalfOpen": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "LimitPercent": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "type": "object",
-        "x-yunka-proto-full-name": "io.yunka.gateway.rpc.CircuitCfg"
-      },
       "io_yunka_gateway_rpc_DeleteRuntimeApiRequest": {
         "properties": {
           "uri": {
@@ -552,29 +459,6 @@
         },
         "type": "object",
         "x-yunka-proto-full-name": "io.yunka.gateway.rpc.DeleteRuntimeApiRequest"
-      },
-      "io_yunka_gateway_rpc_LockEnterpriseRequest": {
-        "properties": {
-          "enterpriseUUID": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "x-yunka-proto-full-name": "io.yunka.gateway.rpc.LockEnterpriseRequest"
-      },
-      "io_yunka_gateway_rpc_NotParamRequest": {
-        "properties": {},
-        "type": "object",
-        "x-yunka-proto-full-name": "io.yunka.gateway.rpc.NotParamRequest"
-      },
-      "io_yunka_gateway_rpc_NotResponse": {
-        "properties": {
-          "code": {
-            "$ref": "#/components/schemas/io_yunka_gateway_rpc_ResponseCode"
-          }
-        },
-        "type": "object",
-        "x-yunka-proto-full-name": "io.yunka.gateway.rpc.NotResponse"
       },
       "io_yunka_gateway_rpc_OperateRoleResponse": {
         "properties": {
@@ -738,28 +622,6 @@
         },
         "type": "object",
         "x-yunka-proto-full-name": "io.yunka.gateway.rpc.RuntimeAuthorization"
-      },
-      "io_yunka_gateway_rpc_ServerNode": {
-        "properties": {
-          "Circuit": {
-            "$ref": "#/components/schemas/io_yunka_gateway_rpc_CircuitCfg"
-          },
-          "ipPort": {
-            "type": "string"
-          },
-          "qps": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "srvName": {
-            "type": "string"
-          },
-          "uuid": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "x-yunka-proto-full-name": "io.yunka.gateway.rpc.ServerNode"
       }
     }
   },
