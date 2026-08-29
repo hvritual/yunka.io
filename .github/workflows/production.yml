@@ -1,10 +1,11 @@
-name: c9-production
+name: production
 
 on:
   push:
-    branches:
-      - agent/c9-operation-contract-runtime
-      - agent/c9-7-execution-semantics
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -28,17 +29,22 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+
       - name: Load toolchain lock
         id: lock
         shell: bash
         run: |
           set -euo pipefail
           source tools/toolchain.env
+          : "${GO_VERSION:?}"
+          : "${PROTOC_RELEASE:?}"
+          : "${PROTOC_LINUX_X86_64_SHA256:?}"
           echo "go_version=${GO_VERSION}" >> "$GITHUB_OUTPUT"
           echo "protoc_release=${PROTOC_RELEASE}" >> "$GITHUB_OUTPUT"
           echo "protoc_sha256=${PROTOC_LINUX_X86_64_SHA256}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: ${{ steps.lock.outputs.go_version }}
@@ -48,6 +54,7 @@ jobs:
             framework/go.sum
             gateway/go.sum
             pkg/go.sum
+
       - name: Install locked protoc
         shell: bash
         env:
@@ -65,8 +72,13 @@ jobs:
           mkdir -p "$install_root"
           unzip -q "$archive" -d "$install_root"
           echo "$install_root/bin" >> "$GITHUB_PATH"
+
       - name: Verify production on MySQL 8.4
         shell: bash
         env:
           YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?charset=utf8mb4&parseTime=true&loc=UTC&multiStatements=true
         run: make verify-production
+
+      - name: Require clean worktree
+        shell: bash
+        run: git diff --exit-code
