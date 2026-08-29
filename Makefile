@@ -16,7 +16,7 @@ PYTHON ?= python3
 VULNCHECK ?= $(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
 MODULES := compat/go-kit-kit-log pkg framework gateway app
 
-.PHONY: toolchain-check rpc-tools rpc-toolchain-check rpc-generate rpc-check rpc-compat-check rpc-legacy-check rpc-consumer-check rpc-bridge-check dependency-check architecture-check module-check authz-check operation-check c7-check domain-check dsl-check test race vet vuln tidy build contract rpc-contract-check contract-check integration verify verify-production
+.PHONY: toolchain-check rpc-tools rpc-toolchain-check rpc-generate rpc-check rpc-compat-check rpc-legacy-check rpc-consumer-check rpc-bridge-check dependency-check architecture-check module-check authz-check operation-check c7-check domain-check dsl-check c10-2-qualification-check test race vet vuln tidy build contract rpc-contract-check contract-check integration verify verify-production
 
 toolchain-check:
 	@set -eu; \
@@ -138,6 +138,9 @@ dsl-check: toolchain-check architecture-check rpc-tools rpc-toolchain-check
 	@cd app && PROTOC="$(PROTOC)" $(GO) run ./cmd contract lint \
 		--sources "$(CONTRACT_SOURCES)" --repo-root "$(CURDIR)"
 
+c10-2-qualification-check: toolchain-check architecture-check rpc-tools rpc-toolchain-check
+	@set -eu; protoc_path="$$(command -v "$(PROTOC)")"; cd app && YUNKA_REQUIRE_C102_QUALIFICATION=1 PROTOC="$$protoc_path" PROTOC_GEN_GO="$(PROTOC_GEN_GO)" PROTOC_GEN_GO_GRPC="$(PROTOC_GEN_GO_GRPC)" $(GO) test -timeout=10m -count=1 ./cmd/assembly -run '^TestC102QualificationGeneratedFixtureClosure$$'
+
 test:
 	@set -eu; for module in $(MODULES); do \
 		echo "==> go test ./$$module/..."; \
@@ -197,6 +200,6 @@ integration:
 	echo "==> MySQL 8 transactional outbox and request-scope integration"; \
 	(cd framework && $(GO) test -timeout=5m -count=1 -tags=integration ./event/outbox ./requestscope ./workflow/saga)
 
-verify: toolchain-check dependency-check module-check authz-check operation-check c7-check domain-check dsl-check rpc-check contract-check rpc-compat-check rpc-legacy-check rpc-consumer-check rpc-bridge-check test race vet vuln build
+verify: toolchain-check dependency-check module-check authz-check operation-check c7-check domain-check dsl-check c10-2-qualification-check rpc-check contract-check rpc-compat-check rpc-legacy-check rpc-consumer-check rpc-bridge-check test race vet vuln build
 
 verify-production: verify integration
