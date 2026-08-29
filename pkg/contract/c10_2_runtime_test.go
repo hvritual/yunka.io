@@ -50,12 +50,14 @@ go 1.25.0
 require (
 	google.golang.org/grpc v1.82.1
 	yunka.io/framework v0.0.0
+	yunka.io/gateway v0.0.0
 	yunka.io/pkg v0.0.0
 )
 
 replace yunka.io/framework => %s
+replace yunka.io/gateway => %s
 replace yunka.io/pkg => %s
-`, filepath.ToSlash(filepath.Join(repositoryRoot, "framework")), filepath.ToSlash(filepath.Join(repositoryRoot, "pkg"))))
+`, filepath.ToSlash(filepath.Join(repositoryRoot, "framework")), filepath.ToSlash(filepath.Join(repositoryRoot, "gateway")), filepath.ToSlash(filepath.Join(repositoryRoot, "pkg"))))
 	writeC102File(t, filepath.Join(root, "contracts", "fixture", "types.go"), `package fixturepb
 
 type TransferRequest struct{}
