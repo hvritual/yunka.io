@@ -24,6 +24,21 @@ func CompileAssemblyPlan(manifest Manifest, operations operationplan.Set, module
 	if err := operationplan.Validate(operations); err != nil {
 		return assemblyplan.Plan{}, fmt.Errorf("contract assembly plan: operation plan: %w", err)
 	}
+	expectedOperations, err := CompileOperationPlans(manifest)
+	if err != nil {
+		return assemblyplan.Plan{}, fmt.Errorf("contract assembly plan: canonical operation projection: %w", err)
+	}
+	expectedDigest, err := operationplan.Digest(expectedOperations)
+	if err != nil {
+		return assemblyplan.Plan{}, fmt.Errorf("contract assembly plan: canonical operation digest: %w", err)
+	}
+	actualDigest, err := operationplan.Digest(operations)
+	if err != nil {
+		return assemblyplan.Plan{}, fmt.Errorf("contract assembly plan: operation digest: %w", err)
+	}
+	if actualDigest != expectedDigest {
+		return assemblyplan.Plan{}, fmt.Errorf("contract assembly plan: operation plan does not match canonical manifest projection")
+	}
 
 	applications := map[string]assemblyplan.ApplicationInput{}
 	for _, service := range manifest.Services {
