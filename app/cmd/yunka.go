@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"yunka.io/app/cmd/api"
+	"yunka.io/app/cmd/assembly"
 	"yunka.io/app/cmd/contract"
 	"yunka.io/app/cmd/dependency"
 	"yunka.io/app/cmd/dev"
@@ -23,6 +24,7 @@ func main() {
 	app.Name = `yunka`
 	app.Version = "0.0.1"
 	app.Commands = []cli.Command{
+		assembly.Command(),
 		contract.Command(),
 		dependency.Command(),
 		dev.Command(),
