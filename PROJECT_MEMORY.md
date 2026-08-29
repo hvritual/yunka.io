@@ -247,3 +247,16 @@ Every new repository task must:
 - C9.9 main merge commit is `e091baff2730e04b402710606f655b3a9cd630b7`.
 - No new runtime mechanism was added by C9.9; C10 or any new framework surface starts only as a separate pressure-driven wave after this closure.
 - The current private personal repository tier does not provide usable GitHub rulesets/required-check enforcement; do not represent `main` as platform-protected. Enforce release policy through durable `ci`/`production`, review/merge discipline, and explicit release rules.
+
+## C10 Runtime Assembly & Framework Productization roadmap
+
+- C10 is the formally selected next framework wave after C9.9 and is tracked by GitHub issue #42 and `docs/waves/C10-runtime-assembly-framework-productization.md`.
+- C10's objective is productization/assembly: allow developers to focus on PO, protobuf Contract, handwritten Application logic, and Operation intent while deterministic typed generation assembles framework plumbing.
+- C10 is strictly ordered: **C10.1 Assembly Contract -> C10.2 Compiler -> C10.3 Runtime Closure -> C10.4 Consumer Upgrade -> C10.5 Release Qualification**. A later runtime-surface subwave must not bypass an unqualified predecessor.
+- C10.1 defines explicit assembly fact ownership and a deterministic AssemblyPlan/IR; it must not create a duplicate writable DSL for facts already owned by protobuf, project config, module descriptors, or dev runtime.
+- C10.2 generates structural typed Go bootstrap/wiring only. It may generate composition, typed binding seams, and explicit REST/gRPC registration glue, but never business behavior, reflection DI, service lookup, or a parallel execution runtime.
+- C10.3 closes generated assembly through the existing `core.App`, Platform Provider, C9 Executor/ExecutionScope, Health, Diagnostics, Application Graph, and `yunka dev` readiness/closure. Existing runtime owners remain authoritative.
+- C10.4 uses real `hvritual/biz` as a consumer-pressure wave. Framework changes require a concrete generic assembly defect/seam; Biz-specific behavior remains in Biz and speculative framework pressure is deferred.
+- C10.5 is a release qualification/fact-reconciliation wave, not a feature wave. It requires exact-tree deterministic generation, framework `make verify-production` on MySQL 8.4, real-consumer regenerate/zero-drift/verify/pressure, and code/generated/docs/memory/Pressure truth reconciliation before C10 is Complete.
+- C10 does not introduce generic BPMN/workflow, distributed transaction/2PC, generic SQL/data-scope DSL, framework-owned business resource taxonomy, audit/cache policy, response replay, Saga topology expansion, or business-semantic inference unless an executable blocker proves the smallest separately reviewed mechanism.
+- Normal C10 implementation follows isolated task branches and PR review/merge. Do not move `main` directly as part of implementation work.
