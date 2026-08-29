@@ -10,9 +10,15 @@ import (
 )
 
 // CompileAssemblyPlan projects existing canonical Contract/OperationPlan facts
-// plus an optional static module descriptor snapshot into the C10 leaf-safe
+// plus a qualified static module descriptor snapshot into the C10 leaf-safe
 // AssemblyPlan IR. It does not invent transport bindings or business behavior.
+// A nil module slice is rejected so callers cannot accidentally publish a
+// partial plan. Pass an explicit empty slice only for an intentionally empty
+// resolved catalog.
 func CompileAssemblyPlan(manifest Manifest, operations operationplan.Set, modules []assemblyplan.ModuleInput) (assemblyplan.Plan, error) {
+	if modules == nil {
+		return assemblyplan.Plan{}, fmt.Errorf("contract assembly plan: qualified module snapshot is required; pass an explicit empty slice only for an intentionally empty catalog")
+	}
 	manifest.Normalize()
 	operations = operationplan.Normalize(operations)
 	if err := operationplan.Validate(operations); err != nil {
