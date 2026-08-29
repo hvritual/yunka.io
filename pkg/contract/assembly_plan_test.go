@@ -8,27 +8,44 @@ import (
 	"yunka.io/pkg/operationplan"
 )
 
-func TestCompileAssemblyPlanReusesCanonicalApplicationAndBindingFacts(t *testing.T) {
-	manifest := Manifest{
+func assemblyManifestFixture() Manifest {
+	return Manifest{
 		SchemaVersion: ManifestVersion,
 		Services: []Service{
-			{Domain: "device", Name: "TransferService", FullName: "demo.device.TransferService", Application: &ApplicationDeclaration{Name: "transfer", Requires: []string{"site/query"}}},
-			{Domain: "site", Name: "QueryService", FullName: "demo.site.QueryService", Application: &ApplicationDeclaration{Name: "query"}},
+			{
+				Domain: "device", Name: "TransferService", FullName: "demo.device.TransferService",
+				Application: &ApplicationDeclaration{Name: "transfer", Requires: []string{"site/query"}},
+				Methods: []Method{{
+					Name: "Transfer", FullName: "demo.device.TransferService.Transfer",
+					Request: "demo.TransferRequest", Response: "demo.TransferResponse",
+					HTTP: []HTTPBinding{{Method: "POST", Path: "/v1/devices:transfer"}},
+					Operation: &OperationDeclaration{
+						ID: "device.transfer", UseCase: "Transfer", PermissionMode: "all",
+						RequiresOperations: []string{"site.validate"},
+						Execution:          &ExecutionPolicy{Transaction: "local", Idempotency: "none"},
+					},
+				}},
+			},
+			{
+				Domain: "site", Name: "QueryService", FullName: "demo.site.QueryService",
+				Application: &ApplicationDeclaration{
+					Name: "query",
+					Operations: []OperationDeclaration{{
+						ID: "site.validate", UseCase: "Validate", PermissionMode: "all",
+						ApplicationMethod: "Validate", RequestType: "demo.ValidateRequest", ResponseType: "demo.ValidateResponse",
+					}},
+				},
+			},
 		},
 	}
-	operations := operationplan.Set{SchemaVersion: operationplan.SchemaVersion, Operations: []operationplan.Plan{
-		{
-			OperationID: "device.transfer", Domain: "device", Application: "transfer", UseCase: "Transfer", RequestType: "demo.TransferRequest", ResponseType: "demo.TransferResponse",
-			Security: operationplan.Security{PermissionMode: "all"}, Execution: operationplan.Execution{Transaction: "local", Idempotency: "none"},
-			Composition: operationplan.Composition{RequiresOperations: []string{"site.validate"}}, ApplicationRequires: []string{"site/query"},
-			Bindings: operationplan.Bindings{RPC: "/demo.device.TransferService/Transfer", HTTP: []operationplan.HTTPBinding{{Method: "POST", Path: "/v1/devices:transfer"}}},
-		},
-		{
-			OperationID: "site.validate", Domain: "site", Application: "query", UseCase: "Validate", RequestType: "demo.ValidateRequest", ResponseType: "demo.ValidateResponse",
-			Security: operationplan.Security{PermissionMode: "all"}, Execution: operationplan.Execution{Transaction: "none", Idempotency: "none"},
-			Composition: operationplan.Composition{},
-		},
-	}}
+}
+
+func TestCompileAssemblyPlanReusesCanonicalApplicationAndBindingFacts(t *testing.T) {
+	manifest := assemblyManifestFixture()
+	operations, err := CompileOperationPlans(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
 	modules := []assemblyplan.ModuleInput{{
 		Name: "device", Requirements: assemblyplan.ModuleRequirements{Databases: []string{"primary"}},
 		Evidence: assemblyplan.Evidence{Ownership: assemblyplan.OwnershipReused, Source: "modulecatalog", Ref: "modules/device"},
@@ -66,14 +83,19 @@ func TestCompileAssemblyPlanFailsWithoutQualifiedModuleSnapshot(t *testing.T) {
 	}
 }
 
-func TestCompileAssemblyPlanFailsWhenOperationApplicationIsUnknown(t *testing.T) {
-	manifest := Manifest{SchemaVersion: ManifestVersion}
-	operations := operationplan.Set{SchemaVersion: operationplan.SchemaVersion, Operations: []operationplan.Plan{{
-		OperationID: "missing.operation", Domain: "missing", Application: "app", UseCase: "Missing", RequestType: "demo.Request", ResponseType: "demo.Response",
-		Security: operationplan.Security{PermissionMode: "all"}, Execution: operationplan.Execution{Transaction: "none", Idempotency: "none"},
-	}}}
-	_, err := CompileAssemblyPlan(manifest, operations, []assemblyplan.ModuleInput{})
-	if err == nil || !strings.Contains(err.Error(), "unknown application") {
-		t.Fatalf("expected unknown application failure, got %v", err)
+func TestCompileAssemblyPlanFailsWhenOperationPlanDriftsFromManifest(t *testing.T) {
+	manifest := assemblyManifestFixture()
+	operations, err := CompileOperationPlans(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index := range operations.Operations {
+		if operations.Operations[index].OperationID == "device.transfer" {
+			operations.Operations[index].Bindings.HTTP[0].Path = "/v1/stale-transfer"
+		}
+	}
+	_, err = CompileAssemblyPlan(manifest, operations, []assemblyplan.ModuleInput{})
+	if err == nil || !strings.Contains(err.Error(), "does not match canonical manifest projection") {
+		t.Fatalf("expected stale operation-plan failure, got %v", err)
 	}
 }
