@@ -24,6 +24,9 @@ func LoadBytes(data []byte) (Plan, error) {
 	if err := Validate(plan); err != nil {
 		return Plan{}, err
 	}
+	if err := validateCommittedPlan(plan); err != nil {
+		return Plan{}, err
+	}
 	return plan, nil
 }
 
