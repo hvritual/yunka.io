@@ -12,9 +12,9 @@ import (
 )
 
 type AssemblyCompilation struct {
-	Plan      assemblyplan.Plan
-	PlanJSON  []byte
-	GoFiles   []GeneratedAssemblyFile
+	Plan     assemblyplan.Plan
+	PlanJSON []byte
+	GoFiles  []GeneratedAssemblyFile
 }
 
 // CompileAssembly is the C10.2 deterministic join point. Contract facts are
@@ -42,7 +42,11 @@ func CompileAssembly(manifest Manifest, modules []assemblyplan.ModuleInput, opti
 	if err != nil {
 		return AssemblyCompilation{}, err
 	}
-	return AssemblyCompilation{Plan: plan, PlanJSON: planJSON, GoFiles: files}, nil
+	compilation := AssemblyCompilation{Plan: plan, PlanJSON: planJSON, GoFiles: files}
+	if err := validateAssemblyCompilation(compilation); err != nil {
+		return AssemblyCompilation{}, err
+	}
+	return compilation, nil
 }
 
 func WriteAssemblyCompilation(contractOut, codeRoot string, compilation AssemblyCompilation) error {
@@ -50,8 +54,8 @@ func WriteAssemblyCompilation(contractOut, codeRoot string, compilation Assembly
 	if contractOut == "" {
 		return fmt.Errorf("contract assembly compiler: contract output directory is required")
 	}
-	if _, err := assemblyplan.LoadBytes(compilation.PlanJSON); err != nil {
-		return fmt.Errorf("contract assembly compiler: invalid plan artifact: %w", err)
+	if err := validateAssemblyCompilation(compilation); err != nil {
+		return err
 	}
 	if err := os.MkdirAll(contractOut, 0o755); err != nil {
 		return err
@@ -67,8 +71,8 @@ func CheckAssemblyCompilation(contractOut, codeRoot string, compilation Assembly
 	if contractOut == "" {
 		return nil, fmt.Errorf("contract assembly compiler: contract output directory is required")
 	}
-	if _, err := assemblyplan.LoadBytes(compilation.PlanJSON); err != nil {
-		return nil, fmt.Errorf("contract assembly compiler: invalid plan artifact: %w", err)
+	if err := validateAssemblyCompilation(compilation); err != nil {
+		return nil, err
 	}
 	var drift []Drift
 	path := filepath.Join(contractOut, AssemblyPlanFilename)
@@ -89,4 +93,21 @@ func CheckAssemblyCompilation(contractOut, codeRoot string, compilation Assembly
 	drift = append(drift, codeDrift...)
 	sort.Slice(drift, func(i, j int) bool { return drift[i].File < drift[j].File })
 	return drift, nil
+}
+
+func validateAssemblyCompilation(compilation AssemblyCompilation) error {
+	canonical, err := assemblyplan.CanonicalJSON(compilation.Plan)
+	if err != nil {
+		return fmt.Errorf("contract assembly compiler: invalid plan: %w", err)
+	}
+	if !bytes.Equal(canonical, compilation.PlanJSON) {
+		return fmt.Errorf("contract assembly compiler: plan and plan artifact bytes do not match")
+	}
+	if _, err := assemblyplan.LoadBytes(compilation.PlanJSON); err != nil {
+		return fmt.Errorf("contract assembly compiler: invalid plan artifact: %w", err)
+	}
+	if _, err := assemblyFileMap(compilation.GoFiles); err != nil {
+		return err
+	}
+	return nil
 }
