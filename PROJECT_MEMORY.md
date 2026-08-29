@@ -209,7 +209,7 @@ Every new repository task must:
 - Generated typed child capabilities may invoke internal Operations without exposing fake RPC/REST endpoints.
 - Internal-only DTOs remain in canonical contract evidence but are excluded from external OpenAPI/TypeScript projections unless reachable from a real externally bound service method.
 - Real `hvritual/biz` cross-Application MySQL 8.4 pressure proved the shared root ExecutionScope/UoW child-Operation mechanism without framework bypass.
-- C9.8 pressure disposition: shared-UoW cross-Application pressure is closed; internal-only Operation identity is resolved; Saga topology graph expansion remains intentionally deferred pending repeated real pressure.
+- C9.8 pressure disposition: FP-C9-001 CLOSED, FP-C9-002 CLOSED, FP-C9-003 CLOSED, FP-C9-004 CLOSED for durable duplicate suppression with response replay deferred, FP-C9-005 OPEN/DEFERRED, FP-C9-006 CLOSED.
 
 ## Application Graph and diagnostics baseline
 
@@ -231,19 +231,18 @@ Every new repository task must:
 - Local runtime state is secret-free local evidence, not committed source of truth.
 - Child processes shut down in reverse dependency order with bounded graceful shutdown and kill fallback; no implicit restart policy is assumed.
 
-## C9.9 — Baseline & Conformance Closure decision
+## C9.9 baseline and conformance closure
 
-- C9.9 is a **fact/release qualification wave**, not a framework feature wave.
-- Product baseline under reconciliation: `main@407193d0b53f5fdbe2aad5c4ab152aba92d61097`, tree `d2454c393e9c19379a71980154d4e354bb4fce22`.
-- C9.9 absorbs the useful R0/C9.8 release-closure work from issue #36 / PR #37 so there is one active closure track rather than parallel truth sources.
-- C10/new framework-surface work remains frozen until C9.9 closes.
-- During C9.9, do not add new ExecutionPolicy mechanisms, generic resource/data-scope taxonomies, SQL-scope DSL, BPMN/workflow engine, distributed transaction/2PC, Saga topology expansion, or business-semantic inference.
-- A product-code change is allowed only when an executable C9.9 closure gate proves a concrete defect; fix the smallest proven defect and rerun the full gate.
-- Permanent `.github/workflows/production.yml` is the read-only MySQL 8.4 release gate for PRs to `main`, pushes to `main`, and manual revalidation.
-- Permanent production verification uses the locked toolchain, canonical `make verify-production`, and clean-worktree enforcement; normal `ci` remains the standard deterministic non-MySQL gate.
-- The current private personal repository tier does not provide usable GitHub rulesets/required-check enforcement; do not represent `main` as platform-protected. Until account capability changes, enforce release policy through `ci`, `production`, review/merge discipline, and explicit release rules.
-- Existing strong evidence includes successful C9.7 MySQL 8.4 production verification and successful real C9.8 `hvritual/biz` cross-Application MySQL 8.4 pressure.
-- Final C9.8 hosted-runner revalidation attempts failed before workflow steps executed (`steps=null`); these remain unresolved verification debt, not passing evidence and not proven code-test failures.
-- C9.9 completion requires green exact-tree `make verify`, green exact-tree MySQL `make verify-production`, green real `hvritual/biz` regeneration/verify/pressure against the same framework tree, zero generated/worktree drift, and synchronized docs/Pressure/issues.
-- C9.8 pressure truth after reconciliation is: FP-C9-001 CLOSED, FP-C9-002 CLOSED, FP-C9-003 CLOSED, FP-C9-004 CLOSED for durable duplicate suppression with response replay deferred, FP-C9-005 OPEN/DEFERRED, FP-C9-006 CLOSED.
-- C9.9 tracking lives in GitHub issue #38 and `docs/waves/C9.9-baseline-conformance-closure.md`.
+- C9.9 is **Complete** and is a fact/release qualification wave, not a framework feature wave.
+- Reconciled pre-merge product baseline is `main@407193d0b53f5fdbe2aad5c4ab152aba92d61097`, tree `d2454c393e9c19379a71980154d4e354bb4fce22`.
+- C9.9 absorbed the useful R0/C9.8 release-closure work from issue #36 / PR #37; those trackers are closed/superseded and C9.9 is the single durable closure record.
+- Permanent `.github/workflows/production.yml` is the read-only MySQL 8.4 release gate for PRs to `main`, pushes to `main`, and manual revalidation; normal `ci` remains the deterministic non-MySQL gate.
+- Native Yunka Actions jobs on the private personal repository may currently terminate before any step with `steps=null`; this is a repository-hosted-runner infrastructure limitation, not passing evidence and not a code-test failure.
+- C9.9 executable substitute evidence is run `33242472137`: exact merged C9.8 product-tree reconstruction, locked Go `1.25.13` / protoc `3.21.12`, canonical contract generation, full `make verify-production` on MySQL 8.4, real Biz regeneration, internal-Operation exposure assertions, `make verify`, and MySQL pressure all passed.
+- The only stale Yunka derived artifacts found by executable closure were deterministic `contracts/generated/client.ts` and `contracts/generated/openapi.json`; the exact regenerated outputs are committed in the C9.9 delivery PR.
+- Real consumer generated truth is the qualified 21-file state. Run `33244218676` proved second-generation zero drift, final internal Operation/composition invariants, `make verify`, MySQL pressure, and pushed the qualified generated commit.
+- Permanent real-consumer conformance run `33244429584` passed on the final 7-Operation C9.8/C9.9 Pressure state.
+- Current Pressure truth is: FP-C9-001 CLOSED, FP-C9-002 CLOSED, FP-C9-003 CLOSED, FP-C9-004 CLOSED for durable duplicate suppression with response replay deferred, FP-C9-005 OPEN/DEFERRED, FP-C9-006 CLOSED.
+- C9.8 issue #34 is closed. C9.9 issue #38 and PR #39 are the final closure/merge records.
+- No new runtime mechanism was added by C9.9; C10 or any new framework surface starts only as a separate pressure-driven wave after C9.9 is merged.
+- The current private personal repository tier does not provide usable GitHub rulesets/required-check enforcement; do not represent `main` as platform-protected. Enforce release policy through durable `ci`/`production`, review/merge discipline, and explicit release rules.
