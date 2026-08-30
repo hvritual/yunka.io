@@ -77,7 +77,7 @@ func fastFeedbackInputRoots(project resolvedProject) []fastfeedback.Root {
 				})
 				for index, protoPath := range source.ProtoPaths {
 					roots = append(roots, fastfeedback.Root{
-						Label: fmt.Sprintf("contract.source.%s.protoPath.%03d", source.Name, index),
+						Label: fmt.Sprintf("contract.source.%s.protoPath.%09d", source.Name, index),
 						Path:  filepath.Join(project.Root, filepath.FromSlash(protoPath)),
 					})
 				}
@@ -88,7 +88,7 @@ func fastFeedbackInputRoots(project resolvedProject) []fastfeedback.Root {
 	}
 	for index, protoPath := range project.AdditionalProtoPaths {
 		roots = append(roots, fastfeedback.Root{
-			Label: fmt.Sprintf("contract.additionalProtoPath.%03d", index),
+			Label: fmt.Sprintf("contract.additionalProtoPath.%09d", index),
 			Path:  protoPath,
 		})
 	}
