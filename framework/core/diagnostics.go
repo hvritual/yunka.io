@@ -9,12 +9,13 @@ import (
 const DiagnosticsSchemaVersion = 1
 
 type DiagnosticsReport struct {
-	SchemaVersion int                `json:"schemaVersion"`
-	State         string             `json:"state"`
-	Health        HealthReport       `json:"health"`
-	Modules       []ModuleDiagnostic `json:"modules,omitempty"`
-	Routes        []string           `json:"routes,omitempty"`
-	Runtime       RuntimeDiagnostic  `json:"runtime"`
+	SchemaVersion int                          `json:"schemaVersion"`
+	State         string                       `json:"state"`
+	Health        HealthReport                 `json:"health"`
+	Modules       []ModuleDiagnostic           `json:"modules,omitempty"`
+	Components    []RuntimeComponentDiagnostic `json:"components,omitempty"`
+	Routes        []string                     `json:"routes,omitempty"`
+	Runtime       RuntimeDiagnostic            `json:"runtime"`
 }
 
 type ModuleDiagnostic struct {
@@ -22,6 +23,13 @@ type ModuleDiagnostic struct {
 	Composition   string `json:"composition,omitempty"`
 	Startable     bool   `json:"startable,omitempty"`
 	Shutdownable  bool   `json:"shutdownable,omitempty"`
+	HealthChecked bool   `json:"healthChecked,omitempty"`
+}
+
+type RuntimeComponentDiagnostic struct {
+	Name          string `json:"name"`
+	Startable     bool   `json:"startable"`
+	Shutdownable  bool   `json:"shutdownable"`
 	HealthChecked bool   `json:"healthChecked,omitempty"`
 }
 
@@ -39,10 +47,11 @@ func (app *App) Diagnostics(ctx context.Context) DiagnosticsReport {
 	if app == nil {
 		return DiagnosticsReport{SchemaVersion: DiagnosticsSchemaVersion, State: "unknown", Health: HealthReport{State: "unknown"}}
 	}
-	var routes []string
+	var legacyRoutes []string
 	if app.rhTree != nil {
-		routes = app.rhTree.Paths()
+		legacyRoutes = app.rhTree.Paths()
 	}
+	routes := mergedRuntimeRoutes(legacyRoutes, app.runtimeInventory)
 	modules := app.composedModuleSnapshot()
 	diagnostics := make([]ModuleDiagnostic, 0, len(modules))
 	for _, module := range modules {
@@ -50,15 +59,25 @@ func (app *App) Diagnostics(ctx context.Context) DiagnosticsReport {
 			diagnostics = append(diagnostics, diagnosticForComposedModule(module))
 		}
 	}
+	components := app.runtimeComponentSnapshot()
+	componentDiagnostics := make([]RuntimeComponentDiagnostic, 0, len(components))
+	for _, component := range components {
+		componentDiagnostics = append(componentDiagnostics, RuntimeComponentDiagnostic{
+			Name: component.Name, Startable: component.StartFunc != nil, Shutdownable: component.ShutdownFunc != nil, HealthChecked: component.HealthFunc != nil,
+		})
+	}
 	return DiagnosticsReport{
 		SchemaVersion: DiagnosticsSchemaVersion,
 		State:         app.State().String(),
 		Health:        app.Health(ctx),
 		Modules:       diagnostics,
+		Components:    componentDiagnostics,
 		Routes:        routes,
 		Runtime: RuntimeDiagnostic{
-			RouteCount:         len(routes),
-			EventBusConfigured: app.eventBus != nil,
+			RouteCount:          len(routes),
+			RPCClientConfigured: app.runtimeInventory.RPCClientConfigured,
+			RPCServerCount:      app.runtimeInventory.RPCServerCount,
+			EventBusConfigured:  app.eventBus != nil,
 		},
 	}
 }
