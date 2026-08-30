@@ -27,14 +27,14 @@ type Options struct {
 }
 
 type Stage struct {
-	Name   string
-	Status string
-	Detail string
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Detail string `json:"detail,omitempty"`
 }
 
 type Report struct {
-	Root   string
-	Stages []Stage
+	Root   string  `json:"-"`
+	Stages []Stage `json:"stages"`
 }
 
 type resolvedProject struct {
@@ -53,20 +53,21 @@ type resolvedProject struct {
 }
 
 func Generate(ctx context.Context, options Options) (Report, error) {
+	failureRoot := workflowRoot(options.Root)
 	project, err := resolveProject(options)
 	if err != nil {
-		return Report{}, err
+		return Report{}, wrapFailure(FailureProject, failureRoot, "", err)
 	}
 	result, artifacts, applicationFiles, err := compileArtifacts(ctx, project)
 	if err != nil {
-		return Report{}, fmt.Errorf("generate contract: %w", err)
+		return Report{}, wrapFailure(FailureContract, project.Root, "", fmt.Errorf("generate contract: %w", err))
 	}
 	if err := contractcore.WriteArtifacts(project.ContractOut, artifacts); err != nil {
-		return Report{}, fmt.Errorf("generate contract artifacts: %w", err)
+		return Report{}, wrapFailure(FailureContract, project.Root, relative(project.Root, project.ContractOut), fmt.Errorf("generate contract artifacts: %w", err))
 	}
 	if len(applicationFiles) > 0 {
 		if err := contractcore.WriteApplicationCode(project.CodeOut, applicationFiles); err != nil {
-			return Report{}, fmt.Errorf("generate application code: %w", err)
+			return Report{}, wrapFailure(FailureContract, project.Root, relative(project.Root, project.CodeOut), fmt.Errorf("generate application code: %w", err))
 		}
 	}
 
@@ -78,11 +79,11 @@ func Generate(ctx context.Context, options Options) (Report, error) {
 	})
 
 	if err := modulecmd.Check(project.ModuleRoot); err != nil {
-		return Report{}, fmt.Errorf("generate module check: %w", err)
+		return Report{}, wrapFailure(FailureModule, project.Root, relative(project.Root, project.ModuleRoot), fmt.Errorf("generate module check: %w", err))
 	}
 	modulesPresent, err := hasModules(project.ModuleRoot)
 	if err != nil {
-		return Report{}, fmt.Errorf("generate module discovery: %w", err)
+		return Report{}, wrapFailure(FailureModule, project.Root, relative(project.Root, project.ModuleRoot), fmt.Errorf("generate module discovery: %w", err))
 	}
 	if modulesPresent {
 		report.Stages = append(report.Stages, Stage{Name: "modules", Status: "checked", Detail: relative(project.Root, project.ModuleRoot)})
@@ -96,14 +97,14 @@ func Generate(ctx context.Context, options Options) (Report, error) {
 		return report, nil
 	}
 	if strings.TrimSpace(project.CodeImport) == "" {
-		return Report{}, errors.New("generate assembly: generated Go import root is unavailable; add go.mod or workflow.generatedGo.import to .yunka/project.json")
+		return Report{}, wrapFailure(FailureAssembly, project.Root, ".yunka/project.json", errors.New("generate assembly: generated Go import root is unavailable; add go.mod or workflow.generatedGo.import to .yunka/project.json"))
 	}
 	compilation, bindingCount, err := compileAssembly(result.Manifest, project)
 	if err != nil {
-		return Report{}, fmt.Errorf("generate assembly: %w", err)
+		return Report{}, wrapFailure(FailureAssembly, project.Root, relative(project.Root, project.CodeOut), fmt.Errorf("generate assembly: %w", err))
 	}
 	if err := contractcore.WriteAssemblyCompilation(project.ContractOut, project.CodeOut, compilation); err != nil {
-		return Report{}, fmt.Errorf("generate assembly artifacts: %w", err)
+		return Report{}, wrapFailure(FailureAssembly, project.Root, relative(project.Root, project.CodeOut), fmt.Errorf("generate assembly artifacts: %w", err))
 	}
 	report.Stages = append(report.Stages, Stage{
 		Name:   "assembly",
@@ -114,28 +115,34 @@ func Generate(ctx context.Context, options Options) (Report, error) {
 }
 
 func Check(ctx context.Context, options Options) (Report, error) {
+	failureRoot := workflowRoot(options.Root)
 	project, err := resolveProject(options)
 	if err != nil {
-		return Report{}, err
+		return Report{}, wrapFailure(FailureProject, failureRoot, "", err)
 	}
 	result, artifacts, applicationFiles, err := compileArtifacts(ctx, project)
 	if err != nil {
-		return Report{}, fmt.Errorf("check contract: %w", err)
+		return Report{}, wrapFailure(FailureContract, project.Root, "", fmt.Errorf("check contract: %w", err))
 	}
-	drift, err := contractcore.CheckArtifacts(project.ContractOut, artifacts)
+	contractDrift, err := contractcore.CheckArtifacts(project.ContractOut, artifacts)
 	if err != nil {
-		return Report{}, fmt.Errorf("check contract artifacts: %w", err)
+		return Report{}, wrapFailure(FailureContract, project.Root, relative(project.Root, project.ContractOut), fmt.Errorf("check contract artifacts: %w", err))
+	}
+	if len(contractDrift) > 0 {
+		first := contractDrift[0]
+		location := filepath.ToSlash(filepath.Join(relative(project.Root, project.ContractOut), filepath.FromSlash(first.File)))
+		return Report{}, wrapFailure(FailureContractDrift, project.Root, location, fmt.Errorf("check contract: generated artifacts are stale (%s: %s); run `yunka generate`", first.File, first.Reason))
 	}
 	if len(applicationFiles) > 0 {
 		applicationDrift, err := contractcore.CheckApplicationCode(project.CodeOut, applicationFiles)
 		if err != nil {
-			return Report{}, fmt.Errorf("check application code: %w", err)
+			return Report{}, wrapFailure(FailureContract, project.Root, relative(project.Root, project.CodeOut), fmt.Errorf("check application code: %w", err))
 		}
-		drift = append(drift, applicationDrift...)
-	}
-	if len(drift) > 0 {
-		first := drift[0]
-		return Report{}, fmt.Errorf("check contract: generated artifacts are stale (%s: %s); run `yunka generate`", first.File, first.Reason)
+		if len(applicationDrift) > 0 {
+			first := applicationDrift[0]
+			location := filepath.ToSlash(filepath.Join(relative(project.Root, project.CodeOut), filepath.FromSlash(first.File)))
+			return Report{}, wrapFailure(FailureContractDrift, project.Root, location, fmt.Errorf("check application code: generated artifacts are stale (%s: %s); run `yunka generate`", first.File, first.Reason))
+		}
 	}
 
 	report := Report{Root: project.Root}
@@ -146,11 +153,11 @@ func Check(ctx context.Context, options Options) (Report, error) {
 	})
 
 	if err := modulecmd.Check(project.ModuleRoot); err != nil {
-		return Report{}, fmt.Errorf("check modules: %w", err)
+		return Report{}, wrapFailure(FailureModule, project.Root, relative(project.Root, project.ModuleRoot), fmt.Errorf("check modules: %w", err))
 	}
 	modulesPresent, err := hasModules(project.ModuleRoot)
 	if err != nil {
-		return Report{}, fmt.Errorf("check module discovery: %w", err)
+		return Report{}, wrapFailure(FailureModule, project.Root, relative(project.Root, project.ModuleRoot), fmt.Errorf("check module discovery: %w", err))
 	}
 	if modulesPresent {
 		report.Stages = append(report.Stages, Stage{Name: "modules", Status: "ok", Detail: relative(project.Root, project.ModuleRoot)})
@@ -164,19 +171,19 @@ func Check(ctx context.Context, options Options) (Report, error) {
 		return report, nil
 	}
 	if strings.TrimSpace(project.CodeImport) == "" {
-		return Report{}, errors.New("check assembly: generated Go import root is unavailable; add go.mod or workflow.generatedGo.import to .yunka/project.json")
+		return Report{}, wrapFailure(FailureAssembly, project.Root, ".yunka/project.json", errors.New("check assembly: generated Go import root is unavailable; add go.mod or workflow.generatedGo.import to .yunka/project.json"))
 	}
 	compilation, bindingCount, err := compileAssembly(result.Manifest, project)
 	if err != nil {
-		return Report{}, fmt.Errorf("check assembly: %w", err)
+		return Report{}, wrapFailure(FailureAssembly, project.Root, relative(project.Root, project.CodeOut), fmt.Errorf("check assembly: %w", err))
 	}
 	assemblyDrift, err := contractcore.CheckAssemblyCompilation(project.ContractOut, project.CodeOut, compilation)
 	if err != nil {
-		return Report{}, fmt.Errorf("check assembly artifacts: %w", err)
+		return Report{}, wrapFailure(FailureAssembly, project.Root, relative(project.Root, project.CodeOut), fmt.Errorf("check assembly artifacts: %w", err))
 	}
 	if len(assemblyDrift) > 0 {
 		first := assemblyDrift[0]
-		return Report{}, fmt.Errorf("check assembly: generated artifacts are stale (%s: %s); run `yunka generate`", first.File, first.Reason)
+		return Report{}, wrapFailure(FailureAssemblyDrift, project.Root, first.File, fmt.Errorf("check assembly: generated artifacts are stale (%s: %s); run `yunka generate`", first.File, first.Reason))
 	}
 	report.Stages = append(report.Stages, Stage{Name: "assembly", Status: "ok", Detail: fmt.Sprintf("bindings=%d", bindingCount)})
 	return report, nil
@@ -493,4 +500,15 @@ func relative(root, path string) string {
 		return path
 	}
 	return filepath.ToSlash(value)
+}
+
+func workflowRoot(root string) string {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		root = "."
+	}
+	if absolute, err := filepath.Abs(root); err == nil {
+		return absolute
+	}
+	return root
 }
