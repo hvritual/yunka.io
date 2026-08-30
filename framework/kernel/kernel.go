@@ -11,14 +11,16 @@ import (
 )
 
 type Options struct {
-	Platform       *platform.Provider
-	Catalog        *modulecatalog.Catalog
-	ContextFactory modulecatalog.ContextFactory
-	Config         modulecatalog.ConfigProvider
-	Logger         logExt.Logger
-	Databases      modulecatalog.DatabaseProvider
-	EventBus       eventBus.EventBus
-	RPC            modulecatalog.RPCProvider
+	Platform          *platform.Provider
+	Catalog           *modulecatalog.Catalog
+	ContextFactory    modulecatalog.ContextFactory
+	Config            modulecatalog.ConfigProvider
+	Logger            logExt.Logger
+	Databases         modulecatalog.DatabaseProvider
+	EventBus          eventBus.EventBus
+	RPC               modulecatalog.RPCProvider
+	RuntimeComponents []core.RuntimeComponent
+	RuntimeInventory  core.RuntimeInventory
 }
 
 // New builds an isolated App. A nil Catalog uses the process-default static
@@ -42,7 +44,8 @@ func New(options Options) (*core.App, error) {
 	return core.NewApp(core.AppOptions{
 		Config: options.Config, Logger: options.Logger, Databases: options.Databases,
 		EventBus: options.EventBus, RPC: options.RPC,
-		Catalog: catalog, ContextFactory: options.ContextFactory,
+		Catalog: options.Catalog, ContextFactory: options.ContextFactory,
+		RuntimeComponents: options.RuntimeComponents, RuntimeInventory: options.RuntimeInventory,
 	})
 }
 
