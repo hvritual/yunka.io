@@ -1,10 +1,14 @@
 package projectflow
 
 import (
+	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	modulecmd "yunka.io/app/cmd/module"
 )
 
 func TestResolveProjectUsesExplicitProfileLocations(t *testing.T) {
@@ -47,6 +51,83 @@ func TestResolveProjectUsesExplicitProfileLocations(t *testing.T) {
 	}
 	if project.DevManifest != filepath.Join(root, ".yunka", "local-dev.json") {
 		t.Fatalf("DevManifest=%q", project.DevManifest)
+	}
+}
+
+func TestProfiledHappyPathGenerateAndCheck(t *testing.T) {
+	protoc, err := exec.LookPath("protoc")
+	if err != nil {
+		t.Skip("protoc is required for the C11.2 profiled happy-path test")
+	}
+	repositoryRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "go.mod"), "module example.com/profiled\n\ngo 1.25.0\n")
+	writeTestFile(t, filepath.Join(root, ".yunka", "project.json"), `{
+  "version": 2,
+  "database": {"tablePrefix": "yk"},
+  "workflow": {
+    "contract": {"protoRoot": "api/proto", "generated": "build/contracts"},
+    "modules": {"root": "src/modules"},
+    "generatedGo": {"root": "src/generated"},
+    "dev": {"manifest": ".yunka/local-dev.json"}
+  }
+}
+`)
+	writeTestFile(t, filepath.Join(root, "api", "proto", "device", "v1", "device.proto"), `syntax = "proto3";
+package device.v1;
+import "yunka/dsl/v1/options.proto";
+option go_package = "example.com/profiled/contracts/device/v1;devicev1";
+option (yunka.dsl.v1.domain) = { name: "device" version: "v1" };
+
+message GetDeviceRequest { string id = 1; }
+message GetDeviceResponse { string id = 1; }
+
+service DeviceApplication {
+  option (yunka.dsl.v1.application) = {
+    name: "management"
+    operations: {
+      id: "device.get"
+      use_case: "get_device"
+      public: true
+      request_type: "device.v1.GetDeviceRequest"
+      response_type: "device.v1.GetDeviceResponse"
+      application_method: "GetDevice"
+      execution: { transaction: TRANSACTION_READ_ONLY idempotency: IDEMPOTENCY_NONE }
+    }
+  };
+}
+`)
+	if err := modulecmd.GenerateWithOptions(modulecmd.Options{
+		Name:     "device",
+		Root:     filepath.Join(root, "src", "modules"),
+		NoConfig: true,
+		Logger:   false,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	options := Options{
+		Root:       root,
+		Protoc:     protoc,
+		ProtoPaths: []string{filepath.Join(repositoryRoot, "contracts", "proto")},
+	}
+	report, err := Generate(context.Background(), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Stages) != 3 || report.Stages[2].Status != "generated" {
+		t.Fatalf("unexpected profiled report: %#v", report)
+	}
+	if _, err := os.Stat(filepath.Join(root, "build", "contracts", "assembly-plan.json")); err != nil {
+		t.Fatalf("profiled assembly plan: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "src", "generated", "assembly")); err != nil {
+		t.Fatalf("profiled generated Go: %v", err)
+	}
+	if _, err := Check(context.Background(), options); err != nil {
+		t.Fatalf("profiled check: %v", err)
 	}
 }
 
