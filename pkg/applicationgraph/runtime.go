@@ -7,16 +7,24 @@ import (
 )
 
 type RuntimeSnapshot struct {
-	State   string           `json:"state"`
-	Modules []RuntimeModule  `json:"modules,omitempty"`
-	Routes  []string         `json:"routes,omitempty"`
-	Runtime RuntimeInventory `json:"runtime"`
+	State      string             `json:"state"`
+	Modules    []RuntimeModule    `json:"modules,omitempty"`
+	Components []RuntimeComponent `json:"components,omitempty"`
+	Routes     []string           `json:"routes,omitempty"`
+	Runtime    RuntimeInventory   `json:"runtime"`
 }
 
 type RuntimeModule struct {
 	Name          string `json:"name"`
 	Startable     bool   `json:"startable,omitempty"`
 	Shutdownable  bool   `json:"shutdownable,omitempty"`
+	HealthChecked bool   `json:"healthChecked,omitempty"`
+}
+
+type RuntimeComponent struct {
+	Name          string `json:"name"`
+	Startable     bool   `json:"startable"`
+	Shutdownable  bool   `json:"shutdownable"`
 	HealthChecked bool   `json:"healthChecked,omitempty"`
 }
 
@@ -61,6 +69,23 @@ func AddRuntime(builder *Builder, snapshot RuntimeSnapshot, applicationName stri
 			return err
 		}
 		if err := builder.AddEdge(Edge{From: appID, To: moduleID, Kind: EdgeContains, Evidence: evidence}); err != nil {
+			return err
+		}
+	}
+	for _, component := range snapshot.Components {
+		name := strings.TrimSpace(component.Name)
+		if name == "" {
+			continue
+		}
+		componentID := ID(NodeRuntimeComponent, name)
+		if err := builder.AddNode(Node{ID: componentID, Kind: NodeRuntimeComponent, Name: name, Attributes: map[string]string{
+			"startable":     strconv.FormatBool(component.Startable),
+			"shutdownable":  strconv.FormatBool(component.Shutdownable),
+			"healthChecked": strconv.FormatBool(component.HealthChecked),
+		}, Evidence: evidence}); err != nil {
+			return err
+		}
+		if err := builder.AddEdge(Edge{From: appID, To: componentID, Kind: EdgeContains, Evidence: evidence}); err != nil {
 			return err
 		}
 	}
