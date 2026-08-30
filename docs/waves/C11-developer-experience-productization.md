@@ -4,11 +4,12 @@
 
 - State: **In progress**
 - Base: `main@257660d5c57ca58647020dc9cf8199f438f5fc96`
-- First delivery branch: `agent/c11-1-developer-happy-path`
+- C11.1: **Complete / qualified**
+- C11.1 exact head: `f0836e0c69af4ddf0f84f42e3422a829da47d0a5`
 - Delivery model: ordered, independently reviewable DX subwaves
 
 ```text
-C11.1 Happy Path
+C11.1 Happy Path          ✅
         ↓
 C11.2 Project Profile
         ↓
@@ -110,132 +111,95 @@ C11 does **not** introduce:
 
 # C11.1 — Happy Path
 
-## Goal
+## Status
 
-Introduce the smallest top-level developer facade that makes the existing deterministic compiler and validation stages usable without requiring developers to manually orchestrate them.
+- State: **Complete / qualified**
+- Exact qualified head: `f0836e0c69af4ddf0f84f42e3422a829da47d0a5`
+- CI: run `33311070919` — full verify and determinism PASS
+- Production: run `33311070913` — MySQL 8.4 `verify-production` and clean worktree PASS
 
-The target first slice is:
+## Goal achieved
+
+C11.1 introduced the smallest top-level developer facade over the existing canonical compiler and validation paths:
 
 ```text
 yunka generate
-    -> existing canonical generation stages
+    -> canonical contract generation
+    -> module validation
+    -> canonical C10 Assembly generation
 
 yunka check
-    -> existing canonical drift/structure checks
+    -> canonical contract drift checks
+    -> module validation
+    -> canonical C10 Assembly drift checks
 ```
 
-C11.1 must be an orchestration/facade layer. It must not fork compiler semantics.
+The facade does not own a second compiler or runtime.
 
-## Required behavior
+## Qualified behavior
 
-### `yunka generate`
+- `yunka generate` and `yunka check` are top-level commands.
+- Conventional project defaults resolve `contracts/sources.json` or `contracts/proto`, `contracts/generated`, `modules`, and generated Go root `internal`.
+- Generated Go root import is derived from `go.mod` as `<go-module>/internal`; the compiler emits Application/Assembly child packages beneath that root.
+- `yunka check` is read-only and fails closed on generated drift.
+- Second generation is byte-stable.
+- A permanent equivalence test compiles the same typed Application/module fixture through both the happy path and expert `contract generate + assembly generate` path and requires identical per-file SHA snapshots.
+- Both happy-path and expert check paths pass on the equivalent outputs.
+- Existing expert commands remain unchanged.
 
-The command must:
+## Preserved boundaries
 
-1. resolve project-local defaults from existing project facts where they already exist;
-2. invoke the canonical contract generation path;
-3. invoke module validation as a prerequisite when modules are present;
-4. invoke the canonical C10 Assembly generation path when assembly inputs are configured/resolvable;
-5. preserve deterministic output and second-run zero drift;
-6. print stage-oriented output so a developer knows what was generated or skipped;
-7. fail immediately at the first blocking canonical error with stage context.
-
-### `yunka check`
-
-The command must:
-
-1. remain read-only;
-2. validate the same canonical project facts used by `yunka generate`;
-3. run contract lint/drift checks;
-4. run module structure/topology validation when modules are present;
-5. run C10 Assembly drift checks when assembly inputs are configured/resolvable;
-6. avoid production-only heavy gates such as race, vulnerability scanning and MySQL pressure;
-7. return a non-zero exit code on blocking drift or invalid structure.
-
-## C11.1 configuration boundary
-
-C11.1 may reuse the existing `.yunka/project.json` and Go module facts, but it must not prematurely expand the project schema into a second architecture model. If the current project config cannot express a required path without duplication, C11.1 may use conservative conventional defaults and defer the generalized profile model to C11.2.
-
-Preferred defaults:
-
-```text
-contract source inventory  contracts/sources.json (when present)
-canonical proto root       contracts/proto
-contract generated output  contracts/generated
-module root                modules
-generated Go root          internal
-generated Go root import   <go module>/internal
-```
-
-The generated Go root deliberately follows the qualified C10 convention. Application code is emitted beneath `internal/<domain>/application`, while Runtime Assembly is emitted beneath `internal/assembly`; the root itself remains `internal`.
-
-Any automatic value must be derived only from explicit filesystem/Go module facts and must remain overridable by the existing expert commands.
-
-## Expected change areas
-
-Allowed/expected:
-
-- `app/cmd/generate/**`;
-- `app/cmd/check/**`;
-- `app/cmd/yunka.go`;
-- narrowly reusable orchestration helpers under `app/cmd/**` or a leaf-safe package;
-- tests proving the facade delegates to canonical generation/check semantics;
-- `docs/waves/**`.
-
-Conditionally allowed only when required by a concrete blocker:
-
-- small exported helper seams in `app/cmd/contract/**` or `app/cmd/assembly/**` that remove duplicate orchestration logic without changing semantics;
-- small project-config read helpers.
-
-Forbidden in C11.1:
-
-- changes to authorization semantics;
-- changes to OperationPlan or Executor semantics;
-- changes to `ExecutionScope`, UoW, transaction or idempotency semantics;
-- changes to Runtime Assembly ownership;
-- changes to Platform lifecycle ownership;
-- new reflection/service-locator composition;
-- new runtime supervision/readiness semantics;
-- generated business logic.
-
-## Validation gate
-
-C11.1 is complete only when:
-
-- `yunka generate` is a top-level command;
-- `yunka check` is a top-level command;
-- both commands work from a repository root without repeating routine compiler flags for the representative fixture;
-- generated artifacts are identical to the existing expert command path;
-- `yunka generate` followed by a second `yunka generate` produces zero tracked drift;
-- `yunka check` is read-only and passes on the generated tree;
-- intentional contract or assembly drift is rejected;
-- existing `yunka contract ...`, `yunka assembly ...`, `yunka module ...`, and `yunka dev ...` behavior remains compatible;
-- architecture/contract/runtime qualification tests remain green;
-- no C7-C10 semantic owner is duplicated.
-
-## Primary risks
-
-### Risk 1 — convenience facade becomes a second compiler
-
-**Control:** facade code must call the existing canonical compiler/generator/check implementations or extracted shared helpers; semantic reimplementation is forbidden.
-
-### Risk 2 — conventional defaults become hidden architecture inference
-
-**Control:** defaults are restricted to filesystem/output locations and Go module import derivation. Business/Application/Operation/module dependency facts remain explicit canonical inputs.
-
-### Risk 3 — `yunka check` becomes as slow as production verification
-
-**Control:** C11.1 explicitly limits `check` to developer-loop structural/drift validation. `make verify` and `make verify-production` remain higher assurance gates.
-
-## Rollback
-
-C11.1 is additive. Remove the top-level facade commands and their orchestration helpers; all existing expert commands and C10 runtime behavior remain unchanged.
+C11.1 changes no authorization, OperationPlan, Executor, ExecutionScope, UoW, transaction, idempotency, Runtime Assembly ownership, Platform lifecycle ownership, or runtime supervision semantics.
 
 ---
 
 # C11.2 — Project Profile
 
-Centralize developer-workflow defaults in a narrowly scoped project profile so routine commands do not require repeated path/import flags. The profile may locate canonical facts but must not duplicate them.
+## Goal
+
+Centralize developer-workflow defaults in a narrowly scoped project profile so routine commands do not require repeated path/import flags, while keeping architecture truth in its existing canonical owners.
+
+## Configuration ownership rule
+
+`.yunka/project.json` may own only developer-workflow/location defaults such as:
+
+- project display identity;
+- contract source inventory or proto-root location;
+- contract generated output location;
+- module root location;
+- generated Go root location;
+- generated Go root import when it cannot be derived safely from `go.mod`;
+- local dev manifest location/default target references.
+
+It must **not** own or duplicate:
+
+- Domain/Application/Operation declarations;
+- Application or Operation dependencies;
+- execution/security/transaction/idempotency policy;
+- module capability/dependency declarations;
+- AssemblyPlan relationships;
+- local process/readiness declarations already owned by `.yunka/dev.json`.
+
+## Required C11.2 behavior
+
+1. Upgrade the project config schema in a backward-compatible, deterministic way.
+2. `yunka init` creates the profile with conservative defaults and derives the Go import root when possible.
+3. `yunka generate` / `yunka check` load the profile first, then resolve canonical facts through configured locations.
+4. Conventional defaults remain compatible for existing C11.1 projects without a migrated profile.
+5. Missing or conflicting paths fail with explicit configuration-stage errors rather than silently falling back to unrelated locations.
+6. Profile serialization is deterministic and contains no secrets.
+7. Expert command flags remain valid escape hatches and are not silently rewritten by the profile.
+
+## C11.2 non-goals
+
+- no second contract/assembly/runtime DSL;
+- no business-semantic configuration;
+- no secret storage;
+- no environment deployment topology;
+- no automatic module/Application discovery beyond existing explicit generated/module facts;
+- no change to C7-C10 semantic owners.
+
+---
 
 # C11.3 — Diagnostics UX
 
