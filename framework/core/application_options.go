@@ -13,20 +13,32 @@ import (
 )
 
 type AppOptions struct {
-	Config         modulecatalog.ConfigProvider
-	Logger         logExt.Logger
-	Databases      modulecatalog.DatabaseProvider
-	EventBus       eventBus.EventBus
-	RPC            modulecatalog.RPCProvider
-	Catalog        *modulecatalog.Catalog
-	ContextFactory modulecatalog.ContextFactory
+	Config            modulecatalog.ConfigProvider
+	Logger            logExt.Logger
+	Databases         modulecatalog.DatabaseProvider
+	EventBus          eventBus.EventBus
+	RPC               modulecatalog.RPCProvider
+	Catalog           *modulecatalog.Catalog
+	ContextFactory    modulecatalog.ContextFactory
+	RuntimeComponents []RuntimeComponent
+	RuntimeInventory  RuntimeInventory
 }
 
 func NewApp(options AppOptions) (*App, error) {
+	components, err := normalizeRuntimeComponents(options.RuntimeComponents)
+	if err != nil {
+		return nil, err
+	}
+	inventory, err := normalizeRuntimeInventory(options.RuntimeInventory)
+	if err != nil {
+		return nil, err
+	}
 	application := &App{
-		globalLogger: options.Logger,
-		eventBus:     options.EventBus,
-		rhTree:       NewHandleTree(),
+		globalLogger:      options.Logger,
+		eventBus:          options.EventBus,
+		rhTree:            NewHandleTree(),
+		runtimeComponents: components,
+		runtimeInventory:  inventory,
 	}
 	application.setState(AppStateNew)
 	if options.Catalog == nil {
