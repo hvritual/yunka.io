@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +16,21 @@ import (
 	contractcore "yunka.io/pkg/contract"
 	"yunka.io/pkg/fastfeedback"
 )
+
+// GenerateWithFastFeedback preserves the canonical Generate path and records
+// disposable local evidence only after that full generation succeeds. Evidence
+// capture/write failures are intentionally non-blocking.
+func GenerateWithFastFeedback(ctx context.Context, options Options) (Report, error) {
+	report, err := Generate(ctx, options)
+	if err != nil {
+		return report, err
+	}
+	project, resolveErr := resolveProject(options)
+	if resolveErr == nil {
+		recordFastFeedback(ctx, project)
+	}
+	return report, nil
+}
 
 func recordFastFeedback(ctx context.Context, project resolvedProject) {
 	metadata, err := buildFastFeedbackMetadata(ctx, project)
@@ -93,7 +109,7 @@ func protocIdentity(ctx context.Context, configured string) (string, error) {
 		return "", err
 	}
 	hash := sha256.New()
-	if _, err := hash.ReadFrom(file); err != nil {
+	if _, err := io.Copy(hash, file); err != nil {
 		_ = file.Close()
 		return "", err
 	}
