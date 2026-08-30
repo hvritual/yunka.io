@@ -41,6 +41,14 @@ func recordFastFeedback(ctx context.Context, project resolvedProject) {
 }
 
 func buildFastFeedbackMetadata(ctx context.Context, project resolvedProject) (fastfeedback.Metadata, error) {
+	toolchain, err := protocIdentity(ctx, project.Protoc)
+	if err != nil {
+		return fastfeedback.Metadata{}, err
+	}
+	return buildFastFeedbackMetadataWithIdentity(project, fastfeedback.CurrentEngineIdentity(), toolchain)
+}
+
+func buildFastFeedbackMetadataWithIdentity(project resolvedProject, engine fastfeedback.EngineIdentity, toolchain string) (fastfeedback.Metadata, error) {
 	inputs, err := fastfeedback.FingerprintRoots(fastFeedbackInputRoots(project))
 	if err != nil {
 		return fastfeedback.Metadata{}, err
@@ -52,11 +60,7 @@ func buildFastFeedbackMetadata(ctx context.Context, project resolvedProject) (fa
 	if err != nil {
 		return fastfeedback.Metadata{}, err
 	}
-	toolchain, err := protocIdentity(ctx, project.Protoc)
-	if err != nil {
-		return fastfeedback.Metadata{}, err
-	}
-	return fastfeedback.NewMetadata(fastfeedback.CurrentEngineIdentity(), toolchain, inputs, outputs)
+	return fastfeedback.NewMetadata(engine, toolchain, inputs, outputs)
 }
 
 func fastFeedbackInputRoots(project resolvedProject) []fastfeedback.Root {
