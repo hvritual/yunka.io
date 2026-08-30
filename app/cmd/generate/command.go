@@ -22,7 +22,7 @@ func Command() cli.Command {
 			cli.StringFlag{Name: "format", Value: dxoutput.FormatText, Usage: "output format: text or json"},
 		},
 		Action: func(c *cli.Context) error {
-			report, workflowErr := projectflow.Generate(context.Background(), projectflow.Options{
+			report, workflowErr := projectflow.GenerateWithFastFeedback(context.Background(), projectflow.Options{
 				Root:       c.String("root"),
 				Protoc:     c.String("protoc"),
 				ProtoPaths: c.StringSlice("proto-path"),
