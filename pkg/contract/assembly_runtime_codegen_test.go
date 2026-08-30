@@ -20,12 +20,12 @@ func TestBindAssemblyRuntimeGeneratesCanonicalKernelBootstrapAndInventory(t *tes
 		t.Fatalf("unexpected runtime-bound assembly files: %#v", files)
 	}
 	source := string(files[0].Content)
+	normalized := strings.Join(strings.Fields(source), " ")
 	for _, required := range []string{
 		"type RuntimeBindings struct",
 		"type RuntimeBinder func(context.Context, *platform.Provider) (RuntimeBindings, error)",
 		"type BootstrapOptions struct",
 		"Platform *platform.Provider",
-		"BindRuntime RuntimeBinder",
 		"RuntimeComponents []core.RuntimeComponent",
 		"func RuntimeInventory() core.RuntimeInventory",
 		`[]string{"/v1/devices:transfer"}`,
@@ -42,6 +42,15 @@ func TestBindAssemblyRuntimeGeneratesCanonicalKernelBootstrapAndInventory(t *tes
 	} {
 		if !strings.Contains(source, required) {
 			t.Fatalf("runtime-bound assembly missing %q:\n%s", required, source)
+		}
+	}
+	for _, required := range []string{
+		"BindRuntime RuntimeBinder",
+		"Factories ApplicationFactories",
+		"Executor operation.Executor",
+	} {
+		if !strings.Contains(normalized, required) {
+			t.Fatalf("runtime-bound assembly missing semantic token sequence %q:\n%s", required, source)
 		}
 	}
 	for _, forbidden := range []string{"reflect.", "ServiceLocator", "serviceLocator", "modulecatalog.Default()", "func (", ".Start(ctx", ".Shutdown(ctx", "options.Platform.Prepare("} {
