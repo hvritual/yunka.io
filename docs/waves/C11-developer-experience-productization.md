@@ -163,9 +163,11 @@ contract source inventory  contracts/sources.json (when present)
 canonical proto root       contracts/proto
 contract generated output  contracts/generated
 module root                modules
-assembly Go output         internal/assembly
-assembly Go import         <go module>/internal/assembly
+generated Go root          internal
+generated Go root import   <go module>/internal
 ```
+
+The generated Go root deliberately follows the qualified C10 convention. Application code is emitted beneath `internal/<domain>/application`, while Runtime Assembly is emitted beneath `internal/assembly`; the root itself remains `internal`.
 
 Any automatic value must be derived only from explicit filesystem/Go module facts and must remain overridable by the existing expert commands.
 
