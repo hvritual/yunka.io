@@ -1,0 +1,46 @@
+syntax = "proto3";
+package device.v1;
+import "yunka/dsl/v1/options.proto";
+option go_package = "example.com/c103qualification/contracts/device/v1;devicev1";
+option (yunka.dsl.v1.domain) = { name: "device" version: "v1" };
+
+message GetDeviceRequest { string id = 1; }
+message DeviceDTO { string id = 1; string serial = 2; }
+message TransferDeviceRequest { string id = 1; string site_id = 2; string sku = 3; }
+message TransferDeviceResponse { bool transferred = 1; }
+
+service DeviceQueryService {
+  option (yunka.dsl.v1.application) = { name: "query" };
+  rpc GetDevice(GetDeviceRequest) returns (DeviceDTO) {
+    option (yunka.dsl.v1.operation) = {
+      id: "device.get"
+      use_case: "get_device"
+      public: true
+      execution: { transaction: TRANSACTION_NONE idempotency: IDEMPOTENCY_NONE }
+    };
+  }
+}
+
+service DeviceTransferService {
+  option (yunka.dsl.v1.application) = {
+    name: "transfer"
+    requires: "site/management"
+    requires: "inventory/catalog"
+  };
+  // @yunka.http POST /v1/devices:transfer body=*
+  rpc TransferDevice(TransferDeviceRequest) returns (TransferDeviceResponse) {
+    option (yunka.dsl.v1.operation) = {
+      id: "device.transfer"
+      use_case: "transfer_device"
+      permissions: "device.transfer"
+      permissions: "site.validate"
+      permissions: "inventory.reserve"
+      tenant_required: true
+      authentication: AUTHENTICATION_JWT
+      requires_operations: "site.validate_transfer_target"
+      requires_operations: "inventory.reserve"
+      composition: COMPOSITION_LOCAL
+      execution: { transaction: TRANSACTION_LOCAL idempotency: IDEMPOTENCY_NONE }
+    };
+  }
+}
