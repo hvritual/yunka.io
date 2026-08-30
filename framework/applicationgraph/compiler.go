@@ -96,6 +96,9 @@ func Core(app *core.App, applicationName string) Source {
 		for _, module := range current.Modules {
 			snapshot.Modules = append(snapshot.Modules, graph.RuntimeModule{Name: module.Name, Startable: module.Startable, Shutdownable: module.Shutdownable, HealthChecked: module.HealthChecked})
 		}
+		for _, component := range current.Components {
+			snapshot.Components = append(snapshot.Components, graph.RuntimeComponent{Name: component.Name, Startable: component.Startable, Shutdownable: component.Shutdownable, HealthChecked: component.HealthChecked})
+		}
 		return graph.AddRuntime(builder, snapshot, applicationName)
 	}}
 }
@@ -125,8 +128,8 @@ func Selector(name string, snapshotter selector.Snapshotter, services ...string)
 				instanceID := graph.ID(graph.NodeInstance, instanceName)
 				attrs := map[string]string{
 					"service": service, "version": node.Version, "nodeId": node.NodeID, "address": node.Address,
-					"ewmaMillis": strconv.FormatFloat(float64(node.EWMA)/float64(time.Millisecond), 'f', -1, 64),
-					"score":      strconv.FormatFloat(node.Score, 'f', -1, 64), "inFlight": strconv.FormatInt(node.InFlight, 10),
+					"ewmaMillis": float64String(float64(node.EWMA) / float64(time.Millisecond)),
+					"score":      float64String(node.Score), "inFlight": strconv.FormatInt(node.InFlight, 10),
 					"ejected": strconv.FormatBool(node.Ejected), "failures": strconv.FormatUint(node.Failures, 10),
 				}
 				if err := builder.AddNode(graph.Node{ID: instanceID, Kind: graph.NodeInstance, Name: instanceName, Attributes: attrs, Evidence: evidence}); err != nil {
@@ -163,7 +166,7 @@ func Resilience(name string, policy *resilience.RPCPolicy, operations ...string)
 			policyID := graph.ID(graph.NodePolicy, operation)
 			attrs := map[string]string{
 				"active": strconv.FormatBool(active), "circuitState": string(snapshot.Circuit.State),
-				"rate": strconv.FormatFloat(snapshot.Rate.Rate, 'f', -1, 64), "burst": strconv.Itoa(snapshot.Rate.Burst),
+				"rate": float64String(snapshot.Rate.Rate), "burst": strconv.Itoa(snapshot.Rate.Burst),
 				"loadLimit": strconv.Itoa(snapshot.Load.Limit), "loadInFlight": strconv.Itoa(snapshot.Load.InFlight),
 			}
 			if err := builder.AddNode(graph.Node{ID: policyID, Kind: graph.NodePolicy, Name: operation, Attributes: attrs, Evidence: evidence}); err != nil {
@@ -210,4 +213,8 @@ func stableStrings(values []string) []string {
 	}
 	sort.Strings(result)
 	return result
+}
+
+func float64String(value float64) string {
+	return strconv.FormatFloat(value, 'f', -1, 64)
 }
