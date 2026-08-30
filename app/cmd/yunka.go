@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/urfave/cli"
 	"log"
 	"os"
@@ -153,6 +154,12 @@ func main() {
 
 	err := app.Run(os.Args)
 	if err != nil {
+		if exitCoder, ok := err.(cli.ExitCoder); ok {
+			if exitCoder.Error() != "" {
+				fmt.Fprintln(os.Stderr, exitCoder.Error())
+			}
+			os.Exit(exitCoder.ExitCode())
+		}
 		log.Fatal(err)
 	}
 }
