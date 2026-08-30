@@ -154,11 +154,11 @@ func main() {
 
 	err := app.Run(os.Args)
 	if err != nil {
-		if exitCoder, ok := err.(cli.ExitCoder); ok {
-			if exitCoder.Error() != "" {
-				fmt.Fprintln(os.Stderr, exitCoder.Error())
+		if message, code, ok := classifyCLIExit(err); ok {
+			if message != "" {
+				fmt.Fprintln(os.Stderr, message)
 			}
-			os.Exit(exitCoder.ExitCode())
+			os.Exit(code)
 		}
 		log.Fatal(err)
 	}
