@@ -200,16 +200,6 @@ func Validate(config Config) error {
 	if (config.Workflow.Contract.Sources == "") == (config.Workflow.Contract.ProtoRoot == "") {
 		return errors.New("project: workflow.contract must set exactly one of sources or protoRoot")
 	}
-	for name, value := range map[string]string{
-		"workflow.contract.generated": config.Workflow.Contract.Generated,
-		"workflow.modules.root":       config.Workflow.Modules.Root,
-		"workflow.generatedGo.root":   config.Workflow.GeneratedGo.Root,
-		"workflow.dev.manifest":        config.Workflow.Dev.Manifest,
-	} {
-		if err := validateProjectPath(name, value); err != nil {
-			return err
-		}
-	}
 	if config.Workflow.Contract.Sources != "" {
 		if err := validateProjectPath("workflow.contract.sources", config.Workflow.Contract.Sources); err != nil {
 			return err
@@ -219,6 +209,18 @@ func Validate(config Config) error {
 		if err := validateProjectPath("workflow.contract.protoRoot", config.Workflow.Contract.ProtoRoot); err != nil {
 			return err
 		}
+	}
+	if err := validateProjectPath("workflow.contract.generated", config.Workflow.Contract.Generated); err != nil {
+		return err
+	}
+	if err := validateProjectPath("workflow.modules.root", config.Workflow.Modules.Root); err != nil {
+		return err
+	}
+	if err := validateProjectPath("workflow.generatedGo.root", config.Workflow.GeneratedGo.Root); err != nil {
+		return err
+	}
+	if err := validateProjectPath("workflow.dev.manifest", config.Workflow.Dev.Manifest); err != nil {
+		return err
 	}
 	if value := strings.TrimSpace(config.Workflow.GeneratedGo.Import); value != "" {
 		if strings.ContainsAny(value, " \t\r\n") || strings.HasPrefix(value, "/") || strings.HasSuffix(value, "/") {
@@ -263,7 +265,7 @@ func normalize(config *Config) {
 	config.Workflow.Contract.Generated = normalizeProjectPath(config.Workflow.Contract.Generated)
 	config.Workflow.Modules.Root = normalizeProjectPath(config.Workflow.Modules.Root)
 	config.Workflow.GeneratedGo.Root = normalizeProjectPath(config.Workflow.GeneratedGo.Root)
-	config.Workflow.GeneratedGo.Import = strings.Trim(strings.TrimSpace(config.Workflow.GeneratedGo.Import), "/")
+	config.Workflow.GeneratedGo.Import = strings.TrimSpace(config.Workflow.GeneratedGo.Import)
 	config.Workflow.Dev.Manifest = normalizeProjectPath(config.Workflow.Dev.Manifest)
 }
 
