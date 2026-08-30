@@ -24,6 +24,9 @@ func TestC103RuntimeClosureKeepsCoreAppAsSingleLifecycleOwner(t *testing.T) {
 	graphAdapter := read("framework/applicationgraph/compiler.go")
 	httpAdapter := read("framework/runtimecomponent/http.go")
 	grpcAdapter := read("framework/runtimecomponent/grpc.go")
+	devPlan := read("pkg/devruntime/plan.go")
+	devClosure := read("pkg/devruntime/closure.go")
+	devCommand := read("app/cmd/dev/main.go")
 	combined := component + bootstrap + runtimeCodegen + graphAdapter + httpAdapter + grpcAdapter
 
 	for _, forbidden := range []string{
@@ -90,5 +93,31 @@ func TestC103RuntimeClosureKeepsCoreAppAsSingleLifecycleOwner(t *testing.T) {
 	}
 	if strings.Contains(bootstrap, "func (result BootstrapResult") || strings.Contains(bootstrap, "func (r BootstrapResult") {
 		t.Error("BootstrapResult must remain a data result and not grow lifecycle methods")
+	}
+
+	dev := devPlan + devClosure + devCommand
+	for _, forbidden := range []string{"os/exec", "exec.Command(", "net.Listen(", "ListenAndServe(", "plugin.Open", "reflect."} {
+		if strings.Contains(dev, forbidden) {
+			t.Errorf("C10.3 dev closure inferred process/runtime topology with %q", forbidden)
+		}
+	}
+	for _, required := range []string{
+		"node.Kind == applicationgraph.NodeApplication",
+		"process.Readiness == nil",
+		"process.Readiness.DiagnosticsReady",
+		"process.Readiness.CaptureDiagnostics",
+		"func ValidateRuntimeClosure(plan Plan, report RuntimeReport) error",
+		"report.State != RuntimeRunRunning",
+		"runtime report plan does not match current closure plan",
+		"graph ownership drift",
+		"current.Diagnostics == nil",
+		"devruntime.ValidateRuntimeClosure(closurePlan, report)",
+	} {
+		if !strings.Contains(dev, required) {
+			t.Errorf("C10.3 dev closure is missing fail-closed marker %q", required)
+		}
+	}
+	if strings.Index(devCommand, "loadPlan(c)") > strings.Index(devCommand, "devruntime.ValidateRuntimeClosure(closurePlan, report)") {
+		t.Error("dev status --closure must rebuild the explicit plan before validating runtime closure")
 	}
 }
