@@ -41,10 +41,10 @@ func TestFastFeedbackInputRootsCoverInventoryAndOrderedProtoPaths(t *testing.T) 
 		"contract.inventory",
 		"contract.source.a",
 		"contract.source.b",
-		"contract.source.b.protoPath.000",
-		"contract.source.b.protoPath.001",
-		"contract.additionalProtoPath.000",
-		"contract.additionalProtoPath.001",
+		"contract.source.b.protoPath.000000000",
+		"contract.source.b.protoPath.000000001",
+		"contract.additionalProtoPath.000000000",
+		"contract.additionalProtoPath.000000001",
 	}
 	if !reflect.DeepEqual(labels, want) {
 		t.Fatalf("labels=%v want %v", labels, want)
