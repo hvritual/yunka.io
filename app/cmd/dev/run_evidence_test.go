@@ -186,3 +186,54 @@ func TestRuntimeEvidenceReadFailureCannotChangeCanonicalRunnerError(t *testing.T
 		t.Fatalf("status guidance was emitted without a readable canonical report:\n%s", got)
 	}
 }
+
+func TestRuntimeEvidenceRejectsStalePriorReport(t *testing.T) {
+	root := t.TempDir()
+	plan := devruntime.Plan{
+		Processes: []devruntime.Process{{Name: "api", Command: []string{"api"}}},
+		Runtime: &devruntime.RuntimeConfig{
+			Application: "example",
+			StatePath:   ".yunka/runtime-state.json",
+			GraphPath:   ".yunka/runtime-graph.json",
+		},
+	}
+	if err := devruntime.WriteRuntimeReport(root, plan.Runtime.StatePath, devruntime.RuntimeReport{
+		SchemaVersion: devruntime.RuntimeReportSchemaVersion,
+		Application:   "previous",
+		State:         devruntime.RuntimeRunRunning,
+		Plan:          []string{"api"},
+		Processes: []devruntime.ProcessRuntimeReport{{
+			Name: "api", State: devruntime.ProcessReady, Ready: true,
+		}},
+		StartedAt: "2026-01-01T00:00:00Z",
+		UpdatedAt: "2026-01-01T00:00:01Z",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	canonicalErr := errors.New("new run failed before recorder")
+	var evidence bytes.Buffer
+	err := runWithEvidenceOptions(
+		context.Background(),
+		plan,
+		root,
+		&evidence,
+		io.Discard,
+		io.Discard,
+		func(context.Context, devruntime.Plan, devruntime.RunOptions) error { return canonicalErr },
+		devruntime.LoadRuntimeReport,
+		time.Millisecond,
+	)
+	if !errors.Is(err, canonicalErr) {
+		t.Fatalf("returned error=%v want canonical runner error", err)
+	}
+	got := evidence.String()
+	if strings.Contains(got, "DEV READY") || strings.Contains(got, "application=previous") {
+		t.Fatalf("stale prior report was rendered as current evidence:\n%s", got)
+	}
+	if strings.Contains(got, "DEV inspect:") {
+		t.Fatalf("stale report produced status guidance:\n%s", got)
+	}
+	if !strings.Contains(got, "DEV FAILED runtime\n") || !strings.Contains(got, "DEV next: yunka doctor\n") {
+		t.Fatalf("missing current-run fallback guidance:\n%s", got)
+	}
+}
