@@ -11,6 +11,7 @@ import (
 	"time"
 
 	modulecmd "yunka.io/app/cmd/module"
+	projectcmd "yunka.io/app/cmd/project"
 	contractcore "yunka.io/pkg/contract"
 )
 
@@ -20,8 +21,8 @@ const (
 )
 
 type Options struct {
-	Root      string
-	Protoc    string
+	Root       string
+	Protoc     string
 	ProtoPaths []string
 }
 
@@ -37,15 +38,17 @@ type Report struct {
 }
 
 type resolvedProject struct {
-	Root              string
-	InventoryPath     string
-	ProtoDir          string
-	ContractOut       string
-	ModuleRoot        string
-	CodeOut           string
-	GoModule          string
-	CodeImport        string
-	Protoc            string
+	Root                 string
+	InventoryPath        string
+	ProtoDir             string
+	ContractOut          string
+	ModuleRoot           string
+	CodeOut              string
+	GoModule             string
+	CodeImport           string
+	DevManifest          string
+	Profiled             bool
+	Protoc               string
 	AdditionalProtoPaths []string
 }
 
@@ -93,7 +96,7 @@ func Generate(ctx context.Context, options Options) (Report, error) {
 		return report, nil
 	}
 	if strings.TrimSpace(project.CodeImport) == "" {
-		return Report{}, errors.New("generate assembly: project go.mod with a module directive is required to derive generated Go imports")
+		return Report{}, errors.New("generate assembly: generated Go import root is unavailable; add go.mod or workflow.generatedGo.import to .yunka/project.json")
 	}
 	compilation, bindingCount, err := compileAssembly(result.Manifest, project)
 	if err != nil {
@@ -161,7 +164,7 @@ func Check(ctx context.Context, options Options) (Report, error) {
 		return report, nil
 	}
 	if strings.TrimSpace(project.CodeImport) == "" {
-		return Report{}, errors.New("check assembly: project go.mod with a module directive is required to derive generated Go imports")
+		return Report{}, errors.New("check assembly: generated Go import root is unavailable; add go.mod or workflow.generatedGo.import to .yunka/project.json")
 	}
 	compilation, bindingCount, err := compileAssembly(result.Manifest, project)
 	if err != nil {
@@ -210,7 +213,7 @@ func compileArtifacts(ctx context.Context, project resolvedProject) (contractcor
 	var applicationFiles []contractcore.GeneratedApplicationFile
 	if contractcore.HasTypedApplications(result.Manifest) {
 		if strings.TrimSpace(project.CodeImport) == "" {
-			return contractcore.CompileResult{}, contractcore.Artifacts{}, nil, errors.New("typed applications require project go.mod so generated application imports can be derived")
+			return contractcore.CompileResult{}, contractcore.Artifacts{}, nil, errors.New("typed applications require a generated Go import root")
 		}
 		applicationFiles, err = contractcore.RenderC9ApplicationCode(result.Manifest, contractcore.ApplicationCodeOptions{RootImport: project.CodeImport})
 		if err != nil {
@@ -269,17 +272,88 @@ func resolveProject(options Options) (resolvedProject, error) {
 		return resolvedProject{}, fmt.Errorf("project root %s is not a directory", absolute)
 	}
 
-	inventoryPath := filepath.Join(absolute, "contracts", "sources.json")
+	protoc := strings.TrimSpace(options.Protoc)
+	if protoc == "" {
+		protoc = strings.TrimSpace(os.Getenv("PROTOC"))
+	}
+	protoPaths := resolveProtoPaths(absolute, options.ProtoPaths)
+
+	config, profileErr := projectcmd.Load(absolute)
+	if profileErr == nil {
+		return resolveProfileProject(absolute, config, protoc, protoPaths)
+	}
+	if !errors.Is(profileErr, os.ErrNotExist) {
+		return resolvedProject{}, fmt.Errorf("project profile: %w", profileErr)
+	}
+	return resolveConventionalProject(absolute, protoc, protoPaths)
+}
+
+func resolveProfileProject(root string, config projectcmd.Config, protoc string, protoPaths []string) (resolvedProject, error) {
+	profile := config.Workflow
+	inventoryPath := ""
+	protoDir := ""
+	if profile.Contract.Sources != "" {
+		inventoryPath = profilePath(root, profile.Contract.Sources)
+		if err := requireProfileFile("workflow.contract.sources", inventoryPath); err != nil {
+			return resolvedProject{}, err
+		}
+	} else {
+		protoDir = profilePath(root, profile.Contract.ProtoRoot)
+		if err := requireProfileDir("workflow.contract.protoRoot", protoDir); err != nil {
+			return resolvedProject{}, err
+		}
+	}
+
+	contractOut := profilePath(root, profile.Contract.Generated)
+	moduleRoot := profilePath(root, profile.Modules.Root)
+	codeOut := profilePath(root, profile.GeneratedGo.Root)
+	devManifest := profilePath(root, profile.Dev.Manifest)
+
+	goModule, goModuleErr := readGoModule(filepath.Join(root, "go.mod"))
+	if goModuleErr != nil && !errors.Is(goModuleErr, os.ErrNotExist) {
+		return resolvedProject{}, fmt.Errorf("project profile go.mod: %w", goModuleErr)
+	}
+	explicitImport := strings.Trim(strings.TrimSpace(profile.GeneratedGo.Import), "/")
+	codeImport := explicitImport
+	if goModule != "" {
+		derived, err := deriveCodeImport(goModule, root, codeOut)
+		if err != nil {
+			return resolvedProject{}, err
+		}
+		if explicitImport != "" && explicitImport != derived {
+			return resolvedProject{}, fmt.Errorf("project profile workflow.generatedGo.import %q conflicts with go.mod-derived import %q", explicitImport, derived)
+		}
+		codeImport = derived
+	}
+
+	return resolvedProject{
+		Root:                 root,
+		InventoryPath:        inventoryPath,
+		ProtoDir:             protoDir,
+		ContractOut:          contractOut,
+		ModuleRoot:           moduleRoot,
+		CodeOut:              codeOut,
+		GoModule:             goModule,
+		CodeImport:           codeImport,
+		DevManifest:          devManifest,
+		Profiled:             true,
+		Protoc:               protoc,
+		AdditionalProtoPaths: protoPaths,
+	}, nil
+}
+
+func resolveConventionalProject(root, protoc string, protoPaths []string) (resolvedProject, error) {
+	inventoryPath := filepath.Join(root, "contracts", "sources.json")
 	if _, err := os.Stat(inventoryPath); os.IsNotExist(err) {
 		inventoryPath = ""
 	} else if err != nil {
 		return resolvedProject{}, err
 	}
-	protoDir := filepath.Join(absolute, "contracts", "proto")
+	protoDir := filepath.Join(root, "contracts", "proto")
 	if inventoryPath == "" {
 		if info, err := os.Stat(protoDir); err != nil {
 			if os.IsNotExist(err) {
-				return resolvedProject{}, errors.New("project has no contracts/sources.json or contracts/proto directory")
+				return resolvedProject{}, errors.New("project has no .yunka/project.json, contracts/sources.json, or contracts/proto directory")
 			}
 			return resolvedProject{}, err
 		} else if !info.IsDir() {
@@ -287,43 +361,91 @@ func resolveProject(options Options) (resolvedProject, error) {
 		}
 	}
 
-	goModule, err := readGoModule(filepath.Join(absolute, "go.mod"))
+	goModule, err := readGoModule(filepath.Join(root, "go.mod"))
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return resolvedProject{}, err
 	}
+	codeOut := filepath.Join(root, "internal")
 	codeImport := ""
 	if goModule != "" {
-		codeImport = strings.TrimRight(goModule, "/") + "/internal"
-	}
-	protoc := strings.TrimSpace(options.Protoc)
-	if protoc == "" {
-		protoc = strings.TrimSpace(os.Getenv("PROTOC"))
+		codeImport, err = deriveCodeImport(goModule, root, codeOut)
+		if err != nil {
+			return resolvedProject{}, err
+		}
 	}
 
-	protoPaths := make([]string, 0, len(options.ProtoPaths))
-	for _, value := range options.ProtoPaths {
+	return resolvedProject{
+		Root:                 root,
+		InventoryPath:        inventoryPath,
+		ProtoDir:             protoDir,
+		ContractOut:          filepath.Join(root, "contracts", "generated"),
+		ModuleRoot:           filepath.Join(root, "modules"),
+		CodeOut:              codeOut,
+		GoModule:             goModule,
+		CodeImport:           codeImport,
+		DevManifest:          filepath.Join(root, ".yunka", "dev.json"),
+		Profiled:             false,
+		Protoc:               protoc,
+		AdditionalProtoPaths: protoPaths,
+	}, nil
+}
+
+func resolveProtoPaths(root string, values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
 		value = strings.TrimSpace(value)
 		if value == "" {
 			continue
 		}
 		if !filepath.IsAbs(value) {
-			value = filepath.Join(absolute, value)
+			value = filepath.Join(root, value)
 		}
-		protoPaths = append(protoPaths, filepath.Clean(value))
+		result = append(result, filepath.Clean(value))
 	}
+	return result
+}
 
-	return resolvedProject{
-		Root:                 absolute,
-		InventoryPath:        inventoryPath,
-		ProtoDir:             protoDir,
-		ContractOut:          filepath.Join(absolute, "contracts", "generated"),
-		ModuleRoot:           filepath.Join(absolute, "modules"),
-		CodeOut:              filepath.Join(absolute, "internal"),
-		GoModule:             goModule,
-		CodeImport:           codeImport,
-		Protoc:               protoc,
-		AdditionalProtoPaths: protoPaths,
-	}, nil
+func profilePath(root, value string) string {
+	return filepath.Join(root, filepath.FromSlash(value))
+}
+
+func requireProfileFile(name, path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("project profile %s points to missing file %s", name, path)
+		}
+		return fmt.Errorf("project profile %s: %w", name, err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("project profile %s must point to a file, got directory %s", name, path)
+	}
+	return nil
+}
+
+func requireProfileDir(name, path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("project profile %s points to missing directory %s", name, path)
+		}
+		return fmt.Errorf("project profile %s: %w", name, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("project profile %s must point to a directory, got file %s", name, path)
+	}
+	return nil
+}
+
+func deriveCodeImport(goModule, root, codeOut string) (string, error) {
+	relative, err := filepath.Rel(root, codeOut)
+	if err != nil {
+		return "", err
+	}
+	if relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("generated Go root %s cannot be derived from project go.mod; configure workflow.generatedGo.import explicitly", codeOut)
+	}
+	return strings.TrimRight(goModule, "/") + "/" + filepath.ToSlash(relative), nil
 }
 
 func readGoModule(path string) (string, error) {
