@@ -21,7 +21,9 @@ const AppName = "dev"
 func Command() cli.Command {
 	return cli.Command{
 		Name:        AppName,
-		Usage:       "plan, run, and inspect explicitly declared local yunka processes",
+		Usage:       "start the declared local runtime, or use plan/run/status for explicit control",
+		Flags:       commonFlags(),
+		Action:      runAction,
 		Subcommands: []cli.Command{planCommand(), runCommand(), statusCommand()},
 	}
 }
@@ -29,7 +31,7 @@ func Command() cli.Command {
 func commonFlags() []cli.Flag {
 	return []cli.Flag{
 		cli.StringFlag{Name: "root", Value: "."},
-		cli.StringFlag{Name: "config", Value: ".yunka/dev.json"},
+		cli.StringFlag{Name: "config", Value: defaultDevManifest},
 		cli.StringFlag{Name: "graph", Value: ".yunka/application-graph.json", Usage: "optional W09 graph for graphNode validation"},
 		cli.StringSliceFlag{Name: "target,t"},
 		cli.BoolFlag{Name: "closure", Usage: "require complete graph ownership and enable schema-v3 runtime artifacts"},
@@ -60,16 +62,18 @@ func planCommand() cli.Command {
 func runCommand() cli.Command {
 	return cli.Command{
 		Name: "run", Usage: "start and supervise the resolved process plan; commands are argv arrays and never executed through a shell", Flags: commonFlags(),
-		Action: func(c *cli.Context) error {
-			plan, err := loadPlan(c)
-			if err != nil {
-				return err
-			}
-			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-			defer stop()
-			return devruntime.Run(ctx, plan, devruntime.RunOptions{Root: c.String("root")})
-		},
+		Action: runAction,
 	}
+}
+
+func runAction(c *cli.Context) error {
+	plan, err := loadPlan(c)
+	if err != nil {
+		return err
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return devruntime.Run(ctx, plan, devruntime.RunOptions{Root: c.String("root")})
 }
 
 func statusCommand() cli.Command {
@@ -134,7 +138,11 @@ func loadPlan(c *cli.Context) (devruntime.Plan, error) {
 	if root == "" {
 		root = "."
 	}
-	manifest, err := devruntime.LoadDevManifest(cliPath(root, c.String("config")))
+	manifestPath, err := resolveDevManifestPath(root, c.String("config"), c.IsSet("config"))
+	if err != nil {
+		return devruntime.Plan{}, err
+	}
+	manifest, err := devruntime.LoadDevManifest(cliPath(root, manifestPath))
 	if err != nil {
 		return devruntime.Plan{}, err
 	}
