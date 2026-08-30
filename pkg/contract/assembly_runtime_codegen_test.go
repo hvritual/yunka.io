@@ -20,7 +20,10 @@ func TestBindAssemblyRuntimeGeneratesCanonicalKernelBootstrapAndInventory(t *tes
 		t.Fatalf("unexpected runtime-bound assembly files: %#v", files)
 	}
 	source := string(files[0].Content)
+	normalized := strings.Join(strings.Fields(source), " ")
 	for _, required := range []string{
+		"type RuntimeBindings struct",
+		"type RuntimeBinder func(context.Context, *platform.Provider) (RuntimeBindings, error)",
 		"type BootstrapOptions struct",
 		"Platform *platform.Provider",
 		"RuntimeComponents []core.RuntimeComponent",
@@ -32,19 +35,38 @@ func TestBindAssemblyRuntimeGeneratesCanonicalKernelBootstrapAndInventory(t *tes
 		"catalog, err := NewCatalog()",
 		"kernel.Bootstrap(ctx, kernel.BootstrapOptions[Applications]",
 		"BuildApplications(options.Factories, options.Executor)",
+		"runtime, err = options.BindRuntime(ctx, options.Platform)",
+		"BuildApplications(runtime.Factories, runtime.Executor)",
 		"RegisterTransports(options.Transports, applications, options.Executor)",
+		"RegisterTransports(options.Transports, applications, runtime.Executor)",
 	} {
 		if !strings.Contains(source, required) {
 			t.Fatalf("runtime-bound assembly missing %q:\n%s", required, source)
 		}
 	}
-	for _, forbidden := range []string{"reflect.", "ServiceLocator", "serviceLocator", "modulecatalog.Default()", "func (", ".Start(ctx", ".Shutdown(ctx"} {
+	for _, required := range []string{
+		"BindRuntime RuntimeBinder",
+		"Factories ApplicationFactories",
+		"Executor operation.Executor",
+	} {
+		if !strings.Contains(normalized, required) {
+			t.Fatalf("runtime-bound assembly missing semantic token sequence %q:\n%s", required, source)
+		}
+	}
+	for _, forbidden := range []string{"reflect.", "ServiceLocator", "serviceLocator", "modulecatalog.Default()", "func (", ".Start(ctx", ".Shutdown(ctx", "options.Platform.Prepare("} {
 		if strings.Contains(source, forbidden) {
 			t.Fatalf("runtime-bound assembly contains forbidden ownership/discovery surface %q:\n%s", forbidden, source)
 		}
 	}
 	if strings.Count(source, `"/v1/devices:transfer"`) != 1 {
 		t.Fatalf("runtime inventory did not contain exactly the explicit HTTP binding:\n%s", source)
+	}
+
+	bootstrapIndex := strings.Index(source, "kernel.Bootstrap(ctx")
+	buildIndex := strings.Index(source, "Build: func()")
+	binderIndex := strings.Index(source, "runtime, err = options.BindRuntime(ctx, options.Platform)")
+	if bootstrapIndex < 0 || buildIndex < bootstrapIndex || binderIndex < buildIndex {
+		t.Fatalf("runtime binder escaped kernel Build sequencing: bootstrap=%d build=%d binder=%d\n%s", bootstrapIndex, buildIndex, binderIndex, source)
 	}
 }
 
