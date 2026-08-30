@@ -20,13 +20,14 @@ func Command() cli.Command {
 			cli.StringFlag{Name: "protoc", EnvVar: "PROTOC", Usage: "protoc binary; defaults to PATH"},
 			cli.StringSliceFlag{Name: "proto-path", Usage: "additional protoc import path; expert escape hatch, may be repeated"},
 			cli.StringFlag{Name: "format", Value: dxoutput.FormatText, Usage: "output format: text or json"},
+			cli.BoolFlag{Name: "full", Usage: "ignore fast-feedback evidence and run the canonical full check"},
 		},
 		Action: func(c *cli.Context) error {
-			report, workflowErr := projectflow.Check(context.Background(), projectflow.Options{
+			report, workflowErr := projectflow.CheckWithFastFeedback(context.Background(), projectflow.Options{
 				Root:       c.String("root"),
 				Protoc:     c.String("protoc"),
 				ProtoPaths: c.StringSlice("proto-path"),
-			})
+			}, c.Bool("full"))
 			result, err := dxoutput.Build("yunka check", c.String("format"), report, workflowErr)
 			if err != nil {
 				return err
