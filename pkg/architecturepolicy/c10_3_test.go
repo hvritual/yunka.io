@@ -22,7 +22,9 @@ func TestC103RuntimeClosureKeepsCoreAppAsSingleLifecycleOwner(t *testing.T) {
 	bootstrap := read("framework/kernel/bootstrap.go")
 	runtimeCodegen := read("pkg/contract/assembly_runtime_codegen.go")
 	graphAdapter := read("framework/applicationgraph/compiler.go")
-	combined := component + bootstrap + runtimeCodegen + graphAdapter
+	httpAdapter := read("framework/runtimecomponent/http.go")
+	grpcAdapter := read("framework/runtimecomponent/grpc.go")
+	combined := component + bootstrap + runtimeCodegen + graphAdapter + httpAdapter + grpcAdapter
 
 	for _, forbidden := range []string{
 		"reflect.", "plugin.Open", "go/packages", "ServiceLocator", "serviceLocator",
@@ -62,6 +64,9 @@ func TestC103RuntimeClosureKeepsCoreAppAsSingleLifecycleOwner(t *testing.T) {
 		"RegisterTransports(options.Transports, applications, options.Executor)",
 		"func RuntimeInventory() core.RuntimeInventory",
 		"snapshot.Components",
+		"type HTTPOptions struct", "Server   *http.Server", "Listener net.Listener",
+		"type GRPCOptions struct", "Server   *grpcgo.Server",
+		"GracefulStop()", "runtime.server.Stop()",
 	} {
 		if !strings.Contains(combined, required) {
 			t.Errorf("C10.3 runtime closure is missing ownership/reuse marker %q", required)
@@ -71,6 +76,12 @@ func TestC103RuntimeClosureKeepsCoreAppAsSingleLifecycleOwner(t *testing.T) {
 	for _, suspicious := range []string{"Service any", "Value any", "Lookup(", "GetService(", "Services map["} {
 		if strings.Contains(component, suspicious) {
 			t.Errorf("RuntimeComponent grew into a service lookup surface with %q", suspicious)
+		}
+	}
+
+	for _, inferred := range []string{"net.Listen(", "ListenAndServe(", "ListenAndServeTLS("} {
+		if strings.Contains(httpAdapter+grpcAdapter, inferred) {
+			t.Errorf("transport lifecycle adapter inferred listener/deployment topology with %q", inferred)
 		}
 	}
 
