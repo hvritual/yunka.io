@@ -150,3 +150,39 @@ func TestRuntimeEvidenceSuppressesDuplicateCanonicalStates(t *testing.T) {
 		t.Fatalf("application Ready rendered %d times:\n%s", got, evidence.String())
 	}
 }
+
+func TestRuntimeEvidenceReadFailureCannotChangeCanonicalRunnerError(t *testing.T) {
+	canonicalErr := errors.New("canonical-runner-error")
+	plan := devruntime.Plan{
+		Processes: []devruntime.Process{{Name: "api", Command: []string{"api"}}},
+		Runtime: &devruntime.RuntimeConfig{
+			Application: "example",
+			StatePath:   ".yunka/runtime-state.json",
+			GraphPath:   ".yunka/runtime-graph.json",
+		},
+	}
+	var evidence bytes.Buffer
+	err := runWithEvidenceOptions(
+		context.Background(),
+		plan,
+		t.TempDir(),
+		&evidence,
+		io.Discard,
+		io.Discard,
+		func(context.Context, devruntime.Plan, devruntime.RunOptions) error { return canonicalErr },
+		func(string, string) (devruntime.RuntimeReport, error) {
+			return devruntime.RuntimeReport{}, errors.New("report unavailable")
+		},
+		time.Millisecond,
+	)
+	if !errors.Is(err, canonicalErr) {
+		t.Fatalf("returned error=%v want canonical runner error", err)
+	}
+	got := evidence.String()
+	if !strings.Contains(got, "DEV FAILED runtime\n") || !strings.Contains(got, "DEV next: yunka doctor\n") {
+		t.Fatalf("missing fallback evidence guidance:\n%s", got)
+	}
+	if strings.Contains(got, "DEV inspect:") {
+		t.Fatalf("status guidance was emitted without a readable canonical report:\n%s", got)
+	}
+}
