@@ -64,7 +64,7 @@ func TestC114QualificationRealBinaryFastFeedback(t *testing.T) {
 		binaryName += ".exe"
 	}
 	yunkaBinary := filepath.Join(workRoot, binaryName)
-	c114RunCommand(t, appRoot, nil, goBinary, "build", "-o", yunkaBinary, "./cmd")
+	c114RunCommand(t, appRoot, nil, goBinary, "build", "-buildvcs=true", "-o", yunkaBinary, "./cmd")
 
 	consumerRoot := filepath.Join(workRoot, "consumer")
 	c114WriteFile(t, filepath.Join(consumerRoot, "go.mod"), "module example.com/c114consumer\n\ngo 1.25.0\n")
