@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/urfave/cli"
+	"yunka.io/app/cmd/dxoutput"
 	"yunka.io/app/cmd/projectflow"
 )
 
@@ -18,17 +19,22 @@ func Command() cli.Command {
 			cli.StringFlag{Name: "root", Value: ".", Usage: "project root"},
 			cli.StringFlag{Name: "protoc", EnvVar: "PROTOC", Usage: "protoc binary; defaults to PATH"},
 			cli.StringSliceFlag{Name: "proto-path", Usage: "additional protoc import path; expert escape hatch, may be repeated"},
+			cli.StringFlag{Name: "format", Value: dxoutput.FormatText, Usage: "output format: text or json"},
 		},
 		Action: func(c *cli.Context) error {
-			report, err := projectflow.Generate(context.Background(), projectflow.Options{
+			report, workflowErr := projectflow.Generate(context.Background(), projectflow.Options{
 				Root:       c.String("root"),
 				Protoc:     c.String("protoc"),
 				ProtoPaths: c.StringSlice("proto-path"),
 			})
+			result, err := dxoutput.Build("yunka generate", c.String("format"), report, workflowErr)
 			if err != nil {
 				return err
 			}
-			fmt.Print(projectflow.Format(report))
+			fmt.Print(result.Output)
+			if result.ExitCode != 0 {
+				return cli.NewExitError("", result.ExitCode)
+			}
 			return nil
 		},
 	}
