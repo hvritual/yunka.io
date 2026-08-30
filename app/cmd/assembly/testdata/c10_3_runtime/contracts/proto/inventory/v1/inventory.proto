@@ -1,0 +1,23 @@
+syntax = "proto3";
+package inventory.v1;
+import "yunka/dsl/v1/options.proto";
+option go_package = "example.com/c103qualification/contracts/inventory/v1;inventoryv1";
+option (yunka.dsl.v1.domain) = { name: "inventory" version: "v1" };
+
+message ReserveRequest { string sku = 1; }
+message ReserveResponse { bool reserved = 1; }
+
+service InventoryApplication {
+  option (yunka.dsl.v1.application) = {
+    name: "catalog"
+    operations: {
+      id: "inventory.reserve"
+      use_case: "reserve_inventory"
+      permissions: "inventory.reserve"
+      request_type: "inventory.v1.ReserveRequest"
+      response_type: "inventory.v1.ReserveResponse"
+      application_method: "Reserve"
+      execution: { transaction: TRANSACTION_LOCAL idempotency: IDEMPOTENCY_NONE }
+    }
+  };
+}

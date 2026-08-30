@@ -24,6 +24,9 @@ type App struct {
 	compositionModules []modulecatalog.Instance
 	compositionFactory modulecatalog.ContextFactory
 
+	runtimeComponents []RuntimeComponent
+	runtimeInventory  RuntimeInventory
+
 	lifecycleMu sync.Mutex
 	state       atomic.Uint32
 

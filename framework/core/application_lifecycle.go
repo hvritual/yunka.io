@@ -29,6 +29,7 @@ func (app *App) Start(ctx context.Context) error {
 	}
 	app.setState(AppStateStarting)
 	modules := app.composedModuleSnapshot()
+	components := app.runtimeComponentSnapshot()
 	if starter, ok := app.compositionFactory.(Startable); ok {
 		if err := safeLifecycleCall("start composition capabilities", func() error { return starter.Start(ctx) }); err != nil {
 			cleanupErr := errors.Join(app.shutdownComponents(ctx, modules)...)
@@ -45,6 +46,16 @@ func (app *App) Start(ctx context.Context) error {
 			cleanupErr := errors.Join(app.shutdownComponents(ctx, modules)...)
 			app.setState(AppStateFailed)
 			return errors.Join(fmt.Errorf("start module %s: %w", module.Name(), err), cleanupErr)
+		}
+	}
+	for index, component := range components {
+		if err := safeLifecycleCall("start runtime component "+component.Name, func() error {
+			return component.StartFunc(ctx)
+		}); err != nil {
+			componentCleanup := errors.Join(shutdownRuntimeComponents(ctx, components[:index+1])...)
+			compositionCleanup := errors.Join(app.shutdownComponents(ctx, modules)...)
+			app.setState(AppStateFailed)
+			return errors.Join(fmt.Errorf("start runtime component %s: %w", component.Name, err), componentCleanup, compositionCleanup)
 		}
 	}
 	app.setState(AppStateReady)
@@ -64,7 +75,9 @@ func (app *App) Shutdown(ctx context.Context) error {
 		return nil
 	}
 	app.setState(AppStateStopping)
-	errs := app.shutdownComponents(ctx, app.composedModuleSnapshot())
+	var errs []error
+	errs = append(errs, shutdownRuntimeComponents(ctx, app.runtimeComponentSnapshot())...)
+	errs = append(errs, app.shutdownComponents(ctx, app.composedModuleSnapshot())...)
 	app.setState(AppStateStopped)
 	return errors.Join(errs...)
 }
@@ -110,6 +123,18 @@ func (app *App) Health(ctx context.Context) HealthReport {
 		}
 		check := HealthCheck{Name: "module." + module.Name(), Status: HealthStatusHealthy}
 		if err := safeLifecycleCall("health module "+module.Name(), func() error { return checker.Health(ctx) }); err != nil {
+			check.Status, check.Error, report.Ready = HealthStatusUnhealthy, err.Error(), false
+		}
+		report.Checks = append(report.Checks, check)
+	}
+	for _, component := range app.runtimeComponentSnapshot() {
+		if component.HealthFunc == nil {
+			continue
+		}
+		check := HealthCheck{Name: "runtime." + component.Name, Status: HealthStatusHealthy}
+		if err := safeLifecycleCall("health runtime component "+component.Name, func() error {
+			return component.HealthFunc(ctx)
+		}); err != nil {
 			check.Status, check.Error, report.Ready = HealthStatusUnhealthy, err.Error(), false
 		}
 		report.Checks = append(report.Checks, check)

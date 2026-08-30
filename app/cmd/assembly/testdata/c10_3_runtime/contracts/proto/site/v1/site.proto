@@ -1,0 +1,23 @@
+syntax = "proto3";
+package site.v1;
+import "yunka/dsl/v1/options.proto";
+option go_package = "example.com/c103qualification/contracts/site/v1;sitev1";
+option (yunka.dsl.v1.domain) = { name: "site" version: "v1" };
+
+message ValidateTransferTargetRequest { string site_id = 1; }
+message ValidateTransferTargetResponse { bool allowed = 1; }
+
+service SiteApplication {
+  option (yunka.dsl.v1.application) = {
+    name: "management"
+    operations: {
+      id: "site.validate_transfer_target"
+      use_case: "validate_transfer_target"
+      permissions: "site.validate"
+      request_type: "site.v1.ValidateTransferTargetRequest"
+      response_type: "site.v1.ValidateTransferTargetResponse"
+      application_method: "ValidateTransferTarget"
+      execution: { transaction: TRANSACTION_NONE idempotency: IDEMPOTENCY_NONE }
+    }
+  };
+}

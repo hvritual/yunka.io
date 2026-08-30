@@ -96,6 +96,9 @@ func Core(app *core.App, applicationName string) Source {
 		for _, module := range current.Modules {
 			snapshot.Modules = append(snapshot.Modules, graph.RuntimeModule{Name: module.Name, Startable: module.Startable, Shutdownable: module.Shutdownable, HealthChecked: module.HealthChecked})
 		}
+		for _, component := range current.Components {
+			snapshot.Components = append(snapshot.Components, graph.RuntimeComponent{Name: component.Name, Startable: component.Startable, Shutdownable: component.Shutdownable, HealthChecked: component.HealthChecked})
+		}
 		return graph.AddRuntime(builder, snapshot, applicationName)
 	}}
 }

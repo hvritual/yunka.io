@@ -52,6 +52,8 @@ func CompileAssembly(manifest Manifest, modules []assemblyplan.ModuleInput, opti
 // CompileBoundAssembly extends CompileAssembly with canonical compiler-local Go
 // bindings discovered from generated module source. The bindings are never
 // guessed from module names and are used only to emit explicit catalog wiring.
+// C10.3 runtime bootstrap is added only here because NewCatalog is proven to
+// exist only after those exact module bindings have been qualified.
 func CompileBoundAssembly(manifest Manifest, modules []assemblyplan.ModuleInput, bindings []ModuleBinding, options AssemblyCodeOptions) (AssemblyCompilation, error) {
 	compilation, err := CompileAssembly(manifest, modules, options)
 	if err != nil {
@@ -61,6 +63,11 @@ func CompileBoundAssembly(manifest Manifest, modules []assemblyplan.ModuleInput,
 	if err != nil {
 		return AssemblyCompilation{}, err
 	}
+	runtimeFiles, err := BindAssemblyRuntime(manifest, compilation.Plan, compilation.GoFiles)
+	if err != nil {
+		return AssemblyCompilation{}, err
+	}
+	compilation.GoFiles = runtimeFiles
 	compilation.ModuleGoFiles = moduleFiles
 	if err := validateAssemblyCompilation(compilation); err != nil {
 		return AssemblyCompilation{}, err

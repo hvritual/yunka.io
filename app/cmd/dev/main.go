@@ -73,18 +73,50 @@ func runCommand() cli.Command {
 }
 
 func statusCommand() cli.Command {
+	flags := append(commonFlags(),
+		cli.StringFlag{Name: "state", Value: devruntime.DefaultRuntimeStatePath},
+		cli.StringFlag{Name: "format", Value: "text", Usage: "text or json"},
+	)
 	return cli.Command{
 		Name:  "status",
-		Usage: "inspect the secret-free local runtime report",
-		Flags: []cli.Flag{
-			cli.StringFlag{Name: "root", Value: "."},
-			cli.StringFlag{Name: "state", Value: devruntime.DefaultRuntimeStatePath},
-			cli.StringFlag{Name: "format", Value: "text", Usage: "text or json"},
-		},
+		Usage: "inspect the secret-free local runtime report and optionally require a complete live closure",
+		Flags: flags,
 		Action: func(c *cli.Context) error {
-			report, err := devruntime.LoadRuntimeReport(c.String("root"), c.String("state"))
+			root := strings.TrimSpace(c.String("root"))
+			if root == "" {
+				root = "."
+			}
+			statePath := strings.TrimSpace(c.String("state"))
+			var closurePlan devruntime.Plan
+			if c.Bool("closure") {
+				plan, err := loadPlan(c)
+				if err != nil {
+					return err
+				}
+				if plan.Runtime == nil {
+					return fmt.Errorf("dev status closure requires runtime configuration")
+				}
+				closurePlan = plan
+				canonicalState := strings.TrimSpace(plan.Runtime.StatePath)
+				if canonicalState == "" {
+					canonicalState = devruntime.DefaultRuntimeStatePath
+				}
+				if statePath != "" && statePath != devruntime.DefaultRuntimeStatePath && filepath.Clean(statePath) != filepath.Clean(canonicalState) {
+					return fmt.Errorf("dev status closure state path %q does not match runtime statePath %q", statePath, canonicalState)
+				}
+				statePath = canonicalState
+			}
+			if statePath == "" {
+				statePath = devruntime.DefaultRuntimeStatePath
+			}
+			report, err := devruntime.LoadRuntimeReport(root, statePath)
 			if err != nil {
 				return err
+			}
+			if c.Bool("closure") {
+				if err := devruntime.ValidateRuntimeClosure(closurePlan, report); err != nil {
+					return err
+				}
 			}
 			if strings.EqualFold(c.String("format"), "json") {
 				encoder := json.NewEncoder(os.Stdout)

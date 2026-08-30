@@ -90,22 +90,34 @@ func BuildPlanWithOptions(manifest DevManifest, root string, targets []string, g
 		if len(graph.Nodes) == 0 {
 			return Plan{}, errors.New("devruntime: closure mode requires an application graph")
 		}
-		graphNodes := make(map[string]struct{}, len(graph.Nodes))
+		graphNodes := make(map[string]applicationgraph.Node, len(graph.Nodes))
 		for _, node := range graph.Nodes {
-			graphNodes[node.ID] = struct{}{}
+			graphNodes[node.ID] = node
 		}
 		owners := make(map[string]string, len(ordered))
 		for _, process := range ordered {
 			if process.GraphNode == "" {
 				return Plan{}, fmt.Errorf("devruntime: closure mode requires process %q graphNode", process.Name)
 			}
-			if _, ok := graphNodes[process.GraphNode]; !ok {
+			node, ok := graphNodes[process.GraphNode]
+			if !ok {
 				return Plan{}, fmt.Errorf("devruntime: process %q graph node %q not found", process.Name, process.GraphNode)
 			}
 			if owner, exists := owners[process.GraphNode]; exists {
 				return Plan{}, fmt.Errorf("devruntime: graph node %q is owned by both %q and %q", process.GraphNode, owner, process.Name)
 			}
 			owners[process.GraphNode] = process.Name
+			if node.Kind == applicationgraph.NodeApplication {
+				if process.Readiness == nil {
+					return Plan{}, fmt.Errorf("devruntime: closure mode requires application owner process %q readiness", process.Name)
+				}
+				if !process.Readiness.DiagnosticsReady {
+					return Plan{}, fmt.Errorf("devruntime: closure mode requires application owner process %q diagnosticsReady=true", process.Name)
+				}
+				if !process.Readiness.CaptureDiagnostics {
+					return Plan{}, fmt.Errorf("devruntime: closure mode requires application owner process %q captureDiagnostics=true", process.Name)
+				}
+			}
 		}
 	}
 
