@@ -118,19 +118,19 @@ func (runtime *grpcRuntime) shutdown(ctx context.Context) error {
 		close(gracefulDone)
 	}()
 
-	var gracefulErr error
 	select {
 	case <-gracefulDone:
+		var failures []error
+		if err := runtime.listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+			failures = append(failures, fmt.Errorf("runtimecomponent: close gRPC %s listener: %w", runtime.name, err))
+		}
+		if err := waitRuntimeDone(ctx, done); err != nil {
+			failures = append(failures, err)
+		}
+		return errors.Join(failures...)
 	case <-ctx.Done():
 		runtime.server.Stop()
-		<-gracefulDone
-		gracefulErr = ctx.Err()
+		_ = runtime.listener.Close()
+		return ctx.Err()
 	}
-	if err := runtime.listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
-		gracefulErr = errors.Join(gracefulErr, fmt.Errorf("runtimecomponent: close gRPC %s listener: %w", runtime.name, err))
-	}
-	if err := waitRuntimeDone(context.Background(), done); err != nil {
-		gracefulErr = errors.Join(gracefulErr, err)
-	}
-	return gracefulErr
 }
