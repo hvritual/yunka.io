@@ -67,6 +67,15 @@ func runWithEvidenceOptions(
 	graphPath := filepath.ToSlash(strings.TrimSpace(plan.Runtime.GraphPath))
 	fmt.Fprintf(evidence, "DEV evidence state=%s graph=%s\n", statePath, graphPath)
 
+	baselineStartedAt := ""
+	if baseline, err := load(root, statePath); err == nil {
+		baselineStartedAt = strings.TrimSpace(baseline.StartedAt)
+	}
+	freshReport := func(report devruntime.RuntimeReport) bool {
+		startedAt := strings.TrimSpace(report.StartedAt)
+		return startedAt != "" && startedAt != baselineStartedAt
+	}
+
 	result := make(chan error, 1)
 	go func() {
 		result <- run(ctx, plan, devruntime.RunOptions{Root: root, Stdout: stdout, Stderr: stderr})
@@ -79,14 +88,15 @@ func runWithEvidenceOptions(
 		select {
 		case runErr := <-result:
 			report, loadErr := load(root, statePath)
-			if loadErr == nil {
+			fresh := loadErr == nil && freshReport(report)
+			if fresh {
 				renderRuntimeEvidence(evidence, report, &observed)
 			}
 			if runErr != nil {
 				if observed.runtimeState != devruntime.RuntimeRunFailed {
 					fmt.Fprintln(evidence, "DEV FAILED runtime")
 				}
-				if loadErr == nil {
+				if fresh {
 					fmt.Fprintf(evidence, "DEV inspect: %s\n", runtimeStatusCommand(plan, statePath))
 				}
 				fmt.Fprintln(evidence, "DEV next: yunka doctor")
@@ -94,7 +104,7 @@ func runWithEvidenceOptions(
 			return runErr
 		case <-ticker.C:
 			report, err := load(root, statePath)
-			if err != nil {
+			if err != nil || !freshReport(report) {
 				continue
 			}
 			renderRuntimeEvidence(evidence, report, &observed)
