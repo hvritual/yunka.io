@@ -1,10 +1,8 @@
 package projectflow
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,9 +18,9 @@ import (
 const c114FastHitBudget = 2 * time.Second
 
 type c114CLIEnvelope struct {
-	SchemaVersion int `json:"schemaVersion"`
-	Command       string `json:"command"`
-	OK            bool `json:"ok"`
+	SchemaVersion int     `json:"schemaVersion"`
+	Command       string  `json:"command"`
+	OK            bool    `json:"ok"`
 	Stages        []Stage `json:"stages,omitempty"`
 	Diagnostics   []struct {
 		Code string `json:"code"`
@@ -30,8 +28,8 @@ type c114CLIEnvelope struct {
 }
 
 func TestC114QualificationRealBinaryFastFeedback(t *testing.T) {
-	if os.Getenv("YUNKA_REQUIRE_C114_QUALIFICATION") != "1" {
-		t.Skip("C11.4 fast-feedback E2E is enforced by the repository qualification gate")
+	if os.Getenv("YUNKA_REQUIRE_C114_QUALIFICATION") != "1" && !strings.EqualFold(os.Getenv("CI"), "true") {
+		t.Skip("C11.4 fast-feedback E2E runs in CI or with YUNKA_REQUIRE_C114_QUALIFICATION=1")
 	}
 
 	repositoryRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
@@ -283,7 +281,7 @@ func c114RequireStages(t *testing.T, envelope c114CLIEnvelope, names ...string) 
 	sort.Strings(got)
 	want := append([]string(nil), names...)
 	sort.Strings(want)
-	if !reflectStringsEqual(got, want) {
+	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
 		t.Fatalf("stages=%v want %v", got, want)
 	}
 }
@@ -331,10 +329,6 @@ func c114WriteFile(t *testing.T, path, content string) {
 	}
 }
 
-func reflectStringsEqual(left, right []string) bool {
-	return bytes.Equal([]byte(strings.Join(left, "\x00")), []byte(strings.Join(right, "\x00")))
-}
-
 func TestC114QualificationBudgetIsConservative(t *testing.T) {
 	if c114FastHitBudget < time.Second {
 		t.Fatalf("qualification budget %s is too aggressive for shared CI runners", c114FastHitBudget)
@@ -342,5 +336,4 @@ func TestC114QualificationBudgetIsConservative(t *testing.T) {
 	if c114FastHitBudget > 5*time.Second {
 		t.Fatalf("qualification budget %s is too weak to protect the C11 fast-feedback goal", c114FastHitBudget)
 	}
-	_ = fmt.Sprintf("%s", c114FastHitBudget)
 }
