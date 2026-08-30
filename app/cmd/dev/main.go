@@ -73,7 +73,7 @@ func runAction(c *cli.Context) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return devruntime.Run(ctx, plan, devruntime.RunOptions{Root: c.String("root")})
+	return runWithEvidence(ctx, plan, c.String("root"), os.Stderr, os.Stdout, os.Stderr)
 }
 
 func statusCommand() cli.Command {
