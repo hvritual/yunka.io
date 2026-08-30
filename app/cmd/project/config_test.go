@@ -36,7 +36,7 @@ func TestInitializePrefersExplicitSourceInventory(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(`{"schemaVersion":1,"sourceSets":[]}`), 0o640); err != nil {
+	if err := os.WriteFile(path, []byte("{\"schemaVersion\":1,\"sourceSets\":[]}"), 0o640); err != nil {
 		t.Fatal(err)
 	}
 	// The source inventory only needs to exist for init's deterministic location choice;
@@ -113,10 +113,7 @@ func TestInitializePersistsLegacyV1Migration(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	legacy := []byte(`{"version":1,"database":{"tablePrefix":"legacy"}}`)
-	// Use ordinary quoted JSON bytes here rather than a semantic helper so this
-	// test protects compatibility with the exact historical wire shape.
-	legacy = []byte("{\"version\":1,\"database\":{\"tablePrefix\":\"legacy\"}}")
+	legacy := []byte("{\"version\":1,\"database\":{\"tablePrefix\":\"legacy\"}}")
 	if err := os.WriteFile(path, legacy, 0o640); err != nil {
 		t.Fatal(err)
 	}
@@ -156,5 +153,13 @@ func TestValidateRejectsProfilePathEscape(t *testing.T) {
 	config.Workflow.Modules.Root = "../modules"
 	if err := Validate(config); err == nil {
 		t.Fatal("expected project path escape rejection")
+	}
+}
+
+func TestValidateRejectsAbsoluteStyleGeneratedImport(t *testing.T) {
+	config := DefaultConfig()
+	config.Workflow.GeneratedGo.Import = "/example.com/demo/internal"
+	if err := Validate(config); err == nil {
+		t.Fatal("expected invalid generated Go import rejection")
 	}
 }
