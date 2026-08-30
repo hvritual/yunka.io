@@ -25,7 +25,7 @@ func TestBindAssemblyRuntimeGeneratesCanonicalKernelBootstrapAndInventory(t *tes
 		"Platform *platform.Provider",
 		"RuntimeComponents []core.RuntimeComponent",
 		"func RuntimeInventory() core.RuntimeInventory",
-		`Routes: []string{"/v1/devices:transfer"}`,
+		`[]string{"/v1/devices:transfer"}`,
 		"RPCClientConfigured: false",
 		"RPCServerCount:      1",
 		"func Bootstrap(ctx context.Context, options BootstrapOptions) (kernel.BootstrapResult[Applications], error)",
