@@ -2,13 +2,12 @@ package doctor
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/urfave/cli"
 	"yunka.io/pkg/devruntime"
+	"yunka.io/pkg/diagnostic"
 )
 
 const AppName = "doctor"
@@ -23,24 +22,38 @@ func Command() cli.Command {
 			cli.BoolFlag{Name: "strict", Usage: "treat warnings as failures"},
 		},
 		Action: func(c *cli.Context) error {
-			report := devruntime.Doctor(context.Background(), devruntime.DoctorOptions{Root: c.String("root")})
-			if strings.EqualFold(c.String("format"), "json") {
-				encoder := json.NewEncoder(os.Stdout)
-				encoder.SetIndent("", "  ")
-				if err := encoder.Encode(report); err != nil {
+			format := strings.ToLower(strings.TrimSpace(c.String("format")))
+			if format != "text" && format != "json" {
+				text, err := diagnostic.RenderText([]diagnostic.Diagnostic{{
+					Code:     "YUNKA-DX-DEV-001",
+					Severity: diagnostic.SeverityError,
+					Stage:    "cli",
+					Summary:  "unsupported output format",
+					Detail:   fmt.Sprintf("format %q is unsupported; use text or json", format),
+				}})
+				if err != nil {
 					return err
 				}
-			} else {
-				for _, check := range report.Checks {
-					fmt.Printf("%-5s %-28s %s", strings.ToUpper(string(check.Status)), check.Name, check.Detail)
-					if check.Action != "" {
-						fmt.Printf("\n      action: %s", check.Action)
-					}
-					fmt.Println()
+				fmt.Print(text)
+				return cli.NewExitError("", 2)
+			}
+
+			report := devruntime.Doctor(context.Background(), devruntime.DoctorOptions{Root: c.String("root")})
+			if format == "json" {
+				contents, err := renderDoctorJSON(report, c.Bool("strict"))
+				if err != nil {
+					return err
 				}
+				fmt.Print(string(contents))
+			} else {
+				text, err := renderDoctorText(report)
+				if err != nil {
+					return err
+				}
+				fmt.Print(text)
 			}
 			if report.Failed(c.Bool("strict")) {
-				return cli.NewExitError("yunka doctor found blocking checks", 1)
+				return cli.NewExitError("", 1)
 			}
 			return nil
 		},
