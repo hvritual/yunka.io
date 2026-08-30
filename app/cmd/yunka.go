@@ -7,12 +7,14 @@ import (
 	"sort"
 	"yunka.io/app/cmd/api"
 	"yunka.io/app/cmd/assembly"
+	"yunka.io/app/cmd/check"
 	"yunka.io/app/cmd/contract"
 	"yunka.io/app/cmd/dependency"
 	"yunka.io/app/cmd/dev"
 	"yunka.io/app/cmd/doc"
 	"yunka.io/app/cmd/doctor"
 	"yunka.io/app/cmd/domain"
+	"yunka.io/app/cmd/generate"
 	"yunka.io/app/cmd/graph"
 	"yunka.io/app/cmd/inspect"
 	"yunka.io/app/cmd/module"
@@ -25,11 +27,13 @@ func main() {
 	app.Version = "0.0.1"
 	app.Commands = []cli.Command{
 		assembly.Command(),
+		check.Command(),
 		contract.Command(),
 		dependency.Command(),
 		dev.Command(),
 		doctor.Command(),
 		domain.Command(),
+		generate.Command(),
 		graph.Command(),
 		project.Command(),
 		inspect.Command(),

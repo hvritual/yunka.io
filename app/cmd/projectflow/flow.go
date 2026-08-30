@@ -1,0 +1,374 @@
+package projectflow
+
+import (
+	"bufio"
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	modulecmd "yunka.io/app/cmd/module"
+	contractcore "yunka.io/pkg/contract"
+)
+
+const (
+	defaultContractTitle   = "yunka API"
+	defaultContractVersion = "1.0.0"
+)
+
+type Options struct {
+	Root      string
+	Protoc    string
+	ProtoPaths []string
+}
+
+type Stage struct {
+	Name   string
+	Status string
+	Detail string
+}
+
+type Report struct {
+	Root   string
+	Stages []Stage
+}
+
+type resolvedProject struct {
+	Root              string
+	InventoryPath     string
+	ProtoDir          string
+	ContractOut       string
+	ModuleRoot        string
+	CodeOut           string
+	GoModule          string
+	CodeImport        string
+	Protoc            string
+	AdditionalProtoPaths []string
+}
+
+func Generate(ctx context.Context, options Options) (Report, error) {
+	project, err := resolveProject(options)
+	if err != nil {
+		return Report{}, err
+	}
+	result, artifacts, applicationFiles, err := compileArtifacts(ctx, project)
+	if err != nil {
+		return Report{}, fmt.Errorf("generate contract: %w", err)
+	}
+	if err := contractcore.WriteArtifacts(project.ContractOut, artifacts); err != nil {
+		return Report{}, fmt.Errorf("generate contract artifacts: %w", err)
+	}
+	if len(applicationFiles) > 0 {
+		if err := contractcore.WriteApplicationCode(project.CodeOut, applicationFiles); err != nil {
+			return Report{}, fmt.Errorf("generate application code: %w", err)
+		}
+	}
+
+	report := Report{Root: project.Root}
+	report.Stages = append(report.Stages, Stage{
+		Name:   "contract",
+		Status: "generated",
+		Detail: fmt.Sprintf("services=%d messages=%d applicationFiles=%d out=%s", len(result.Manifest.Services), len(result.Manifest.Messages), len(applicationFiles), relative(project.Root, project.ContractOut)),
+	})
+
+	if err := modulecmd.Check(project.ModuleRoot); err != nil {
+		return Report{}, fmt.Errorf("generate module check: %w", err)
+	}
+	modulesPresent, err := hasModules(project.ModuleRoot)
+	if err != nil {
+		return Report{}, fmt.Errorf("generate module discovery: %w", err)
+	}
+	if modulesPresent {
+		report.Stages = append(report.Stages, Stage{Name: "modules", Status: "checked", Detail: relative(project.Root, project.ModuleRoot)})
+	} else {
+		report.Stages = append(report.Stages, Stage{Name: "modules", Status: "skipped", Detail: "no generated modules"})
+	}
+
+	assemblyRequired := modulesPresent || contractcore.HasTypedApplications(result.Manifest)
+	if !assemblyRequired {
+		report.Stages = append(report.Stages, Stage{Name: "assembly", Status: "skipped", Detail: "no typed applications or generated modules"})
+		return report, nil
+	}
+	if strings.TrimSpace(project.CodeImport) == "" {
+		return Report{}, errors.New("generate assembly: project go.mod with a module directive is required to derive generated Go imports")
+	}
+	compilation, bindingCount, err := compileAssembly(result.Manifest, project)
+	if err != nil {
+		return Report{}, fmt.Errorf("generate assembly: %w", err)
+	}
+	if err := contractcore.WriteAssemblyCompilation(project.ContractOut, project.CodeOut, compilation); err != nil {
+		return Report{}, fmt.Errorf("generate assembly artifacts: %w", err)
+	}
+	report.Stages = append(report.Stages, Stage{
+		Name:   "assembly",
+		Status: "generated",
+		Detail: fmt.Sprintf("bindings=%d codeOut=%s", bindingCount, relative(project.Root, project.CodeOut)),
+	})
+	return report, nil
+}
+
+func Check(ctx context.Context, options Options) (Report, error) {
+	project, err := resolveProject(options)
+	if err != nil {
+		return Report{}, err
+	}
+	result, artifacts, applicationFiles, err := compileArtifacts(ctx, project)
+	if err != nil {
+		return Report{}, fmt.Errorf("check contract: %w", err)
+	}
+	drift, err := contractcore.CheckArtifacts(project.ContractOut, artifacts)
+	if err != nil {
+		return Report{}, fmt.Errorf("check contract artifacts: %w", err)
+	}
+	if len(applicationFiles) > 0 {
+		applicationDrift, err := contractcore.CheckApplicationCode(project.CodeOut, applicationFiles)
+		if err != nil {
+			return Report{}, fmt.Errorf("check application code: %w", err)
+		}
+		drift = append(drift, applicationDrift...)
+	}
+	if len(drift) > 0 {
+		first := drift[0]
+		return Report{}, fmt.Errorf("check contract: generated artifacts are stale (%s: %s); run `yunka generate`", first.File, first.Reason)
+	}
+
+	report := Report{Root: project.Root}
+	report.Stages = append(report.Stages, Stage{
+		Name:   "contract",
+		Status: "ok",
+		Detail: fmt.Sprintf("services=%d messages=%d applicationFiles=%d", len(result.Manifest.Services), len(result.Manifest.Messages), len(applicationFiles)),
+	})
+
+	if err := modulecmd.Check(project.ModuleRoot); err != nil {
+		return Report{}, fmt.Errorf("check modules: %w", err)
+	}
+	modulesPresent, err := hasModules(project.ModuleRoot)
+	if err != nil {
+		return Report{}, fmt.Errorf("check module discovery: %w", err)
+	}
+	if modulesPresent {
+		report.Stages = append(report.Stages, Stage{Name: "modules", Status: "ok", Detail: relative(project.Root, project.ModuleRoot)})
+	} else {
+		report.Stages = append(report.Stages, Stage{Name: "modules", Status: "skipped", Detail: "no generated modules"})
+	}
+
+	assemblyRequired := modulesPresent || contractcore.HasTypedApplications(result.Manifest)
+	if !assemblyRequired {
+		report.Stages = append(report.Stages, Stage{Name: "assembly", Status: "skipped", Detail: "no typed applications or generated modules"})
+		return report, nil
+	}
+	if strings.TrimSpace(project.CodeImport) == "" {
+		return Report{}, errors.New("check assembly: project go.mod with a module directive is required to derive generated Go imports")
+	}
+	compilation, bindingCount, err := compileAssembly(result.Manifest, project)
+	if err != nil {
+		return Report{}, fmt.Errorf("check assembly: %w", err)
+	}
+	assemblyDrift, err := contractcore.CheckAssemblyCompilation(project.ContractOut, project.CodeOut, compilation)
+	if err != nil {
+		return Report{}, fmt.Errorf("check assembly artifacts: %w", err)
+	}
+	if len(assemblyDrift) > 0 {
+		first := assemblyDrift[0]
+		return Report{}, fmt.Errorf("check assembly: generated artifacts are stale (%s: %s); run `yunka generate`", first.File, first.Reason)
+	}
+	report.Stages = append(report.Stages, Stage{Name: "assembly", Status: "ok", Detail: fmt.Sprintf("bindings=%d", bindingCount)})
+	return report, nil
+}
+
+func Format(report Report) string {
+	var builder strings.Builder
+	for _, stage := range report.Stages {
+		fmt.Fprintf(&builder, "%-9s %-9s %s\n", strings.ToUpper(stage.Status), stage.Name, stage.Detail)
+	}
+	return builder.String()
+}
+
+func compileArtifacts(ctx context.Context, project resolvedProject) (contractcore.CompileResult, contractcore.Artifacts, []contractcore.GeneratedApplicationFile, error) {
+	result, err := compileContract(ctx, project)
+	if err != nil {
+		return contractcore.CompileResult{}, contractcore.Artifacts{}, nil, err
+	}
+	diagnostics := contractcore.Lint(result.Manifest)
+	if contractcore.HasErrors(diagnostics) {
+		for _, diagnostic := range diagnostics {
+			if strings.EqualFold(string(diagnostic.Severity), "error") {
+				return contractcore.CompileResult{}, contractcore.Artifacts{}, nil, fmt.Errorf("contract lint %s: %s", diagnostic.Path, diagnostic.Message)
+			}
+		}
+		return contractcore.CompileResult{}, contractcore.Artifacts{}, nil, errors.New("contract lint failed")
+	}
+	artifacts, err := contractcore.RenderArtifacts(result.Manifest, contractcore.ArtifactOptions{
+		OpenAPI: contractcore.OpenAPIOptions{Title: defaultContractTitle, Version: defaultContractVersion},
+	})
+	if err != nil {
+		return contractcore.CompileResult{}, contractcore.Artifacts{}, nil, err
+	}
+	var applicationFiles []contractcore.GeneratedApplicationFile
+	if contractcore.HasTypedApplications(result.Manifest) {
+		if strings.TrimSpace(project.CodeImport) == "" {
+			return contractcore.CompileResult{}, contractcore.Artifacts{}, nil, errors.New("typed applications require project go.mod so generated application imports can be derived")
+		}
+		applicationFiles, err = contractcore.RenderC9ApplicationCode(result.Manifest, contractcore.ApplicationCodeOptions{RootImport: project.CodeImport})
+		if err != nil {
+			return contractcore.CompileResult{}, contractcore.Artifacts{}, nil, err
+		}
+	}
+	return result, artifacts, applicationFiles, nil
+}
+
+func compileContract(ctx context.Context, project resolvedProject) (contractcore.CompileResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	compileCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	if project.InventoryPath != "" {
+		return contractcore.CompileInventory(compileCtx, contractcore.InventoryCompileOptions{
+			RepositoryRoot: project.Root,
+			InventoryPath:  project.InventoryPath,
+			Protoc:         project.Protoc,
+		})
+	}
+	return contractcore.Compile(compileCtx, contractcore.CompileOptions{
+		Dir:        project.ProtoDir,
+		ProtoPaths: project.AdditionalProtoPaths,
+		Protoc:     project.Protoc,
+	})
+}
+
+func compileAssembly(manifest contractcore.Manifest, project resolvedProject) (contractcore.AssemblyCompilation, int, error) {
+	modules, bindings, err := contractcore.DiscoverModuleSnapshot(project.ModuleRoot)
+	if err != nil {
+		return contractcore.AssemblyCompilation{}, 0, err
+	}
+	compilation, err := contractcore.CompileBoundAssembly(manifest, modules, bindings, contractcore.AssemblyCodeOptions{RootImport: project.CodeImport})
+	if err != nil {
+		return contractcore.AssemblyCompilation{}, 0, err
+	}
+	return compilation, len(bindings), nil
+}
+
+func resolveProject(options Options) (resolvedProject, error) {
+	root := strings.TrimSpace(options.Root)
+	if root == "" {
+		root = "."
+	}
+	absolute, err := filepath.Abs(root)
+	if err != nil {
+		return resolvedProject{}, err
+	}
+	info, err := os.Stat(absolute)
+	if err != nil {
+		return resolvedProject{}, err
+	}
+	if !info.IsDir() {
+		return resolvedProject{}, fmt.Errorf("project root %s is not a directory", absolute)
+	}
+
+	inventoryPath := filepath.Join(absolute, "contracts", "sources.json")
+	if _, err := os.Stat(inventoryPath); os.IsNotExist(err) {
+		inventoryPath = ""
+	} else if err != nil {
+		return resolvedProject{}, err
+	}
+	protoDir := filepath.Join(absolute, "contracts", "proto")
+	if inventoryPath == "" {
+		if info, err := os.Stat(protoDir); err != nil {
+			if os.IsNotExist(err) {
+				return resolvedProject{}, errors.New("project has no contracts/sources.json or contracts/proto directory")
+			}
+			return resolvedProject{}, err
+		} else if !info.IsDir() {
+			return resolvedProject{}, fmt.Errorf("contract proto root %s is not a directory", protoDir)
+		}
+	}
+
+	goModule, err := readGoModule(filepath.Join(absolute, "go.mod"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return resolvedProject{}, err
+	}
+	codeImport := ""
+	if goModule != "" {
+		codeImport = strings.TrimRight(goModule, "/") + "/internal"
+	}
+	protoc := strings.TrimSpace(options.Protoc)
+	if protoc == "" {
+		protoc = strings.TrimSpace(os.Getenv("PROTOC"))
+	}
+
+	protoPaths := make([]string, 0, len(options.ProtoPaths))
+	for _, value := range options.ProtoPaths {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if !filepath.IsAbs(value) {
+			value = filepath.Join(absolute, value)
+		}
+		protoPaths = append(protoPaths, filepath.Clean(value))
+	}
+
+	return resolvedProject{
+		Root:                 absolute,
+		InventoryPath:        inventoryPath,
+		ProtoDir:             protoDir,
+		ContractOut:          filepath.Join(absolute, "contracts", "generated"),
+		ModuleRoot:           filepath.Join(absolute, "modules"),
+		CodeOut:              filepath.Join(absolute, "internal"),
+		GoModule:             goModule,
+		CodeImport:           codeImport,
+		Protoc:               protoc,
+		AdditionalProtoPaths: protoPaths,
+	}, nil
+}
+
+func readGoModule(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "module ") {
+			module := strings.TrimSpace(strings.TrimPrefix(line, "module "))
+			if module == "" {
+				return "", fmt.Errorf("go.mod %s contains an empty module directive", path)
+			}
+			return module, nil
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+	return "", fmt.Errorf("go.mod %s contains no module directive", path)
+}
+
+func hasModules(root string) (bool, error) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func relative(root, path string) string {
+	value, err := filepath.Rel(root, path)
+	if err != nil {
+		return path
+	}
+	return filepath.ToSlash(value)
+}
