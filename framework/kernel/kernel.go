@@ -44,7 +44,7 @@ func New(options Options) (*core.App, error) {
 	return core.NewApp(core.AppOptions{
 		Config: options.Config, Logger: options.Logger, Databases: options.Databases,
 		EventBus: options.EventBus, RPC: options.RPC,
-		Catalog: options.Catalog, ContextFactory: options.ContextFactory,
+		Catalog: catalog, ContextFactory: options.ContextFactory,
 		RuntimeComponents: options.RuntimeComponents, RuntimeInventory: options.RuntimeInventory,
 	})
 }
