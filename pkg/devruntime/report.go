@@ -56,6 +56,7 @@ type RuntimeCoreSummary struct {
 type ProcessRuntimeReport struct {
 	Name        string              `json:"name"`
 	GraphNode   string              `json:"graphNode,omitempty"`
+	GraphNodes  []string            `json:"graphNodes,omitempty"`
 	State       ProcessState        `json:"state"`
 	Ready       bool                `json:"ready"`
 	Diagnostics *RuntimeCoreSummary `json:"diagnostics,omitempty"`
@@ -114,9 +115,13 @@ func newRuntimeRecorder(root string, plan Plan, now func() time.Time) (*runtimeR
 		UpdatedAt:     stamp,
 	}
 	for _, process := range plan.Processes {
-		report.Processes = append(report.Processes, ProcessRuntimeReport{
-			Name: process.Name, GraphNode: process.GraphNode, State: ProcessPending,
-		})
+		entry := ProcessRuntimeReport{Name: process.Name, State: ProcessPending}
+		if len(process.GraphNodes) != 0 {
+			entry.GraphNodes = append([]string(nil), process.GraphNodes...)
+		} else {
+			entry.GraphNode = process.GraphNode
+		}
+		report.Processes = append(report.Processes, entry)
 	}
 	recorder := &runtimeRecorder{root: root, statePath: statePath, graphPath: graphPath, plan: plan, report: report, now: now}
 	if err := recorder.persist(); err != nil {
@@ -230,6 +235,7 @@ func sanitizedRuntimeReport(report RuntimeReport) RuntimeReport {
 	report.Processes = append([]ProcessRuntimeReport(nil), report.Processes...)
 	for index := range report.Processes {
 		report.Processes[index].Error = sanitizeRuntimeError(report.Processes[index].Error)
+		report.Processes[index].GraphNodes = append([]string(nil), report.Processes[index].GraphNodes...)
 		if report.Processes[index].Diagnostics != nil {
 			copy := *report.Processes[index].Diagnostics
 			report.Processes[index].Diagnostics = &copy
@@ -276,6 +282,10 @@ func FormatRuntimeReport(writer io.Writer, report RuntimeReport) error {
 		}
 		if process.GraphNode != "" {
 			if _, err := fmt.Fprintf(writer, " graph=%s", process.GraphNode); err != nil {
+				return err
+			}
+		} else if len(process.GraphNodes) != 0 {
+			if _, err := fmt.Fprintf(writer, " graphs=%s", strings.Join(process.GraphNodes, ",")); err != nil {
 				return err
 			}
 		}
