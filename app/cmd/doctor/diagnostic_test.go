@@ -30,8 +30,9 @@ func TestDoctorMappingsCoverCurrentProbeNames(t *testing.T) {
 		if !ok {
 			t.Fatalf("missing mapping for %s", name)
 		}
-		if mapping.Code == "" || mapping.Stage == "" {
-			t.Fatalf("incomplete mapping for %s: %#v", name, mapping)
+		definition, ok := diagnostic.LookupDefinition(mapping.Code)
+		if !ok || definition.Stage == "" {
+			t.Fatalf("mapping %s does not resolve canonical definition: %#v", name, mapping)
 		}
 	}
 }
@@ -74,7 +75,7 @@ func TestDoctorStrictChangesExitTruthWithoutChangingWarningSeverity(t *testing.T
 	}
 	var warning *diagnostic.Diagnostic
 	for index := range strict.Diagnostics {
-		if strict.Diagnostics[index].Code == "YUNKA-DX-DEV-101" {
+		if strict.Diagnostics[index].Code == diagnostic.CodeDoctorGitStatus {
 			warning = &strict.Diagnostics[index]
 		}
 	}
@@ -97,7 +98,7 @@ func TestAdaptDoctorReportPreservesRemediationAsNonExecutingAction(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 1 || items[0].Code != "YUNKA-DX-TOOLCHAIN-112" || len(items[0].Actions) != 1 {
+	if len(items) != 1 || items[0].Code != diagnostic.CodeDoctorProtocGenGo || len(items[0].Actions) != 1 {
 		t.Fatalf("items=%#v", items)
 	}
 	if items[0].Actions[0].Kind != diagnostic.ActionCommand {
