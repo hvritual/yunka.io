@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 3,
+  "runtime": {
+    "application": "example",
+    "statePath": ".yunka/dev-runtime.json",
+    "graphPath": ".yunka/runtime-graph.json",
+    "contractManifest": "contracts/generated/manifest.json",
+    "shutdownTimeout": "10s"
+  },
+  "processes": [
+    {
+      "name": "api",
+      "command": [
+        "go",
+        "run",
+        "./cmd/api"
+      ],
+      "readiness": {
+        "url": "http://127.0.0.1:8080/ready",
+        "timeout": "30s",
+        "interval": "250ms",
+        "expectedStatus": 200
+      }
+    }
+  ]
+}
