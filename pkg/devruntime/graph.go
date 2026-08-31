@@ -59,7 +59,10 @@ func BuildRuntimeGraph(plan Plan, report RuntimeReport) (applicationgraph.Graph,
 			}
 			evidence = append(evidence, applicationgraph.Observed("dev.runtime", "supervised direct-child runtime state"))
 		}
-		if process.GraphNode != "" {
+		owned := processOwnedGraphNodes(process)
+		if len(process.GraphNodes) != 0 {
+			attributes["graphNodes"] = strings.Join(owned, ",")
+		} else if process.GraphNode != "" {
 			attributes["graphNode"] = process.GraphNode
 		}
 		if err := builder.AddNode(applicationgraph.Node{
@@ -88,11 +91,13 @@ func BuildRuntimeGraph(plan Plan, report RuntimeReport) (applicationgraph.Graph,
 				return applicationgraph.Graph{}, err
 			}
 		}
-		if process.GraphNode != "" && builder.HasNode(process.GraphNode) {
-			if err := builder.AddEdge(applicationgraph.Edge{
-				From: processID, To: process.GraphNode, Kind: applicationgraph.EdgeRuns, Evidence: declared,
-			}); err != nil {
-				return applicationgraph.Graph{}, err
+		for _, graphNode := range processOwnedGraphNodes(process) {
+			if builder.HasNode(graphNode) {
+				if err := builder.AddEdge(applicationgraph.Edge{
+					From: processID, To: graphNode, Kind: applicationgraph.EdgeRuns, Evidence: declared,
+				}); err != nil {
+					return applicationgraph.Graph{}, err
+				}
 			}
 		}
 	}
