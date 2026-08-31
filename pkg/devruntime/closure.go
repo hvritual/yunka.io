@@ -60,8 +60,10 @@ func ValidateRuntimeClosure(plan Plan, report RuntimeReport) error {
 		if !ok {
 			return fmt.Errorf("devruntime: runtime report is missing process %q", expected.Name)
 		}
-		if strings.TrimSpace(current.GraphNode) != strings.TrimSpace(expected.GraphNode) {
-			return fmt.Errorf("devruntime: process %q graph ownership drift: report=%q plan=%q", expected.Name, current.GraphNode, expected.GraphNode)
+		expectedNodes := processOwnedGraphNodes(expected)
+		currentNodes := reportOwnedGraphNodes(current)
+		if !equalOwnedGraphNodes(currentNodes, expectedNodes) {
+			return fmt.Errorf("devruntime: process %q graph ownership drift: report=%v plan=%v", expected.Name, currentNodes, expectedNodes)
 		}
 		if current.State == ProcessFailed || strings.TrimSpace(current.Error) != "" {
 			return fmt.Errorf("devruntime: process %q is failed: state=%s error=%s", expected.Name, current.State, sanitizeRuntimeError(current.Error))
@@ -74,11 +76,17 @@ func ValidateRuntimeClosure(plan Plan, report RuntimeReport) error {
 			return fmt.Errorf("devruntime: process %q is not running: state=%s", expected.Name, current.State)
 		}
 
-		node, exists := nodes[expected.GraphNode]
-		if !exists {
-			return fmt.Errorf("devruntime: process %q graph node %q is absent from closure graph", expected.Name, expected.GraphNode)
+		requiresDiagnostics := false
+		for _, graphNode := range expectedNodes {
+			node, exists := nodes[graphNode]
+			if !exists {
+				return fmt.Errorf("devruntime: process %q graph node %q is absent from closure graph", expected.Name, graphNode)
+			}
+			if node.Kind == applicationgraph.NodeApplication {
+				requiresDiagnostics = true
+			}
 		}
-		if node.Kind != applicationgraph.NodeApplication {
+		if !requiresDiagnostics {
 			continue
 		}
 		if expected.Readiness == nil || !expected.Readiness.DiagnosticsReady || !expected.Readiness.CaptureDiagnostics {
