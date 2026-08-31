@@ -20,6 +20,7 @@ func TestC116ARootCommandTaxonomyIsCompleteAndStable(t *testing.T) {
 		"doc":        categorySupplementary,
 		"doctor":     categoryDiagnostics,
 		"domain":     categoryExpert,
+		"explain":    categoryDiagnostics,
 		"generate":   categoryDeveloperWorkflow,
 		"graph":      categoryDiagnostics,
 		"init":       categoryDeveloperWorkflow,
@@ -107,6 +108,7 @@ func TestC116AApplyDiscoverabilityPreservesCommandsAndRendersHappyPath(t *testin
 		"Expert architecture",
 		"Supplementary tooling",
 		"yunka init -> yunka generate -> yunka check -> yunka dev",
+		"explain",
 	} {
 		if !strings.Contains(help, expected) {
 			t.Fatalf("root help missing %q:\n%s", expected, help)
