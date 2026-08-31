@@ -15,6 +15,7 @@ import (
 	"yunka.io/app/cmd/doc"
 	"yunka.io/app/cmd/doctor"
 	"yunka.io/app/cmd/domain"
+	"yunka.io/app/cmd/explain"
 	"yunka.io/app/cmd/generate"
 	"yunka.io/app/cmd/graph"
 	"yunka.io/app/cmd/inspect"
@@ -34,6 +35,7 @@ func main() {
 		dev.Command(),
 		doctor.Command(),
 		domain.Command(),
+		explain.Command(),
 		generate.Command(),
 		graph.Command(),
 		project.Command(),
