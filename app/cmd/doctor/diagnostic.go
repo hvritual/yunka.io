@@ -15,25 +15,23 @@ const doctorDiagnosticSchemaVersion = 1
 
 type doctorMapping struct {
 	Code       string
-	Stage      string
-	Location   string
 	ActionKind diagnostic.ActionKind
 }
 
 var doctorMappings = map[string]doctorMapping{
-	"workspace.root":              {Code: "YUNKA-DX-PROJECT-101", Stage: "project", ActionKind: diagnostic.ActionCommand},
-	"workspace.go_work":           {Code: "YUNKA-DX-TOOLCHAIN-101", Stage: "toolchain", Location: "go.work", ActionKind: diagnostic.ActionEdit},
-	"toolchain.lock":              {Code: "YUNKA-DX-TOOLCHAIN-102", Stage: "toolchain", Location: "tools/toolchain.env", ActionKind: diagnostic.ActionEdit},
-	"tool.go":                     {Code: "YUNKA-DX-TOOLCHAIN-110", Stage: "toolchain", ActionKind: diagnostic.ActionCommand},
-	"tool.protoc":                 {Code: "YUNKA-DX-TOOLCHAIN-111", Stage: "toolchain", ActionKind: diagnostic.ActionCommand},
-	"tool.protoc-gen-go":          {Code: "YUNKA-DX-TOOLCHAIN-112", Stage: "toolchain", ActionKind: diagnostic.ActionCommand},
-	"tool.protoc-gen-go-grpc":     {Code: "YUNKA-DX-TOOLCHAIN-113", Stage: "toolchain", ActionKind: diagnostic.ActionCommand},
-	"tool.gcc":                    {Code: "YUNKA-DX-TOOLCHAIN-114", Stage: "toolchain", ActionKind: diagnostic.ActionCommand},
-	"tool.git":                    {Code: "YUNKA-DX-TOOLCHAIN-115", Stage: "toolchain", ActionKind: diagnostic.ActionCommand},
-	"contract.manifest":           {Code: "YUNKA-DX-CONTRACT-101", Stage: "contract", Location: "contracts/generated/manifest.json", ActionKind: diagnostic.ActionCommand},
-	"application_graph.contract": {Code: "YUNKA-DX-CONTRACT-102", Stage: "contract", Location: "contracts/generated/manifest.json", ActionKind: diagnostic.ActionEdit},
-	"git.status":                  {Code: "YUNKA-DX-DEV-101", Stage: "developer-environment", ActionKind: diagnostic.ActionCommand},
-	"dev.manifest":                {Code: "YUNKA-DX-DEV-102", Stage: "developer-environment", Location: ".yunka/dev.json", ActionKind: diagnostic.ActionEdit},
+	"workspace.root":              {Code: diagnostic.CodeDoctorWorkspaceRoot, ActionKind: diagnostic.ActionCommand},
+	"workspace.go_work":           {Code: diagnostic.CodeDoctorGoWork, ActionKind: diagnostic.ActionEdit},
+	"toolchain.lock":              {Code: diagnostic.CodeDoctorToolchainLock, ActionKind: diagnostic.ActionEdit},
+	"tool.go":                     {Code: diagnostic.CodeDoctorGo, ActionKind: diagnostic.ActionCommand},
+	"tool.protoc":                 {Code: diagnostic.CodeDoctorProtoc, ActionKind: diagnostic.ActionCommand},
+	"tool.protoc-gen-go":          {Code: diagnostic.CodeDoctorProtocGenGo, ActionKind: diagnostic.ActionCommand},
+	"tool.protoc-gen-go-grpc":     {Code: diagnostic.CodeDoctorProtocGenGoGRPC, ActionKind: diagnostic.ActionCommand},
+	"tool.gcc":                    {Code: diagnostic.CodeDoctorGCC, ActionKind: diagnostic.ActionCommand},
+	"tool.git":                    {Code: diagnostic.CodeDoctorGit, ActionKind: diagnostic.ActionCommand},
+	"contract.manifest":           {Code: diagnostic.CodeDoctorContractManifest, ActionKind: diagnostic.ActionCommand},
+	"application_graph.contract": {Code: diagnostic.CodeDoctorContractGraph, ActionKind: diagnostic.ActionEdit},
+	"git.status":                  {Code: diagnostic.CodeDoctorGitStatus, ActionKind: diagnostic.ActionCommand},
+	"dev.manifest":                {Code: diagnostic.CodeDoctorDevManifest, ActionKind: diagnostic.ActionEdit},
 }
 
 type doctorEnvelope struct {
@@ -51,19 +49,23 @@ func adaptDoctorReport(report devruntime.DoctorReport) ([]diagnostic.Diagnostic,
 		if !ok {
 			return nil, fmt.Errorf("doctor diagnostics: unmapped check %q", check.Name)
 		}
+		definition, ok := diagnostic.LookupDefinition(mapping.Code)
+		if !ok {
+			return nil, fmt.Errorf("doctor diagnostics: code %q has no canonical definition", mapping.Code)
+		}
 		severity, err := doctorSeverity(check.Status)
 		if err != nil {
 			return nil, fmt.Errorf("doctor diagnostics: %s: %w", check.Name, err)
 		}
 		item := diagnostic.Diagnostic{
-			Code:     mapping.Code,
+			Code:     definition.Code,
 			Severity: severity,
-			Stage:    mapping.Stage,
+			Stage:    definition.Stage,
 			Summary:  check.Name,
 			Detail:   sanitizeDoctorDetail(report.Root, check.Detail),
 		}
-		if mapping.Location != "" {
-			item.Location = &diagnostic.Location{Path: mapping.Location}
+		if definition.Location != "" {
+			item.Location = &diagnostic.Location{Path: definition.Location}
 		}
 		if strings.TrimSpace(check.Action) != "" {
 			item.Actions = []diagnostic.Action{{
