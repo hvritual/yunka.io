@@ -24,13 +24,9 @@ func Command() cli.Command {
 		Action: func(c *cli.Context) error {
 			format := strings.ToLower(strings.TrimSpace(c.String("format")))
 			if format != "text" && format != "json" {
-				text, err := diagnostic.RenderText([]diagnostic.Diagnostic{{
-					Code:     "YUNKA-DX-DEV-001",
-					Severity: diagnostic.SeverityError,
-					Stage:    "cli",
-					Summary:  "unsupported output format",
-					Detail:   fmt.Sprintf("format %q is unsupported; use text or json", format),
-				}})
+				item := diagnostic.MustDefinition(diagnostic.CodeUnsupportedOutputFormat).Diagnostic(diagnostic.SeverityError)
+				item.Detail = fmt.Sprintf("format %q is unsupported; use text or json", format)
+				text, err := diagnostic.RenderText([]diagnostic.Diagnostic{item})
 				if err != nil {
 					return err
 				}
