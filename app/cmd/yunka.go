@@ -151,6 +151,7 @@ func main() {
 	}
 
 	sort.Sort(cli.CommandsByName(app.Commands))
+	applyDiscoverability(app)
 
 	err := app.Run(os.Args)
 	if err != nil {
