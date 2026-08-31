@@ -43,7 +43,7 @@ sub=inspect aliases=- flags=code-import,file,module-root,proto-dir,proto-path,pr
 			command: module.Command(),
 			want: `command=module aliases=- flags=name action=true
 sub=check aliases=- flags=root action=true
-sub=new aliases=- flags=config-key,database,depends-on,event-bus,n|name,no-config,no-logger,root,rpc action=true`,
+sub=new aliases=- flags=config-key,database,depends-on,event-bus,no-config,no-logger,n|name,root,rpc action=true`,
 		},
 		{
 			name:    "domain",
