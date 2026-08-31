@@ -343,7 +343,8 @@ func TestC5HelperProcess(t *testing.T) {
 			os.Exit(2)
 		}
 		channel := make(chan os.Signal, 1)
-		signal.Notify(channel)
+		signal.Notify(channel, c5ShutdownSignal())
+		defer signal.Stop(channel)
 		if err := os.WriteFile(args[1]+".ready."+args[2], []byte("ready\n"), 0o600); err != nil {
 			os.Exit(3)
 		}
