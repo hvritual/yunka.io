@@ -3,23 +3,26 @@ package projectflow
 import (
 	"errors"
 	"path/filepath"
+	"reflect"
 	"testing"
+
+	"yunka.io/pkg/diagnostic"
 )
 
 func TestDiagnoseStableFailureClasses(t *testing.T) {
 	root := t.TempDir()
 	tests := []struct {
-		name string
-		kind FailureKind
-		code string
+		name  string
+		kind  FailureKind
+		code  string
 		stage string
 	}{
-		{name: "project", kind: FailureProject, code: "YUNKA-DX-PROJECT-001", stage: "project"},
-		{name: "contract", kind: FailureContract, code: "YUNKA-DX-CONTRACT-001", stage: "contract"},
-		{name: "contract drift", kind: FailureContractDrift, code: "YUNKA-DX-CONTRACT-002", stage: "contract"},
-		{name: "module", kind: FailureModule, code: "YUNKA-DX-MODULE-001", stage: "module"},
-		{name: "assembly", kind: FailureAssembly, code: "YUNKA-DX-ASSEMBLY-001", stage: "assembly"},
-		{name: "assembly drift", kind: FailureAssemblyDrift, code: "YUNKA-DX-ASSEMBLY-002", stage: "assembly"},
+		{name: "project", kind: FailureProject, code: diagnostic.CodeProjectResolve, stage: "project"},
+		{name: "contract", kind: FailureContract, code: diagnostic.CodeContractFailure, stage: "contract"},
+		{name: "contract drift", kind: FailureContractDrift, code: diagnostic.CodeContractDrift, stage: "contract"},
+		{name: "module", kind: FailureModule, code: diagnostic.CodeModuleFailure, stage: "module"},
+		{name: "assembly", kind: FailureAssembly, code: diagnostic.CodeAssemblyFailure, stage: "assembly"},
+		{name: "assembly drift", kind: FailureAssemblyDrift, code: diagnostic.CodeAssemblyDrift, stage: "assembly"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -27,6 +30,10 @@ func TestDiagnoseStableFailureClasses(t *testing.T) {
 			item := Diagnose(err)
 			if item.Code != test.code || item.Stage != test.stage {
 				t.Fatalf("diagnostic=%#v", item)
+			}
+			definition := diagnostic.MustDefinition(test.code)
+			if item.Summary != definition.Meaning || !reflect.DeepEqual(item.Actions, definition.Actions) {
+				t.Fatalf("diagnostic identity drifted from catalog: item=%#v definition=%#v", item, definition)
 			}
 			if item.Detail == "" || item.Detail == "failure at "+filepath.Join(root, "contracts", "generated") {
 				t.Fatalf("detail was not sanitized: %q", item.Detail)
@@ -44,7 +51,7 @@ func TestCheckMissingProjectProducesTypedProjectFailure(t *testing.T) {
 		t.Fatal("expected check failure")
 	}
 	item := Diagnose(err)
-	if item.Code != "YUNKA-DX-PROJECT-001" {
+	if item.Code != diagnostic.CodeProjectResolve {
 		t.Fatalf("code=%q detail=%q", item.Code, item.Detail)
 	}
 }
