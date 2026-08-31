@@ -143,6 +143,7 @@ func Run(ctx context.Context, plan Plan, options RunOptions) error {
 		}
 
 		command := exec.Command(process.Command[0], process.Command[1:]...)
+		prepareProcess(command)
 		command.Dir = dir
 		command.Env = inheritedEnvironment(options.Environ, process.InheritEnv)
 		command.Stdout = &prefixWriter{prefix: "[" + process.Name + "] ", writer: options.Stdout}
@@ -286,7 +287,7 @@ func shutdownProcesses(handles []*supervisedProcess, recorder *runtimeRecorder, 
 			}
 		}
 		if !handle.done() {
-			if err := handle.command.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			if err := killProcess(handle.command.Process); err != nil && !errors.Is(err, os.ErrProcessDone) {
 				failures = append(failures, fmt.Errorf("devruntime: kill %s: %w", handle.process.Name, err))
 			}
 			timer := time.NewTimer(maxKillWaitDuration)
