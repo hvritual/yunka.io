@@ -55,74 +55,37 @@ func wrapFailure(kind FailureKind, root, location string, err error) error {
 func Diagnose(err error) diagnostic.Diagnostic {
 	var failure *Failure
 	if !errors.As(err, &failure) {
-		return diagnostic.Diagnostic{
-			Code:     "YUNKA-DX-DEV-999",
-			Severity: diagnostic.SeverityError,
-			Stage:    "developer-workflow",
-			Summary:  "developer workflow failed",
-			Detail:   sanitizeDetail("", err),
-		}
+		item := diagnostic.MustDefinition(diagnostic.CodeDeveloperWorkflowFailed).Diagnostic(diagnostic.SeverityError)
+		item.Detail = sanitizeDetail("", err)
+		return item
 	}
 
-	item := diagnostic.Diagnostic{
-		Severity: diagnostic.SeverityError,
-		Detail:   sanitizeDetail(failure.Root, failure.Err),
-	}
+	definition := diagnostic.MustDefinition(failureDefinitionCode(failure.Kind))
+	item := definition.Diagnostic(diagnostic.SeverityError)
+	item.Detail = sanitizeDetail(failure.Root, failure.Err)
 	if failure.Location != "" {
 		item.Location = &diagnostic.Location{Path: failure.Location}
 	}
-
-	switch failure.Kind {
-	case FailureProject:
-		item.Code = "YUNKA-DX-PROJECT-001"
-		item.Stage = "project"
-		item.Summary = "project configuration could not be resolved"
-		item.Actions = []diagnostic.Action{{
-			Kind:  diagnostic.ActionEdit,
-			Label: "Review project profile",
-			Value: ".yunka/project.json",
-		}}
-	case FailureContract:
-		item.Code = "YUNKA-DX-CONTRACT-001"
-		item.Stage = "contract"
-		item.Summary = "contract generation or validation failed"
-	case FailureContractDrift:
-		item.Code = "YUNKA-DX-CONTRACT-002"
-		item.Stage = "contract"
-		item.Summary = "generated contract artifacts are stale"
-		item.Actions = []diagnostic.Action{{
-			Kind:  diagnostic.ActionCommand,
-			Label: "Regenerate",
-			Value: "yunka generate",
-		}}
-	case FailureModule:
-		item.Code = "YUNKA-DX-MODULE-001"
-		item.Stage = "module"
-		item.Summary = "module validation failed"
-		item.Actions = []diagnostic.Action{{
-			Kind:  diagnostic.ActionCommand,
-			Label: "Inspect modules",
-			Value: "yunka module check",
-		}}
-	case FailureAssembly:
-		item.Code = "YUNKA-DX-ASSEMBLY-001"
-		item.Stage = "assembly"
-		item.Summary = "runtime assembly generation or validation failed"
-	case FailureAssemblyDrift:
-		item.Code = "YUNKA-DX-ASSEMBLY-002"
-		item.Stage = "assembly"
-		item.Summary = "generated runtime assembly artifacts are stale"
-		item.Actions = []diagnostic.Action{{
-			Kind:  diagnostic.ActionCommand,
-			Label: "Regenerate",
-			Value: "yunka generate",
-		}}
-	default:
-		item.Code = "YUNKA-DX-DEV-999"
-		item.Stage = "developer-workflow"
-		item.Summary = "developer workflow failed"
-	}
 	return item
+}
+
+func failureDefinitionCode(kind FailureKind) string {
+	switch kind {
+	case FailureProject:
+		return diagnostic.CodeProjectResolve
+	case FailureContract:
+		return diagnostic.CodeContractFailure
+	case FailureContractDrift:
+		return diagnostic.CodeContractDrift
+	case FailureModule:
+		return diagnostic.CodeModuleFailure
+	case FailureAssembly:
+		return diagnostic.CodeAssemblyFailure
+	case FailureAssemblyDrift:
+		return diagnostic.CodeAssemblyDrift
+	default:
+		return diagnostic.CodeDeveloperWorkflowFailed
+	}
 }
 
 func cleanLocation(value string) string {
