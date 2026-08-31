@@ -57,6 +57,7 @@ type Process struct {
 	WorkingDir string     `json:"workingDir,omitempty"`
 	DependsOn  []string   `json:"dependsOn,omitempty"`
 	GraphNode  string     `json:"graphNode,omitempty"`
+	GraphNodes []string   `json:"graphNodes,omitempty"`
 	InheritEnv []string   `json:"inheritEnv,omitempty"`
 	Readiness  *Readiness `json:"readiness,omitempty"`
 }
@@ -130,6 +131,12 @@ func (manifest DevManifest) Validate(root string, graph applicationgraph.Graph) 
 		graphIndex[node.ID] = struct{}{}
 	}
 	for _, original := range manifest.Processes {
+		if err := validateProcessGraphOwnership(original); err != nil {
+			return fmt.Errorf("devruntime: process %q graph ownership: %w", strings.TrimSpace(original.Name), err)
+		}
+		if len(original.GraphNodes) != 0 && manifest.SchemaVersion < RuntimeClosureSchemaVersion {
+			return fmt.Errorf("devruntime: process %q graphNodes requires schemaVersion %d", strings.TrimSpace(original.Name), RuntimeClosureSchemaVersion)
+		}
 		rawProcessDependencies := append([]string(nil), original.DependsOn...)
 		process := normalizeProcess(original)
 		name := process.Name
@@ -150,9 +157,11 @@ func (manifest DevManifest) Validate(root string, graph applicationgraph.Graph) 
 		if _, err := resolveWorkingDir(root, process.WorkingDir); err != nil {
 			return fmt.Errorf("devruntime: process %q: %w", name, err)
 		}
-		if process.GraphNode != "" && len(graphIndex) > 0 {
-			if _, ok := graphIndex[process.GraphNode]; !ok {
-				return fmt.Errorf("devruntime: process %q graph node %q not found", name, process.GraphNode)
+		if len(graphIndex) > 0 {
+			for _, graphNode := range processOwnedGraphNodes(process) {
+				if _, ok := graphIndex[graphNode]; !ok {
+					return fmt.Errorf("devruntime: process %q graph node %q not found", name, graphNode)
+				}
 			}
 		}
 		for _, environmentName := range process.InheritEnv {
@@ -243,6 +252,7 @@ func normalizeProcess(process Process) Process {
 	process.Name = strings.TrimSpace(process.Name)
 	process.WorkingDir = strings.TrimSpace(process.WorkingDir)
 	process.GraphNode = strings.TrimSpace(process.GraphNode)
+	process.GraphNodes = stableStrings(process.GraphNodes)
 	process.Command = append([]string(nil), process.Command...)
 	if len(process.Command) > 0 {
 		process.Command[0] = strings.TrimSpace(process.Command[0])
