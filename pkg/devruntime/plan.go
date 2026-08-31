@@ -96,18 +96,25 @@ func BuildPlanWithOptions(manifest DevManifest, root string, targets []string, g
 		}
 		owners := make(map[string]string, len(ordered))
 		for _, process := range ordered {
-			if process.GraphNode == "" {
-				return Plan{}, fmt.Errorf("devruntime: closure mode requires process %q graphNode", process.Name)
+			owned := processOwnedGraphNodes(process)
+			if len(owned) == 0 {
+				return Plan{}, fmt.Errorf("devruntime: closure mode requires process %q graphNode or graphNodes", process.Name)
 			}
-			node, ok := graphNodes[process.GraphNode]
-			if !ok {
-				return Plan{}, fmt.Errorf("devruntime: process %q graph node %q not found", process.Name, process.GraphNode)
+			requiresDiagnostics := false
+			for _, graphNode := range owned {
+				node, ok := graphNodes[graphNode]
+				if !ok {
+					return Plan{}, fmt.Errorf("devruntime: process %q graph node %q not found", process.Name, graphNode)
+				}
+				if owner, exists := owners[graphNode]; exists {
+					return Plan{}, fmt.Errorf("devruntime: graph node %q is owned by both %q and %q", graphNode, owner, process.Name)
+				}
+				owners[graphNode] = process.Name
+				if node.Kind == applicationgraph.NodeApplication {
+					requiresDiagnostics = true
+				}
 			}
-			if owner, exists := owners[process.GraphNode]; exists {
-				return Plan{}, fmt.Errorf("devruntime: graph node %q is owned by both %q and %q", process.GraphNode, owner, process.Name)
-			}
-			owners[process.GraphNode] = process.Name
-			if node.Kind == applicationgraph.NodeApplication {
+			if requiresDiagnostics {
 				if process.Readiness == nil {
 					return Plan{}, fmt.Errorf("devruntime: closure mode requires application owner process %q readiness", process.Name)
 				}
