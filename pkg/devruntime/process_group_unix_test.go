@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"syscall"
@@ -107,7 +108,7 @@ func TestC117ProcessGroupHelper(t *testing.T) {
 			os.Exit(3)
 		}
 		channel := make(chan os.Signal, 1)
-		signalNotify(channel, syscall.SIGTERM)
+		signal.Notify(channel, syscall.SIGTERM)
 		<-channel
 		if err := os.WriteFile(args[2], []byte("signaled\n"), 0o600); err != nil {
 			os.Exit(4)
@@ -116,10 +117,4 @@ func TestC117ProcessGroupHelper(t *testing.T) {
 	default:
 		os.Exit(2)
 	}
-}
-
-func signalNotify(channel chan<- os.Signal, signals ...os.Signal) {
-	// Kept as a tiny seam so the helper stays focused on process-group behavior.
-	// The production path continues to use syscall signals directly.
-	signal.Notify(channel, signals...)
 }
