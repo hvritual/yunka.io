@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"flag"
 	"sort"
 	"strings"
 	"testing"
@@ -95,9 +94,10 @@ func TestC116AApplyDiscoverabilityPreservesCommandsAndRendersHappyPath(t *testin
 		t.Fatalf("root description introduced unsupported deprecation language: %q", app.Description)
 	}
 
-	set := flag.NewFlagSet("yunka", flag.ContinueOnError)
-	ctx := cli.NewContext(app, set, nil)
-	if err := cli.ShowAppHelp(ctx); err != nil {
+	// Exercise the same setup path as the real CLI. urfave/cli v1 builds its
+	// command-category index during App.Run; calling ShowAppHelp directly would
+	// bypass that setup and render an empty COMMANDS section.
+	if err := app.Run([]string{"yunka", "--help"}); err != nil {
 		t.Fatal(err)
 	}
 	help := output.String()
