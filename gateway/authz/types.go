@@ -40,12 +40,13 @@ func (policy Policy) AcceptsAuthentication(method string) bool {
 type Reason string
 
 const (
-	ReasonAllowed              Reason = "allowed"
-	ReasonUnauthenticated      Reason = "unauthenticated"
-	ReasonTenantRequired       Reason = "tenant_required"
-	ReasonRoleRequired         Reason = "role_required"
-	ReasonPermissionDenied     Reason = "permission_denied"
-	ReasonAuthenticationMethod Reason = "authentication_method_denied"
+	ReasonAllowed                  Reason = "allowed"
+	ReasonUnauthenticated          Reason = "unauthenticated"
+	ReasonTenantRequired           Reason = "tenant_required"
+	ReasonRoleRequired             Reason = "role_required"
+	ReasonPermissionDenied         Reason = "permission_denied"
+	ReasonAuthenticationMethod     Reason = "authentication_method_denied"
+	ReasonGrantResolverUnavailable Reason = "grant_resolver_unavailable"
 )
 
 type Decision struct {
