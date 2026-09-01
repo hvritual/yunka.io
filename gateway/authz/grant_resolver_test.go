@@ -95,6 +95,38 @@ func TestLegacyTenantGrantCheckerFailsClosedForNonTenantAuthority(t *testing.T) 
 	}
 }
 
+func TestLegacyRBACAuthorizerFailsClosedForNonTenantAuthority(t *testing.T) {
+	calls := 0
+	authorizer, err := NewRBACAuthorizer(checkerFunc(func(context.Context, string, []string, []PermissionKey, PermissionMode) (bool, error) {
+		calls++
+		return true, nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal := identity.Principal{
+		Subject:       "platform-admin:root",
+		Roles:         []string{"platform-admin"},
+		AuthMethod:    identity.AuthMethodAPIKey,
+		Authenticated: true,
+	}
+	decision, err := authorizer.Authorize(context.Background(), principal, Policy{
+		Operation:      "tenant.create",
+		Permissions:    []PermissionKey{"platform.tenant.create"},
+		TenantRequired: false,
+		Authentication: []string{identity.AuthMethodAPIKey},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decision.Allowed || decision.Reason != ReasonGrantResolverUnavailable {
+		t.Fatalf("decision=%#v", decision)
+	}
+	if calls != 0 {
+		t.Fatalf("legacy RBAC checker calls=%d want=0", calls)
+	}
+}
+
 func TestTenantRequiredStillFailsBeforeGrantResolution(t *testing.T) {
 	calls := 0
 	resolver := grantResolverFunc(func(context.Context, GrantRequest) ([]Grant, error) {
