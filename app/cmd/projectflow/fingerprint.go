@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	projectcmd "yunka.io/app/cmd/project"
 	contractcore "yunka.io/pkg/contract"
 	"yunka.io/pkg/fastfeedback"
 )
@@ -75,6 +76,7 @@ func fastFeedbackInputRoots(project resolvedProject) []fastfeedback.Root {
 	roots := []fastfeedback.Root{
 		{Label: "project.profile", Path: filepath.Join(project.Root, ".yunka", "project.json"), Optional: true},
 		{Label: "project.goMod", Path: filepath.Join(project.Root, "go.mod"), Optional: true},
+		{Label: "project.providers", Path: filepath.Join(project.Root, filepath.FromSlash(projectcmd.ProviderManifestRelativePath)), Optional: true},
 		{Label: "module.root", Path: project.ModuleRoot, Optional: true},
 	}
 	if project.InventoryPath != "" {

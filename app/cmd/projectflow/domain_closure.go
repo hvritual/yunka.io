@@ -25,17 +25,22 @@ func generateProjectWithFastFeedback(ctx context.Context, options Options) (Repo
 	if err != nil {
 		return Report{}, fmt.Errorf("generate protobuf Go: %w", err)
 	}
+	providerCount, providerEnabled, err := validateProviderClosure(project)
+	if err != nil {
+		return Report{}, fmt.Errorf("generate providers: %w", err)
+	}
 	report, err := GenerateWithFastFeedback(ctx, options)
 	if err != nil {
 		return report, err
 	}
-	report.Stages = prependProjectClosureStages(report.Stages, project, domainCount, protobufCount, protobufEnabled, "generated")
+	report.Stages = prependProjectClosureStages(report.Stages, project, domainCount, protobufCount, protobufEnabled, providerCount, providerEnabled, "generated")
 	return report, nil
 }
 
-// checkProject expands the authoritative read-only project check with Domain
-// and standard protobuf Go drift validation. It deliberately calls the
-// canonical Check function rather than the fast wrapper to avoid recursion.
+// checkProject expands the authoritative read-only project check with Domain,
+// protobuf Go, and typed infrastructure provider validation. It deliberately
+// calls the canonical Check function rather than the fast wrapper to avoid
+// recursion.
 func checkProject(ctx context.Context, options Options) (Report, error) {
 	project, err := resolveProject(options)
 	if err != nil {
@@ -49,15 +54,19 @@ func checkProject(ctx context.Context, options Options) (Report, error) {
 	if err != nil {
 		return Report{}, fmt.Errorf("check protobuf Go: %w", err)
 	}
+	providerCount, providerEnabled, err := validateProviderClosure(project)
+	if err != nil {
+		return Report{}, fmt.Errorf("check providers: %w", err)
+	}
 	report, err := Check(ctx, options)
 	if err != nil {
 		return report, err
 	}
-	report.Stages = prependProjectClosureStages(report.Stages, project, domainCount, protobufCount, protobufEnabled, "ok")
+	report.Stages = prependProjectClosureStages(report.Stages, project, domainCount, protobufCount, protobufEnabled, providerCount, providerEnabled, "ok")
 	return report, nil
 }
 
-func prependProjectClosureStages(stages []Stage, project resolvedProject, domainCount, protobufCount int, protobufEnabled bool, successStatus string) []Stage {
+func prependProjectClosureStages(stages []Stage, project resolvedProject, domainCount, protobufCount int, protobufEnabled bool, providerCount int, providerEnabled bool, successStatus string) []Stage {
 	domainStage := Stage{Name: "domains", Status: successStatus, Detail: fmt.Sprintf("count=%d root=%s", domainCount, relative(project.Root, project.CodeOut))}
 	if domainCount == 0 {
 		domainStage.Status = "skipped"
@@ -68,7 +77,12 @@ func prependProjectClosureStages(stages []Stage, project resolvedProject, domain
 		protobufStage.Status = "skipped"
 		protobufStage.Detail = "no Go-generating proto sources"
 	}
-	result := make([]Stage, 0, len(stages)+2)
-	result = append(result, domainStage, protobufStage)
+	providerStage := Stage{Name: "providers", Status: successStatus, Detail: fmt.Sprintf("bindings=%d", providerCount)}
+	if !providerEnabled {
+		providerStage.Status = "skipped"
+		providerStage.Detail = "no provider manifest or module capability requirements"
+	}
+	result := make([]Stage, 0, len(stages)+3)
+	result = append(result, domainStage, protobufStage, providerStage)
 	return append(result, stages...)
 }
