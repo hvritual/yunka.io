@@ -104,6 +104,14 @@ jobs:
           set -euo pipefail
           make -C yunka.io rpc-tools
 
+      - name: Build VCS-stamped Yunka CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd yunka.io/app && go build -buildvcs=true -o "$RUNNER_TEMP/yunka" ./cmd)
+          test -x "$RUNNER_TEMP/yunka"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
       - name: Prove repository-contained contract dependency
         shell: bash
         run: |
@@ -116,34 +124,25 @@ jobs:
           ! grep -Fq 'contract generate' biz/Makefile
           ! grep -Fq 'assembly generate' biz/Makefile
 
-      - name: Prove C11 happy-path generation and read-only check
+      - name: Prove bare C11 happy-path generation and read-only check
         shell: bash
+        env:
+          PROTOC: protoc
+          PROTOC_GEN_GO: ${{ github.workspace }}/yunka.io/.yunka/bin/protoc-gen-go
+          PROTOC_GEN_GO_GRPC: ${{ github.workspace }}/yunka.io/.yunka/bin/protoc-gen-go-grpc
         run: |
           set -euo pipefail
-          make -C biz generate \
-            YUNKA_ROOT="$GITHUB_WORKSPACE/yunka.io" \
-            PROTOC="$(command -v protoc)" \
-            PROTOC_GEN_GO="$GITHUB_WORKSPACE/yunka.io/.yunka/bin/protoc-gen-go" \
-            PROTOC_GEN_GO_GRPC="$GITHUB_WORKSPACE/yunka.io/.yunka/bin/protoc-gen-go-grpc"
-          git -C biz diff --exit-code
-          test -z "$(git -C biz status --porcelain)"
-          (
-            cd biz
-            find contracts/generated contracts/gen internal -type f \( -name '*.json' -o -name '*.ts' -o -name '*.pb.go' -o -name 'zz_yunka*.go' \) -print0 | sort -z | xargs -0 sha256sum
-          ) > "$RUNNER_TEMP/c11-7-c-evidence/generated-first.sha256"
-          make -C biz generate \
-            YUNKA_ROOT="$GITHUB_WORKSPACE/yunka.io" \
-            PROTOC="$(command -v protoc)" \
-            PROTOC_GEN_GO="$GITHUB_WORKSPACE/yunka.io/.yunka/bin/protoc-gen-go" \
-            PROTOC_GEN_GO_GRPC="$GITHUB_WORKSPACE/yunka.io/.yunka/bin/protoc-gen-go-grpc"
-          (
-            cd biz
-            find contracts/generated contracts/gen internal -type f \( -name '*.json' -o -name '*.ts' -o -name '*.pb.go' -o -name 'zz_yunka*.go' \) -print0 | sort -z | xargs -0 sha256sum
-          ) > "$RUNNER_TEMP/c11-7-c-evidence/generated-second.sha256"
+          cd biz
+          yunka generate
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
+          find contracts/generated contracts/gen internal -type f \( -name '*.json' -o -name '*.ts' -o -name '*.pb.go' -o -name 'zz_yunka*.go' \) -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/c11-7-c-evidence/generated-first.sha256"
+          yunka generate
+          find contracts/generated contracts/gen internal -type f \( -name '*.json' -o -name '*.ts' -o -name '*.pb.go' -o -name 'zz_yunka*.go' \) -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/c11-7-c-evidence/generated-second.sha256"
           diff -u "$RUNNER_TEMP/c11-7-c-evidence/generated-first.sha256" "$RUNNER_TEMP/c11-7-c-evidence/generated-second.sha256"
-          make -C biz check YUNKA_ROOT="$GITHUB_WORKSPACE/yunka.io" PROTOC="$(command -v protoc)"
-          git -C biz diff --exit-code
-          test -z "$(git -C biz status --porcelain)"
+          yunka check
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
 
       - name: Prove C10 execution and assembly semantics unchanged
         shell: bash
@@ -165,13 +164,6 @@ jobs:
         run: |
           set -euo pipefail
           (cd biz && go build ./...)
-
-      - name: Build VCS-stamped Yunka CLI
-        shell: bash
-        run: |
-          set -euo pipefail
-          (cd yunka.io/app && go build -buildvcs=true -o "$RUNNER_TEMP/yunka" ./cmd)
-          test -x "$RUNNER_TEMP/yunka"
 
       - name: Prove real zero-argument Biz Ready closure and clean shutdown
         shell: bash
@@ -217,17 +209,28 @@ jobs:
               cat "$RUNNER_TEMP/biz-dev.stderr" || true
               exit 1
             fi
-            if test -f .yunka/dev-runtime.json && jq -e '.state == "running" and (.processes | length) == 1 and .processes[0].state == "ready" and .processes[0].ready == true' .yunka/dev-runtime.json >/dev/null; then
+
+            runtime_ready=0
+            log_ready=0
+            diagnostics_ready=0
+            if test -f .yunka/dev-runtime.json && jq -e '.state == "running" and (.processes | length) == 1 and .processes[0].state == "ready" and .processes[0].ready == true' .yunka/dev-runtime.json >/dev/null 2>&1; then
+              runtime_ready=1
+            fi
+            if grep -Fq 'DEV READY' "$RUNNER_TEMP/biz-dev.stderr" 2>/dev/null; then
+              log_ready=1
+            fi
+            if curl --fail --silent --show-error --max-time 1 http://127.0.0.1:8080/__yunka/diagnostics > "$RUNNER_TEMP/biz-diagnostics.json.tmp" 2>/dev/null && jq -e '.schemaVersion == 1 and .core.schemaVersion == 1 and .core.state == "ready" and .core.health.ready == true' "$RUNNER_TEMP/biz-diagnostics.json.tmp" >/dev/null 2>&1; then
+              diagnostics_ready=1
+            fi
+            if test "$runtime_ready" = 1 && test "$log_ready" = 1 && test "$diagnostics_ready" = 1; then
+              mv "$RUNNER_TEMP/biz-diagnostics.json.tmp" "$RUNNER_TEMP/biz-diagnostics.json"
               ready=1
               break
             fi
+            rm -f "$RUNNER_TEMP/biz-diagnostics.json.tmp"
             sleep 0.25
           done
           test "$ready" = 1
-          grep -Fq 'DEV READY' "$RUNNER_TEMP/biz-dev.stderr"
-
-          curl --fail --silent --show-error http://127.0.0.1:8080/__yunka/diagnostics > "$RUNNER_TEMP/biz-diagnostics.json"
-          jq -e '.schemaVersion == 1 and .core.schemaVersion == 1 and .core.state == "ready" and .core.health.ready == true' "$RUNNER_TEMP/biz-diagnostics.json" >/dev/null
 
           "$RUNNER_TEMP/yunka" dev status --closure --format json > "$RUNNER_TEMP/biz-status.json"
           jq -e '
@@ -285,7 +288,7 @@ jobs:
           ! grep -q 'operation.NewExecutorWithOptions' biz/modules/deviceops/module.go
           printf '%s\n' \
             'C11.7_C_CLEAN_CHECKOUT_PAIR=PASS' \
-            'C11.7_C_GENERATE_CHECK=PASS' \
+            'C11.7_C_BARE_GENERATE_CHECK=PASS' \
             'C11.7_C_C10_SEMANTICS=PASS' \
             'C11.7_C_REAL_BIZ_READY=PASS' \
             'C11.7_C_RUNTIME_CLOSURE=PASS' \
