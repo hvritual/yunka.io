@@ -52,7 +52,8 @@ type DeviceGroupPO struct { Name string }
 	}
 	domainRoot := filepath.Join(root, "internal", "device")
 	for _, relative := range []string{
-		"domain/zz_yunka_coffee_machine_entity_gen.go",
+		"domain/coffee_machine.go",
+		"domain/device_group.go",
 		"ports/zz_yunka_repositories_gen.go",
 		"infrastructure/persistence/zz_yunka_coffee_machine_record_gen.go",
 		"infrastructure/persistence/zz_yunka_repositories_gen.go",
