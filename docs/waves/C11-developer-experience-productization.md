@@ -1,5 +1,12 @@
 # C11 — Developer Experience Productization
 
+> Document class: **HISTORICAL**  
+> Delivery state: **Complete / production-qualified**  
+> Current status authority: [`docs/STATUS.md`](../STATUS.md)  
+> Final C11 qualified head: `52b67bc0cc78ebad4367b255f2a25bce4e729159` (issue #60)  
+> Post-C11 five-gap convergence: qualified `a0cf52d2fdc8e5fd2b361b8c2640dfa60184b1b4`, merged as current `main@24089df35f945abb42ddb00731283f4d878d8424`  
+> Historical note: the original status, sequencing, and planning text below is preserved as authored and is **not** current status truth.
+
 ## Status
 
 - State: **In progress**
