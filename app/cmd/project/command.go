@@ -11,13 +11,18 @@ const AppName = "init"
 func Command() cli.Command {
 	return cli.Command{
 		Name:  AppName,
-		Usage: "initialize or migrate the yunka developer project profile",
+		Usage: "initialize or migrate the yunka developer project profile and safe project skeleton",
 		Flags: []cli.Flag{
 			cli.StringFlag{Name: "root", Usage: "project root", Value: "."},
 			cli.StringFlag{Name: "db-prefix", Usage: "database table prefix; defaults to yk on first initialization"},
 		},
 		Action: func(context *cli.Context) error {
-			config, err := Initialize(context.String("root"), context.String("db-prefix"))
+			root := context.String("root")
+			config, err := Initialize(root, context.String("db-prefix"))
+			if err != nil {
+				return err
+			}
+			scaffold, err := Scaffold(root, config)
 			if err != nil {
 				return err
 			}
@@ -33,7 +38,17 @@ func Command() cli.Command {
 				generatedImport = "<derive-from-go.mod>"
 			}
 			fmt.Printf("generated-go: root=%s import=%s\n", config.Workflow.GeneratedGo.Root, generatedImport)
-			fmt.Printf("dev: manifest=%s\n", config.Workflow.Dev.Manifest)
+			if scaffold.BootstrapContract != "" {
+				fmt.Printf("bootstrap-contract: %s\n", scaffold.BootstrapContract)
+			}
+			if scaffold.BootstrapEntrypoint != "" {
+				fmt.Printf("bootstrap-entrypoint: %s\n", scaffold.BootstrapEntrypoint)
+			}
+			if scaffold.DevManifest != "" {
+				fmt.Printf("dev: manifest=%s\n", scaffold.DevManifest)
+			} else {
+				fmt.Printf("dev: manifest=%s not-created reason=%s\n", config.Workflow.Dev.Manifest, scaffold.DevSkipped)
+			}
 			return nil
 		},
 	}
