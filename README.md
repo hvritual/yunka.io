@@ -23,6 +23,15 @@ Exact tool versions are locked in `tools/toolchain.env`; local and CI verificati
 The modules are joined by the root `go.work`. `app` intentionally uses the distinct module
 path `yunka.io/app`; `framework` remains `yunka.io/framework`.
 
+## Documentation authority
+
+This README is maintained as **current developer/product documentation**. For repository-wide status and documentation ownership:
+
+- [`docs/STATUS.md`](docs/STATUS.md) is the current framework/wave/release status authority.
+- [`docs/DOCUMENTATION_GOVERNANCE.md`](docs/DOCUMENTATION_GOVERNANCE.md) defines document classes and truth ownership.
+- `PROJECT_MEMORY.md` records durable current governance and architecture invariants.
+- `docs/waves/**` contains historical roadmaps, implementation records, and exact qualification evidence; an old roadmap status field is not current status unless its classification explicitly says so.
+
 ## Verification
 
 ```bash
@@ -57,7 +66,7 @@ C4 removes the historical external `github.com/go-kit/kit v0.10.0` dependency gr
 
 Because `go mod tidy` operates on one module at a time, each product module that reaches the SLS SDK carries the same version-scoped local replacement for `github.com/go-kit/kit v0.10.0`, while root `go.work` keeps the compatibility module as a workspace main module. The target is always the reviewed repository directory; arbitrary external replacements remain forbidden.
 
-`tools/dependency-policy.json` is enforced by `yunka dependency check` / `make dependency-check`. The gate validates the repository-local compatibility module, rejects unsplit etcd, grpc-gateway v1, monolithic genproto, any external replacement, a reintroduced genproto replace, and new legacy protobuf imports outside approved compatibility islands. Existing generated gateway/SMS protobuf and the isolated legacy RPC generator remain compatibility artifacts; C4 does not rewrite them. See `docs/waves/C4-dependency-convergence.md`.
+`tools/dependency-policy.json` is enforced by `yunka dependency check` / `make dependency-check`. The gate validates the repository-local compatibility module, rejects unsplit etcd, grpc-gateway v1, monolithic genproto, any external replacement, a reintroduced genproto replace, and new legacy protobuf imports outside approved compatibility islands. Existing generated gateway/SMS protobuf files remain reviewed compatibility artifacts where still required; C4 did not rewrite them.
 
 The workspace contains four product modules plus the single logging compatibility module. C6 removed the isolated legacy RPC generator module.
 
@@ -191,8 +200,7 @@ an explicit opt-in for deployments whose privacy and retention rules allow those
 
 ## Contract pipeline
 
-W06 makes protobuf the contract source of truth and adds deterministic contract artifacts and
-compatibility checks without replacing the legacy RPC generator.
+Protobuf is the canonical contract source of truth. The current repository uses deterministic standard protobuf/gRPC generation and read-only drift/compatibility checks; the historical legacy RPC generator has already been removed from the active workspace.
 
 ```bash
 yunka contract lint
@@ -201,16 +209,9 @@ yunka contract inspect
 yunka contract check
 ```
 
-C3 makes `contracts/sources.json` the canonical service-contract inventory. The historical
-`app/cmd/rpc/pb/` source remains as `legacy-api`, while the actual gateway runtime protobuf under
-`gateway/rpc/pb/` is compiled independently as `gateway-runtime`. Separate protoc invocations
-prevent same-basename imports from crossing source roots. The normalized results are merged
-deterministically into the committed `contracts/generated/` artifacts.
+`contracts/sources.json` is the canonical service-contract inventory over sources beneath `contracts/proto`. Historical compatibility schemas may remain under explicitly reviewed compatibility roots such as `contracts/proto/legacy`, and committed compatibility descriptors such as `gateway/rpc/meta/*.pb.go` or `pkg/rpcmeta/legacy/**` remain generated artifacts rather than writable contract sources.
 
-`make rpc-contract-check` additionally proves that the descriptors registered by the committed
-legacy `gateway/rpc/meta/*.pb.go` files still match `gateway/rpc/pb/`. Generated RPC files remain
-immutable in C3; the historical destructive generator is not treated as an authoritative contract
-source.
+`make rpc-contract-check` validates committed contract/descriptor consistency against the canonical source inventory. Generated RPC files are immutable outputs; there is no current `app/cmd/rpc` destructive generator path to treat as contract truth.
 
 Only explicit HTTP bindings are emitted into OpenAPI `paths`. Standard `google.api.http` is
 preferred; `@yunka.http` comments remain a migration bridge. C3 does not infer routes from dynamic
@@ -219,7 +220,7 @@ invented paths. Pull-request CI continues to reject breaking service, method, fi
 streaming, and HTTP-binding changes.
 
 See `contracts/README.md`, `docs/waves/W06-contract-pipeline.md`, and
-`docs/waves/C3-contract-convergence.md` for the contract model and convergence boundary.
+`docs/waves/C3-contract-convergence.md` for the historical contract-pipeline introduction and convergence boundary; use this README and `PROJECT_MEMORY.md` for the current runtime ownership model.
 
 ## C9 Operation contract and execution semantics
 
@@ -304,11 +305,7 @@ not a production fallback. See `docs/waves/W10-dev-runtime-testkit.md` for the f
 
 ### C6 RPC generation foundation
 
-C6 preserves existing Service business method signatures while replacing the historical RPC generator. `contracts/proto` is the canonical source root, and `make rpc-generate` is the only mutating standard protobuf/gRPC generation command. `make rpc-check` is read-only and blocks generated drift; `make rpc-compat-check` compares the current semantic contract against the C5 baseline. The temporary XR compatibility wrappers remain only until the typed bridge is complete and are not a second source of protobuf truth.
-
-### C6.2 typed compatibility bridge
-
-The C6 development branch preserves existing Service business code while moving execution to standard generated gRPC interfaces. `gateway/rpc/bridge` adapts the current per-request module Service lifetime through a typed provider; `gateway/rpc/client` preserves historical client methods over a standard typed client and an explicit target factory. New server composition uses typed registration, and transport tests use gRPC `bufconn`. These adapters are migration seams: the old XR generator, legacy invoke transport, and generated memory dispatcher are still scheduled for atomic deletion before C6 can merge.
+C6 preserves existing Service business method signatures while replacing the historical RPC generator. `contracts/proto` is the canonical source root, and `make rpc-generate` is the only mutating standard protobuf/gRPC generation command. `make rpc-check` is read-only and blocks generated drift; `make rpc-compat-check` compares the current semantic contract against the C5 baseline. The legacy XR generator/runtime path has already been removed; remaining bridge/client packages are typed compatibility adapters over the standard grpc-go runtime, not a second protobuf or execution source of truth.
 
 ### C6 single RPC runtime
 
