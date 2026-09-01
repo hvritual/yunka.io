@@ -153,6 +153,7 @@ func renderProtobufGo(ctx context.Context, project resolvedProject) (map[string]
 			if strings.TrimSpace(protoPath) != "" {
 				args = append(args, "-I", filepath.Clean(protoPath))
 			}
+		}
 		args = append(args,
 			"--plugin=protoc-gen-go="+goPlugin,
 			"--plugin=protoc-gen-go-grpc="+grpcPlugin,
