@@ -162,9 +162,52 @@ func c9RESTErrorName(naming serviceCodegenNaming) string {
 	return "writeOperationError"
 }
 
+func c9CapabilityEdgeSymbol(source Service, dependency string) string {
+	sourceSymbol := ""
+	if source.Application != nil {
+		sourceSymbol = exportedApplicationSymbol(source.Application.Name)
+	}
+	if sourceSymbol == "" {
+		sourceSymbol = exportedApplicationSymbol(source.Name)
+	}
+	targetSymbol := exportedApplicationSymbol(strings.ReplaceAll(dependency, "/", "_"))
+	return sourceSymbol + "To" + targetSymbol
+}
+
+func c9RequiredCapabilityOperations(source Service, target Service) ([]applicationOperationBinding, error) {
+	targetOperations, err := serviceApplicationOperations(target)
+	if err != nil {
+		return nil, err
+	}
+	targetByID := make(map[string]applicationOperationBinding, len(targetOperations))
+	for _, binding := range targetOperations {
+		targetByID[binding.Operation.ID] = binding
+	}
+
+	sourceOperations, err := serviceApplicationOperations(source)
+	if err != nil {
+		return nil, err
+	}
+	required := map[string]struct{}{}
+	for _, binding := range sourceOperations {
+		for _, operationID := range binding.Operation.RequiresOperations {
+			if _, ok := targetByID[operationID]; ok {
+				required[operationID] = struct{}{}
+			}
+		}
+	}
+
+	result := make([]applicationOperationBinding, 0, len(required))
+	for _, binding := range targetOperations {
+		if _, ok := required[binding.Operation.ID]; ok {
+			result = append(result, binding)
+		}
+	}
+	return result, nil
+}
+
 func renderC9CapabilityPorts(service Service, naming serviceCodegenNaming, services map[string]Service, typedByDomain map[string][]Service, packages []protoGoPackage, rootImport string) (string, error) {
 	imports := newImportSet()
-	imports.add("context", "context")
 	imports.add("errors", "errors")
 	imports.add("yunka.io/framework/operation", "operation")
 	var declarations strings.Builder
@@ -181,23 +224,31 @@ func renderC9CapabilityPorts(service Service, naming serviceCodegenNaming, servi
 			return "", fmt.Errorf("contract C9 application codegen: capability dependencies %s and %s collapse to symbol %s", owner, dependency, dependencySymbol)
 		}
 		seen[dependencySymbol] = dependency
-		interfaceName := dependencySymbol + "ChildCapability"
-		implementationName := "c9" + dependencySymbol + "ChildCapability"
-		constructorName := "New" + dependencySymbol + "ChildCapability"
+		edgeSymbol := c9CapabilityEdgeSymbol(service, dependency)
+		if edgeSymbol == "" {
+			return "", fmt.Errorf("contract C9 application codegen: capability edge %s -> %s has no generated symbol", service.Domain+"/"+service.Application.Name, dependency)
+		}
+		interfaceName := edgeSymbol + "ChildCapability"
+		implementationName := "c9" + edgeSymbol + "ChildCapability"
+		constructorName := "New" + edgeSymbol + "ChildCapability"
 
 		targetApplicationType := targetNaming.ApplicationInterface
 		if target.Domain != service.Domain {
 			alias := imports.add(rootImport+"/"+target.Domain+"/application", safeFileName(target.Domain)+"application")
 			targetApplicationType = alias + "." + targetNaming.ApplicationInterface
 		}
-		policyAlias := imports.add(rootImport+"/"+target.Domain+"/policy", safeFileName(target.Domain)+"policy")
 
-		var interfaceMethods strings.Builder
-		var wrapperMethods strings.Builder
-		operations, err := serviceApplicationOperations(target)
+		operations, err := c9RequiredCapabilityOperations(service, target)
 		if err != nil {
 			return "", err
 		}
+		var policyAlias string
+		if len(operations) > 0 {
+			imports.add("context", "context")
+			policyAlias = imports.add(rootImport+"/"+target.Domain+"/policy", safeFileName(target.Domain)+"policy")
+		}
+		var interfaceMethods strings.Builder
+		var wrapperMethods strings.Builder
 		for _, operationBinding := range operations {
 			request, err := resolveGoType(operationBinding.RequestType, packages, imports)
 			if err != nil {
@@ -225,7 +276,7 @@ func renderC9CapabilityPorts(service Service, naming serviceCodegenNaming, servi
 	b.WriteString(imports.render())
 	b.WriteString(")\n\n")
 	b.WriteString(declarations.String())
-	fmt.Fprintf(&b, "// %sCapabilities exposes only C9 child-Operation wrappers for declared application dependencies.\n", naming.Symbol)
+	fmt.Fprintf(&b, "// %sCapabilities exposes edge-owned C9 child-Operation wrappers for declared operation dependencies.\n", naming.Symbol)
 	fmt.Fprintf(&b, "type %sCapabilities interface {\n%s}\n", naming.Symbol, providerMethods.String())
 	return b.String(), nil
 }

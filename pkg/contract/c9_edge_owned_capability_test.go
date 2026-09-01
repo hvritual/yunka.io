@@ -1,12 +1,15 @@
 package contract
 
 import (
+	"bytes"
 	"strings"
 	"testing"
+
+	"yunka.io/pkg/assemblyplan"
 )
 
-func TestRenderC9CapabilityPortsAreOwnedBySourceEdgeAndOperationSubset(t *testing.T) {
-	manifest := Manifest{
+func edgeOwnedCapabilityFixture() Manifest {
+	return Manifest{
 		SchemaVersion: ManifestVersion,
 		Files: []File{{
 			Name:      "tenant.proto",
@@ -45,7 +48,10 @@ func TestRenderC9CapabilityPortsAreOwnedBySourceEdgeAndOperationSubset(t *testin
 			},
 		},
 	}
+}
 
+func TestRenderC9CapabilityPortsAreOwnedBySourceEdgeAndOperationSubset(t *testing.T) {
+	manifest := edgeOwnedCapabilityFixture()
 	files, err := RenderC9ApplicationCode(manifest, ApplicationCodeOptions{RootImport: "example.com/biz/internal"})
 	if err != nil {
 		t.Fatal(err)
@@ -61,14 +67,6 @@ func TestRenderC9CapabilityPortsAreOwnedBySourceEdgeAndOperationSubset(t *testin
 		t.Fatalf("expected both source-owned capability files, got paths=%v", generatedApplicationPaths(files))
 	}
 
-	for _, required := range []string{
-		"type TenantLifecycleToTenantRolePermissionChildCapability interface",
-		"func NewTenantLifecycleToTenantRolePermissionChildCapability(",
-		"AssignRole(context.Context",
-		"tenantrolepermissionPolicies", // impossible sentinel to ensure this test never accidentally depends on policy helper internals
-	} {
-		_ = required
-	}
 	if !strings.Contains(lifecycle, "type TenantLifecycleToTenantRolePermissionChildCapability interface") ||
 		!strings.Contains(lifecycle, "func NewTenantLifecycleToTenantRolePermissionChildCapability(") ||
 		!strings.Contains(lifecycle, "AssignRole(context.Context") {
@@ -89,6 +87,54 @@ func TestRenderC9CapabilityPortsAreOwnedBySourceEdgeAndOperationSubset(t *testin
 
 	if strings.Contains(lifecycle, "type TenantRolePermissionChildCapability interface") || strings.Contains(member, "type TenantRolePermissionChildCapability interface") {
 		t.Fatalf("target-owned child capability symbol still exists and can collide across source applications:\nlifecycle=%s\nmember=%s", lifecycle, member)
+	}
+}
+
+func TestRenderAssemblyCodeUsesSourceEdgeCapabilityIdentity(t *testing.T) {
+	manifest := edgeOwnedCapabilityFixture()
+	operations, err := CompileOperationPlans(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := CompileAssemblyPlan(manifest, operations, []assemblyplan.ModuleInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := RenderAssemblyCode(manifest, plan, AssemblyCodeOptions{RootImport: "example.com/biz/internal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(files[0].Content)
+	for _, required := range []string{
+		"TenantRolePermission tenantapplication.TenantLifecycleToTenantRolePermissionChildCapability",
+		"TenantRolePermission tenantapplication.TenantMemberLifecycleToTenantRolePermissionChildCapability",
+		"tenantapplication.NewTenantLifecycleToTenantRolePermissionChildCapability(applications.TenantRolePermission, executor)",
+		"tenantapplication.NewTenantMemberLifecycleToTenantRolePermissionChildCapability(applications.TenantRolePermission, executor)",
+	} {
+		if !strings.Contains(source, required) {
+			t.Fatalf("generated assembly missing edge-owned capability %q:\n%s", required, source)
+		}
+	}
+}
+
+func TestRenderC9EdgeOwnedCapabilitiesAreDeterministic(t *testing.T) {
+	manifest := edgeOwnedCapabilityFixture()
+	first, err := RenderC9ApplicationCode(manifest, ApplicationCodeOptions{RootImport: "example.com/biz/internal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest.Services[0], manifest.Services[2] = manifest.Services[2], manifest.Services[0]
+	second, err := RenderC9ApplicationCode(manifest, ApplicationCodeOptions{RootImport: "example.com/biz/internal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first) != len(second) {
+		t.Fatalf("generated file count drifted: first=%d second=%d", len(first), len(second))
+	}
+	for index := range first {
+		if first[index].Path != second[index].Path || !bytes.Equal(first[index].Content, second[index].Content) {
+			t.Fatalf("edge-owned capability generation is not deterministic at index %d:\nfirst=%s\nsecond=%s", index, first[index].Content, second[index].Content)
+		}
 	}
 }
 
