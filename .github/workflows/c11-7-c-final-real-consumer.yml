@@ -104,6 +104,14 @@ jobs:
           set -euo pipefail
           make -C yunka.io rpc-tools
 
+      - name: Build VCS-stamped Yunka CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd yunka.io/app && go build -buildvcs=true -o "$RUNNER_TEMP/yunka" ./cmd)
+          test -x "$RUNNER_TEMP/yunka"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
       - name: Prove repository-contained contract dependency
         shell: bash
         run: |
@@ -116,34 +124,25 @@ jobs:
           ! grep -Fq 'contract generate' biz/Makefile
           ! grep -Fq 'assembly generate' biz/Makefile
 
-      - name: Prove C11 happy-path generation and read-only check
+      - name: Prove bare C11 happy-path generation and read-only check
         shell: bash
+        env:
+          PROTOC: protoc
+          PROTOC_GEN_GO: ${{ github.workspace }}/yunka.io/.yunka/bin/protoc-gen-go
+          PROTOC_GEN_GO_GRPC: ${{ github.workspace }}/yunka.io/.yunka/bin/protoc-gen-go-grpc
         run: |
           set -euo pipefail
-          make -C biz generate \
-            YUNKA_ROOT="$GITHUB_WORKSPACE/yunka.io" \
-            PROTOC="$(command -v protoc)" \
-            PROTOC_GEN_GO="$GITHUB_WORKSPACE/yunka.io/.yunka/bin/protoc-gen-go" \
-            PROTOC_GEN_GO_GRPC="$GITHUB_WORKSPACE/yunka.io/.yunka/bin/protoc-gen-go-grpc"
-          git -C biz diff --exit-code
-          test -z "$(git -C biz status --porcelain)"
-          (
-            cd biz
-            find contracts/generated contracts/gen internal -type f \( -name '*.json' -o -name '*.ts' -o -name '*.pb.go' -o -name 'zz_yunka*.go' \) -print0 | sort -z | xargs -0 sha256sum
-          ) > "$RUNNER_TEMP/c11-7-c-evidence/generated-first.sha256"
-          make -C biz generate \
-            YUNKA_ROOT="$GITHUB_WORKSPACE/yunka.io" \
-            PROTOC="$(command -v protoc)" \
-            PROTOC_GEN_GO="$GITHUB_WORKSPACE/yunka.io/.yunka/bin/protoc-gen-go" \
-            PROTOC_GEN_GO_GRPC="$GITHUB_WORKSPACE/yunka.io/.yunka/bin/protoc-gen-go-grpc"
-          (
-            cd biz
-            find contracts/generated contracts/gen internal -type f \( -name '*.json' -o -name '*.ts' -o -name '*.pb.go' -o -name 'zz_yunka*.go' \) -print0 | sort -z | xargs -0 sha256sum
-          ) > "$RUNNER_TEMP/c11-7-c-evidence/generated-second.sha256"
+          cd biz
+          yunka generate
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
+          find contracts/generated contracts/gen internal -type f \( -name '*.json' -o -name '*.ts' -o -name '*.pb.go' -o -name 'zz_yunka*.go' \) -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/c11-7-c-evidence/generated-first.sha256"
+          yunka generate
+          find contracts/generated contracts/gen internal -type f \( -name '*.json' -o -name '*.ts' -o -name '*.pb.go' -o -name 'zz_yunka*.go' \) -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/c11-7-c-evidence/generated-second.sha256"
           diff -u "$RUNNER_TEMP/c11-7-c-evidence/generated-first.sha256" "$RUNNER_TEMP/c11-7-c-evidence/generated-second.sha256"
-          make -C biz check YUNKA_ROOT="$GITHUB_WORKSPACE/yunka.io" PROTOC="$(command -v protoc)"
-          git -C biz diff --exit-code
-          test -z "$(git -C biz status --porcelain)"
+          yunka check
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
 
       - name: Prove C10 execution and assembly semantics unchanged
         shell: bash
@@ -165,13 +164,6 @@ jobs:
         run: |
           set -euo pipefail
           (cd biz && go build ./...)
-
-      - name: Build VCS-stamped Yunka CLI
-        shell: bash
-        run: |
-          set -euo pipefail
-          (cd yunka.io/app && go build -buildvcs=true -o "$RUNNER_TEMP/yunka" ./cmd)
-          test -x "$RUNNER_TEMP/yunka"
 
       - name: Prove real zero-argument Biz Ready closure and clean shutdown
         shell: bash
@@ -285,7 +277,7 @@ jobs:
           ! grep -q 'operation.NewExecutorWithOptions' biz/modules/deviceops/module.go
           printf '%s\n' \
             'C11.7_C_CLEAN_CHECKOUT_PAIR=PASS' \
-            'C11.7_C_GENERATE_CHECK=PASS' \
+            'C11.7_C_BARE_GENERATE_CHECK=PASS' \
             'C11.7_C_C10_SEMANTICS=PASS' \
             'C11.7_C_REAL_BIZ_READY=PASS' \
             'C11.7_C_RUNTIME_CLOSURE=PASS' \
