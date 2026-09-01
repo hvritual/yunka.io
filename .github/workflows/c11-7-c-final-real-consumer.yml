@@ -209,17 +209,28 @@ jobs:
               cat "$RUNNER_TEMP/biz-dev.stderr" || true
               exit 1
             fi
-            if test -f .yunka/dev-runtime.json && jq -e '.state == "running" and (.processes | length) == 1 and .processes[0].state == "ready" and .processes[0].ready == true' .yunka/dev-runtime.json >/dev/null; then
+
+            runtime_ready=0
+            log_ready=0
+            diagnostics_ready=0
+            if test -f .yunka/dev-runtime.json && jq -e '.state == "running" and (.processes | length) == 1 and .processes[0].state == "ready" and .processes[0].ready == true' .yunka/dev-runtime.json >/dev/null 2>&1; then
+              runtime_ready=1
+            fi
+            if grep -Fq 'DEV READY' "$RUNNER_TEMP/biz-dev.stderr" 2>/dev/null; then
+              log_ready=1
+            fi
+            if curl --fail --silent --show-error --max-time 1 http://127.0.0.1:8080/__yunka/diagnostics > "$RUNNER_TEMP/biz-diagnostics.json.tmp" 2>/dev/null && jq -e '.schemaVersion == 1 and .core.schemaVersion == 1 and .core.state == "ready" and .core.health.ready == true' "$RUNNER_TEMP/biz-diagnostics.json.tmp" >/dev/null 2>&1; then
+              diagnostics_ready=1
+            fi
+            if test "$runtime_ready" = 1 && test "$log_ready" = 1 && test "$diagnostics_ready" = 1; then
+              mv "$RUNNER_TEMP/biz-diagnostics.json.tmp" "$RUNNER_TEMP/biz-diagnostics.json"
               ready=1
               break
             fi
+            rm -f "$RUNNER_TEMP/biz-diagnostics.json.tmp"
             sleep 0.25
           done
           test "$ready" = 1
-          grep -Fq 'DEV READY' "$RUNNER_TEMP/biz-dev.stderr"
-
-          curl --fail --silent --show-error http://127.0.0.1:8080/__yunka/diagnostics > "$RUNNER_TEMP/biz-diagnostics.json"
-          jq -e '.schemaVersion == 1 and .core.schemaVersion == 1 and .core.state == "ready" and .core.health.ready == true' "$RUNNER_TEMP/biz-diagnostics.json" >/dev/null
 
           "$RUNNER_TEMP/yunka" dev status --closure --format json > "$RUNNER_TEMP/biz-status.json"
           jq -e '
