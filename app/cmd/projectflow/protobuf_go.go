@@ -13,13 +13,11 @@ import (
 	"sort"
 	"strings"
 
+	projectcmd "yunka.io/app/cmd/project"
 	contractcore "yunka.io/pkg/contract"
 )
 
-const (
-	protobufGoManifestRelativePath = ".yunka/protobuf-go.json"
-	protobufGoManifestVersion      = 1
-)
+const protobufGoManifestVersion = 1
 
 var goPackageOptionPattern = regexp.MustCompile(`(?s)(^|[[:space:]])option[[:space:]]+go_package[[:space:]]*=[[:space:]]*"[^"]+"[[:space:]]*;`)
 
@@ -55,13 +53,7 @@ func checkProtobufGo(ctx context.Context, project resolvedProject) (int, bool, e
 	if err != nil {
 		return 0, enabled, err
 	}
-	if !exists {
-		if len(expectedFiles) == 0 {
-			return 0, enabled, nil
-		}
-		return 0, enabled, errors.New("protobuf-go: generated output manifest is missing; run `yunka generate`")
-	}
-	if !equalStringSlices(manifest.Files, expectedFiles) {
+	if exists && !equalStringSlices(manifest.Files, expectedFiles) {
 		return 0, enabled, fmt.Errorf("protobuf-go: generated output set drift; have=%v want=%v; run `yunka generate`", manifest.Files, expectedFiles)
 	}
 	for _, relative := range expectedFiles {
@@ -97,6 +89,22 @@ func protobufGoRequired(project resolvedProject) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// protobufGoFastFeedbackSafe prevents legacy projects without the explicit
+// ownership marker from reusing incomplete output fingerprints. They continue
+// to receive canonical generate/check behavior until `yunka init` adopts the
+// strict manifest-backed ownership model.
+func protobufGoFastFeedbackSafe(project resolvedProject) bool {
+	required, err := protobufGoRequired(project)
+	if err != nil {
+		return false
+	}
+	if !required {
+		return true
+	}
+	_, exists, err := loadProtobufGoManifest(project)
+	return err == nil && exists
 }
 
 func renderProtobufGo(ctx context.Context, project resolvedProject) (map[string][]byte, bool, error) {
@@ -336,13 +344,10 @@ func installProtobufGo(project resolvedProject, expected map[string][]byte) erro
 			return err
 		}
 	}
-	manifestPath := filepath.Join(project.Root, filepath.FromSlash(protobufGoManifestRelativePath))
-	if len(expectedFiles) == 0 {
-		if err := os.Remove(manifestPath); err != nil && !os.IsNotExist(err) {
-			return err
-		}
+	if !exists {
 		return nil
 	}
+	manifestPath := filepath.Join(project.Root, filepath.FromSlash(projectcmd.ProtobufGoManifestRelativePath))
 	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o750); err != nil {
 		return err
 	}
@@ -355,7 +360,7 @@ func installProtobufGo(project resolvedProject, expected map[string][]byte) erro
 }
 
 func loadProtobufGoManifest(project resolvedProject) (protobufGoManifest, bool, error) {
-	path := filepath.Join(project.Root, filepath.FromSlash(protobufGoManifestRelativePath))
+	path := filepath.Join(project.Root, filepath.FromSlash(projectcmd.ProtobufGoManifestRelativePath))
 	contents, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return protobufGoManifest{}, false, nil
@@ -367,7 +372,7 @@ func loadProtobufGoManifest(project resolvedProject) (protobufGoManifest, bool, 
 	decoder := json.NewDecoder(bytes.NewReader(contents))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&manifest); err != nil {
-		return protobufGoManifest{}, false, fmt.Errorf("protobuf-go: decode %s: %w", protobufGoManifestRelativePath, err)
+		return protobufGoManifest{}, false, fmt.Errorf("protobuf-go: decode %s: %w", projectcmd.ProtobufGoManifestRelativePath, err)
 	}
 	if manifest.SchemaVersion != protobufGoManifestVersion {
 		return protobufGoManifest{}, false, fmt.Errorf("protobuf-go: unsupported manifest schemaVersion %d", manifest.SchemaVersion)

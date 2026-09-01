@@ -46,6 +46,9 @@ func generateIncremental(
 	if err != nil {
 		return fullGenerate(ctx, options)
 	}
+	if !protobufGoFastFeedbackSafe(project) {
+		return fullGenerate(ctx, options)
+	}
 	cachePath := filepath.Join(project.Root, filepath.FromSlash(fastfeedback.CacheRelativePath))
 	cached, err := fastfeedback.Load(cachePath)
 	if err != nil {

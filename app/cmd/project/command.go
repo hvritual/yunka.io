@@ -30,6 +30,10 @@ func Command() cli.Command {
 			if err != nil {
 				return err
 			}
+			protobufManifest, err := EnsureProtobufGoManifest(root)
+			if err != nil {
+				return err
+			}
 			fmt.Printf("yunka project initialized: version=%d db-prefix=%s\n", config.Version, config.Database.TablePrefix)
 			if config.Workflow.Contract.Sources != "" {
 				fmt.Printf("contract: sources=%s generated=%s\n", config.Workflow.Contract.Sources, config.Workflow.Contract.Generated)
@@ -43,6 +47,7 @@ func Command() cli.Command {
 			}
 			fmt.Printf("generated-go: root=%s import=%s\n", config.Workflow.GeneratedGo.Root, generatedImport)
 			fmt.Printf("providers: manifest=%s\n", providerManifest)
+			fmt.Printf("protobuf-go: manifest=%s\n", protobufManifest)
 			if scaffold.BootstrapContract != "" {
 				fmt.Printf("bootstrap-contract: %s\n", scaffold.BootstrapContract)
 			}

@@ -46,6 +46,9 @@ func checkWithFastFeedback(
 	if err != nil {
 		return fullCheck(ctx, options)
 	}
+	if !protobufGoFastFeedbackSafe(project) {
+		return fullCheck(ctx, options)
+	}
 	cachePath := filepath.Join(project.Root, filepath.FromSlash(fastfeedback.CacheRelativePath))
 	cached, err := fastfeedback.Load(cachePath)
 	if err != nil {
