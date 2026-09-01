@@ -112,7 +112,7 @@ func TestOperationRuntimeGuardErrorStopsBoundary(t *testing.T) {
 	authorizer, _ := NewGrantAuthorizer(grantCheckerFunc(func(context.Context, string, []string, []PermissionKey) ([]Grant, error) {
 		return []Grant{{Permission: "p"}}, nil
 	}))
-	resolver := NewStaticResolver(map[string]Policy{"/svc/Get": {Operation: "get", Permissions: []PermissionKey{"p"}}})
+	resolver := NewStaticResolver(map[string]Policy{"/svc/Get": {Operation: "get", Permissions: []PermissionKey{"p"}, TenantRequired: true}})
 	runtime, _ := NewOperationRuntime(resolver, authorizer, NewStaticGuardResolver(map[OperationID]OperationGuard{"get": guardFunc(func(context.Context, AuthorizedOperation, any) (context.Context, error) { return nil, sentinel })}))
 	principal := identity.Principal{TenantID: "tenant", UserID: "u", Roles: []string{"r"}, Authenticated: true}
 	_, err := runtime.Prepare(identity.WithPrincipal(context.Background(), principal), "/svc/Get", nil)
