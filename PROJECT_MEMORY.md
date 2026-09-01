@@ -30,6 +30,16 @@ Every new repository task must:
 4. inspect local branch/status/remotes when a local checkout exists;
 5. preserve user changes and inspect relevant wave/design documentation before editing.
 
+## Documentation governance baseline
+
+- `docs/DOCUMENTATION_GOVERNANCE.md` is the canonical documentation classification and truth-ownership policy.
+- `docs/STATUS.md` is the only repository documentation authority for current framework/wave/release status and explicitly deferred pressure; do not reconstruct current status from historical roadmap headers.
+- `README.md` is maintained as current developer/product behavior and must not describe completed migrations or deleted mechanisms as still pending.
+- `PROJECT_MEMORY.md` owns durable active governance and architecture invariants, not transient task progress or a duplicated wave-status ledger.
+- `docs/waves/**` contains historical roadmaps, implementation records, and exact qualification evidence. A planning document's original `Planned`/`In progress` text is historical unless an explicit classification says otherwise.
+- Completed roadmaps are preserved as historical evidence and receive a classification/current-status banner rather than having their original planning prose silently rewritten.
+- After repository bootstrap, read `docs/STATUS.md` before using wave/release status to plan new work; use release/qualification records only for the exact SHA/tree they prove.
+
 ## Toolchain and verification baseline
 
 - Go toolchain baseline: `1.25.13`.
