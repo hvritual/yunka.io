@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	projectcmd "yunka.io/app/cmd/project"
 	"yunka.io/pkg/fastfeedback"
 )
 
@@ -52,6 +53,16 @@ func TestC114QualificationRealBinaryFastFeedback(t *testing.T) {
 	if err != nil {
 		t.Fatal("C11.4 qualification requires git")
 	}
+	goPlugin, err := resolveProtobufPlugin(repositoryRoot, "PROTOC_GEN_GO", "protoc-gen-go")
+	if err != nil {
+		t.Fatalf("C11.4 qualification requires protoc-gen-go: %v", err)
+	}
+	grpcPlugin, err := resolveProtobufPlugin(repositoryRoot, "PROTOC_GEN_GO_GRPC", "protoc-gen-go-grpc")
+	if err != nil {
+		t.Fatalf("C11.4 qualification requires protoc-gen-go-grpc: %v", err)
+	}
+	t.Setenv("PROTOC_GEN_GO", goPlugin)
+	t.Setenv("PROTOC_GEN_GO_GRPC", grpcPlugin)
 
 	beforeStatus := c114GitStatus(t, gitBinary, repositoryRoot)
 	if beforeStatus != "" {
@@ -92,6 +103,9 @@ service DeviceApplication {
   };
 }
 `)
+	if _, err := projectcmd.EnsureProtobufGoManifest(consumerRoot); err != nil {
+		t.Fatalf("adopt protobuf Go ownership for qualification fixture: %v", err)
+	}
 
 	c114RunCommand(t, consumerRoot, nil, yunkaBinary,
 		"module", "new", "--name", "device", "--root", filepath.Join(consumerRoot, "modules"), "--no-config", "--no-logger")
@@ -119,7 +133,7 @@ service DeviceApplication {
 	if !firstEnvelope.OK || c114HasStage(firstEnvelope, "fast-generate") {
 		t.Fatalf("first generate must be canonical, got %s", firstGenerate)
 	}
-	c114RequireStages(t, firstEnvelope, "contract", "modules", "assembly")
+	c114RequireCanonicalProjectStages(t, firstEnvelope)
 
 	cachePath := filepath.Join(consumerRoot, filepath.FromSlash(fastfeedback.CacheRelativePath))
 	metadata, err := fastfeedback.Load(cachePath)
@@ -158,7 +172,7 @@ service DeviceApplication {
 	if !fullGenerateEnvelope.OK || c114HasStage(fullGenerateEnvelope, "fast-generate") {
 		t.Fatalf("--full generate unexpectedly used fast path: %s", fullGenerate)
 	}
-	c114RequireStages(t, fullGenerateEnvelope, "contract", "modules", "assembly")
+	c114RequireCanonicalProjectStages(t, fullGenerateEnvelope)
 
 	fullCheckArgs := append(append([]string(nil), baseCheck...), "--full")
 	fullCheck, _, err := c114RunCLI(yunkaBinary, consumerRoot, fullCheckArgs...)
@@ -169,7 +183,7 @@ service DeviceApplication {
 	if !fullCheckEnvelope.OK || c114HasStage(fullCheckEnvelope, "fast-check") {
 		t.Fatalf("--full check unexpectedly used fast path: %s", fullCheck)
 	}
-	c114RequireStages(t, fullCheckEnvelope, "contract", "modules", "assembly")
+	c114RequireCanonicalProjectStages(t, fullCheckEnvelope)
 
 	manifestPath := filepath.Join(consumerRoot, "contracts", "generated", "manifest.json")
 	manifest, err := os.ReadFile(manifestPath)
@@ -201,7 +215,7 @@ service DeviceApplication {
 	if !recoveryEnvelope.OK || c114HasStage(recoveryEnvelope, "fast-generate") {
 		t.Fatalf("output drift must force canonical regeneration: %s", recoveryGenerate)
 	}
-	c114RequireStages(t, recoveryEnvelope, "contract", "modules", "assembly")
+	c114RequireCanonicalProjectStages(t, recoveryEnvelope)
 
 	recoveredCache, err := fastfeedback.Load(cachePath)
 	if err != nil {
@@ -270,6 +284,11 @@ func c114HasStage(envelope c114CLIEnvelope, name string) bool {
 		}
 	}
 	return false
+}
+
+func c114RequireCanonicalProjectStages(t *testing.T, envelope c114CLIEnvelope) {
+	t.Helper()
+	c114RequireStages(t, envelope, "domains", "protobuf-go", "providers", "contract", "modules", "assembly")
 }
 
 func c114RequireStages(t *testing.T, envelope c114CLIEnvelope, names ...string) {
