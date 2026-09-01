@@ -18,20 +18,89 @@ type Grant struct {
 	Scope      string
 }
 
-// GrantChecker returns grants that actually authorize the requested permissions.
-// Implementations MUST bind Scope to the same role/permission grant; unrelated role scope
-// rows must never be returned.
+// GrantChecker is the legacy tenant-bound grant seam. It is intentionally
+// tenant-specific and cannot authorize permission-bearing Operations whose
+// Policy does not require a trusted tenant context.
 type GrantChecker interface {
 	ResolveGrants(context.Context, string, []string, []PermissionKey) ([]Grant, error)
 }
 
-type GrantAuthorizer struct{ checker GrantChecker }
+// GrantRequest is the canonical permission-resolution input. Principal and
+// Operation are trusted runtime facts; TenantBound records whether the Policy
+// requires authorization to be evaluated inside the Principal tenant boundary.
+type GrantRequest struct {
+	Principal   identity.Principal
+	Operation   OperationID
+	Permissions []PermissionKey
+	TenantBound bool
+}
 
-func NewGrantAuthorizer(checker GrantChecker) (*GrantAuthorizer, error) {
+// GrantResolver is the principal-aware IAM seam used by the canonical grant
+// authorizer. Implementations own the authority model for tenant-bound and
+// non-tenant-bound principals; the framework does not infer authority from
+// permission prefixes, role names, package names, or routes.
+type GrantResolver interface {
+	ResolveGrants(context.Context, GrantRequest) ([]Grant, error)
+}
+
+var (
+	// ErrGrantResolverUnavailable means the configured resolver cannot safely
+	// resolve the requested authority boundary. The authorizer maps it to a
+	// fail-closed Decision rather than silently falling back to another scope.
+	ErrGrantResolverUnavailable = errors.New("gateway authz: grant resolver unavailable")
+	errTenantGrantRolesRequired  = errors.New("gateway authz: tenant grant roles required")
+)
+
+type tenantBoundGrantResolver struct{ checker GrantChecker }
+
+// NewTenantBoundGrantResolver adapts the legacy GrantChecker into the new
+// principal-aware seam. It deliberately fails closed for non-tenant-bound
+// permission resolution so an empty TenantID never becomes a hidden platform
+// or global-authority protocol.
+func NewTenantBoundGrantResolver(checker GrantChecker) (GrantResolver, error) {
 	if checker == nil {
 		return nil, errors.New("gateway authz: grant checker is required")
 	}
-	return &GrantAuthorizer{checker: checker}, nil
+	return tenantBoundGrantResolver{checker: checker}, nil
+}
+
+func (resolver tenantBoundGrantResolver) ResolveGrants(ctx context.Context, request GrantRequest) ([]Grant, error) {
+	if !request.TenantBound {
+		return nil, ErrGrantResolverUnavailable
+	}
+	if strings.TrimSpace(request.Principal.TenantID) == "" {
+		return nil, ErrGrantResolverUnavailable
+	}
+	if len(request.Principal.Roles) == 0 {
+		return nil, errTenantGrantRolesRequired
+	}
+	return resolver.checker.ResolveGrants(
+		ctx,
+		request.Principal.TenantID,
+		request.Principal.Roles,
+		request.Permissions,
+	)
+}
+
+type GrantAuthorizer struct{ resolver GrantResolver }
+
+// NewGrantAuthorizer preserves the existing tenant-bound constructor and
+// behavior. Consumers that need permission authorization without a tenant
+// boundary must opt into NewGrantAuthorizerWithResolver with an explicit
+// principal-aware GrantResolver.
+func NewGrantAuthorizer(checker GrantChecker) (*GrantAuthorizer, error) {
+	resolver, err := NewTenantBoundGrantResolver(checker)
+	if err != nil {
+		return nil, err
+	}
+	return NewGrantAuthorizerWithResolver(resolver)
+}
+
+func NewGrantAuthorizerWithResolver(resolver GrantResolver) (*GrantAuthorizer, error) {
+	if resolver == nil {
+		return nil, errors.New("gateway authz: grant resolver is required")
+	}
+	return &GrantAuthorizer{resolver: resolver}, nil
 }
 
 func (a *GrantAuthorizer) Authorize(ctx context.Context, principal identity.Principal, policy Policy) (Decision, error) {
@@ -59,17 +128,27 @@ func (a *GrantAuthorizer) Authorize(ctx context.Context, principal identity.Prin
 		decision.Allowed, decision.Reason = true, ReasonAllowed
 		return decision, nil
 	}
-	if strings.TrimSpace(principal.TenantID) == "" {
-		decision.Reason = ReasonTenantRequired
+	if a == nil || a.resolver == nil {
+		decision.Reason = ReasonGrantResolverUnavailable
 		return decision, nil
 	}
-	if len(principal.Roles) == 0 {
-		decision.Reason = ReasonRoleRequired
-		return decision, nil
-	}
-	grants, err := a.checker.ResolveGrants(ctx, principal.TenantID, principal.Roles, policy.Permissions)
+	grants, err := a.resolver.ResolveGrants(ctx, GrantRequest{
+		Principal:   principal,
+		Operation:   policy.Operation,
+		Permissions: append([]PermissionKey(nil), policy.Permissions...),
+		TenantBound: policy.TenantRequired,
+	})
 	if err != nil {
-		return decision, fmt.Errorf("gateway authz: grant resolution: %w", err)
+		switch {
+		case errors.Is(err, ErrGrantResolverUnavailable):
+			decision.Reason = ReasonGrantResolverUnavailable
+			return decision, nil
+		case errors.Is(err, errTenantGrantRolesRequired):
+			decision.Reason = ReasonRoleRequired
+			return decision, nil
+		default:
+			return decision, fmt.Errorf("gateway authz: grant resolution: %w", err)
+		}
 	}
 	requested := make(map[PermissionKey]struct{}, len(policy.Permissions))
 	for _, permission := range policy.Permissions {
