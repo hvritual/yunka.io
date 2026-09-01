@@ -37,6 +37,7 @@ func TestFastFeedbackInputRootsCoverInventoryAndOrderedProtoPaths(t *testing.T) 
 	want := []string{
 		"project.profile",
 		"project.goMod",
+		"project.providers",
 		"module.root",
 		"contract.inventory",
 		"contract.source.a",
