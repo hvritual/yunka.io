@@ -18,9 +18,10 @@ func validateProviderClosure(project resolvedProject) (int, bool, error) {
 	path := filepath.Join(project.Root, filepath.FromSlash(projectcmd.ProviderManifestRelativePath))
 	manifest, err := providerplan.Load(path)
 	if os.IsNotExist(err) {
-		if providerplan.HasRequirements(modules) {
-			return 0, false, fmt.Errorf("provider closure: %s is required by module capabilities; run `yunka init` then declare providers", projectcmd.ProviderManifestRelativePath)
-		}
+		// Backward-compatibility boundary: projects that predate the declarative
+		// provider manifest may continue to assemble platform.Provider explicitly
+		// in consumer code. `yunka init` creates the manifest for new/adopted
+		// projects; once it exists, module capability closure is strict below.
 		return 0, false, nil
 	}
 	if err != nil {
