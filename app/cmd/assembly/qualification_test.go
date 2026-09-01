@@ -237,8 +237,8 @@ func (*deviceQueryService) GetDevice(_ context.Context, request *devicev1.GetDev
 }
 
 type deviceTransferService struct {
-    site deviceapplication.SiteManagementChildCapability
-    inventory deviceapplication.InventoryCatalogChildCapability
+    site deviceapplication.TransferToSiteManagementChildCapability
+    inventory deviceapplication.TransferToInventoryCatalogChildCapability
 }
 func (*deviceTransferService) TransferDevice(context.Context, *devicev1.TransferDeviceRequest) (*devicev1.TransferDeviceResponse, error) {
     return &devicev1.TransferDeviceResponse{Transferred: true}, nil
