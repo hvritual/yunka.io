@@ -40,12 +40,13 @@ func (policy Policy) AcceptsAuthentication(method string) bool {
 type Reason string
 
 const (
-	ReasonAllowed              Reason = "allowed"
-	ReasonUnauthenticated      Reason = "unauthenticated"
-	ReasonTenantRequired       Reason = "tenant_required"
-	ReasonRoleRequired         Reason = "role_required"
-	ReasonPermissionDenied     Reason = "permission_denied"
-	ReasonAuthenticationMethod Reason = "authentication_method_denied"
+	ReasonAllowed                  Reason = "allowed"
+	ReasonUnauthenticated          Reason = "unauthenticated"
+	ReasonTenantRequired           Reason = "tenant_required"
+	ReasonRoleRequired             Reason = "role_required"
+	ReasonPermissionDenied         Reason = "permission_denied"
+	ReasonAuthenticationMethod     Reason = "authentication_method_denied"
+	ReasonGrantResolverUnavailable Reason = "grant_resolver_unavailable"
 )
 
 type Decision struct {
@@ -56,6 +57,8 @@ type Decision struct {
 	Reason      Reason
 }
 
+// PermissionChecker is the legacy tenant-bound boolean permission seam. It is
+// not a global/non-tenant authorization mechanism.
 type PermissionChecker interface {
 	HasPermissions(context.Context, string, []string, []PermissionKey, PermissionMode) (bool, error)
 }
@@ -64,6 +67,9 @@ type Authorizer interface {
 	Authorize(context.Context, identity.Principal, Policy) (Decision, error)
 }
 
+// RBACAuthorizer is the legacy tenant-bound boolean authorizer. Permissioned
+// non-tenant Policies fail closed; principal-aware authority should use
+// GrantAuthorizer with GrantResolver.
 type RBACAuthorizer struct{ checker PermissionChecker }
 
 func NewRBACAuthorizer(checker PermissionChecker) (*RBACAuthorizer, error) {
@@ -98,8 +104,8 @@ func (a *RBACAuthorizer) Authorize(ctx context.Context, principal identity.Princ
 		decision.Allowed, decision.Reason = true, ReasonAllowed
 		return decision, nil
 	}
-	if strings.TrimSpace(principal.TenantID) == "" {
-		decision.Reason = ReasonTenantRequired
+	if !policy.TenantRequired {
+		decision.Reason = ReasonGrantResolverUnavailable
 		return decision, nil
 	}
 	if len(principal.Roles) == 0 {
