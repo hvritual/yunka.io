@@ -1,5 +1,12 @@
 # C10 — Runtime Assembly & Framework Productization
 
+> Document class: **HISTORICAL**  
+> Delivery state: **Complete / qualified / merged**  
+> Current status authority: [`docs/STATUS.md`](../STATUS.md)  
+> Original qualified release head: `4c4beb72ffde79d97a28cf5c3b083c756b729d27`  
+> Release record: [`C10.5-release-qualification.md`](C10.5-release-qualification.md)  
+> Historical note: the original status, sequencing, and planning text below is preserved as authored and is **not** current status truth.
+
 ## Status
 
 - State: **Planned**
