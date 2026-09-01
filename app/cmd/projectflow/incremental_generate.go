@@ -11,16 +11,22 @@ type canonicalGenerateFunc func(context.Context, Options) (Report, error)
 
 // GenerateIncremental is the top-level developer happy-path wrapper. It may
 // return a no-op success only when the qualified C11.4 evidence proves the
-// running engine, protoc toolchain, canonical inputs, and existing generated
-// outputs are an exact reusable match. Every other state falls back to the
-// existing full project generation path, including managed Domain artifacts.
+// running engine, complete protobuf toolchain, canonical inputs, and existing
+// generated outputs are an exact reusable match. Every other state falls back
+// to the full project generation path.
 func GenerateIncremental(ctx context.Context, options Options, forceFull bool) (Report, error) {
+	identity := toolchainIdentityFunc(protocIdentity)
+	if project, err := resolveProject(options); err == nil {
+		identity = func(ctx context.Context, _ string) (string, error) {
+			return projectToolchainIdentity(ctx, project)
+		}
+	}
 	return generateIncremental(
 		ctx,
 		options,
 		forceFull,
 		fastfeedback.CurrentEngineIdentity(),
-		protocIdentity,
+		identity,
 		generateProjectWithFastFeedback,
 	)
 }

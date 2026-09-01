@@ -15,12 +15,18 @@ type canonicalCheckFunc func(context.Context, Options) (Report, error)
 // always used when fast-feedback evidence is unavailable, invalid,
 // unverifiable, or mismatched.
 func CheckWithFastFeedback(ctx context.Context, options Options, forceFull bool) (Report, error) {
+	identity := toolchainIdentityFunc(protocIdentity)
+	if project, err := resolveProject(options); err == nil {
+		identity = func(ctx context.Context, _ string) (string, error) {
+			return projectToolchainIdentity(ctx, project)
+		}
+	}
 	return checkWithFastFeedback(
 		ctx,
 		options,
 		forceFull,
 		fastfeedback.CurrentEngineIdentity(),
-		protocIdentity,
+		identity,
 		checkProject,
 	)
 }

@@ -41,7 +41,7 @@ func recordFastFeedback(ctx context.Context, project resolvedProject) {
 }
 
 func buildFastFeedbackMetadata(ctx context.Context, project resolvedProject) (fastfeedback.Metadata, error) {
-	toolchain, err := protocIdentity(ctx, project.Protoc)
+	toolchain, err := projectToolchainIdentity(ctx, project)
 	if err != nil {
 		return fastfeedback.Metadata{}, err
 	}
@@ -53,10 +53,18 @@ func buildFastFeedbackMetadataWithIdentity(project resolvedProject, engine fastf
 	if err != nil {
 		return fastfeedback.Metadata{}, err
 	}
-	outputs, err := fastfeedback.FingerprintRoots([]fastfeedback.Root{
+	outputRoots := []fastfeedback.Root{
 		{Label: "output.contract", Path: project.ContractOut, Optional: true},
 		{Label: "output.generatedGo", Path: project.CodeOut, Optional: true},
-	})
+		{Label: "output.protobufGoManifest", Path: filepath.Join(project.Root, filepath.FromSlash(protobufGoManifestRelativePath)), Optional: true},
+	}
+	for index, relative := range protobufGoOutputPaths(project) {
+		outputRoots = append(outputRoots, fastfeedback.Root{
+			Label: fmt.Sprintf("output.protobufGo.%09d", index),
+			Path:  filepath.Join(project.Root, filepath.FromSlash(relative)),
+		})
+	}
+	outputs, err := fastfeedback.FingerprintRoots(outputRoots)
 	if err != nil {
 		return fastfeedback.Metadata{}, err
 	}
@@ -99,6 +107,37 @@ func fastFeedbackInputRoots(project resolvedProject) []fastfeedback.Root {
 	return roots
 }
 
+func projectToolchainIdentity(ctx context.Context, project resolvedProject) (string, error) {
+	protoc, err := protocIdentity(ctx, project.Protoc)
+	if err != nil {
+		return "", err
+	}
+	required, err := protobufGoRequired(project)
+	if err != nil {
+		return "", err
+	}
+	if !required {
+		return protoc, nil
+	}
+	goPlugin, err := resolveProtobufPlugin(project.Root, "PROTOC_GEN_GO", "protoc-gen-go")
+	if err != nil {
+		return "", err
+	}
+	grpcPlugin, err := resolveProtobufPlugin(project.Root, "PROTOC_GEN_GO_GRPC", "protoc-gen-go-grpc")
+	if err != nil {
+		return "", err
+	}
+	goIdentity, err := executableIdentity(ctx, "protoc-gen-go", goPlugin)
+	if err != nil {
+		return "", err
+	}
+	grpcIdentity, err := executableIdentity(ctx, "protoc-gen-go-grpc", grpcPlugin)
+	if err != nil {
+		return "", err
+	}
+	return protoc + "|" + goIdentity + "|" + grpcIdentity, nil
+}
+
 func protocIdentity(ctx context.Context, configured string) (string, error) {
 	name := strings.TrimSpace(configured)
 	if name == "" {
@@ -108,6 +147,10 @@ func protocIdentity(ctx context.Context, configured string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return executableIdentity(ctx, "protoc", path)
+}
+
+func executableIdentity(ctx context.Context, label, path string) (string, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return "", err
@@ -127,11 +170,11 @@ func protocIdentity(ctx context.Context, configured string) (string, error) {
 	defer cancel()
 	output, err := exec.CommandContext(versionCtx, path, "--version").CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("protoc identity: %w", err)
+		return "", fmt.Errorf("%s identity: %w", label, err)
 	}
 	version := strings.TrimSpace(string(output))
 	if version == "" {
-		return "", fmt.Errorf("protoc identity: empty --version output")
+		return "", fmt.Errorf("%s identity: empty --version output", label)
 	}
-	return "protoc:" + version + ":sha256:" + hex.EncodeToString(hash.Sum(nil)), nil
+	return label + ":" + version + ":sha256:" + hex.EncodeToString(hash.Sum(nil)), nil
 }
