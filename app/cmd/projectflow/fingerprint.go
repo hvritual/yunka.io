@@ -57,7 +57,7 @@ func buildFastFeedbackMetadataWithIdentity(project resolvedProject, engine fastf
 	outputRoots := []fastfeedback.Root{
 		{Label: "output.contract", Path: project.ContractOut, Optional: true},
 		{Label: "output.generatedGo", Path: project.CodeOut, Optional: true},
-		{Label: "output.protobufGoManifest", Path: filepath.Join(project.Root, filepath.FromSlash(protobufGoManifestRelativePath)), Optional: true},
+		{Label: "output.protobufGoManifest", Path: filepath.Join(project.Root, filepath.FromSlash(projectcmd.ProtobufGoManifestRelativePath)), Optional: true},
 	}
 	for index, relative := range protobufGoOutputPaths(project) {
 		outputRoots = append(outputRoots, fastfeedback.Root{
