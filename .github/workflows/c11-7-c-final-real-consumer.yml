@@ -1,0 +1,312 @@
+name: c11-7-c-final-real-consumer
+
+on:
+  push:
+    branches:
+      - agent/c11-7-c-final-real-consumer-qualification
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  final-real-consumer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    env:
+      C117_BIZ_SHA: df3a8ed8d0bf1c1eb0e75889675bd7291b0dd1d8
+      C10_OPERATION_SHA256: 903905a8bea81901f9682f487809e57d635991b0689c36c1aee9c08a990ee35a
+      C10_ASSEMBLY_SHA256: 1d2d31c9b0c723aaadaede2ed0eb8d627a1684a74f1c5988b1b4d1468cdb5514
+      YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?charset=utf8mb4&parseTime=true&loc=UTC&multiStatements=true
+      YUNKA_BIZ_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?charset=utf8mb4&parseTime=true&loc=UTC&multiStatements=true
+      YUNKA_BIZ_AUTO_MIGRATE: "true"
+    steps:
+      - name: Checkout exact Yunka candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: yunka.io
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout exact qualified Biz main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: hvritual/biz
+          ref: ${{ env.C117_BIZ_SHA }}
+          path: biz
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Assert exact release-candidate identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C yunka.io rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C biz rev-parse HEAD)" = "$C117_BIZ_SHA"
+          test -z "$(git -C yunka.io status --porcelain)"
+          test -z "$(git -C biz status --porcelain)"
+          mkdir -p "$RUNNER_TEMP/c11-7-c-evidence"
+          printf 'yunka=%s\nbiz=%s\n' "$GITHUB_SHA" "$C117_BIZ_SHA" > "$RUNNER_TEMP/c11-7-c-evidence/release-pair.txt"
+
+      - name: Load locked Yunka toolchain
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          source yunka.io/tools/toolchain.env
+          : "${GO_VERSION:?}"
+          : "${PROTOC_RELEASE:?}"
+          : "${PROTOC_LINUX_X86_64_SHA256:?}"
+          echo "go_version=${GO_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "protoc_release=${PROTOC_RELEASE}" >> "$GITHUB_OUTPUT"
+          echo "protoc_sha256=${PROTOC_LINUX_X86_64_SHA256}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup locked Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache: false
+
+      - name: Install locked protoc
+        shell: bash
+        env:
+          PROTOC_RELEASE: ${{ steps.lock.outputs.protoc_release }}
+          PROTOC_SHA256: ${{ steps.lock.outputs.protoc_sha256 }}
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/protoc.zip"
+          install_root="$RUNNER_TEMP/protoc"
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" \
+            -o "$archive"
+          echo "${PROTOC_SHA256}  ${archive}" | sha256sum -c -
+          mkdir -p "$install_root"
+          unzip -q "$archive" -d "$install_root"
+          echo "$install_root/bin" >> "$GITHUB_PATH"
+
+      - name: Build locked protobuf Go plugins
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C yunka.io rpc-tools
+
+      - name: Prove repository-contained contract dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmp biz/contracts/third_party/yunka/dsl/v1/options.proto yunka.io/contracts/proto/yunka/dsl/v1/options.proto
+          ! grep -Fq '$(YUNKA_ROOT)/contracts/proto' biz/Makefile
+          grep -Fq 'contracts/third_party' biz/contracts/sources.json
+          grep -Fq 'go run ./cmd generate' biz/Makefile
+          grep -Fq 'go run ./cmd check' biz/Makefile
+          ! grep -Fq 'contract generate' biz/Makefile
+          ! grep -Fq 'assembly generate' biz/Makefile
+
+      - name: Prove C11 happy-path generation and read-only check
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C biz generate \
+            YUNKA_ROOT="$GITHUB_WORKSPACE/yunka.io" \
+            PROTOC="$(command -v protoc)" \
+            PROTOC_GEN_GO="$GITHUB_WORKSPACE/yunka.io/.yunka/bin/protoc-gen-go" \
+            PROTOC_GEN_GO_GRPC="$GITHUB_WORKSPACE/yunka.io/.yunka/bin/protoc-gen-go-grpc"
+          git -C biz diff --exit-code
+          test -z "$(git -C biz status --porcelain)"
+          (
+            cd biz
+            find contracts/generated contracts/gen internal -type f \( -name '*.json' -o -name '*.ts' -o -name '*.pb.go' -o -name 'zz_yunka*.go' \) -print0 | sort -z | xargs -0 sha256sum
+          ) > "$RUNNER_TEMP/c11-7-c-evidence/generated-first.sha256"
+          make -C biz generate \
+            YUNKA_ROOT="$GITHUB_WORKSPACE/yunka.io" \
+            PROTOC="$(command -v protoc)" \
+            PROTOC_GEN_GO="$GITHUB_WORKSPACE/yunka.io/.yunka/bin/protoc-gen-go" \
+            PROTOC_GEN_GO_GRPC="$GITHUB_WORKSPACE/yunka.io/.yunka/bin/protoc-gen-go-grpc"
+          (
+            cd biz
+            find contracts/generated contracts/gen internal -type f \( -name '*.json' -o -name '*.ts' -o -name '*.pb.go' -o -name 'zz_yunka*.go' \) -print0 | sort -z | xargs -0 sha256sum
+          ) > "$RUNNER_TEMP/c11-7-c-evidence/generated-second.sha256"
+          diff -u "$RUNNER_TEMP/c11-7-c-evidence/generated-first.sha256" "$RUNNER_TEMP/c11-7-c-evidence/generated-second.sha256"
+          make -C biz check YUNKA_ROOT="$GITHUB_WORKSPACE/yunka.io" PROTOC="$(command -v protoc)"
+          git -C biz diff --exit-code
+          test -z "$(git -C biz status --porcelain)"
+
+      - name: Prove C10 execution and assembly semantics unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          operation="$(sha256sum biz/contracts/generated/operation-plans.json | awk '{print $1}')"
+          assembly="$(sha256sum biz/contracts/generated/assembly-plan.json | awk '{print $1}')"
+          test "$operation" = "$C10_OPERATION_SHA256"
+          test "$assembly" = "$C10_ASSEMBLY_SHA256"
+          printf 'operation=%s\nassembly=%s\n' "$operation" "$assembly" > "$RUNNER_TEMP/c11-7-c-evidence/semantic-hashes.txt"
+          grep -Fq 'generatedassembly.Bootstrap' biz/internal/bizruntime/runtime.go
+          grep -Fq 'operation.NewExecutorWithOptions' biz/internal/bizruntime/runtime.go
+          grep -Fq 'requestscope.NewGORMExecutionFactory' biz/internal/bizruntime/runtime.go
+          grep -Fq 'execution.NewIdempotencyCoordinator' biz/internal/bizruntime/runtime.go
+          grep -Fq 'authz.NewExecutionSecurity' biz/internal/bizruntime/runtime.go
+
+      - name: Prove Biz compiles before runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd biz && go build ./...)
+
+      - name: Build VCS-stamped Yunka CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd yunka.io/app && go build -buildvcs=true -o "$RUNNER_TEMP/yunka" ./cmd)
+          test -x "$RUNNER_TEMP/yunka"
+
+      - name: Prove real zero-argument Biz Ready closure and clean shutdown
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd biz
+          evidence_dir="$RUNNER_TEMP/c11-7-c-evidence"
+          rm -f .yunka/dev-runtime.json .yunka/runtime-graph.json
+
+          dump_runtime() {
+            cp -f .yunka/dev-runtime.json "$evidence_dir/dev-runtime.json" 2>/dev/null || true
+            cp -f .yunka/runtime-graph.json "$evidence_dir/runtime-graph.json" 2>/dev/null || true
+            cp -f "$RUNNER_TEMP/biz-dev.stdout" "$evidence_dir/biz-dev.stdout" 2>/dev/null || true
+            cp -f "$RUNNER_TEMP/biz-dev.stderr" "$evidence_dir/biz-dev.stderr" 2>/dev/null || true
+            cp -f "$RUNNER_TEMP/biz-diagnostics.json" "$evidence_dir/biz-diagnostics.json" 2>/dev/null || true
+            cp -f "$RUNNER_TEMP/biz-status.json" "$evidence_dir/biz-status.json" 2>/dev/null || true
+          }
+
+          "$RUNNER_TEMP/yunka" dev >"$RUNNER_TEMP/biz-dev.stdout" 2>"$RUNNER_TEMP/biz-dev.stderr" &
+          dev_pid=$!
+          cleanup() {
+            if kill -0 "$dev_pid" 2>/dev/null; then
+              kill -TERM "$dev_pid" 2>/dev/null || true
+              wait "$dev_pid" || true
+            fi
+          }
+          on_exit() {
+            status=$?
+            trap - EXIT
+            dump_runtime
+            cleanup
+            dump_runtime
+            exit "$status"
+          }
+          trap on_exit EXIT
+
+          ready=0
+          for _ in $(seq 1 240); do
+            if ! kill -0 "$dev_pid" 2>/dev/null; then
+              wait "$dev_pid" || true
+              dump_runtime
+              cat "$RUNNER_TEMP/biz-dev.stdout" || true
+              cat "$RUNNER_TEMP/biz-dev.stderr" || true
+              exit 1
+            fi
+            if test -f .yunka/dev-runtime.json && jq -e '.state == "running" and (.processes | length) == 1 and .processes[0].state == "ready" and .processes[0].ready == true' .yunka/dev-runtime.json >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 0.25
+          done
+          test "$ready" = 1
+          grep -Fq 'DEV READY' "$RUNNER_TEMP/biz-dev.stderr"
+
+          curl --fail --silent --show-error http://127.0.0.1:8080/__yunka/diagnostics > "$RUNNER_TEMP/biz-diagnostics.json"
+          jq -e '.schemaVersion == 1 and .core.schemaVersion == 1 and .core.state == "ready" and .core.health.ready == true' "$RUNNER_TEMP/biz-diagnostics.json" >/dev/null
+
+          "$RUNNER_TEMP/yunka" dev status --closure --format json > "$RUNNER_TEMP/biz-status.json"
+          jq -e '
+            .state == "running" and
+            (.processes | length) == 1 and
+            .processes[0].name == "biz" and
+            .processes[0].state == "ready" and
+            .processes[0].ready == true and
+            .processes[0].diagnostics.ready == true and
+            ((.processes[0].graphNodes | sort) == ([
+              "application:deviceops/device_management",
+              "application:deviceops/device_transfer",
+              "application:deviceops/site_management"
+            ] | sort))
+          ' "$RUNNER_TEMP/biz-status.json" >/dev/null
+          jq -e '[.edges[] | select(.kind == "runs" and .from == "process:biz")] | length == 3' .yunka/runtime-graph.json >/dev/null
+
+          kill -TERM "$dev_pid"
+          wait "$dev_pid"
+          jq -e '.state == "stopped" and .processes[0].state == "stopped"' .yunka/dev-runtime.json >/dev/null
+          if curl --fail --silent --max-time 2 http://127.0.0.1:8080/__yunka/diagnostics >/dev/null 2>&1; then
+            echo 'diagnostics endpoint remained reachable after supervisor shutdown' >&2
+            exit 1
+          fi
+          printf '%s\n' 'shutdown=clean' > "$evidence_dir/shutdown.txt"
+          dump_runtime
+          trap - EXIT
+
+      - name: Prove C9 and C10 regression gates on MySQL 8.4
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C biz verify \
+            YUNKA_ROOT="$GITHUB_WORKSPACE/yunka.io" \
+            PROTOC="$(command -v protoc)" \
+            PROTOC_GEN_GO="$GITHUB_WORKSPACE/yunka.io/.yunka/bin/protoc-gen-go" \
+            PROTOC_GEN_GO_GRPC="$GITHUB_WORKSPACE/yunka.io/.yunka/bin/protoc-gen-go-grpc"
+          make -C biz pressure \
+            YUNKA_ROOT="$GITHUB_WORKSPACE/yunka.io" \
+            PROTOC="$(command -v protoc)" \
+            PROTOC_GEN_GO="$GITHUB_WORKSPACE/yunka.io/.yunka/bin/protoc-gen-go" \
+            PROTOC_GEN_GO_GRPC="$GITHUB_WORKSPACE/yunka.io/.yunka/bin/protoc-gen-go-grpc"
+
+      - name: Assert final C11 adoption structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'frameworkdiagnostics.NewHTTPHandler' biz/internal/bizruntime/diagnostics.go
+          grep -Fq '"closure": true' biz/.yunka/dev.json
+          grep -Fq 'application:deviceops/device_management' biz/.yunka/dev.json
+          grep -Fq 'application:deviceops/device_transfer' biz/.yunka/dev.json
+          grep -Fq 'application:deviceops/site_management' biz/.yunka/dev.json
+          ! grep -q 'kernel.New' biz/cmd/biz/main.go
+          ! grep -q 'modulecatalog.Default' biz/cmd/biz/main.go
+          ! grep -q 'operation.NewExecutorWithOptions' biz/modules/deviceops/module.go
+          printf '%s\n' \
+            'C11.7_C_CLEAN_CHECKOUT_PAIR=PASS' \
+            'C11.7_C_GENERATE_CHECK=PASS' \
+            'C11.7_C_C10_SEMANTICS=PASS' \
+            'C11.7_C_REAL_BIZ_READY=PASS' \
+            'C11.7_C_RUNTIME_CLOSURE=PASS' \
+            'C11.7_C_PROCESS_TREE_SHUTDOWN=PASS' \
+            'C11.7_C_MYSQL84_PRESSURE=PASS' > "$RUNNER_TEMP/c11-7-c-evidence/summary.txt"
+          cat "$RUNNER_TEMP/c11-7-c-evidence/summary.txt"
+
+      - name: Require clean release-candidate worktrees
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C biz diff --exit-code
+          test -z "$(git -C biz status --porcelain)"
+          git -C yunka.io diff --exit-code
+          test -z "$(git -C yunka.io status --porcelain)"
+
+      - name: Export final C11.7 qualification evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: c11-7-c-final-real-consumer-evidence
+          path: ${{ runner.temp }}/c11-7-c-evidence
+          if-no-files-found: warn
+          retention-days: 7
