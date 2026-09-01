@@ -134,11 +134,11 @@ func TestPrincipalAwareResolverOwnsRoleModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	principal := identity.Principal{Subject: "service:control-plane", Authenticated: true, AuthMethod: identity.AuthMethodService}
+	principal := identity.Principal{Subject: "service:control-plane", Authenticated: true, AuthMethod: "service"}
 	decision, err := authorizer.Authorize(context.Background(), principal, Policy{
 		Operation:      "system.inspect",
 		Permissions:    []PermissionKey{"system.read"},
-		Authentication: []string{identity.AuthMethodService},
+		Authentication: []string{"service"},
 	})
 	if err != nil {
 		t.Fatal(err)
