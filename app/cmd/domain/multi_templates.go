@@ -14,7 +14,7 @@ func renderMultiStructural(spec Spec, packageImport string) map[string]string {
 		"infrastructure/persistence/zz_yunka_repositories_gen.go": multiRepositoriesTemplate(spec, packageImport),
 	}
 	for _, object := range spec.Objects {
-		files["domain/zz_yunka_"+object.Name+"_entity_gen.go"] = multiEntityTemplate(spec, object)
+		files["domain/"+object.File] = multiEntityTemplate(spec, object)
 		files["infrastructure/persistence/zz_yunka_"+object.Name+"_record_gen.go"] = multiRecordTemplate(spec, object, packageImport)
 	}
 	return files
