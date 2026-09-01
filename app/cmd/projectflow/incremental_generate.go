@@ -13,7 +13,7 @@ type canonicalGenerateFunc func(context.Context, Options) (Report, error)
 // return a no-op success only when the qualified C11.4 evidence proves the
 // running engine, protoc toolchain, canonical inputs, and existing generated
 // outputs are an exact reusable match. Every other state falls back to the
-// existing full generation path.
+// existing full project generation path, including managed Domain artifacts.
 func GenerateIncremental(ctx context.Context, options Options, forceFull bool) (Report, error) {
 	return generateIncremental(
 		ctx,
@@ -21,7 +21,7 @@ func GenerateIncremental(ctx context.Context, options Options, forceFull bool) (
 		forceFull,
 		fastfeedback.CurrentEngineIdentity(),
 		protocIdentity,
-		GenerateWithFastFeedback,
+		generateProjectWithFastFeedback,
 	)
 }
 

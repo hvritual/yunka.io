@@ -11,9 +11,9 @@ type toolchainIdentityFunc func(context.Context, string) (string, error)
 type canonicalCheckFunc func(context.Context, Options) (Report, error)
 
 // CheckWithFastFeedback is the developer happy-path wrapper. The canonical
-// Check function remains the authoritative full validation path and is always
-// used when fast-feedback evidence is unavailable, invalid, unverifiable, or
-// mismatched.
+// project closure check remains the authoritative full validation path and is
+// always used when fast-feedback evidence is unavailable, invalid,
+// unverifiable, or mismatched.
 func CheckWithFastFeedback(ctx context.Context, options Options, forceFull bool) (Report, error) {
 	return checkWithFastFeedback(
 		ctx,
@@ -21,7 +21,7 @@ func CheckWithFastFeedback(ctx context.Context, options Options, forceFull bool)
 		forceFull,
 		fastfeedback.CurrentEngineIdentity(),
 		protocIdentity,
-		Check,
+		checkProject,
 	)
 }
 
