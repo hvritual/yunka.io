@@ -1,4 +1,4 @@
-name: c4-1-rc6-staged-release
+name: c4-1-rc7-staged-release
 
 on:
   push:
@@ -16,8 +16,7 @@ jobs:
     timeout-minutes: 120
     env:
       BRANCH: fix/c4-1-module-publication-convergence
-      RC_VERSION: v0.1.0-c41rc6
-      PREV_VERSION: v0.1.0-c41rc5
+      RC_VERSION: v0.1.0-c41rc7
       GONOPROXY: github.com/hvritual/yunka.io/*
       GONOSUMDB: github.com/hvritual/yunka.io/*
     steps:
@@ -70,7 +69,7 @@ jobs:
           make rpc-toolchain-check
           for prefix in pkg framework gateway; do
             if git ls-remote --exit-code --tags origin "refs/tags/${prefix}/${RC_VERSION}" >/dev/null 2>&1; then
-              echo "RC6 tag already exists: ${prefix}/${RC_VERSION}" >&2
+              echo "RC7 tag already exists: ${prefix}/${RC_VERSION}" >&2
               exit 1
             fi
           done
@@ -81,22 +80,18 @@ jobs:
           grep -q 'github.com/go-kit/kit v0.13.0' pkg/go.mod
           grep -q 'google.golang.org/genproto v0.0.0-20260810153831-ec0a7760b754' pkg/go.mod
           test -f pkg/internal/dependencyanchor/genproto.go
-          # App is repository-owned tooling, not a publishable module. Its current
-          # require may point at the previous failed RC whose tag was deliberately
-          # removed, so app qualification starts only after pkg@RC6 exists.
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
-      - name: Publish pkg RC6
+      - name: Publish pkg RC7
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           pkg_sha="$(git rev-parse HEAD)"
           git tag "pkg/${RC_VERSION}" "$pkg_sha"
           git push origin "refs/tags/pkg/${RC_VERSION}"
           test "$(git ls-remote --tags origin "refs/tags/pkg/${RC_VERSION}" | awk '{print $1}')" = "$pkg_sha"
           echo "PKG_SHA=$pkg_sha" >> "$GITHUB_ENV"
-
           (cd pkg && \
             GOWORK=off go mod tidy -diff && \
             GOWORK=off go list -m all >/dev/null && \
@@ -104,14 +99,14 @@ jobs:
             GOWORK=off go vet ./... && \
             GOWORK=off go build ./...)
 
-      - name: Pin and publish framework RC6
+      - name: Pin and publish framework RC7
         shell: bash
         run: |
           set -euo pipefail
-          sed -i 's/v0\.1\.0-c41rc5/v0.1.0-c41rc6/g' framework/go.mod
+          (cd framework && GOWORK=off go mod edit -require=github.com/hvritual/yunka.io/pkg@${RC_VERSION})
           (cd framework && GOWORK=off go mod tidy)
           if grep -q '^replace ' framework/go.mod; then
-            echo 'framework go.mod contains replace after RC6 tidy' >&2
+            echo 'framework go.mod contains replace after RC7 tidy' >&2
             exit 1
           fi
           grep -q "github.com/hvritual/yunka.io/pkg ${RC_VERSION}" framework/go.mod
@@ -122,7 +117,7 @@ jobs:
             GOWORK=off go vet ./... && \
             GOWORK=off go build ./...)
           git add framework/go.mod framework/go.sum
-          git commit -m 'build: pin framework to pkg RC6'
+          git commit -m 'build: pin framework to pkg RC7'
           git push origin "HEAD:${BRANCH}"
           framework_sha="$(git rev-parse HEAD)"
           git tag "framework/${RC_VERSION}" "$framework_sha"
@@ -130,14 +125,15 @@ jobs:
           test "$(git ls-remote --tags origin "refs/tags/framework/${RC_VERSION}" | awk '{print $1}')" = "$framework_sha"
           echo "FRAMEWORK_SHA=$framework_sha" >> "$GITHUB_ENV"
 
-      - name: Pin and publish gateway RC6
+      - name: Pin and publish gateway RC7
         shell: bash
         run: |
           set -euo pipefail
-          sed -i 's/v0\.1\.0-c41rc5/v0.1.0-c41rc6/g' gateway/go.mod
+          (cd gateway && GOWORK=off go mod edit -require=github.com/hvritual/yunka.io/pkg@${RC_VERSION})
+          (cd gateway && GOWORK=off go mod edit -require=github.com/hvritual/yunka.io/framework@${RC_VERSION})
           (cd gateway && GOWORK=off go mod tidy)
           if grep -q '^replace ' gateway/go.mod; then
-            echo 'gateway go.mod contains replace after RC6 tidy' >&2
+            echo 'gateway go.mod contains replace after RC7 tidy' >&2
             exit 1
           fi
           grep -q "github.com/hvritual/yunka.io/pkg ${RC_VERSION}" gateway/go.mod
@@ -149,7 +145,7 @@ jobs:
             GOWORK=off go vet ./... && \
             GOWORK=off go build ./...)
           git add gateway/go.mod gateway/go.sum
-          git commit -m 'build: pin gateway to framework and pkg RC6'
+          git commit -m 'build: pin gateway to framework and pkg RC7'
           git push origin "HEAD:${BRANCH}"
           gateway_sha="$(git rev-parse HEAD)"
           git tag "gateway/${RC_VERSION}" "$gateway_sha"
@@ -157,19 +153,15 @@ jobs:
           test "$(git ls-remote --tags origin "refs/tags/gateway/${RC_VERSION}" | awk '{print $1}')" = "$gateway_sha"
           echo "GATEWAY_SHA=$gateway_sha" >> "$GITHUB_ENV"
 
-      - name: Converge app and repository workspace
+      - name: Converge and commit app workspace RC7
         shell: bash
         run: |
           set -euo pipefail
-          sed -i 's/v0\.1\.0-c41rc5/v0.1.0-c41rc6/g' app/go.mod tools/module-release.env docs/waves/C4.1-module-publication-convergence.md
+          (cd app && GOWORK=off go mod edit -require=github.com/hvritual/yunka.io/pkg@${RC_VERSION})
           (cd app && GOWORK=off go mod tidy)
+          sed -E -i "s/^YUNKA_MODULE_RELEASE=.*/YUNKA_MODULE_RELEASE=${RC_VERSION}/" tools/module-release.env
           grep -q "github.com/hvritual/yunka.io/pkg ${RC_VERSION}" app/go.mod
           grep -q "YUNKA_MODULE_RELEASE=${RC_VERSION}" tools/module-release.env
-
-          # Now app has a real upstream artifact. Close both app-level qualification
-          # hygiene findings before repository workspace bookkeeping is committed.
-          (cd app && go test ./cmd -run TestC116CExpertCommandCompatibilitySnapshots -count=1)
-          (cd app && go test ./cmd/projectflow -run TestC114QualificationRealBinaryFastFeedback -count=1)
 
           rm -f go.work.sum
           go list -m all >/dev/null
@@ -185,36 +177,29 @@ jobs:
 
           cat >> docs/waves/C4.1-module-publication-convergence.md <<'EOF'
 
-          ## RC6 dependency-ordered publication
+          ## RC7 clean repository qualification
 
-          RC5 closed the source-workspace bootstrap and app qualification hygiene
-          gaps, then proved one remaining release-order cycle: the repository
-          `go.work.sum` cannot contain checksum entries for a fresh versioned sibling
-          module until that sibling tag actually exists. Treating pkg/framework/
-          gateway as one atomic same-commit publication therefore makes root workspace
-          bookkeeping a circular precondition.
+          RC6 proved the dependency-ordered module publication itself: pkg,
+          framework-on-pkg, and gateway-on-framework/pkg all passed independent
+          GOWORK=off tidy/test/vet/build. RC6 then failed only because app/root
+          bookkeeping changes were left uncommitted while the C11.4 fast-feedback
+          qualification correctly required a clean tracked worktree.
 
-          RC6 publishes the modules in their real dependency order: pkg first;
-          framework only after `pkg@RC6` is resolvable; gateway only after both
-          `pkg@RC6` and `framework@RC6` are resolvable. The three modules share one
-          release version but each prefix tag points to the exact commit at which that
-          module's own dependency contract became independently valid. App and root
-          `go.work.sum` are converged afterward as repository-development bookkeeping,
-          not as inputs to a module tag.
-
-          This removes the bootstrap cycle without local replaces in any publishable
-          go.mod or in the repository go.work. Exact release qualification remains
-          consumer-driven: each tagged module is tested with GOWORK=off and a clean
-          external consumer must resolve pkg/framework/gateway at the same RC6 version.
+          RC7 keeps the same staged publication model and makes repository-owned app
+          convergence explicit bookkeeping. After all three module tags exist, app is
+          pinned to the real pkg release, root go.work.sum is rebuilt from the tagged
+          graph, generated/contract outputs are checked, and those repository changes
+          are committed before any app VCS-identity qualification runs. This preserves
+          `vcs.modified=false` as an actual invariant instead of weakening the test.
           EOF
 
           git add app/go.mod app/go.sum tools/module-release.env go.work.sum docs/waves/C4.1-module-publication-convergence.md
-          git commit -m 'build: converge C4.1 RC6 repository workspace'
+          git commit -m 'build: converge C4.1 RC7 repository workspace'
           git push origin "HEAD:${BRANCH}"
           workspace_sha="$(git rev-parse HEAD)"
           echo "WORKSPACE_SHA=$workspace_sha" >> "$GITHUB_ENV"
 
-      - name: Qualify exact RC6 artifacts
+      - name: Qualify clean RC7 workspace and artifacts
         shell: bash
         run: |
           set -euo pipefail
@@ -224,7 +209,15 @@ jobs:
           test -n "${WORKSPACE_SHA:-}"
           test "$(git rev-parse HEAD)" = "$WORKSPACE_SHA"
           test -z "$(git status --porcelain)" || {
-            echo 'RC6 repository workspace is not clean before qualification' >&2
+            echo 'RC7 repository workspace is not clean before qualification' >&2
+            git status --porcelain >&2
+            exit 1
+          }
+
+          (cd app && go test ./cmd -run TestC116CExpertCommandCompatibilitySnapshots -count=1)
+          (cd app && go test ./cmd/projectflow -run TestC114QualificationRealBinaryFastFeedback -count=1)
+          test -z "$(git status --porcelain)" || {
+            echo 'targeted app qualification dirtied RC7 workspace' >&2
             git status --porcelain >&2
             exit 1
           }
@@ -244,7 +237,7 @@ jobs:
             (cd "$module" && go test ./... && go vet ./... && go build ./...)
           done
           test -z "$(git status --porcelain)" || {
-            echo 'source-workspace qualification dirtied RC6 bookkeeping commit' >&2
+            echo 'source-workspace qualification dirtied RC7 bookkeeping commit' >&2
             git status --porcelain >&2
             exit 1
           }
@@ -261,7 +254,7 @@ jobs:
 
           tmp="$(mktemp -d)"
           cd "$tmp"
-          GOWORK=off go mod init yunka-c41-rc6-external-probe >/dev/null
+          GOWORK=off go mod init yunka-c41-rc7-external-probe >/dev/null
           GOWORK=off go get "github.com/hvritual/yunka.io/pkg@${RC_VERSION}"
           GOWORK=off go get "github.com/hvritual/yunka.io/framework@${RC_VERSION}"
           GOWORK=off go get "github.com/hvritual/yunka.io/gateway@${RC_VERSION}"
@@ -271,17 +264,17 @@ jobs:
           test "$(GOWORK=off go list -m -f '{{.Version}}' github.com/hvritual/yunka.io/gateway)" = "$RC_VERSION"
           cd - >/dev/null
           rm -rf "$tmp"
-          echo "C4.1 RC6 staged publication qualified: pkg=$PKG_SHA framework=$FRAMEWORK_SHA gateway=$GATEWAY_SHA workspace=$WORKSPACE_SHA"
+          echo "C4.1 RC7 qualified: pkg=$PKG_SHA framework=$FRAMEWORK_SHA gateway=$GATEWAY_SHA workspace=$WORKSPACE_SHA"
 
-      - name: Finalize successful RC6 executor
+      - name: Finalize successful RC7 executor
         shell: bash
         run: |
           set -euo pipefail
           git rm -f .github/workflows/c4-1-rc6-staged-release.yml
-          git commit -m 'ci: retire successful C4.1 RC6 executor'
+          git commit -m 'ci: retire successful C4.1 RC7 executor'
           git push origin "HEAD:${BRANCH}"
 
-      - name: Cleanup failed RC6 tags
+      - name: Cleanup failed RC7 tags
         if: failure()
         shell: bash
         run: |
