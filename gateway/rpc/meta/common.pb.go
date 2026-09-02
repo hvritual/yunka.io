@@ -157,7 +157,7 @@ const file_gateway_common_proto_rawDesc = "" +
 	"\x04code\x18\x01 \x01(\x0e2\".io.yunka.gateway.rpc.ResponseCodeR\x04code*%\n" +
 	"\fResponseCode\x12\a\n" +
 	"\x03Not\x10\x00\x12\f\n" +
-	"\bResponse\x10\x01B Z\x1egithub.com/hvritual/yunka.io/gateway/rpc/meta;metab\x06proto3"
+	"\bResponse\x10\x01B4Z2github.com/hvritual/yunka.io/gateway/rpc/meta;metab\x06proto3"
 
 var (
 	file_gateway_common_proto_rawDescOnce sync.Once

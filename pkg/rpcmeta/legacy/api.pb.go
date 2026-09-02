@@ -268,7 +268,7 @@ const file_legacy_api_proto_rawDesc = "" +
 	"\n" +
 	"ApiService\x12.\n" +
 	"\fGetApiByUUID\x12\x0e.GetApiRequest\x1a\x0e.GetApiReponse\x12J\n" +
-	"\x11FindAllRuntimeAPI\x12\x19.FindAllRuntimeAPIRequest\x1a\x1a.FindAllRuntimeAPIResponseB$Z\"github.com/hvritual/yunka.io/pkg/rpcmeta/legacy;legacyb\x06proto3"
+	"\x11FindAllRuntimeAPI\x12\x19.FindAllRuntimeAPIRequest\x1a\x1a.FindAllRuntimeAPIResponseB8Z6github.com/hvritual/yunka.io/pkg/rpcmeta/legacy;legacyb\x06proto3"
 
 var (
 	file_legacy_api_proto_rawDescOnce sync.Once
