@@ -5,11 +5,11 @@ import (
 	"strings"
 
 	"gorm.io/gorm"
-	"yunka.io/framework/core/modulecatalog"
-	"yunka.io/gateway/authz"
-	"yunka.io/gateway/dispatcher/intercept"
-	"yunka.io/gateway/dispatcher/intercept/role/db"
-	"yunka.io/gateway/dispatcher/router"
+	"github.com/hvritual/yunka.io/framework/core/modulecatalog"
+	"github.com/hvritual/yunka.io/gateway/authz"
+	"github.com/hvritual/yunka.io/gateway/dispatcher/intercept"
+	"github.com/hvritual/yunka.io/gateway/dispatcher/intercept/role/db"
+	"github.com/hvritual/yunka.io/gateway/dispatcher/router"
 )
 
 var ErrBuildContextUnavailable = errors.New("role intercept: module build context is unavailable")

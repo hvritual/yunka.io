@@ -6,7 +6,7 @@ import (
 	sls "github.com/aliyun/aliyun-log-go-sdk"
 	"github.com/go-kit/log"
 	"io"
-	"yunka.io/pkg/resource"
+	"github.com/hvritual/yunka.io/pkg/resource"
 )
 
 type (

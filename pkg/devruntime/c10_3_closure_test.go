@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	applicationgraph "yunka.io/pkg/applicationgraph"
+	applicationgraph "github.com/hvritual/yunka.io/pkg/applicationgraph"
 )
 
 func TestC103ClosureApplicationOwnerRequiresDiagnosticsBarrier(t *testing.T) {

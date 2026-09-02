@@ -11,7 +11,7 @@ func TestAutoloadDescriptorOnlyPolicy(t *testing.T) {
 	valid := filepath.Join(root, "valid.go")
 	if err := os.WriteFile(valid, []byte(`package autoload
 import (
-  "yunka.io/framework/core/modulecatalog"
+  "github.com/hvritual/yunka.io/framework/core/modulecatalog"
   orders "yunka.io/modules/orders"
 )
 func init() { modulecatalog.MustRegister(orders.GeneratedDescriptor()) }
@@ -30,7 +30,7 @@ func init() { modulecatalog.MustRegister(orders.GeneratedDescriptor()) }
 	if err := os.WriteFile(invalid, []byte(`package autoload
 import (
   "os"
-  "yunka.io/framework/core/modulecatalog"
+  "github.com/hvritual/yunka.io/framework/core/modulecatalog"
   orders "yunka.io/modules/orders"
 )
 func init() {
@@ -78,7 +78,7 @@ func init() { modulecatalog.MustRegister(orders.GeneratedDescriptor()) }
 `,
 		"side_effect.go": `package autoload
 import (
-  "yunka.io/framework/core/modulecatalog"
+  "github.com/hvritual/yunka.io/framework/core/modulecatalog"
   orders "yunka.io/modules/orders"
 )
 func init() { modulecatalog.MustRegister(orders.GeneratedDescriptor(readEnvironment())) }
@@ -108,7 +108,7 @@ func TestTypedCompositionRejectsSelectorServiceLocatorAndAliasedPool(t *testing.
 	}
 	if err := os.WriteFile(filepath.Join(root, "framework/core/modulecatalog/bad.go"), []byte(`package modulecatalog
 import (
-  core "yunka.io/framework/core"
+  core "github.com/hvritual/yunka.io/framework/core"
   synchronization "sync"
 )
 var pool synchronization.Pool
@@ -139,9 +139,9 @@ func TestTypedCompositionRejectsLegacyContainerImportsInC72Paths(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(root, "framework/requestscope/bad.go"), []byte(`package requestscope
 import (
-  "yunka.io/framework/core/module"
-  "yunka.io/framework/core/request"
-  "yunka.io/pkg/di"
+  "github.com/hvritual/yunka.io/framework/core/module"
+  "github.com/hvritual/yunka.io/framework/core/request"
+  "github.com/hvritual/yunka.io/pkg/di"
 )
 var _ = module.NewModule
 var _ request.Runtime
@@ -170,7 +170,7 @@ func TestC73RejectsRemovedPathsAndRuntimeMutation(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(root, "gateway/rpc/bridge/bad.go"), []byte(`package bridge
 import (
-  old "yunka.io/framework/core/module"
+  old "github.com/hvritual/yunka.io/framework/core/module"
   "sync"
 )
 type ModuleGatewayProvider struct { pool sync.Pool }

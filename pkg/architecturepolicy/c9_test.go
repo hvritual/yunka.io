@@ -23,12 +23,12 @@ func TestC9OperationCompilerAndExecutorBoundaries(t *testing.T) {
 	codegen := read("pkg/contract/c9_application_codegen.go")
 	artifact := read("pkg/contract/artifact.go")
 
-	for _, forbidden := range []string{"yunka.io/framework", "yunka.io/gateway", "gorm.io/", "database/sql"} {
+	for _, forbidden := range []string{"github.com/hvritual/yunka.io/framework", "github.com/hvritual/yunka.io/gateway", "gorm.io/", "database/sql"} {
 		if strings.Contains(plan, forbidden) {
 			t.Errorf("leaf operationplan IR depends on forbidden runtime package %q", forbidden)
 		}
 	}
-	if strings.Contains(executor, "yunka.io/gateway") {
+	if strings.Contains(executor, "github.com/hvritual/yunka.io/gateway") {
 		t.Error("framework/operation must not own or import gateway authorization")
 	}
 	if !strings.Contains(security, "PolicyFromOperationPlan") || !strings.Contains(security, "NewExecutionSecurity") {

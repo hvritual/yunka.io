@@ -4,7 +4,7 @@ package yunka.dsl.v1;
 
 import "google/protobuf/descriptor.proto";
 
-option go_package = "yunka.io/pkg/contractdsl/v1;contractdslv1";
+option go_package = "github.com/hvritual/yunka.io/pkg/contractdsl/v1;contractdslv1";
 
 enum DTOKind {
   DTO_UNSPECIFIED = 0;

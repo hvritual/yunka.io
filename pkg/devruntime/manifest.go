@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	applicationgraph "yunka.io/pkg/applicationgraph"
+	applicationgraph "github.com/hvritual/yunka.io/pkg/applicationgraph"
 )
 
 const (

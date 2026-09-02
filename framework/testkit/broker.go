@@ -6,7 +6,7 @@ import (
 	"sort"
 	"sync"
 
-	"yunka.io/framework/event"
+	"github.com/hvritual/yunka.io/framework/event"
 )
 
 type Broker struct {

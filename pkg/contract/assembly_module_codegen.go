@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"yunka.io/pkg/assemblyplan"
-	"yunka.io/pkg/modulespec"
+	"github.com/hvritual/yunka.io/pkg/assemblyplan"
+	"github.com/hvritual/yunka.io/pkg/modulespec"
 )
 
 const AssemblyModuleCodePath = "assembly/zz_yunka_modules_gen.go"
@@ -56,7 +56,7 @@ func RenderAssemblyModuleCode(plan assemblyplan.Plan, bindings []ModuleBinding) 
 
 	imports := newImportSet()
 	imports.add("fmt", "fmt")
-	imports.add("yunka.io/framework/core/modulecatalog", "modulecatalog")
+	imports.add("github.com/hvritual/yunka.io/framework/core/modulecatalog", "modulecatalog")
 	aliases := make(map[string]string, len(bindings))
 	for _, name := range names {
 		if binding, ok := byName[name]; ok {

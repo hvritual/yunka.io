@@ -12,9 +12,9 @@ import (
 
 	"google.golang.org/grpc"
 	"gorm.io/gorm"
-	"yunka.io/framework/core/eventBus"
-	"yunka.io/framework/core/modulecatalog"
-	"yunka.io/pkg/logExt"
+	"github.com/hvritual/yunka.io/framework/core/eventBus"
+	"github.com/hvritual/yunka.io/framework/core/modulecatalog"
+	"github.com/hvritual/yunka.io/pkg/logExt"
 )
 
 const DefaultPrepareTimeout = 30 * time.Second

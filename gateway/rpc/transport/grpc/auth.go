@@ -11,7 +11,7 @@ import (
 	grpccredentials "google.golang.org/grpc/credentials"
 	grpcmetadata "google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
-	"yunka.io/framework/core/identity"
+	"github.com/hvritual/yunka.io/framework/core/identity"
 )
 
 const (

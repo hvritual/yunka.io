@@ -4,7 +4,7 @@ package outboxruntime
 
 import (
 	"fmt"
-	"yunka.io/framework/core/modulecatalog"
+	"github.com/hvritual/yunka.io/framework/core/modulecatalog"
 )
 
 func GeneratedDescriptor() modulecatalog.Descriptor {

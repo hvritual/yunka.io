@@ -1,6 +1,6 @@
 package method
 
-import "yunka.io/gateway/rpc/meta"
+import "github.com/hvritual/yunka.io/gateway/rpc/meta"
 
 const (
 	BatchAddRuntimeApi = meta.GatewayService_BatchAddRuntimeApi_FullMethodName

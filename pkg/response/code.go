@@ -1,7 +1,7 @@
 package response
 
 import (
-	"yunka.io/pkg/define"
+	"github.com/hvritual/yunka.io/pkg/define"
 )
 
 /**

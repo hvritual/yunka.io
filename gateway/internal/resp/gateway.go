@@ -2,7 +2,7 @@ package resp
 
 import (
 	"strconv"
-	"yunka.io/pkg/response"
+	"github.com/hvritual/yunka.io/pkg/response"
 )
 
 /**

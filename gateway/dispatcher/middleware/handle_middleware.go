@@ -6,16 +6,16 @@ import (
 	"sync"
 
 	"github.com/buger/jsonparser"
-	"yunka.io/framework/core/request"
-	"yunka.io/framework/core/runtimecontext"
-	"yunka.io/gateway/authz"
-	"yunka.io/gateway/dispatcher/bridge"
-	"yunka.io/gateway/dispatcher/proxy"
-	"yunka.io/gateway/internal/resp"
-	"yunka.io/gateway/rpc/meta"
-	"yunka.io/pkg/response"
-	"yunka.io/pkg/stringsExt"
-	"yunka.io/pkg/syncExt"
+	"github.com/hvritual/yunka.io/framework/core/request"
+	"github.com/hvritual/yunka.io/framework/core/runtimecontext"
+	"github.com/hvritual/yunka.io/gateway/authz"
+	"github.com/hvritual/yunka.io/gateway/dispatcher/bridge"
+	"github.com/hvritual/yunka.io/gateway/dispatcher/proxy"
+	"github.com/hvritual/yunka.io/gateway/internal/resp"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/pkg/response"
+	"github.com/hvritual/yunka.io/pkg/stringsExt"
+	"github.com/hvritual/yunka.io/pkg/syncExt"
 )
 
 const (

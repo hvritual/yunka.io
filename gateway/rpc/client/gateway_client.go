@@ -7,7 +7,7 @@ import (
 	"time"
 
 	grpcgo "google.golang.org/grpc"
-	"yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
 )
 
 const DefaultTimeout = 500 * time.Millisecond

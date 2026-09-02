@@ -22,13 +22,13 @@ func TestDiscoverModuleSnapshotReadsGeneratedDescriptorFacts(t *testing.T) {
 	write(filepath.Join(moduleRoot, "module.go"), "package device\nconst ModuleName = \"device\"\n")
 	write(filepath.Join(moduleRoot, "autoload", "register.go"), `package autoload
 import (
-    "yunka.io/framework/core/modulecatalog"
+    "github.com/hvritual/yunka.io/framework/core/modulecatalog"
     module "example.com/product/modules/device"
 )
 func init() { modulecatalog.MustRegister(module.GeneratedDescriptor()) }
 `)
 	write(filepath.Join(moduleRoot, "zz_yunka_module_gen.go"), `package device
-import "yunka.io/framework/core/modulecatalog"
+import "github.com/hvritual/yunka.io/framework/core/modulecatalog"
 func GeneratedDescriptor() modulecatalog.Descriptor {
     return modulecatalog.Descriptor{
         Name: ModuleName,
@@ -67,7 +67,7 @@ func GeneratedDescriptor() modulecatalog.Descriptor {
 func TestParseGeneratedDescriptorFailsClosedOnUnknownField(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "zz_yunka_module_gen.go")
 	if err := os.WriteFile(path, []byte(`package device
-import "yunka.io/framework/core/modulecatalog"
+import "github.com/hvritual/yunka.io/framework/core/modulecatalog"
 func GeneratedDescriptor() modulecatalog.Descriptor {
     return modulecatalog.Descriptor{
         Name: ModuleName,

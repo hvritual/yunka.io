@@ -2,11 +2,11 @@ package middleware
 
 import (
 	"crypto/subtle"
-	"yunka.io/framework/core/identity"
-	"yunka.io/framework/core/request"
-	"yunka.io/gateway/dispatcher/proxy"
-	"yunka.io/gateway/rpc/meta"
-	"yunka.io/pkg/stringsExt"
+	"github.com/hvritual/yunka.io/framework/core/identity"
+	"github.com/hvritual/yunka.io/framework/core/request"
+	"github.com/hvritual/yunka.io/gateway/dispatcher/proxy"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/pkg/stringsExt"
 )
 
 /**

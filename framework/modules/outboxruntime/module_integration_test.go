@@ -10,8 +10,8 @@ import (
 
 	mysqlDriver "gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	"yunka.io/framework/core/eventBus"
-	"yunka.io/pkg/logExt"
+	"github.com/hvritual/yunka.io/framework/core/eventBus"
+	"github.com/hvritual/yunka.io/pkg/logExt"
 )
 
 func TestModuleLifecycleMySQL84(t *testing.T) {

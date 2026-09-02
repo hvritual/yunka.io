@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 import "legacy/common.proto";
-option go_package = "yunka.io/pkg/rpcmeta/legacy;legacy";
+option go_package = "github.com/hvritual/yunka.io/pkg/rpcmeta/legacy;legacy";
 
 enum ModuleCanUse {
     All = 0;

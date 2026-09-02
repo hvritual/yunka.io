@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"yunka.io/pkg/selector"
+	"github.com/hvritual/yunka.io/pkg/selector"
 )
 
 // PickTarget delegates node selection to W5 without creating a second RPC

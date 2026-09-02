@@ -7,9 +7,9 @@ import (
 	"sync"
 	"testing"
 
-	"yunka.io/framework/core/identity"
-	"yunka.io/framework/core/runtimecontext"
-	"yunka.io/pkg/logExt"
+	"github.com/hvritual/yunka.io/framework/core/identity"
+	"github.com/hvritual/yunka.io/framework/core/runtimecontext"
+	"github.com/hvritual/yunka.io/pkg/logExt"
 )
 
 type fakeUnitOfWork struct {

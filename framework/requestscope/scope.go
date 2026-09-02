@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"sync"
 
-	"yunka.io/framework/core/identity"
-	"yunka.io/framework/core/runtimecontext"
-	"yunka.io/framework/execution"
-	"yunka.io/pkg/logExt"
+	"github.com/hvritual/yunka.io/framework/core/identity"
+	"github.com/hvritual/yunka.io/framework/core/runtimecontext"
+	"github.com/hvritual/yunka.io/framework/execution"
+	"github.com/hvritual/yunka.io/pkg/logExt"
 )
 
 var (

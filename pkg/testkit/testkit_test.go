@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"yunka.io/pkg/registry"
+	"github.com/hvritual/yunka.io/pkg/registry"
 )
 
 func TestClockAdvance(t *testing.T) {

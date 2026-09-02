@@ -1,6 +1,6 @@
 package platform
 
-import "yunka.io/pkg/logExt"
+import "github.com/hvritual/yunka.io/pkg/logExt"
 
 type moduleLogger struct {
 	delegate logExt.Logger

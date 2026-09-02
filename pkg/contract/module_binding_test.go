@@ -18,7 +18,7 @@ func TestDiscoverModuleBindingsUsesExplicitGeneratedFacts(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(moduleRoot, "autoload", "register.go"), []byte(`package autoload
 import (
-    "yunka.io/framework/core/modulecatalog"
+    "github.com/hvritual/yunka.io/framework/core/modulecatalog"
     module "example.com/product/modules/device"
 )
 func init() { modulecatalog.MustRegister(module.GeneratedDescriptor()) }

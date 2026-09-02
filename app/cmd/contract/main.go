@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/urfave/cli"
-	contractcore "yunka.io/pkg/contract"
+	contractcore "github.com/hvritual/yunka.io/pkg/contract"
 )
 
 const AppName = "contract"

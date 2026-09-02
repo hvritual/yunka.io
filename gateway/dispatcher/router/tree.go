@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
 )
 
 type Handle *meta.RuntimeApi

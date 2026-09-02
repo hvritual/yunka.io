@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"yunka.io/pkg/assemblyplan"
+	"github.com/hvritual/yunka.io/pkg/assemblyplan"
 )
 
 func TestC102GeneratedAssemblyCompilesTypedFactoryBoundary(t *testing.T) {
@@ -49,14 +49,14 @@ go 1.25.0
 
 require (
 	google.golang.org/grpc v1.82.1
-	yunka.io/framework v0.0.0
-	yunka.io/gateway v0.0.0
-	yunka.io/pkg v0.0.0
+	github.com/hvritual/yunka.io/framework v0.0.0
+	github.com/hvritual/yunka.io/gateway v0.0.0
+	github.com/hvritual/yunka.io/pkg v0.0.0
 )
 
-replace yunka.io/framework => %s
-replace yunka.io/gateway => %s
-replace yunka.io/pkg => %s
+replace github.com/hvritual/yunka.io/framework => %s
+replace github.com/hvritual/yunka.io/gateway => %s
+replace github.com/hvritual/yunka.io/pkg => %s
 `, filepath.ToSlash(filepath.Join(repositoryRoot, "framework")), filepath.ToSlash(filepath.Join(repositoryRoot, "gateway")), filepath.ToSlash(filepath.Join(repositoryRoot, "pkg"))))
 	writeC102File(t, filepath.Join(root, "contracts", "fixture", "types.go"), `package fixturepb
 
@@ -70,7 +70,7 @@ type ValidateResponse struct{}
 import (
 	"net/http"
 	deviceapplication "example.com/c102fixture/internal/device/application"
-	"yunka.io/framework/operation"
+	"github.com/hvritual/yunka.io/framework/operation"
 )
 
 func RegisterOperationExecutor(*http.ServeMux, deviceapplication.TransferService, operation.Executor) error { return nil }
@@ -80,7 +80,7 @@ func RegisterOperationExecutor(*http.ServeMux, deviceapplication.TransferService
 import (
 	deviceapplication "example.com/c102fixture/internal/device/application"
 	"google.golang.org/grpc"
-	"yunka.io/framework/operation"
+	"github.com/hvritual/yunka.io/framework/operation"
 )
 
 func RegisterOperationExecutor(grpc.ServiceRegistrar, deviceapplication.TransferService, operation.Executor) error { return nil }

@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"yunka.io/pkg/devruntime"
-	"yunka.io/pkg/diagnostic"
+	"github.com/hvritual/yunka.io/pkg/devruntime"
+	"github.com/hvritual/yunka.io/pkg/diagnostic"
 )
 
 const doctorDiagnosticSchemaVersion = 1

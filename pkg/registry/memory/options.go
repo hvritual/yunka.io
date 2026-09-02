@@ -3,7 +3,7 @@ package memory
 import (
 	"context"
 
-	"yunka.io/pkg/registry"
+	"github.com/hvritual/yunka.io/pkg/registry"
 )
 
 type servicesKey struct{}

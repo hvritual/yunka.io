@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"yunka.io/pkg/modulespec"
+	"github.com/hvritual/yunka.io/pkg/modulespec"
 )
 
 func TestDeclarativeModuleCLIPathCreatesOnlyCanonicalSpec(t *testing.T) {

@@ -18,8 +18,8 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 	empty "google.golang.org/protobuf/types/known/emptypb"
-	"yunka.io/framework/core/identity"
-	coremiddleware "yunka.io/framework/core/middleware"
+	"github.com/hvritual/yunka.io/framework/core/identity"
+	coremiddleware "github.com/hvritual/yunka.io/framework/core/middleware"
 )
 
 const testIdentityMethod = "/c1.Identity/WhoAmI"

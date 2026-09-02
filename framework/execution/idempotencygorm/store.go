@@ -11,7 +11,7 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"yunka.io/framework/execution"
+	"github.com/hvritual/yunka.io/framework/execution"
 )
 
 const defaultLeaseDuration = 2 * time.Minute

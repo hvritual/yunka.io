@@ -4,7 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"fmt"
-	"yunka.io/pkg/stringsExt"
+	"github.com/hvritual/yunka.io/pkg/stringsExt"
 )
 
 func GCMEncrypt(originText, additional, key []byte) (nonce []byte, cipherText []byte, err error) {

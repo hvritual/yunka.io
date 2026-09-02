@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"yunka.io/framework/core"
-	graph "yunka.io/pkg/applicationgraph"
+	"github.com/hvritual/yunka.io/framework/core"
+	graph "github.com/hvritual/yunka.io/pkg/applicationgraph"
 )
 
 func TestCoreSourceIncludesSafeRuntimeComponentAndInventoryEvidence(t *testing.T) {

@@ -813,7 +813,7 @@ const file_yunka_dsl_v1_options_proto_rawDesc = "" +
 	"\x06domain\x12\x1c.google.protobuf.FileOptions\x18\xb9\x8e\x03 \x01(\v2\x1f.yunka.dsl.v1.DomainDeclarationR\x06domain:Q\n" +
 	"\x03dto\x12\x1f.google.protobuf.MessageOptions\x18\xba\x8e\x03 \x01(\v2\x1c.yunka.dsl.v1.DTODeclarationR\x03dto:i\n" +
 	"\vapplication\x12\x1f.google.protobuf.ServiceOptions\x18\xbb\x8e\x03 \x01(\v2$.yunka.dsl.v1.ApplicationDeclarationR\vapplication:b\n" +
-	"\toperation\x12\x1e.google.protobuf.MethodOptions\x18\xbc\x8e\x03 \x01(\v2\".yunka.dsl.v1.OperationDeclarationR\toperationB+Z)yunka.io/pkg/contractdsl/v1;contractdslv1b\x06proto3"
+	"\toperation\x12\x1e.google.protobuf.MethodOptions\x18\xbc\x8e\x03 \x01(\v2\".yunka.dsl.v1.OperationDeclarationR\toperationB?Z=github.com/hvritual/yunka.io/pkg/contractdsl/v1;contractdslv1b\x06proto3"
 
 var (
 	file_yunka_dsl_v1_options_proto_rawDescOnce sync.Once

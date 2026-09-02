@@ -17,10 +17,10 @@ import (
 	"time"
 
 	grpcgo "google.golang.org/grpc"
-	"yunka.io/framework/core"
-	"yunka.io/framework/diagnostics"
-	"yunka.io/framework/kernel"
-	"yunka.io/framework/runtimecomponent"
+	"github.com/hvritual/yunka.io/framework/core"
+	"github.com/hvritual/yunka.io/framework/diagnostics"
+	"github.com/hvritual/yunka.io/framework/kernel"
+	"github.com/hvritual/yunka.io/framework/runtimecomponent"
 )
 
 const (

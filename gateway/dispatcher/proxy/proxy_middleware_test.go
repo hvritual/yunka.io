@@ -3,9 +3,9 @@ package proxy
 import (
 	"reflect"
 	"testing"
-	"yunka.io/framework/core/request"
-	"yunka.io/gateway/dispatcher/router"
-	"yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/framework/core/request"
+	"github.com/hvritual/yunka.io/gateway/dispatcher/router"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
 )
 
 /**

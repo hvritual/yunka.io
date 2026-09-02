@@ -5,7 +5,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
-	"yunka.io/pkg/registry"
+	"github.com/hvritual/yunka.io/pkg/registry"
 )
 
 func TestMDNS(t *testing.T) {

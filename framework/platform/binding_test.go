@@ -3,7 +3,7 @@ package platform
 import (
 	"testing"
 
-	"yunka.io/pkg/providerplan"
+	"github.com/hvritual/yunka.io/pkg/providerplan"
 )
 
 func TestBindManifestBuildsTypedFactoryMapsFromEnvironment(t *testing.T) {

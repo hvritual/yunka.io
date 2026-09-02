@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"yunka.io/framework/core/identity"
+	"github.com/hvritual/yunka.io/framework/core/identity"
 )
 
 type checkerFunc func(context.Context, string, []string, []PermissionKey, PermissionMode) (bool, error)

@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/valyala/fasthttp"
-	"yunka.io/framework/observability"
-	"yunka.io/pkg/logExt"
+	"github.com/hvritual/yunka.io/framework/observability"
+	"github.com/hvritual/yunka.io/pkg/logExt"
 )
 
 // UseObservability installs the unified W4 middleware around gateway requests.

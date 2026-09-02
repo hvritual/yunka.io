@@ -2,8 +2,8 @@ package outboxruntime
 
 import (
 	"gorm.io/gorm"
-	"yunka.io/framework/core/eventBus"
-	"yunka.io/pkg/logExt"
+	"github.com/hvritual/yunka.io/framework/core/eventBus"
+	"github.com/hvritual/yunka.io/pkg/logExt"
 )
 
 // Dependencies is the complete compiler-checked capability view for this module.

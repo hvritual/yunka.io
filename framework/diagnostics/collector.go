@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"yunka.io/framework/core"
+	"github.com/hvritual/yunka.io/framework/core"
 )
 
 const SchemaVersion = 1

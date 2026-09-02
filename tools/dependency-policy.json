@@ -2,7 +2,6 @@
   "schemaVersion": 3,
   "moduleFiles": [
     "go.work",
-    "compat/go-kit-kit-log/go.mod",
     "pkg/go.mod",
     "framework/go.mod",
     "gateway/go.mod",
@@ -10,13 +9,16 @@
   ],
   "forbiddenModules": [
     "github.com/grpc-ecosystem/grpc-gateway",
-    "go.etcd.io/etcd",
-    "google.golang.org/genproto"
+    "go.etcd.io/etcd"
   ],
   "requiredModules": [
     {
       "path": "github.com/aliyun/aliyun-log-go-sdk",
       "version": "v0.1.127"
+    },
+    {
+      "path": "github.com/go-kit/kit",
+      "version": "v0.13.0"
     },
     {
       "path": "github.com/go-kit/log",
@@ -35,6 +37,10 @@
       "version": "v1.36.11"
     },
     {
+      "path": "google.golang.org/genproto",
+      "version": "v0.0.0-20260810153831-ec0a7760b754"
+    },
+    {
       "path": "google.golang.org/genproto/googleapis/api",
       "version": "v0.0.0-20260810153831-ec0a7760b754"
     },
@@ -43,36 +49,15 @@
       "version": "v0.0.0-20260807164820-c8921c73eeea"
     }
   ],
-  "workspaceModules": [
-    {
-      "path": "github.com/go-kit/kit",
-      "directory": "compat/go-kit-kit-log"
-    }
-  ],
+  "workspaceModules": [],
   "forbidExternalReplaces": true,
   "forbiddenReplaceModules": [
     "google.golang.org/genproto"
   ],
-  "requiredLocalReplacements": [
-    {
-      "path": "github.com/go-kit/kit",
-      "version": "v0.10.0",
-      "directory": "compat/go-kit-kit-log",
-      "files": [
-        "go.work",
-        "pkg/go.mod",
-        "framework/go.mod",
-        "gateway/go.mod",
-        "app/go.mod"
-      ]
-    }
-  ],
+  "requiredLocalReplacements": [],
   "legacyImports": [
     {
-      "path": "github.com/go-kit/kit",
-      "allowedPrefixes": [
-        "compat/go-kit-kit-log/"
-      ]
+      "path": "github.com/go-kit/kit"
     },
     {
       "path": "github.com/aliyun/aliyun-log-go-sdk",

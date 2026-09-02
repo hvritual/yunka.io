@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"yunka.io/framework/core/identity"
-	frameworkoperation "yunka.io/framework/operation"
-	"yunka.io/pkg/operationplan"
+	"github.com/hvritual/yunka.io/framework/core/identity"
+	frameworkoperation "github.com/hvritual/yunka.io/framework/operation"
+	"github.com/hvritual/yunka.io/pkg/operationplan"
 )
 
 var (

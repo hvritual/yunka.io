@@ -3,7 +3,7 @@ package selector
 import (
 	"testing"
 
-	"yunka.io/pkg/registry"
+	"github.com/hvritual/yunka.io/pkg/registry"
 )
 
 func TestFilterEndpoint(t *testing.T) {

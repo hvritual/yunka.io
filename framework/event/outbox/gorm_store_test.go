@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"gorm.io/gorm"
-	"yunka.io/framework/event"
+	"github.com/hvritual/yunka.io/framework/event"
 )
 
 func TestGORMStoreRejectsUnsafeTableName(t *testing.T) {

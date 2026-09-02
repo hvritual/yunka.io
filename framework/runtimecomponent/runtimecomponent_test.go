@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/test/bufconn"
-	"yunka.io/framework/core"
+	"github.com/hvritual/yunka.io/framework/core"
 )
 
 func TestHTTPComponentRunsThroughCoreAppLifecycle(t *testing.T) {

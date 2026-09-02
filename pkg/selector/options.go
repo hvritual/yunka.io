@@ -5,7 +5,7 @@ import (
 	"math"
 	"time"
 
-	"yunka.io/pkg/registry"
+	"github.com/hvritual/yunka.io/pkg/registry"
 )
 
 // AdaptiveMode controls the stateful node choice algorithm.

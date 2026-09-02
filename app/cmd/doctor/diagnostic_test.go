@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"yunka.io/pkg/devruntime"
-	"yunka.io/pkg/diagnostic"
+	"github.com/hvritual/yunka.io/pkg/devruntime"
+	"github.com/hvritual/yunka.io/pkg/diagnostic"
 )
 
 func TestDoctorMappingsCoverCurrentProbeNames(t *testing.T) {

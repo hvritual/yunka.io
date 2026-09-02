@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"yunka.io/framework/core/identity"
-	"yunka.io/pkg/operationplan"
+	"github.com/hvritual/yunka.io/framework/core/identity"
+	"github.com/hvritual/yunka.io/pkg/operationplan"
 )
 
 func TestIdempotencyCoordinatorClaimsCompletesAndAllowsFailedRetry(t *testing.T) {

@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"yunka.io/framework/core/identity"
-	"yunka.io/pkg/define"
+	"github.com/hvritual/yunka.io/framework/core/identity"
+	"github.com/hvritual/yunka.io/pkg/define"
 )
 
 func TestPrincipalFromClaims(t *testing.T) {

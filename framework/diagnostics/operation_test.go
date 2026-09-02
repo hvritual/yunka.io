@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	frameworkoperation "yunka.io/framework/operation"
-	"yunka.io/pkg/operationplan"
+	frameworkoperation "github.com/hvritual/yunka.io/framework/operation"
+	"github.com/hvritual/yunka.io/pkg/operationplan"
 )
 
 func TestOperationSourceExposesSafePlanSummaryOnly(t *testing.T) {

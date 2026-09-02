@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"yunka.io/framework/core/identity"
+	"github.com/hvritual/yunka.io/framework/core/identity"
 )
 
 // Grant is an IAM-owned permission grant projected into the framework security runtime.

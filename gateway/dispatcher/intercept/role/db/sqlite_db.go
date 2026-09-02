@@ -11,7 +11,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"yunka.io/gateway/authz"
+	"github.com/hvritual/yunka.io/gateway/authz"
 )
 
 const legacyRoleModuleButtonTableName = "role_module_button"

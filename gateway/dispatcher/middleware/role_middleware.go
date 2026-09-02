@@ -1,10 +1,10 @@
 package middleware
 
 import (
-	"yunka.io/framework/core/request"
-	"yunka.io/gateway/dispatcher/intercept"
-	"yunka.io/gateway/dispatcher/proxy"
-	"yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/framework/core/request"
+	"github.com/hvritual/yunka.io/gateway/dispatcher/intercept"
+	"github.com/hvritual/yunka.io/gateway/dispatcher/proxy"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
 )
 
 /**

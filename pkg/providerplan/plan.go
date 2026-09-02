@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"yunka.io/pkg/assemblyplan"
+	"github.com/hvritual/yunka.io/pkg/assemblyplan"
 )
 
 const SchemaVersion = 1

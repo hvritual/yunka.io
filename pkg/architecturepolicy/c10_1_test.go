@@ -65,7 +65,7 @@ func TestC101AssemblyAdaptersRemainOneWay(t *testing.T) {
 	contractAdapter := read("pkg/contract/assembly_plan.go")
 	moduleAdapter := read("framework/core/modulecatalog/assembly.go")
 
-	if strings.Contains(contractAdapter, "yunka.io/framework") || strings.Contains(contractAdapter, "modulecatalog") {
+	if strings.Contains(contractAdapter, "github.com/hvritual/yunka.io/framework") || strings.Contains(contractAdapter, "modulecatalog") {
 		t.Error("pkg/contract AssemblyPlan projection must not depend on framework/modulecatalog")
 	}
 	if !strings.Contains(contractAdapter, "OperationPlansFilename") || !strings.Contains(contractAdapter, "BindingInput") {

@@ -1,6 +1,6 @@
 package memory
 
-import "yunka.io/pkg/logExt"
+import "github.com/hvritual/yunka.io/pkg/logExt"
 
 // Memory is an explicit in-memory SMS sender for development and tests. It has
 // no dependency on a package-global application logger.

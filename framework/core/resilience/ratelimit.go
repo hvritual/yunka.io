@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"yunka.io/framework/core/middleware"
+	"github.com/hvritual/yunka.io/framework/core/middleware"
 )
 
 type RateLimitConfig struct {

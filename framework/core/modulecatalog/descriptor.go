@@ -9,8 +9,8 @@ import (
 
 	"google.golang.org/grpc"
 	"gorm.io/gorm"
-	"yunka.io/framework/core/eventBus"
-	"yunka.io/pkg/logExt"
+	"github.com/hvritual/yunka.io/framework/core/eventBus"
+	"github.com/hvritual/yunka.io/pkg/logExt"
 )
 
 var moduleNamePattern = regexp.MustCompile(`^[a-z][a-z0-9._-]{0,127}$`)

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"yunka.io/pkg/devruntime"
+	"github.com/hvritual/yunka.io/pkg/devruntime"
 )
 
 const defaultRuntimeEvidencePollInterval = 25 * time.Millisecond

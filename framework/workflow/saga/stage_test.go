@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"yunka.io/framework/event"
-	"yunka.io/framework/execution"
+	"github.com/hvritual/yunka.io/framework/event"
+	"github.com/hvritual/yunka.io/framework/execution"
 )
 
 type stageUnit struct{ handle any }

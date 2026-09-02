@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"yunka.io/framework/core"
+	"github.com/hvritual/yunka.io/framework/core"
 )
 
 // BootstrapOptions describes structural assembly sequencing only. The Build and

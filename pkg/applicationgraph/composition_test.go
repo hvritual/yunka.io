@@ -2,7 +2,7 @@ package applicationgraph
 
 import (
 	"testing"
-	"yunka.io/pkg/contract"
+	"github.com/hvritual/yunka.io/pkg/contract"
 )
 
 func TestContractCompositionCreatesDependencyEdges(t *testing.T) {

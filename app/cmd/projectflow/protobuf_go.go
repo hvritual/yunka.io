@@ -14,7 +14,7 @@ import (
 	"strings"
 
 	projectcmd "yunka.io/app/cmd/project"
-	contractcore "yunka.io/pkg/contract"
+	contractcore "github.com/hvritual/yunka.io/pkg/contract"
 )
 
 const protobufGoManifestVersion = 1

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"yunka.io/framework/event"
+	"github.com/hvritual/yunka.io/framework/event"
 )
 
 // MemoryStore is deterministic and useful for tests/dev. It deliberately does

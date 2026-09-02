@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"yunka.io/pkg/fastfeedback"
+	"github.com/hvritual/yunka.io/pkg/fastfeedback"
 )
 
 func TestFastFeedbackInputRootsCoverInventoryAndOrderedProtoPaths(t *testing.T) {

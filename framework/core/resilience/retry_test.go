@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"yunka.io/framework/core/middleware"
-	"yunka.io/framework/core/runtimecontext"
+	"github.com/hvritual/yunka.io/framework/core/middleware"
+	"github.com/hvritual/yunka.io/framework/core/runtimecontext"
 )
 
 func TestRetryRequiresExplicitIdempotency(t *testing.T) {

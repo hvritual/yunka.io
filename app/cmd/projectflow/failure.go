@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"yunka.io/pkg/diagnostic"
+	"github.com/hvritual/yunka.io/pkg/diagnostic"
 )
 
 type FailureKind string

@@ -3,7 +3,7 @@ package selector
 import (
 	"testing"
 
-	"yunka.io/pkg/registry/memory"
+	"github.com/hvritual/yunka.io/pkg/registry/memory"
 )
 
 func TestRegistrySelector(t *testing.T) {

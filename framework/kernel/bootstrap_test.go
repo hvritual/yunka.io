@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"testing"
 
-	"yunka.io/framework/core"
-	"yunka.io/framework/core/modulecatalog"
+	"github.com/hvritual/yunka.io/framework/core"
+	"github.com/hvritual/yunka.io/framework/core/modulecatalog"
 )
 
 func TestBootstrapSequencesBuildRegisterThenExistingAppStart(t *testing.T) {

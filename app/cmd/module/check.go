@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"yunka.io/pkg/architecturepolicy"
-	"yunka.io/pkg/modulespec"
+	"github.com/hvritual/yunka.io/pkg/architecturepolicy"
+	"github.com/hvritual/yunka.io/pkg/modulespec"
 )
 
 var requiredModuleFiles = []string{

@@ -3,11 +3,11 @@ package kernel
 import (
 	"errors"
 
-	"yunka.io/framework/core"
-	"yunka.io/framework/core/eventBus"
-	"yunka.io/framework/core/modulecatalog"
-	"yunka.io/framework/platform"
-	"yunka.io/pkg/logExt"
+	"github.com/hvritual/yunka.io/framework/core"
+	"github.com/hvritual/yunka.io/framework/core/eventBus"
+	"github.com/hvritual/yunka.io/framework/core/modulecatalog"
+	"github.com/hvritual/yunka.io/framework/platform"
+	"github.com/hvritual/yunka.io/pkg/logExt"
 )
 
 type Options struct {

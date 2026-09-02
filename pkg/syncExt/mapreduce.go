@@ -15,8 +15,8 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"yunka.io/pkg/errorExt"
-	"yunka.io/pkg/threading"
+	"github.com/hvritual/yunka.io/pkg/errorExt"
+	"github.com/hvritual/yunka.io/pkg/threading"
 )
 
 const (

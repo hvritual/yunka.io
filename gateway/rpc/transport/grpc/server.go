@@ -6,9 +6,9 @@ import (
 	"fmt"
 
 	grpcgo "google.golang.org/grpc"
-	"yunka.io/gateway/rpc/bridge"
-	"yunka.io/gateway/rpc/meta"
-	"yunka.io/pkg/rpcbridge"
+	"github.com/hvritual/yunka.io/gateway/rpc/bridge"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/pkg/rpcbridge"
 )
 
 var (

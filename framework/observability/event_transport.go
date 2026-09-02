@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"time"
 
-	frameworkevent "yunka.io/framework/event"
-	"yunka.io/framework/event/outbox"
+	frameworkevent "github.com/hvritual/yunka.io/framework/event"
+	"github.com/hvritual/yunka.io/framework/event/outbox"
 )
 
 type eventPropagator struct{}

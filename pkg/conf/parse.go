@@ -3,7 +3,7 @@ package conf
 import (
 	"reflect"
 	"strings"
-	"yunka.io/pkg/stringsExt"
+	"github.com/hvritual/yunka.io/pkg/stringsExt"
 )
 
 /**

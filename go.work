@@ -4,10 +4,7 @@ toolchain go1.25.13
 
 use (
 	./app
-	./compat/go-kit-kit-log
 	./framework
 	./gateway
 	./pkg
 )
-
-replace github.com/go-kit/kit v0.10.0 => ./compat/go-kit-kit-log

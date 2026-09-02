@@ -1,8 +1,8 @@
 package handle
 
 import (
-	"yunka.io/gateway/rpc/client"
-	"yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/gateway/rpc/client"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
 )
 
 // GatewayServiceClient is a source-compatible alias over the single typed

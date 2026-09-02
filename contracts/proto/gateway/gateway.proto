@@ -4,7 +4,7 @@ package io.yunka.gateway.rpc;
 import "gateway/api_common.proto";
 import "gateway/common.proto";
 
-option go_package = "yunka.io/gateway/rpc/meta;meta";
+option go_package = "github.com/hvritual/yunka.io/gateway/rpc/meta;meta";
 
 message OperateRuntimeApiResponse {
     ResponseCode code = 1;

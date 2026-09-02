@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"yunka.io/framework/core/middleware"
+	"github.com/hvritual/yunka.io/framework/core/middleware"
 )
 
 func TestTimeoutBudgetRejectsInsufficientParentBudget(t *testing.T) {

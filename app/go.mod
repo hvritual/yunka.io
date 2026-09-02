@@ -4,13 +4,11 @@ go 1.25.0
 
 toolchain go1.25.13
 
-replace github.com/go-kit/kit v0.10.0 => ../compat/go-kit-kit-log
-
 require (
+	github.com/hvritual/yunka.io/pkg v0.1.0-c41rc7
 	github.com/kataras/golog v0.1.5
 	github.com/pkg/errors v0.9.1
 	github.com/urfave/cli v1.22.5
-	yunka.io/pkg v0.0.0-00010101000000-000000000000
 )
 
 require (
@@ -24,5 +22,3 @@ require (
 	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
-
-replace yunka.io/pkg => ../pkg

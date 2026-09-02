@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"yunka.io/framework/core"
-	"yunka.io/framework/core/resilience"
-	graph "yunka.io/pkg/applicationgraph"
-	"yunka.io/pkg/contract"
-	"yunka.io/pkg/selector"
+	"github.com/hvritual/yunka.io/framework/core"
+	"github.com/hvritual/yunka.io/framework/core/resilience"
+	graph "github.com/hvritual/yunka.io/pkg/applicationgraph"
+	"github.com/hvritual/yunka.io/pkg/contract"
+	"github.com/hvritual/yunka.io/pkg/selector"
 )
 
 type Source interface {

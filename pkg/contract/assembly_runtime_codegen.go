@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"yunka.io/pkg/assemblyplan"
+	"github.com/hvritual/yunka.io/pkg/assemblyplan"
 )
 
 // BindAssemblyRuntime augments the structural assembly file only after module
@@ -57,7 +57,7 @@ func addAssemblyRuntimeImports(source string) (string, error) {
 		}
 		existing[path] = struct{}{}
 	}
-	required := []string{"context", "fmt", "yunka.io/framework/core"}
+	required := []string{"context", "fmt", "github.com/hvritual/yunka.io/framework/core"}
 	var additions strings.Builder
 	for _, path := range required {
 		if _, ok := existing[path]; ok {

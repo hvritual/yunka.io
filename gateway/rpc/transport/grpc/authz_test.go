@@ -7,8 +7,8 @@ import (
 	grpcgo "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"yunka.io/framework/core/identity"
-	"yunka.io/gateway/authz"
+	"github.com/hvritual/yunka.io/framework/core/identity"
+	"github.com/hvritual/yunka.io/gateway/authz"
 )
 
 type grpcChecker func(context.Context, string, []string, []authz.PermissionKey, authz.PermissionMode) (bool, error)

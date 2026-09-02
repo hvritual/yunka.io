@@ -2,7 +2,7 @@
 package registry
 
 import (
-	"yunka.io/pkg/selector"
+	"github.com/hvritual/yunka.io/pkg/selector"
 )
 
 // NewSelector returns a new registry selector

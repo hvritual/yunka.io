@@ -1,7 +1,7 @@
 package etcdv3
 
 import (
-	"yunka.io/pkg/registry"
+	"github.com/hvritual/yunka.io/pkg/registry"
 	"context"
 )
 

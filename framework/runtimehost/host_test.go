@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"yunka.io/framework/core/modulecatalog"
-	"yunka.io/framework/kernel"
+	"github.com/hvritual/yunka.io/framework/core/modulecatalog"
+	"github.com/hvritual/yunka.io/framework/kernel"
 )
 
 func TestBootstrapOwnsTransportLifecycleHealthAndDiagnostics(t *testing.T) {

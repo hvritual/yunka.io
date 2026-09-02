@@ -7,7 +7,7 @@ import (
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"yunka.io/gateway/authz"
+	"github.com/hvritual/yunka.io/gateway/authz"
 )
 
 func openPermissionTestStore(t *testing.T) (*Store, *gorm.DB) {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"yunka.io/pkg/selector"
+	"github.com/hvritual/yunka.io/pkg/selector"
 )
 
 func TestSelectorFeedbackIgnoresLocalPolicyRejections(t *testing.T) {

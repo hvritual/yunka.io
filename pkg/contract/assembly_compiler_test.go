@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"yunka.io/pkg/assemblyplan"
+	"github.com/hvritual/yunka.io/pkg/assemblyplan"
 )
 
 func TestCompileAssemblyEmitsPlanAndGoFromOneJoinedFactSet(t *testing.T) {

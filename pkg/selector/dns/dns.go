@@ -6,8 +6,8 @@ import (
 	"net"
 	"strconv"
 
-	"yunka.io/pkg/registry"
-	"yunka.io/pkg/selector"
+	"github.com/hvritual/yunka.io/pkg/registry"
+	"github.com/hvritual/yunka.io/pkg/selector"
 )
 
 type dnsSelector struct {

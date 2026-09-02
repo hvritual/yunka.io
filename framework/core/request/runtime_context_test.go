@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/valyala/fasthttp"
-	"yunka.io/framework/core/identity"
-	"yunka.io/framework/core/runtimecontext"
+	"github.com/hvritual/yunka.io/framework/core/identity"
+	"github.com/hvritual/yunka.io/framework/core/runtimecontext"
 )
 
 func TestContextCarriesTrustedRuntimeContext(t *testing.T) {

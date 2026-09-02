@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"yunka.io/framework/core/resilience"
+	"github.com/hvritual/yunka.io/framework/core/resilience"
 )
 
 func TestRuntimeMiddlewareStatus(t *testing.T) {

@@ -8,9 +8,9 @@ import (
 	"sync/atomic"
 	"syscall"
 
-	"yunka.io/framework/core/eventBus"
-	"yunka.io/framework/core/modulecatalog"
-	"yunka.io/pkg/logExt"
+	"github.com/hvritual/yunka.io/framework/core/eventBus"
+	"github.com/hvritual/yunka.io/framework/core/modulecatalog"
+	"github.com/hvritual/yunka.io/pkg/logExt"
 )
 
 // App is one isolated typed application instance. Runtime configuration,

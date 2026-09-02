@@ -11,9 +11,9 @@ import (
 	"strings"
 
 	"github.com/urfave/cli"
-	applicationgraph "yunka.io/pkg/applicationgraph"
-	"yunka.io/pkg/contract"
-	"yunka.io/pkg/operationplan"
+	applicationgraph "github.com/hvritual/yunka.io/pkg/applicationgraph"
+	"github.com/hvritual/yunka.io/pkg/contract"
+	"github.com/hvritual/yunka.io/pkg/operationplan"
 )
 
 const AppName = "graph"

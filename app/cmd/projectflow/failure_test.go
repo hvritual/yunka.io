@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"yunka.io/pkg/diagnostic"
+	"github.com/hvritual/yunka.io/pkg/diagnostic"
 )
 
 func TestDiagnoseStableFailureClasses(t *testing.T) {

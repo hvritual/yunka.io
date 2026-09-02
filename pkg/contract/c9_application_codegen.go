@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"yunka.io/pkg/operationplan"
+	"github.com/hvritual/yunka.io/pkg/operationplan"
 )
 
 // RenderC9ApplicationCode emits the canonical C9 application boundary.
@@ -209,7 +209,7 @@ func c9RequiredCapabilityOperations(source Service, target Service) ([]applicati
 func renderC9CapabilityPorts(service Service, naming serviceCodegenNaming, services map[string]Service, typedByDomain map[string][]Service, packages []protoGoPackage, rootImport string) (string, error) {
 	imports := newImportSet()
 	imports.add("errors", "errors")
-	imports.add("yunka.io/framework/operation", "operation")
+	imports.add("github.com/hvritual/yunka.io/framework/operation", "operation")
 	var declarations strings.Builder
 	var providerMethods strings.Builder
 	seen := map[string]string{}
@@ -283,7 +283,7 @@ func renderC9CapabilityPorts(service Service, naming serviceCodegenNaming, servi
 
 func renderC9OperationPlans(service Service, naming serviceCodegenNaming, plans map[string]operationplan.Plan) (string, error) {
 	var b strings.Builder
-	b.WriteString(GeneratedApplicationMarker + "\n\npackage policy\n\nimport \"yunka.io/pkg/operationplan\"\n\n")
+	b.WriteString(GeneratedApplicationMarker + "\n\npackage policy\n\nimport \"github.com/hvritual/yunka.io/pkg/operationplan\"\n\n")
 	operations, err := serviceApplicationOperations(service)
 	if err != nil {
 		return "", err
@@ -339,9 +339,9 @@ func renderC9RPCAdapter(service Service, packages []protoGoPackage, rootImport s
 	policyAlias := imports.add(rootImport+"/"+service.Domain+"/policy", "policy")
 	imports.add("google.golang.org/grpc", "grpc")
 	imports.add("google.golang.org/grpc/metadata", "grpcmetadata")
-	imports.add("yunka.io/framework/execution", "execution")
-	imports.add("yunka.io/framework/operation", "operation")
-	imports.add("yunka.io/gateway/rpc/transport/grpc", "gatewaygrpc")
+	imports.add("github.com/hvritual/yunka.io/framework/execution", "execution")
+	imports.add("github.com/hvritual/yunka.io/framework/operation", "operation")
+	imports.add("github.com/hvritual/yunka.io/gateway/rpc/transport/grpc", "gatewaygrpc")
 	serverName := c9ServerName(naming)
 	registerName := c9RegisterName(naming)
 	var methods strings.Builder
@@ -377,9 +377,9 @@ func renderC9RESTAdapter(service Service, packages []protoGoPackage, messages ma
 	imports := newImportSet()
 	applicationAlias := imports.add(rootImport+"/"+service.Domain+"/application", "application")
 	policyAlias := imports.add(rootImport+"/"+service.Domain+"/policy", "policy")
-	imports.add("yunka.io/framework/execution", "execution")
-	imports.add("yunka.io/framework/operation", "operation")
-	imports.add("yunka.io/gateway/authz", "authz")
+	imports.add("github.com/hvritual/yunka.io/framework/execution", "execution")
+	imports.add("github.com/hvritual/yunka.io/framework/operation", "operation")
+	imports.add("github.com/hvritual/yunka.io/gateway/authz", "authz")
 	imports.add("google.golang.org/protobuf/encoding/protojson", "protojson")
 
 	handlerType := c9RESTHandlerName(naming)

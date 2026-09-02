@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"yunka.io/pkg/assemblyplan"
+	"github.com/hvritual/yunka.io/pkg/assemblyplan"
 )
 
 func TestRenderAssemblyModuleCodeUsesExplicitBindingsOnly(t *testing.T) {

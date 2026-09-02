@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"yunka.io/framework/core/middleware"
+	"github.com/hvritual/yunka.io/framework/core/middleware"
 )
 
 // TimeoutBudgetConfig constrains one logical call while preserving budget for

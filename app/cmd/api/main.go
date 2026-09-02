@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 	"unicode"
-	"yunka.io/pkg/array"
-	"yunka.io/pkg/cryptoExt"
-	"yunka.io/pkg/httpExt"
+	"github.com/hvritual/yunka.io/pkg/array"
+	"github.com/hvritual/yunka.io/pkg/cryptoExt"
+	"github.com/hvritual/yunka.io/pkg/httpExt"
 )
 
 const (

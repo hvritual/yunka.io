@@ -11,7 +11,7 @@ import (
 
 	"github.com/hashicorp/mdns"
 	hash "github.com/mitchellh/hashstructure"
-	"yunka.io/pkg/registry"
+	"github.com/hvritual/yunka.io/pkg/registry"
 )
 
 type mdnsTxt struct {

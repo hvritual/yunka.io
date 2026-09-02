@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"yunka.io/pkg/modulespec"
+	"github.com/hvritual/yunka.io/pkg/modulespec"
 )
 
 type SpecOptions struct {

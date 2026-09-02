@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"yunka.io/framework/core/identity"
+	"github.com/hvritual/yunka.io/framework/core/identity"
 )
 
 type grantCheckerFunc func(context.Context, string, []string, []PermissionKey) ([]Grant, error)

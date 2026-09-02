@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"yunka.io/pkg/contract"
+	"github.com/hvritual/yunka.io/pkg/contract"
 )
 
 func AddContract(builder *Builder, manifest contract.Manifest) error {

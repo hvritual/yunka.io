@@ -20,7 +20,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const defaultInstrumentationName = "yunka.io/framework"
+const defaultInstrumentationName = "github.com/hvritual/yunka.io/framework"
 
 // Config defines process-level telemetry identity. Export destinations are
 // intentionally configured through standard OTEL_* environment variables so

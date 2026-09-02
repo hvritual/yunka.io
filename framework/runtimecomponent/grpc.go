@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	grpcgo "google.golang.org/grpc"
-	"yunka.io/framework/core"
+	"github.com/hvritual/yunka.io/framework/core"
 )
 
 type GRPCOptions struct {

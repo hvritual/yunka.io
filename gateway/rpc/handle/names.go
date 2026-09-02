@@ -1,6 +1,6 @@
 package handle
 
-import "yunka.io/gateway/rpc/method"
+import "github.com/hvritual/yunka.io/gateway/rpc/method"
 
 const (
 	BatchAddRuntimeApi = method.BatchAddRuntimeApi

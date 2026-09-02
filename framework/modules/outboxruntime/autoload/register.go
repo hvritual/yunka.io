@@ -1,8 +1,8 @@
 package autoload
 
 import (
-	"yunka.io/framework/core/modulecatalog"
-	module "yunka.io/framework/modules/outboxruntime"
+	"github.com/hvritual/yunka.io/framework/core/modulecatalog"
+	module "github.com/hvritual/yunka.io/framework/modules/outboxruntime"
 )
 
 func init() { modulecatalog.MustRegister(module.GeneratedDescriptor()) }

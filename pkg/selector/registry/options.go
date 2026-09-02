@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"yunka.io/pkg/selector"
+	"github.com/hvritual/yunka.io/pkg/selector"
 )
 
 // Set the registry cache ttl

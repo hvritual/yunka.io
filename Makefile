@@ -14,7 +14,7 @@ RPC_GEN_DRIVER ?= $(CURDIR)/tools/rpcgen/generate.py
 RPC_ABI_BASELINE ?= $(CURDIR)/contracts/baselines/c5-contract-manifest.json
 PYTHON ?= python3
 VULNCHECK ?= $(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
-MODULES := compat/go-kit-kit-log pkg framework gateway app
+MODULES := pkg framework gateway app
 
 .PHONY: toolchain-check rpc-tools rpc-toolchain-check rpc-generate rpc-check rpc-compat-check rpc-legacy-check rpc-consumer-check rpc-bridge-check dependency-check architecture-check module-check authz-check operation-check c7-check domain-check dsl-check c10-2-qualification-check c10-3-runtime-closure-check test race vet vuln tidy build contract rpc-contract-check contract-check integration verify verify-production
 
@@ -170,10 +170,11 @@ vuln:
 
 tidy:
 	@set -eu; for module in $(MODULES); do \
-		echo "==> go mod tidy ./$$module"; \
-		(cd $$module && $(GO) mod tidy); \
+		echo "==> GOWORK=off go mod tidy ./$$module"; \
+		(cd $$module && GOWORK=off $(GO) mod tidy); \
 	done
-	$(GO) work sync
+	@$(GO) work edit -fmt
+	@$(GO) list -m all >/dev/null
 
 contract: toolchain-check
 	@cd app && PROTOC="$(PROTOC)" $(GO) run ./cmd contract generate \
@@ -206,3 +207,7 @@ integration:
 verify: toolchain-check dependency-check module-check authz-check operation-check c7-check domain-check dsl-check c10-2-qualification-check c10-3-runtime-closure-check rpc-check contract-check rpc-compat-check rpc-legacy-check rpc-consumer-check rpc-bridge-check test race vet vuln build
 
 verify-production: verify integration
+
+.PHONY: module-release-check
+module-release-check:
+	@bash ./tools/module-release-check.sh

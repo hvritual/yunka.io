@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"yunka.io/framework/core/modulecatalog"
+	"github.com/hvritual/yunka.io/framework/core/modulecatalog"
 )
 
 func (app *App) State() AppState         { return AppState(app.state.Load()) }

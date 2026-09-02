@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"yunka.io/framework/core"
+	"github.com/hvritual/yunka.io/framework/core"
 )
 
 type HTTPOptions struct {

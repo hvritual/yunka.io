@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"yunka.io/pkg/assemblyplan"
+	"github.com/hvritual/yunka.io/pkg/assemblyplan"
 )
 
 const (
@@ -174,10 +174,10 @@ func renderAssemblyRoot(plan assemblyplan.Plan, rootImport string, services map[
 	if len(plan.Applications) > 0 {
 		imports.add("fmt", "fmt")
 	}
-	imports.add("yunka.io/framework/core/modulecatalog", "modulecatalog")
-	imports.add("yunka.io/framework/kernel", "kernel")
-	imports.add("yunka.io/framework/operation", "operation")
-	imports.add("yunka.io/framework/platform", "platform")
+	imports.add("github.com/hvritual/yunka.io/framework/core/modulecatalog", "modulecatalog")
+	imports.add("github.com/hvritual/yunka.io/framework/kernel", "kernel")
+	imports.add("github.com/hvritual/yunka.io/framework/operation", "operation")
+	imports.add("github.com/hvritual/yunka.io/framework/platform", "platform")
 
 	type appInfo struct {
 		ID           string

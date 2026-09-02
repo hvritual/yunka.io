@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	frameworkevent "yunka.io/framework/event"
-	"yunka.io/framework/event/outbox"
+	frameworkevent "github.com/hvritual/yunka.io/framework/event"
+	"github.com/hvritual/yunka.io/framework/event/outbox"
 )
 
 func TestOutboxSourceExposesCountsWithoutPayload(t *testing.T) {

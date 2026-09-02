@@ -578,7 +578,7 @@ const file_gateway_api_common_proto_rawDesc = "" +
 	"\aAuthApi\x10\x10*6\n" +
 	"\x0ePermissionMode\x12\x11\n" +
 	"\rPermissionAll\x10\x00\x12\x11\n" +
-	"\rPermissionAny\x10\x01B Z\x1eyunka.io/gateway/rpc/meta;metab\x06proto3"
+	"\rPermissionAny\x10\x01B4Z2github.com/hvritual/yunka.io/gateway/rpc/meta;metab\x06proto3"
 
 var (
 	file_gateway_api_common_proto_rawDescOnce sync.Once

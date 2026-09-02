@@ -7,8 +7,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	stdgrpc "google.golang.org/grpc"
 	grpcmetadata "google.golang.org/grpc/metadata"
-	coremiddleware "yunka.io/framework/core/middleware"
-	"yunka.io/framework/core/runtimecontext"
+	coremiddleware "github.com/hvritual/yunka.io/framework/core/middleware"
+	"github.com/hvritual/yunka.io/framework/core/runtimecontext"
 )
 
 func TestUnaryServerInterceptorDerivesRPCMetadata(t *testing.T) {
