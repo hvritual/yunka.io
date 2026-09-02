@@ -19,6 +19,7 @@ jobs:
       STABLE_VERSION: v0.1.0
       MAIN_MERGE_SHA: 94113e9fb9fd021f773efd626dba49489b5b2071
       PKG_QUALIFIED_SHA: abdcc78c571b68e3ece4fed0014c20f75cf163ec
+      PKG_STABLE_SHA: 94113e9fb9fd021f773efd626dba49489b5b2071
       GONOPROXY: github.com/hvritual/yunka.io/*
       GONOSUMDB: github.com/hvritual/yunka.io/*
     steps:
