@@ -81,28 +81,22 @@ jobs:
           grep -q 'github.com/go-kit/kit v0.13.0' pkg/go.mod
           grep -q 'google.golang.org/genproto v0.0.0-20260810153831-ec0a7760b754' pkg/go.mod
           test -f pkg/internal/dependencyanchor/genproto.go
-          (cd app && go test ./cmd -run TestC116CExpertCommandCompatibilitySnapshots -count=1)
+          # App is repository-owned tooling, not a publishable module. Its current
+          # require may point at the previous failed RC whose tag was deliberately
+          # removed, so app qualification starts only after pkg@RC6 exists.
 
       - name: Publish pkg RC6
         shell: bash
         run: |
           set -euo pipefail
-          # Remove the one-shot executor before any release tag points at a commit.
-          # Module zip contents are prefix-scoped, but keeping the tagged repository
-          # commits clean makes the release history auditable as well.
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm -f .github/workflows/c4-1-rc6-staged-release.yml
-          git commit -m 'build: start C4.1 RC6 staged publication'
-          git push origin "HEAD:${BRANCH}"
           pkg_sha="$(git rev-parse HEAD)"
           git tag "pkg/${RC_VERSION}" "$pkg_sha"
           git push origin "refs/tags/pkg/${RC_VERSION}"
           test "$(git ls-remote --tags origin "refs/tags/pkg/${RC_VERSION}" | awk '{print $1}')" = "$pkg_sha"
           echo "PKG_SHA=$pkg_sha" >> "$GITHUB_ENV"
 
-          # Prove the first independently published artifact before allowing the
-          # dependent framework stage to advance.
           (cd pkg && \
             GOWORK=off go mod tidy -diff && \
             GOWORK=off go list -m all >/dev/null && \
@@ -172,10 +166,11 @@ jobs:
           grep -q "github.com/hvritual/yunka.io/pkg ${RC_VERSION}" app/go.mod
           grep -q "YUNKA_MODULE_RELEASE=${RC_VERSION}" tools/module-release.env
 
-          # All upstream RC6 artifacts now exist. Rebuild repository-workspace
-          # checksum state from the real tagged graph. Preload package/test graphs
-          # before the bookkeeping commit so the subsequent source qualification
-          # can prove a genuinely clean VCS state.
+          # Now app has a real upstream artifact. Close both app-level qualification
+          # hygiene findings before repository workspace bookkeeping is committed.
+          (cd app && go test ./cmd -run TestC116CExpertCommandCompatibilitySnapshots -count=1)
+          (cd app && go test ./cmd/projectflow -run TestC114QualificationRealBinaryFastFeedback -count=1)
+
           rm -f go.work.sum
           go list -m all >/dev/null
           for module in pkg framework gateway; do
@@ -234,12 +229,10 @@ jobs:
             exit 1
           }
 
-          # Re-read the exact tag identities rather than trusting creation output.
           test "$(git ls-remote --tags origin "refs/tags/pkg/${RC_VERSION}" | awk '{print $1}')" = "$PKG_SHA"
           test "$(git ls-remote --tags origin "refs/tags/framework/${RC_VERSION}" | awk '{print $1}')" = "$FRAMEWORK_SHA"
           test "$(git ls-remote --tags origin "refs/tags/gateway/${RC_VERSION}" | awk '{print $1}')" = "$GATEWAY_SHA"
 
-          # Repository source workspace: all four modules, clean before and after.
           go list -m all >/dev/null
           git diff --exit-code -- go.work.sum
           make rpc-check
@@ -256,9 +249,6 @@ jobs:
             exit 1
           }
 
-          # Independent module contract at branch head is byte-identical to each
-          # corresponding tag subtree because later staged commits never rewrite an
-          # already-published module directory.
           for module in pkg framework gateway; do
             echo "==> GOWORK=off ${module}"
             (cd "$module" && \
@@ -269,8 +259,6 @@ jobs:
               GOWORK=off go build ./...)
           done
 
-          # Consumer view is authoritative: no workspace and no repository-local
-          # replacement can participate in this graph.
           tmp="$(mktemp -d)"
           cd "$tmp"
           GOWORK=off go mod init yunka-c41-rc6-external-probe >/dev/null
@@ -284,6 +272,14 @@ jobs:
           cd - >/dev/null
           rm -rf "$tmp"
           echo "C4.1 RC6 staged publication qualified: pkg=$PKG_SHA framework=$FRAMEWORK_SHA gateway=$GATEWAY_SHA workspace=$WORKSPACE_SHA"
+
+      - name: Finalize successful RC6 executor
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -f .github/workflows/c4-1-rc6-staged-release.yml
+          git commit -m 'ci: retire successful C4.1 RC6 executor'
+          git push origin "HEAD:${BRANCH}"
 
       - name: Cleanup failed RC6 tags
         if: failure()
