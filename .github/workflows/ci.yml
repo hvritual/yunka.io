@@ -89,6 +89,16 @@ jobs:
           !(github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository)
         run: exit 1
+      - name: Dependency resolution drift report
+        shell: bash
+        run: make dependency-resolution-report
+      - name: Upload dependency resolution report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-resolution-${{ github.sha }}
+          retention-days: 7
+          if-no-files-found: error
+          path: .artifacts/dependency-resolution/
       - name: Install protoc
         shell: bash
         run: |
