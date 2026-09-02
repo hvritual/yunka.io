@@ -5,7 +5,7 @@ CONTRACT_OUT ?= $(CURDIR)/contracts/generated
 VULNCHECK ?= $(GO) run golang.org/x/vuln/cmd/govulncheck@v1.7.0
 MODULES := pkg framework gateway app app/cmd/rpc
 
-.PHONY: test race vet vuln tidy build contract contract-check verify
+.PHONY: test race vet vuln tidy build contract contract-check dependency-resolution-report dependency-resolution-check verify
 
 test:
 	@set -eu; for module in $(MODULES); do \
@@ -45,6 +45,12 @@ contract:
 contract-check:
 	@cd app && PROTOC="$(PROTOC)" $(GO) run ./cmd contract check \
 		--proto-dir "$(CONTRACT_PROTO_DIR)" --out "$(CONTRACT_OUT)" --title "yunka API" --version "1.0.0"
+
+dependency-resolution-report:
+	@GO="$(GO)" bash ./scripts/dependency-resolution-gate.sh report
+
+dependency-resolution-check:
+	@GO="$(GO)" bash ./scripts/dependency-resolution-gate.sh check
 
 build:
 	@set -eu; for module in $(MODULES); do \
