@@ -71,7 +71,7 @@ func TestDocumentationTruthOwnership(t *testing.T) {
 	for _, required := range []string{
 		"One fact, one current owner.",
 		"Status is centralized.",
-		"Durable memory is not a task tracker.",
+		"Durable memory is not a task tracker",
 		"HISTORICAL",
 		"EVIDENCE",
 	} {
@@ -80,21 +80,21 @@ func TestDocumentationTruthOwnership(t *testing.T) {
 		}
 	}
 
-	for _, currentDoc := range []struct {
+	for _, historicalDoc := range []struct {
 		name    string
 		content string
 	}{
 		{"C10 roadmap", c10},
 		{"C11 roadmap", c11},
 	} {
-		if !strings.Contains(currentDoc.content, "Document class: **HISTORICAL**") {
-			t.Errorf("%s is not explicitly classified HISTORICAL", currentDoc.name)
+		if !strings.Contains(historicalDoc.content, "Document class: **HISTORICAL**") {
+			t.Errorf("%s is not explicitly classified HISTORICAL", historicalDoc.name)
 		}
-		if !strings.Contains(currentDoc.content, "Current status authority: [`docs/STATUS.md`](../STATUS.md)") {
-			t.Errorf("%s does not point to the current status authority", currentDoc.name)
+		if !strings.Contains(historicalDoc.content, "Current status authority: [`docs/STATUS.md`](../STATUS.md)") {
+			t.Errorf("%s does not point to the current status authority", historicalDoc.name)
 		}
-		if !strings.Contains(currentDoc.content, "**not** current status truth") {
-			t.Errorf("%s does not protect preserved planning prose from being read as current truth", currentDoc.name)
+		if !strings.Contains(historicalDoc.content, "**not** current status truth") {
+			t.Errorf("%s does not protect preserved planning prose from being read as current truth", historicalDoc.name)
 		}
 	}
 
