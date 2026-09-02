@@ -85,6 +85,11 @@ func BuildPlanWithOptions(manifest DevManifest, root string, targets []string, g
 		value := normalizeRuntimeConfig(manifest.Runtime)
 		closure = closure || value.Closure
 		runtime = &value
+		var err error
+		ordered, err = deriveAssemblyOwnership(root, ordered)
+		if err != nil {
+			return Plan{}, err
+		}
 	}
 	if closure {
 		if len(graph.Nodes) == 0 {
@@ -98,7 +103,7 @@ func BuildPlanWithOptions(manifest DevManifest, root string, targets []string, g
 		for _, process := range ordered {
 			owned := processOwnedGraphNodes(process)
 			if len(owned) == 0 {
-				return Plan{}, fmt.Errorf("devruntime: closure mode requires process %q graphNode or graphNodes", process.Name)
+				return Plan{}, fmt.Errorf("devruntime: closure mode requires process %q generated assembly ownership or legacy graphNode/graphNodes", process.Name)
 			}
 			requiresDiagnostics := false
 			for _, graphNode := range owned {
