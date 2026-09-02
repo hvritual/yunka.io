@@ -8,8 +8,8 @@ require (
 	github.com/aliyun/aliyun-log-go-sdk v0.1.127
 	github.com/buger/jsonparser v1.6.1
 	github.com/google/uuid v1.6.0
-	github.com/hvritual/yunka.io/framework v0.1.0-c41rc1
-	github.com/hvritual/yunka.io/pkg v0.1.0-c41rc1
+	github.com/hvritual/yunka.io/framework v0.1.0-c41rc2
+	github.com/hvritual/yunka.io/pkg v0.1.0-c41rc2
 	github.com/prometheus/client_golang v1.23.2
 	github.com/valyala/fasthttp v1.73.0
 	go.opentelemetry.io/otel/trace v1.44.0
@@ -26,7 +26,8 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/go-kit/kit v0.10.0 // indirect
+	github.com/go-kit/kit v0.13.0 // indirect
+	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.5.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
