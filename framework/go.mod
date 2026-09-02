@@ -10,7 +10,7 @@ require (
 	github.com/go-playground/universal-translator v0.17.0
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/golang/protobuf v1.5.4
-	github.com/hvritual/yunka.io/pkg v0.1.0-c41rc4
+	github.com/hvritual/yunka.io/pkg v0.1.0-c41rc5
 	github.com/pkg/errors v0.9.1
 	github.com/valyala/fasthttp v1.73.0
 	go.opentelemetry.io/contrib/exporters/autoexport v0.69.0
