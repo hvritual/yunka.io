@@ -70,8 +70,8 @@ jobs:
             go mod edit -dropreplace=github.com/hvritual/yunka.io/pkg && \
             go mod edit -require=github.com/hvritual/yunka.io/pkg@${RC_VERSION})
 
-          # Tidy each module while sibling release tags do not exist yet. The local
-          # replacements are temporary command scaffolding and are removed before commit.
+          # Generate standalone module metadata before the sibling release tags exist.
+          # Temporary replaces exist only inside this runner and are removed before commit.
           (cd pkg && GOWORK=off go mod tidy)
           (cd framework && \
             GOWORK=off go mod edit -replace=github.com/hvritual/yunka.io/pkg=../pkg && \
@@ -171,14 +171,14 @@ jobs:
 
           ## Qualification
 
-          C4.1 is qualified only when:
+          C4.1 is qualified only when the exact tagged candidate passes:
 
-          1. source-workspace `test/vet/build` passes with all four repository modules;
-          2. each publishable module resolves and passes `test/vet/build` with `GOWORK=off`;
+          1. source-workspace `test/vet/build` with all four repository modules;
+          2. each publishable module's `GOWORK=off test/vet/build`;
           3. no publishable `go.mod` contains `replace`;
-          4. a clean external consumer can fetch the same release version of pkg/framework/gateway.
+          4. a clean external consumer fetches the same release version of pkg/framework/gateway.
 
-          The first qualification release is `v0.1.0-c41rc1`; stable tags are created only after canonical integration.
+          The first qualification release is `v0.1.0-c41rc1`; failed qualification deletes the RC tags. Stable tags are created only after canonical integration.
           EOF
           python3 - <<'PY'
           from pathlib import Path
@@ -188,16 +188,7 @@ jobs:
               s += '\n.PHONY: module-release-check\nmodule-release-check:\n\t@bash ./tools/module-release-check.sh\n'
           p.write_text(s)
           PY
-      - name: Verify source workspace before release candidate
-        shell: bash
-        run: |
-          set -euo pipefail
-          for module in pkg framework gateway app; do
-            echo "==> workspace $module"
-            (cd "$module" && go test ./... && go vet ./... && go build ./...)
-          done
-          test -f go.work.sum
-      - name: Commit migration candidate
+      - name: Commit exact release candidate
         shell: bash
         run: |
           set -euo pipefail
@@ -208,10 +199,11 @@ jobs:
           git commit -m 'build: make Yunka modules independently publishable'
           git push origin "HEAD:${BRANCH}"
           echo "MIGRATION_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-      - name: Publish and qualify C4.1 release candidate
+      - name: Publish and qualify exact C4.1 release candidate
         shell: bash
         run: |
           set -Eeuo pipefail
+          export GOPROXY=direct
           cleanup() {
             git push origin \
               :refs/tags/pkg/${RC_VERSION} \
@@ -228,7 +220,15 @@ jobs:
             "refs/tags/framework/${RC_VERSION}" \
             "refs/tags/gateway/${RC_VERSION}"
 
-          # Force release-mode resolution. This must not rely on root go.work or sibling paths.
+          # First validate the normal repository development composition against the
+          # exact RC candidate now that its release versions exist.
+          for module in pkg framework gateway app; do
+            echo "==> workspace $module"
+            (cd "$module" && go test ./... && go vet ./... && go build ./...)
+          done
+
+          # Then force standalone release-mode resolution. No root workspace or sibling
+          # path is allowed to satisfy these commands.
           for module in pkg framework gateway app; do
             echo "==> GOWORK=off $module"
             (cd "$module" && GOWORK=off go list -m all >/dev/null && \
@@ -236,5 +236,20 @@ jobs:
           done
 
           bash ./tools/module-release-check.sh
+
+          # Workspace commands may regenerate only the root checksum file. They must
+          # not mutate independently-managed module contracts after tagging.
+          unexpected="$(git status --porcelain | grep -vE '^\?\? go\.work\.sum$' || true)"
+          if [[ -n "$unexpected" ]]; then
+            echo 'release qualification mutated tagged module content:' >&2
+            printf '%s\n' "$unexpected" >&2
+            exit 1
+          fi
+          if [[ -f go.work.sum ]]; then
+            git add go.work.sum
+            git commit -m 'chore: refresh C4.1 workspace checksum'
+            git push origin "HEAD:${BRANCH}"
+          fi
+
           trap - ERR
           echo "C4.1 release candidate qualified at $MIGRATION_SHA"
