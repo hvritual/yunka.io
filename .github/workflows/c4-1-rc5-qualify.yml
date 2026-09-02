@@ -68,28 +68,23 @@ jobs:
           make rpc-tools
           make rpc-toolchain-check
 
-          # First stabilize every module while sibling versions still describe the
-          # previous candidate. Local replacements are runner-only scaffolding, so no
-          # unpublished fresh RC version is resolved before its tags exist.
-          (cd pkg && GOWORK=off go mod tidy)
-          (cd framework && \
-            GOWORK=off go mod edit -replace=github.com/hvritual/yunka.io/pkg=../pkg && \
-            GOWORK=off go mod tidy && \
-            GOWORK=off go mod edit -dropreplace=github.com/hvritual/yunka.io/pkg)
-          (cd gateway && \
-            GOWORK=off go mod edit -replace=github.com/hvritual/yunka.io/pkg=../pkg && \
-            GOWORK=off go mod edit -replace=github.com/hvritual/yunka.io/framework=../framework && \
-            GOWORK=off go mod tidy && \
-            GOWORK=off go mod edit -dropreplace=github.com/hvritual/yunka.io/pkg && \
-            GOWORK=off go mod edit -dropreplace=github.com/hvritual/yunka.io/framework)
-          (cd app && \
-            GOWORK=off go mod edit -replace=github.com/hvritual/yunka.io/pkg=../pkg && \
-            GOWORK=off go mod tidy && \
-            GOWORK=off go mod edit -dropreplace=github.com/hvritual/yunka.io/pkg)
+          # RC4 already proved the third-party dependency graph and generated
+          # artifacts. RC5 changes only qualification baselines, workspace checksum
+          # state, and sibling release-version declarations. Do not run any
+          # GOWORK=off tidy before fresh RC5 tags exist.
+          if grep -n '^replace ' pkg/go.mod framework/go.mod gateway/go.mod; then
+            echo 'publishable module go.mod contains replace directive' >&2
+            exit 1
+          fi
+          grep -q 'github.com/go-kit/kit v0.13.0' pkg/go.mod
+          grep -q 'google.golang.org/genproto v0.0.0-20260810153831-ec0a7760b754' pkg/go.mod
+          test -f pkg/internal/dependencyanchor/genproto.go
 
-          # Materialize the development-workspace checksum before switching sibling
-          # requires to RC5. All four modules are workspace mains here, so this does
-          # not depend on any deleted RC4 tag and does not use `go work sync`.
+          # Restore the tracked development-workspace checksum baseline that existed
+          # on main, then let the current four-main-module workspace add any checksum
+          # entries it actually needs. This never runs `go work sync` and therefore
+          # cannot project workspace MVS selections into module go.mod files.
+          git show origin/main:go.work.sum > go.work.sum
           go list -m all >/dev/null
           test -f go.work.sum
           for module in \
@@ -102,18 +97,9 @@ jobs:
             }
           done
 
-          if grep -n '^replace ' pkg/go.mod framework/go.mod gateway/go.mod; then
-            echo 'publishable module go.mod contains replace directive' >&2
-            exit 1
-          fi
-          grep -q 'github.com/go-kit/kit v0.13.0' pkg/go.mod
-          grep -q 'google.golang.org/genproto v0.0.0-20260810153831-ec0a7760b754' pkg/go.mod
-          test -f pkg/internal/dependencyanchor/genproto.go
-
-          # RC4 was pushed and therefore must never be reused. Change only sibling
-          # version declarations after all pre-publication tidy/checksum work is done.
-          # The exact RC5 artifact will be tested with GOWORK=off only after its tags
-          # have been created.
+          # RC4 was pushed and therefore must never be reused. Switch only the
+          # sibling version declarations to fresh RC5 after pre-publication workspace
+          # resolution is complete. Real standalone resolution begins after tags.
           for file in framework/go.mod gateway/go.mod app/go.mod tools/module-release.env docs/waves/C4.1-module-publication-convergence.md; do
             if [[ -f "$file" ]]; then
               sed -i 's/v0\.1\.0-c41rc4/v0.1.0-c41rc5/g' "$file"
@@ -124,8 +110,8 @@ jobs:
             exit 1
           fi
 
-          # Workspace tests resolve the repository-local main modules, so they can
-          # validate the CLI baseline without requiring unpublished RC5 tags.
+          # This test uses the local workspace main modules and must pass before the
+          # candidate is committed; it does not require unpublished RC5 tags.
           (cd app && go test ./cmd -run TestC116CExpertCommandCompatibilitySnapshots -count=1)
 
           cat >> docs/waves/C4.1-module-publication-convergence.md <<'EOF'
@@ -148,15 +134,14 @@ jobs:
           test's pre-build clean check intentionally ignored untracked files, while Go
           VCS stamping observed the repository as modified and emitted
           `vcs.modified=true`, making fast-feedback engine evidence unverified. RC5
-          keeps a resolved `go.work.sum` as tracked development-workspace state. It
-          still does not run `go work sync`; the workspace remains a development
-          composition surface, not the public module release contract.
+          restores tracked `go.work.sum` as development-workspace state and resolves
+          it without `go work sync`; the workspace remains a development composition
+          surface, not the public module release contract.
 
-          Candidate preparation performs independent tidy and workspace checksum
-          resolution before changing sibling requirements to the fresh RC version.
-          This prevents pre-publication commands from trying to resolve a tag that does
-          not exist yet. Exact GOWORK=off validation starts only after RC5 tags point to
-          the candidate.
+          Fresh sibling RC versions are not resolved before publication. RC5 reuses
+          RC4's already-qualified third-party module metadata, changes only sibling
+          version declarations before the candidate commit, and performs all
+          GOWORK=off tidy/resolution checks only after the RC5 tags exist.
 
           C4.1 standalone qualification is limited to the publishable pkg/framework/
           gateway modules. App remains repository-owned tooling and is covered by the
@@ -250,6 +235,7 @@ jobs:
           for module in pkg framework gateway; do
             echo "==> GOWORK=off ${module}"
             (cd "$module" && \
+              GOWORK=off go mod tidy -diff && \
               GOWORK=off go list -m all >/dev/null && \
               GOWORK=off go test ./... && \
               GOWORK=off go vet ./... && \
