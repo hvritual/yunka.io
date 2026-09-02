@@ -65,23 +65,47 @@ jobs:
         run: |
           set -euo pipefail
           make toolchain-check
+          make rpc-tools
+          make rpc-toolchain-check
 
-          # RC3 was a real published candidate and must not be reused even though its
-          # failed qualification removed the refs: module proxies may cache versions.
+          GOEXE="$(go env GOEXE)"
+          PROTOC_GEN_GO="$PWD/.yunka/bin/protoc-gen-go${GOEXE}"
+          PROTOC_GEN_GO_GRPC="$PWD/.yunka/bin/protoc-gen-go-grpc${GOEXE}"
+
+          # Generate only protobuf artifacts here. Do not call the rpc-generate Make
+          # target: that target also runs contract generation, which requires the final
+          # sibling module version and therefore belongs after the RC tags exist.
+          python3 tools/rpcgen/generate.py \
+            --repo-root "$PWD" \
+            --protoc protoc \
+            --protoc-gen-go "$PROTOC_GEN_GO" \
+            --protoc-gen-go-grpc "$PROTOC_GEN_GO_GRPC"
+          python3 tools/rpcgen/generate.py \
+            --repo-root "$PWD" \
+            --protoc protoc \
+            --protoc-gen-go "$PROTOC_GEN_GO" \
+            --protoc-gen-go-grpc "$PROTOC_GEN_GO_GRPC" \
+            --check
+
+          # Prove the exact RC3 failure surface using only runner-local sibling
+          # replacements. These replacements never enter the candidate commit.
+          (cd gateway && \
+            GOWORK=off go mod edit -replace=github.com/hvritual/yunka.io/pkg=../pkg && \
+            GOWORK=off go mod edit -replace=github.com/hvritual/yunka.io/framework=../framework && \
+            GOWORK=off go test ./rpc/meta && \
+            GOWORK=off go mod edit -dropreplace=github.com/hvritual/yunka.io/pkg && \
+            GOWORK=off go mod edit -dropreplace=github.com/hvritual/yunka.io/framework)
+
+          # RC3 was pushed and must never be reused. Only after descriptor regeneration
+          # succeeds do we advance all sibling module references to fresh RC4.
           for file in framework/go.mod gateway/go.mod app/go.mod tools/module-release.env docs/waves/C4.1-module-publication-convergence.md; do
             if [[ -f "$file" ]]; then
               sed -i 's/v0\.1\.0-c41rc3/v0.1.0-c41rc4/g' "$file"
             fi
           done
 
-          # The initial module-path migration intentionally updated .proto go_package
-          # declarations, but textual replacement also touched generated raw descriptor
-          # literals. Regenerate from canonical proto sources so descriptor lengths and
-          # generated metadata match the new GitHub module paths.
-          make rpc-generate
-          make rpc-check
-
-          # Prepare each module independently without committing any sibling replace.
+          # Prepare each module independently. Local replacements are runner scaffolding
+          # only and are removed before the exact RC4 candidate is committed.
           (cd pkg && GOWORK=off go mod tidy)
           (cd framework && \
             GOWORK=off go mod edit -replace=github.com/hvritual/yunka.io/pkg=../pkg && \
@@ -112,28 +136,24 @@ jobs:
             exit 1
           fi
 
-          # This is the exact failure surface from RC3. Importing rpc/meta must now
-          # initialize descriptors without protobuf raw-descriptor corruption.
-          (cd gateway && go test ./rpc/meta)
-
           cat >> docs/waves/C4.1-module-publication-convergence.md <<'EOF'
 
           ## RC4 protobuf regeneration
 
           RC3 made the dependency graph independently resolvable and tidy-stable, then
-          exposed a source-artifact defect in gateway RPC initialization. The original
-          C4.1 path migration had text-replaced module paths inside generated `.pb.go`
-          raw descriptor literals. Those literals are length-delimited protobuf binary
-          data, so increasing the embedded `go_package` path length without regeneration
+          exposed a generated-artifact defect in gateway RPC initialization. The initial
+          C4.1 path migration text-replaced module paths inside generated `.pb.go` raw
+          descriptor literals. Those literals are length-delimited protobuf binary data,
+          so increasing the embedded `go_package` path length without regeneration
           corrupted descriptor framing and caused `google.golang.org/protobuf` to panic
           in `unmarshalSeed`.
 
-          RC4 regenerates all canonical protobuf Go outputs from the migrated `.proto`
-          sources using the repository-locked protoc/protoc-gen-go toolchain. No RPC ABI
-          is intentionally changed; this repairs generated descriptor encoding so it is
-          consistent with the already-migrated GitHub module paths. RC4 uses a fresh
-          module version because a previously pushed RC version must be treated as
-          immutable even if its failed qualification removed the Git refs.
+          RC4 aligns the RPC generator's canonical module prefix with
+          `github.com/hvritual/yunka.io` and regenerates all managed protobuf Go outputs
+          from canonical `.proto` sources using the repository-locked protoc and Go
+          plugins. The generator is run directly before publication so descriptor repair
+          does not depend on a not-yet-existing RC version. Contract generation and full
+          compatibility checks run only after the exact RC4 tags exist.
           EOF
 
       - name: Commit exact RC4 candidate
@@ -176,6 +196,13 @@ jobs:
             resolved="$(git ls-remote --tags origin "refs/tags/${prefix}/${RC_VERSION}" | awk '{print $1}')"
             test "$resolved" = "$CANDIDATE_SHA"
           done
+
+          # These checks intentionally run after publication because app/framework/gateway
+          # now reference the real RC4 module version rather than local siblings.
+          make rpc-check
+          make contract
+          make contract-check
+          git diff --exit-code -- contracts/generated
 
           echo '==> source workspace qualification'
           for module in pkg framework gateway app; do
