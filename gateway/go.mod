@@ -8,8 +8,8 @@ require (
 	github.com/aliyun/aliyun-log-go-sdk v0.1.127
 	github.com/buger/jsonparser v1.6.1
 	github.com/google/uuid v1.6.0
-	github.com/hvritual/yunka.io/framework v0.1.0-c41rc7
-	github.com/hvritual/yunka.io/pkg v0.1.0-c41rc7
+	github.com/hvritual/yunka.io/framework v0.1.0
+	github.com/hvritual/yunka.io/pkg v0.1.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/valyala/fasthttp v1.73.0
 	go.opentelemetry.io/otel/trace v1.44.0
