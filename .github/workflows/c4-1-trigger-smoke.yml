@@ -1,0 +1,12 @@
+name: c4-1-trigger-smoke
+
+on:
+  push:
+    branches:
+      - fix/c4-1-module-publication-convergence
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo c4-1-trigger-ok
