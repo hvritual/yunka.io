@@ -36,7 +36,8 @@ jobs:
               -e 's#yunka\.io/framework#github.com/hvritual/yunka.io/framework#g' \
               -e 's#yunka\.io/gateway#github.com/hvritual/yunka.io/gateway#g' \
               "$file"
-          done < <(git grep -Ilz -E 'yunka\.io/(pkg|framework|gateway)' || true)
+          done < <(git grep -Ilz -E 'yunka\.io/(pkg|framework|gateway)' -- \
+            app framework gateway pkg tools contracts deploy README.md AGENTS.md Makefile go.work 2>/dev/null || true)
 
           rm -rf compat/go-kit-kit-log
           cat > go.work <<'EOF'
@@ -69,23 +70,25 @@ jobs:
             go mod edit -dropreplace=github.com/hvritual/yunka.io/pkg && \
             go mod edit -require=github.com/hvritual/yunka.io/pkg@${RC_VERSION})
 
-          (cd pkg && go mod tidy)
+          # Tidy each module while sibling release tags do not exist yet. The local
+          # replacements are temporary command scaffolding and are removed before commit.
+          (cd pkg && GOWORK=off go mod tidy)
           (cd framework && \
-            go mod edit -replace=github.com/hvritual/yunka.io/pkg=../pkg && \
-            go mod tidy && \
-            go mod edit -dropreplace=github.com/hvritual/yunka.io/pkg)
+            GOWORK=off go mod edit -replace=github.com/hvritual/yunka.io/pkg=../pkg && \
+            GOWORK=off go mod tidy && \
+            GOWORK=off go mod edit -dropreplace=github.com/hvritual/yunka.io/pkg)
           (cd gateway && \
-            go mod edit -replace=github.com/hvritual/yunka.io/pkg=../pkg && \
-            go mod edit -replace=github.com/hvritual/yunka.io/framework=../framework && \
-            go mod tidy && \
-            go mod edit -dropreplace=github.com/hvritual/yunka.io/pkg && \
-            go mod edit -dropreplace=github.com/hvritual/yunka.io/framework)
+            GOWORK=off go mod edit -replace=github.com/hvritual/yunka.io/pkg=../pkg && \
+            GOWORK=off go mod edit -replace=github.com/hvritual/yunka.io/framework=../framework && \
+            GOWORK=off go mod tidy && \
+            GOWORK=off go mod edit -dropreplace=github.com/hvritual/yunka.io/pkg && \
+            GOWORK=off go mod edit -dropreplace=github.com/hvritual/yunka.io/framework)
           (cd app && \
-            go mod edit -replace=github.com/hvritual/yunka.io/pkg=../pkg && \
-            go mod tidy && \
-            go mod edit -dropreplace=github.com/hvritual/yunka.io/pkg)
+            GOWORK=off go mod edit -replace=github.com/hvritual/yunka.io/pkg=../pkg && \
+            GOWORK=off go mod tidy && \
+            GOWORK=off go mod edit -dropreplace=github.com/hvritual/yunka.io/pkg)
+
           rm -f go.work.sum
-          go work sync
 
           if grep -n '^replace ' pkg/go.mod framework/go.mod gateway/go.mod; then
             echo 'publishable module go.mod contains replace directive' >&2
@@ -128,10 +131,10 @@ jobs:
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
           cd "$tmp"
-          go mod init yunka-release-probe >/dev/null
-          go get "$YUNKA_PKG_MODULE@$version"
-          go get "$YUNKA_FRAMEWORK_MODULE@$version"
-          go get "$YUNKA_GATEWAY_MODULE@$version"
+          GOWORK=off go mod init yunka-release-probe >/dev/null
+          GOWORK=off go get "$YUNKA_PKG_MODULE@$version"
+          GOWORK=off go get "$YUNKA_FRAMEWORK_MODULE@$version"
+          GOWORK=off go get "$YUNKA_GATEWAY_MODULE@$version"
           GOWORK=off go list -m all >/dev/null
           echo "module-release-check: external consumer resolved $version"
           EOF
@@ -155,7 +158,7 @@ jobs:
 
           `pkg -> framework -> gateway`.
 
-          Publishable module `go.mod` files must not contain local `replace` directives. The repository `go.work` is only a development composition surface and is not a release contract.
+          Publishable module `go.mod` files must not contain local `replace` directives. The repository `go.work` is only a development composition surface and is not a release contract. `go work sync` is deliberately excluded from release qualification because it can project workspace-wide MVS selections back into otherwise independent modules.
 
           ## Compatibility decision
 
@@ -165,10 +168,10 @@ jobs:
 
           C4.1 is qualified only when:
 
-          1. each publishable module resolves with `GOWORK=off`;
-          2. no publishable `go.mod` contains `replace`;
-          3. a clean external consumer can fetch the same release version of pkg/framework/gateway;
-          4. source-workspace tests still pass.
+          1. source-workspace `test/vet/build` passes with all four repository modules;
+          2. each publishable module resolves and passes `test/vet/build` with `GOWORK=off`;
+          3. no publishable `go.mod` contains `replace`;
+          4. a clean external consumer can fetch the same release version of pkg/framework/gateway.
 
           The first qualification release is `v0.1.0-c41rc1`; stable tags are created only after canonical integration.
           EOF
@@ -185,21 +188,22 @@ jobs:
         run: |
           set -euo pipefail
           for module in pkg framework gateway app; do
-            echo "==> $module"
+            echo "==> workspace $module"
             (cd "$module" && go test ./... && go vet ./... && go build ./...)
           done
+          test -f go.work.sum
       - name: Commit migration candidate
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm .github/workflows/c4-1-publication-migrate.yml
+          git rm .github/workflows/c4-1-publication-migrate.yml .github/workflows/c4-1-trigger-smoke.yml
           git add -A
           git commit -m 'build: make Yunka modules independently publishable'
           git push origin "HEAD:${BRANCH}"
           echo "MIGRATION_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-      - name: Publish C4.1 qualification tags
+      - name: Publish and qualify C4.1 release candidate
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -210,6 +214,7 @@ jobs:
               :refs/tags/gateway/${RC_VERSION} || true
           }
           trap cleanup ERR
+
           git tag "pkg/${RC_VERSION}" "$MIGRATION_SHA"
           git tag "framework/${RC_VERSION}" "$MIGRATION_SHA"
           git tag "gateway/${RC_VERSION}" "$MIGRATION_SHA"
@@ -218,9 +223,13 @@ jobs:
             "refs/tags/framework/${RC_VERSION}" \
             "refs/tags/gateway/${RC_VERSION}"
 
+          # Force release-mode resolution. This must not rely on root go.work or sibling paths.
           for module in pkg framework gateway app; do
             echo "==> GOWORK=off $module"
-            (cd "$module" && GOWORK=off go test ./... && GOWORK=off go vet ./... && GOWORK=off go build ./...)
+            (cd "$module" && GOWORK=off go list -m all >/dev/null && \
+              GOWORK=off go test ./... && GOWORK=off go vet ./... && GOWORK=off go build ./...)
           done
+
           bash ./tools/module-release-check.sh
           trap - ERR
+          echo "C4.1 release candidate qualified at $MIGRATION_SHA"
