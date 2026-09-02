@@ -6,6 +6,9 @@ on:
       - fix/c4-1-module-publication-convergence
     paths:
       - .github/workflows/c4-1-rc-qualify.yml
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
