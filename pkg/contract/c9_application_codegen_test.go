@@ -75,7 +75,7 @@ func TestRenderC9ApplicationCodeGeneratesChildOperationCapability(t *testing.T) 
 		byPath[file.Path] = string(file.Content)
 	}
 	capability := byPath["device/application/zz_yunka_transfer_capability_ports_gen.go"]
-	if !strings.Contains(capability, "operation.ExecuteChildTyped") || !strings.Contains(capability, "sitepolicy.OperationPlanValidate()") || !strings.Contains(capability, "NewSiteValidationChildCapability") {
+	if !strings.Contains(capability, "operation.ExecuteChildTyped") || !strings.Contains(capability, "sitepolicy.OperationPlanValidate()") || !strings.Contains(capability, "NewTransferToSiteValidationChildCapability") {
 		t.Fatalf("C9 child capability is not executor-backed:\n%s", capability)
 	}
 	if strings.Contains(capability, "Resolve(") || strings.Contains(capability, "map[string]any") {

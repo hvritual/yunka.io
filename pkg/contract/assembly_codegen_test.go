@@ -68,7 +68,7 @@ func TestRenderAssemblyCodeBuildsTypedFactoriesCapabilitiesAndCanonicalTransport
 		"type ApplicationFactories interface",
 		"BuildDeviceTransfer(DeviceTransferDependencies) (deviceapplication.TransferService, error)",
 		"BuildSiteQuery(SiteQueryDependencies) (siteapplication.QueryService, error)",
-		"NewSiteQueryChildCapability(applications.SiteQuery, executor)",
+		"NewTransferToSiteQueryChildCapability(applications.SiteQuery, executor)",
 		"devicerest.RegisterOperationExecutor",
 		"devicerpc.RegisterOperationExecutor",
 		"func ExpectedModuleRequirements() modulecatalog.RequirementSet",

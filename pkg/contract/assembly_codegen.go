@@ -260,7 +260,8 @@ func renderAssemblyRoot(plan assemblyplan.Plan, rootImport string, services map[
 		fmt.Fprintf(&b, "type %sDependencies struct {\n", info.Symbol)
 		for _, dependency := range info.Dependencies {
 			field := exportedApplicationSymbol(strings.ReplaceAll(dependency, "/", "_"))
-			fmt.Fprintf(&b, "\t%s %s.%sChildCapability\n", field, info.Package, field)
+			edgeSymbol := c9CapabilityEdgeSymbol(info.Service, dependency)
+			fmt.Fprintf(&b, "\t%s %s.%sChildCapability\n", field, info.Package, edgeSymbol)
 		}
 		b.WriteString("}\n\n")
 	}
@@ -291,7 +292,8 @@ func renderAssemblyRoot(plan assemblyplan.Plan, rootImport string, services map[
 			depInfo := infos[dependency]
 			field := depInfo.Symbol
 			local := lowerFirstIdentifier(info.Symbol + field + "Capability")
-			fmt.Fprintf(&b, "\t%s, err := %s.New%sChildCapability(applications.%s, executor)\n", local, info.Package, field, field)
+			edgeSymbol := c9CapabilityEdgeSymbol(info.Service, dependency)
+			fmt.Fprintf(&b, "\t%s, err := %s.New%sChildCapability(applications.%s, executor)\n", local, info.Package, edgeSymbol, field)
 			fmt.Fprintf(&b, "\tif err != nil { return Applications{}, fmt.Errorf(%q, err) }\n", "yunka assembly: build "+id+" dependency "+dependency+": %w")
 		}
 		fmt.Fprintf(&b, "\tapplications.%s, err = factories.Build%s(%sDependencies{", info.Symbol, info.Symbol, info.Symbol)

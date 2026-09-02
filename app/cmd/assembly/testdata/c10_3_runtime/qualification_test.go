@@ -204,8 +204,8 @@ func (*deviceQueryService) GetDevice(_ context.Context, request *devicev1.GetDev
 }
 
 type deviceTransferService struct {
-	site      deviceapplication.SiteManagementChildCapability
-	inventory deviceapplication.InventoryCatalogChildCapability
+	site      deviceapplication.TransferToSiteManagementChildCapability
+	inventory deviceapplication.TransferToInventoryCatalogChildCapability
 	probe     *runtimeProbe
 }
 
