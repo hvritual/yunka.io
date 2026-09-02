@@ -17,6 +17,7 @@ jobs:
     env:
       BRANCH: fix/c4-1-module-publication-convergence
       RC_VERSION: v0.1.0-c41rc5
+      PREV_VERSION: v0.1.0-c41rc4
       GONOPROXY: github.com/hvritual/yunka.io/*
       GONOSUMDB: github.com/hvritual/yunka.io/*
     steps:
@@ -68,10 +69,6 @@ jobs:
           make rpc-tools
           make rpc-toolchain-check
 
-          # RC4 already proved the third-party dependency graph and generated
-          # artifacts. RC5 changes only qualification baselines, workspace checksum
-          # state, and sibling release-version declarations. Do not run any
-          # GOWORK=off tidy before fresh RC5 tags exist.
           if grep -n '^replace ' pkg/go.mod framework/go.mod gateway/go.mod; then
             echo 'publishable module go.mod contains replace directive' >&2
             exit 1
@@ -80,26 +77,45 @@ jobs:
           grep -q 'google.golang.org/genproto v0.0.0-20260810153831-ec0a7760b754' pkg/go.mod
           test -f pkg/internal/dependencyanchor/genproto.go
 
-          # Restore the tracked development-workspace checksum baseline that existed
-          # on main, then let the current four-main-module workspace add any checksum
-          # entries it actually needs. This never runs `go work sync` and therefore
-          # cannot project workspace MVS selections into module go.mod files.
-          git show origin/main:go.work.sum > go.work.sum
-          go list -m all >/dev/null
-          test -f go.work.sum
+          # Go workspace MVS may still load a versioned edge between workspace main
+          # modules. Build an external qualification workspace with version-specific
+          # local replacements for those sibling edges. Wildcard replacements are
+          # intentionally avoided because the replaced modules are also workspace
+          # mains. The temporary workspace and its sum live outside the Git tree.
+          repo="$PWD"
+          c4_work="$RUNNER_TEMP/c4-1-rc5.work"
+          cat > "$c4_work" <<EOF
+          go 1.25.0
+
+          toolchain go1.25.13
+
+          use (
+            $repo/app
+            $repo/framework
+            $repo/gateway
+            $repo/pkg
+          )
+
+          replace github.com/hvritual/yunka.io/pkg ${PREV_VERSION} => $repo/pkg
+          replace github.com/hvritual/yunka.io/framework ${PREV_VERSION} => $repo/framework
+          EOF
+          git show origin/main:go.work.sum > "${c4_work}.sum"
+          echo "C4_WORK=$c4_work" >> "$GITHUB_ENV"
+
+          GOWORK="$c4_work" go list -m all >/dev/null
           for module in \
             github.com/hvritual/yunka.io/pkg \
             github.com/hvritual/yunka.io/framework \
             github.com/hvritual/yunka.io/gateway; do
-            test "$(go list -m -f '{{.Main}}' "$module")" = "true" || {
-              echo "$module is not resolved as a workspace main module" >&2
+            test "$(GOWORK="$c4_work" go list -m -f '{{.Main}}' "$module")" = "true" || {
+              echo "$module is not resolved as a temporary workspace main module" >&2
               exit 1
             }
           done
 
-          # RC4 was pushed and therefore must never be reused. Switch only the
-          # sibling version declarations to fresh RC5 after pre-publication workspace
-          # resolution is complete. Real standalone resolution begins after tags.
+          # RC4 was pushed and therefore must never be reused. Switch only sibling
+          # version declarations to fresh RC5 after the old-version source graph has
+          # been proven locally.
           for file in framework/go.mod gateway/go.mod app/go.mod tools/module-release.env docs/waves/C4.1-module-publication-convergence.md; do
             if [[ -f "$file" ]]; then
               sed -i 's/v0\.1\.0-c41rc4/v0.1.0-c41rc5/g' "$file"
@@ -110,9 +126,22 @@ jobs:
             exit 1
           fi
 
-          # This test uses the local workspace main modules and must pass before the
-          # candidate is committed; it does not require unpublished RC5 tags.
-          (cd app && go test ./cmd -run TestC116CExpertCommandCompatibilitySnapshots -count=1)
+          # Retarget only the temporary qualification workspace to fresh RC5 local
+          # edges; the repository go.work remains free of release-time replaces.
+          GOWORK="$c4_work" go work edit \
+            -dropreplace=github.com/hvritual/yunka.io/pkg@${PREV_VERSION} \
+            -dropreplace=github.com/hvritual/yunka.io/framework@${PREV_VERSION} \
+            -replace=github.com/hvritual/yunka.io/pkg@${RC_VERSION}=$repo/pkg \
+            -replace=github.com/hvritual/yunka.io/framework@${RC_VERSION}=$repo/framework
+          GOWORK="$c4_work" go list -m all >/dev/null
+
+          # Validate the corrected expert snapshot through the local source graph.
+          (cd app && GOWORK="$c4_work" go test ./cmd -run TestC116CExpertCommandCompatibilitySnapshots -count=1)
+
+          # Preserve the checksum state produced by the isolated source workspace as
+          # the tracked development-workspace checksum. Local replacements themselves
+          # have no module sums; all copied lines describe external dependencies.
+          cp "${c4_work}.sum" go.work.sum
 
           cat >> docs/waves/C4.1-module-publication-convergence.md <<'EOF'
 
@@ -133,19 +162,21 @@ jobs:
           Subsequent workspace commands recreated it as an untracked file. The C11.4
           test's pre-build clean check intentionally ignored untracked files, while Go
           VCS stamping observed the repository as modified and emitted
-          `vcs.modified=true`, making fast-feedback engine evidence unverified. RC5
-          restores tracked `go.work.sum` as development-workspace state and resolves
-          it without `go work sync`; the workspace remains a development composition
-          surface, not the public module release contract.
+          `vcs.modified=true`, making fast-feedback engine evidence unverified.
 
-          Fresh sibling RC versions are not resolved before publication. RC5 reuses
-          RC4's already-qualified third-party module metadata, changes only sibling
-          version declarations before the candidate commit, and performs all
-          GOWORK=off tidy/resolution checks only after the RC5 tags exist.
+          RC5 performs pre-publication source qualification through a runner-external
+          go.work that uses the same four repository modules plus version-specific
+          local replacements for sibling release edges. This handles Go workspace MVS
+          loading of versioned inter-module requirements without putting any local
+          replace in publishable go.mod files or the repository go.work. The temporary
+          workspace sum is copied back as tracked go.work.sum, so ordinary workspace
+          commands no longer create an untracked VCS-dirty artifact.
 
-          C4.1 standalone qualification is limited to the publishable pkg/framework/
-          gateway modules. App remains repository-owned tooling and is covered by the
-          required four-module source-workspace qualification.
+          Fresh sibling RC versions are not resolved remotely before publication.
+          Exact GOWORK=off tidy/resolution starts only after RC5 tags point to the
+          committed candidate. App remains repository-owned tooling and is qualified
+          in source-workspace mode; standalone release qualification is limited to
+          pkg/framework/gateway.
           EOF
 
       - name: Commit exact RC5 candidate
@@ -164,6 +195,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test -n "${C4_WORK:-}"
           test -z "$(git status --porcelain)" || {
             echo 'RC5 candidate worktree is not clean before source qualification' >&2
             git status --porcelain >&2
@@ -171,13 +203,13 @@ jobs:
           }
 
           # Re-run both exact RC4 app failures against a clean committed candidate.
-          (cd app && go test ./cmd -run TestC116CExpertCommandCompatibilitySnapshots -count=1)
+          (cd app && GOWORK="$C4_WORK" go test ./cmd -run TestC116CExpertCommandCompatibilitySnapshots -count=1)
           test -z "$(git status --porcelain)" || {
             echo 'expert snapshot qualification dirtied candidate worktree' >&2
             git status --porcelain >&2
             exit 1
           }
-          (cd app && go test ./cmd/projectflow -run TestC114QualificationRealBinaryFastFeedback -count=1)
+          (cd app && GOWORK="$C4_WORK" go test ./cmd/projectflow -run TestC114QualificationRealBinaryFastFeedback -count=1)
           test -z "$(git status --porcelain)" || {
             echo 'fast-feedback qualification dirtied candidate worktree' >&2
             git status --porcelain >&2
@@ -212,6 +244,11 @@ jobs:
             resolved="$(git ls-remote --tags origin "refs/tags/${prefix}/${RC_VERSION}" | awk '{print $1}')"
             test "$resolved" = "$CANDIDATE_SHA"
           done
+
+          # Once tags exist, the repository's actual development workspace must also
+          # resolve without temporary replacements and without changing tracked state.
+          go list -m all >/dev/null
+          git diff --exit-code -- go.work.sum
 
           make rpc-check
           make contract
