@@ -1,0 +1,89 @@
+name: c4-1-canonical-gate-convergence
+
+on:
+  push:
+    branches:
+      - fix/c4-1-module-publication-convergence
+    paths:
+      - .github/workflows/c4-1-canonical-gate-convergence.yml
+
+permissions:
+  contents: write
+
+jobs:
+  converge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout C4.1 branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/c4-1-module-publication-convergence
+          fetch-depth: 0
+
+      - name: Load toolchain lock
+        id: toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          echo "go_version=${GO_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup locked Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.toolchain.outputs.go_version }}
+          cache: false
+
+      - name: Replace workspace-governed tidy with independent module tidy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("Makefile")
+          text = path.read_text()
+          old = '''tidy:
+          \t@set -eu; for module in $(MODULES); do \\
+          \t\techo "==> go mod tidy ./$$module"; \\
+          \t\t(cd $$module && $(GO) mod tidy); \\
+          \tdone
+          \t$(GO) work sync
+          '''
+          new = '''tidy:
+          \t@set -eu; for module in $(MODULES); do \\
+          \t\techo "==> GOWORK=off go mod tidy ./$$module"; \\
+          \t\t(cd $$module && GOWORK=off $(GO) mod tidy); \\
+          \tdone
+          \t@$(GO) work edit -fmt
+          \t@$(GO) list -m all >/dev/null
+          '''
+          if old not in text:
+              raise SystemExit("canonical tidy block not found exactly once")
+          if text.count(old) != 1:
+              raise SystemExit("canonical tidy block is ambiguous")
+          path.write_text(text.replace(old, new))
+          PY
+
+      - name: Qualify canonical dependency maintenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          make tidy
+          make dependency-check
+          test -z "$(git grep -n '^replace ' -- pkg/go.mod framework/go.mod gateway/go.mod || true)"
+          git diff --check
+          echo '--- canonical dependency maintenance diff ---'
+          git diff -- Makefile go.work go.work.sum pkg/go.mod pkg/go.sum framework/go.mod framework/go.sum gateway/go.mod gateway/go.sum app/go.mod app/go.sum tools/dependency-policy.json
+
+      - name: Commit canonical Gate convergence
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f .github/workflows/c4-1-canonical-gate-convergence.yml
+          git add Makefile go.work go.work.sum pkg/go.mod pkg/go.sum framework/go.mod framework/go.sum gateway/go.mod gateway/go.sum app/go.mod app/go.sum tools/dependency-policy.json
+          git commit -m 'build: align canonical dependency gates with module publication'
+          git push origin HEAD:fix/c4-1-module-publication-convergence
