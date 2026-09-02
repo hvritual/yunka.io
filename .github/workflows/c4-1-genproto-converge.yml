@@ -44,14 +44,27 @@ jobs:
             fi
           done
 
-          # go-kit/kit v0.13.0 still references the pre-split root genproto module.
-          # Raise the root module floor to the same modern repository generation
-          # used by Yunka's split googleapis/api and googleapis/rpc modules.
-          for module in pkg framework gateway; do
-            (cd "$module" && GOWORK=off go mod edit -require=google.golang.org/genproto@${GENPROTO_VERSION})
-          done
+          # Go kit v0.13.0 still carries a 2021 pre-split root genproto requirement.
+          # A plain higher indirect require is removed by `go mod tidy`, so pkg owns a
+          # build-tagged dependency anchor to make the compatibility floor explicit,
+          # tidy-stable, and inherited by framework/gateway consumers through pkg/go.mod.
+          mkdir -p pkg/internal/dependencyanchor
+          cat > pkg/internal/dependencyanchor/genproto.go <<'EOF'
+          //go:build yunka_dependency_anchor
 
+          // Package dependencyanchor contains build-tagged imports that make
+          // publish-time module graph compatibility constraints explicit. It is not
+          // part of Yunka's runtime graph.
+          package dependencyanchor
+
+          import _ "google.golang.org/genproto/googleapis/type/date"
+          EOF
+
+          (cd pkg && GOWORK=off go mod edit -require=google.golang.org/genproto@${GENPROTO_VERSION})
           (cd pkg && GOWORK=off go mod tidy)
+
+          # Sibling replacements below exist only in this runner while the RC3 tags do
+          # not exist yet. They are removed before the candidate commit.
           (cd framework && \
             GOWORK=off go mod edit -replace=github.com/hvritual/yunka.io/pkg=../pkg && \
             GOWORK=off go mod tidy && \
@@ -73,11 +86,16 @@ jobs:
             echo 'publishable module go.mod contains replace directive' >&2
             exit 1
           fi
+          grep -q "google.golang.org/genproto ${GENPROTO_VERSION}" pkg/go.mod || {
+            echo 'pkg did not retain modern root genproto floor after tidy' >&2
+            exit 1
+          }
+          selected="$(cd pkg && GOWORK=off go list -m -f '{{.Version}}' google.golang.org/genproto)"
+          test "$selected" = "$GENPROTO_VERSION" || {
+            echo "pkg selected root genproto $selected, expected $GENPROTO_VERSION" >&2
+            exit 1
+          }
           for module in pkg framework gateway; do
-            grep -q "google.golang.org/genproto ${GENPROTO_VERSION}" "$module/go.mod" || {
-              echo "$module did not retain modern root genproto floor" >&2
-              exit 1
-            }
             if grep -q 'github.com/go-kit/kit v0.10.0' "$module/go.mod"; then
               echo "$module regressed to go-kit v0.10.0" >&2
               exit 1
@@ -93,14 +111,19 @@ jobs:
           ## RC3 genproto split convergence
 
           RC2 removed the unreachable Lyft dependency by raising Go kit to v0.13.0.
-          Its maintained graph still selects a 2021 pre-split root
-          `google.golang.org/genproto`, while Yunka already uses the modern split
-          `google.golang.org/genproto/googleapis/api` and `/rpc` modules. That produces
-          ambiguous imports for `googleapis/api/*` and `googleapis/rpc/*`. RC3 raises the
-          root genproto module to `v0.0.0-20260810153831-ec0a7760b754`, whose root module
-          metadata depends on the split API/RPC modules instead of duplicating their
-          packages. This is a version-floor convergence only; publishable modules remain
-          free of local `replace` directives.
+          That version still references a 2021 pre-split root `google.golang.org/genproto`,
+          while Yunka already uses the modern split `googleapis/api` and `googleapis/rpc`
+          modules. The mixed graph produces ambiguous imports.
+
+          A plain modern root-genproto `require` is not stable because `go mod tidy`
+          removes version-only constraints that have no package dependency. RC3 therefore
+          adds `pkg/internal/dependencyanchor`, enabled only by the
+          `yunka_dependency_anchor` build tag, with a blank import of the root-module-only
+          `google.golang.org/genproto/googleapis/type/date` package. This gives the modern
+          root genproto floor a real package reason to remain in `pkg/go.mod`; Go's module
+          tidy analysis considers build-tagged packages, while normal Yunka runtime builds
+          do not compile the anchor. Framework and gateway inherit the floor transitively
+          through their published dependency on pkg. No publishable module uses `replace`.
           EOF
 
       - name: Commit exact RC3 candidate
@@ -111,7 +134,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git rm -f .github/workflows/c4-1-genproto-converge.yml
           git add -A
-          git commit -m 'build: converge C4.1 split genproto dependency graph'
+          git commit -m 'build: make C4.1 genproto floor tidy-stable'
           git push origin "HEAD:${BRANCH}"
           echo "CANDIDATE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
