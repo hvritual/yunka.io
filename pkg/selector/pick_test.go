@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"yunka.io/pkg/registry"
+	"github.com/hvritual/yunka.io/pkg/registry"
 )
 
 func TestServiceFromFullMethod(t *testing.T) {

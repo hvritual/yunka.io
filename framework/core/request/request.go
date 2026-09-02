@@ -4,9 +4,9 @@ import (
 	"github.com/valyala/fasthttp"
 	"net"
 	"strings"
-	"yunka.io/framework/core/binding"
-	"yunka.io/pkg/define"
-	"yunka.io/pkg/stringsExt"
+	"github.com/hvritual/yunka.io/framework/core/binding"
+	"github.com/hvritual/yunka.io/pkg/define"
+	"github.com/hvritual/yunka.io/pkg/stringsExt"
 )
 
 /**

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"yunka.io/framework/core/modulecatalog"
+	"github.com/hvritual/yunka.io/framework/core/modulecatalog"
 )
 
 type lifecycleTestModule struct {

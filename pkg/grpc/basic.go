@@ -3,7 +3,7 @@ package grpc
 import (
 	"google.golang.org/grpc"
 	"net"
-	"yunka.io/pkg/logExt"
+	"github.com/hvritual/yunka.io/pkg/logExt"
 )
 
 /**

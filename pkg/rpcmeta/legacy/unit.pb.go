@@ -1050,7 +1050,7 @@ const file_legacy_unit_proto_rawDesc = "" +
 	"\x11FindSimpleModules\x12\x12.ModuleUUIDRequest\x1a\x15.SimpleModuleResponse\x12A\n" +
 	"\x11FindAllModuleSort\x12\x10.NotParamRequest\x1a\x1a.FindAllModuleSortResponse\x12S\n" +
 	" FindModuleSimpleByModuleSortUUID\x12\x18.FindModuleSimpleRequest\x1a\x15.SimpleModuleResponse\x129\n" +
-	"\x0eFindModulesApi\x12\x12.ModuleUUIDRequest\x1a\x13.ModulesApiResponseB$Z\"yunka.io/pkg/rpcmeta/legacy;legacyb\x06proto3"
+	"\x0eFindModulesApi\x12\x12.ModuleUUIDRequest\x1a\x13.ModulesApiResponseB$Z\"github.com/hvritual/yunka.io/pkg/rpcmeta/legacy;legacyb\x06proto3"
 
 var (
 	file_legacy_unit_proto_rawDescOnce sync.Once

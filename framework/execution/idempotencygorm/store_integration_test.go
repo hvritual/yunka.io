@@ -11,9 +11,9 @@ import (
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	"yunka.io/framework/core/identity"
-	"yunka.io/framework/execution"
-	"yunka.io/pkg/operationplan"
+	"github.com/hvritual/yunka.io/framework/core/identity"
+	"github.com/hvritual/yunka.io/framework/execution"
+	"github.com/hvritual/yunka.io/pkg/operationplan"
 )
 
 func TestMySQLIdempotencyStoreAtomicCompletionAndLeaseFencing(t *testing.T) {

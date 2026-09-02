@@ -3,7 +3,7 @@ package memory
 import (
 	"errors"
 
-	"yunka.io/pkg/registry"
+	"github.com/hvritual/yunka.io/pkg/registry"
 )
 
 type memoryWatcher struct {

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"yunka.io/pkg/diagnostic"
+	"github.com/hvritual/yunka.io/pkg/diagnostic"
 )
 
 type c116DExplainEnvelope struct {

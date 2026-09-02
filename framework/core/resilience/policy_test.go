@@ -7,8 +7,8 @@ import (
 	"time"
 
 	grpcgo "google.golang.org/grpc"
-	"yunka.io/framework/core/middleware"
-	"yunka.io/framework/core/runtimecontext"
+	"github.com/hvritual/yunka.io/framework/core/middleware"
+	"github.com/hvritual/yunka.io/framework/core/runtimecontext"
 )
 
 func TestRPCPolicyRetriesIdempotentUnaryCallAndKeepsKeyedState(t *testing.T) {

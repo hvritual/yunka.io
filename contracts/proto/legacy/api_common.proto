@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "yunka.io/pkg/rpcmeta/legacy;legacy";
+option go_package = "github.com/hvritual/yunka.io/pkg/rpcmeta/legacy;legacy";
 
 /**
 * @Description: TODO

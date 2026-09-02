@@ -1,6 +1,6 @@
 package testkit
 
-import pkgtestkit "yunka.io/pkg/testkit"
+import pkgtestkit "github.com/hvritual/yunka.io/pkg/testkit"
 
 type Clock = pkgtestkit.Clock
 type Registry = pkgtestkit.Registry

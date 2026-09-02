@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"gorm.io/gorm"
-	"yunka.io/framework/execution"
+	"github.com/hvritual/yunka.io/framework/execution"
 )
 
 // GORMUnitOfWork is the typed repository seam for GORM-backed request scopes.

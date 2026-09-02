@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	frameworkoperation "yunka.io/framework/operation"
-	"yunka.io/pkg/operationplan"
+	frameworkoperation "github.com/hvritual/yunka.io/framework/operation"
+	"github.com/hvritual/yunka.io/pkg/operationplan"
 )
 
 type OperationSummary struct {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"yunka.io/framework/event/outbox"
+	"github.com/hvritual/yunka.io/framework/event/outbox"
 )
 
 type OutboxSnapshot struct {

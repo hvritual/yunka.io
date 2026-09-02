@@ -1,7 +1,7 @@
 syntax = "proto3";
 package io.yunka.gateway.rpc;
 
-option go_package = "yunka.io/gateway/rpc/meta;meta";
+option go_package = "github.com/hvritual/yunka.io/gateway/rpc/meta;meta";
 
 enum CallType {
     CallReserve = 0;

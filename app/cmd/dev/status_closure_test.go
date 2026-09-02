@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/urfave/cli"
-	applicationgraph "yunka.io/pkg/applicationgraph"
-	"yunka.io/pkg/devruntime"
+	applicationgraph "github.com/hvritual/yunka.io/pkg/applicationgraph"
+	"github.com/hvritual/yunka.io/pkg/devruntime"
 )
 
 func TestC103StatusClosureValidatesCurrentExplicitPlan(t *testing.T) {

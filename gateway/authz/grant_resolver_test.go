@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"yunka.io/framework/core/identity"
+	"github.com/hvritual/yunka.io/framework/core/identity"
 )
 
 type grantResolverFunc func(context.Context, GrantRequest) ([]Grant, error)

@@ -3,7 +3,7 @@ package mdns
 import (
 	"testing"
 
-	"yunka.io/pkg/registry"
+	"github.com/hvritual/yunka.io/pkg/registry"
 )
 
 func TestDiffMDNSSnapshots(t *testing.T) {

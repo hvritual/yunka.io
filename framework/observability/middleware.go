@@ -10,9 +10,9 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
-	"yunka.io/framework/core/middleware"
-	"yunka.io/framework/core/resilience"
-	"yunka.io/framework/core/runtimecontext"
+	"github.com/hvritual/yunka.io/framework/core/middleware"
+	"github.com/hvritual/yunka.io/framework/core/resilience"
+	"github.com/hvritual/yunka.io/framework/core/runtimecontext"
 )
 
 // Middleware creates one operation span, records common metrics, emits a

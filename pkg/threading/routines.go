@@ -15,7 +15,7 @@ import (
 	"bytes"
 	"runtime"
 	"strconv"
-	"yunka.io/pkg/rescue"
+	"github.com/hvritual/yunka.io/pkg/rescue"
 )
 
 func GoSafe(fn func()) {

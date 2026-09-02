@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"yunka.io/framework/event"
+	"github.com/hvritual/yunka.io/framework/event"
 )
 
 func TestMemoryStoreLeaseAndRetryLifecycle(t *testing.T) {

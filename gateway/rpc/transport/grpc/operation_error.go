@@ -5,9 +5,9 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"yunka.io/framework/execution"
-	"yunka.io/framework/operation"
-	"yunka.io/gateway/authz"
+	"github.com/hvritual/yunka.io/framework/execution"
+	"github.com/hvritual/yunka.io/framework/operation"
+	"github.com/hvritual/yunka.io/gateway/authz"
 )
 
 // OperationError maps framework/security execution failures to transport

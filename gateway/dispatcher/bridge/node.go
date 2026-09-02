@@ -1,8 +1,8 @@
 package bridge
 
 import (
-	"yunka.io/framework/core/request"
-	"yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/framework/core/request"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
 )
 
 /**

@@ -6,10 +6,10 @@ import (
 	sls "github.com/aliyun/aliyun-log-go-sdk"
 	"net/http"
 	"time"
-	"yunka.io/framework/core/request"
-	"yunka.io/gateway/dispatcher/proxy"
-	"yunka.io/gateway/rpc/meta"
-	"yunka.io/pkg/define"
+	"github.com/hvritual/yunka.io/framework/core/request"
+	"github.com/hvritual/yunka.io/gateway/dispatcher/proxy"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/pkg/define"
 )
 
 const (

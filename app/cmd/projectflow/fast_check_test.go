@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"testing"
 
-	"yunka.io/pkg/fastfeedback"
+	"github.com/hvritual/yunka.io/pkg/fastfeedback"
 )
 
 const fastCheckToolchain = "protoc:test:sha256:verified"

@@ -2,8 +2,8 @@ package observability
 
 import (
 	grpcgo "google.golang.org/grpc"
-	"yunka.io/framework/core/middleware"
-	"yunka.io/framework/core/resilience"
+	"github.com/hvritual/yunka.io/framework/core/middleware"
+	"github.com/hvritual/yunka.io/framework/core/resilience"
 )
 
 // UnaryClientInterceptor instruments the single grpc-go unary client runtime.

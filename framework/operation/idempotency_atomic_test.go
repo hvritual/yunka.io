@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"yunka.io/framework/core/identity"
-	"yunka.io/framework/execution"
-	"yunka.io/pkg/operationplan"
+	"github.com/hvritual/yunka.io/framework/core/identity"
+	"github.com/hvritual/yunka.io/framework/execution"
+	"github.com/hvritual/yunka.io/pkg/operationplan"
 )
 
 type atomicSequenceStore struct {

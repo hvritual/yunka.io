@@ -9,11 +9,11 @@ import (
 	grpcgo "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
-	"yunka.io/gateway/rpc/bridge"
-	"yunka.io/gateway/rpc/client"
-	"yunka.io/gateway/rpc/handle"
-	"yunka.io/gateway/rpc/meta"
-	"yunka.io/pkg/rpcbridge"
+	"github.com/hvritual/yunka.io/gateway/rpc/bridge"
+	"github.com/hvritual/yunka.io/gateway/rpc/client"
+	"github.com/hvritual/yunka.io/gateway/rpc/handle"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/pkg/rpcbridge"
 )
 
 // existingService is a plain application-owned service with no runtime mutation.

@@ -13,7 +13,7 @@ import (
 	"time"
 
 	projectcmd "yunka.io/app/cmd/project"
-	"yunka.io/pkg/fastfeedback"
+	"github.com/hvritual/yunka.io/pkg/fastfeedback"
 )
 
 const c114FastHitBudget = 2 * time.Second

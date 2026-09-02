@@ -12,8 +12,8 @@ import (
 	grpcmetadata "google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
-	"yunka.io/framework/core/identity"
-	coremiddleware "yunka.io/framework/core/middleware"
+	"github.com/hvritual/yunka.io/framework/core/identity"
+	coremiddleware "github.com/hvritual/yunka.io/framework/core/middleware"
 )
 
 const (

@@ -1,10 +1,8 @@
-module yunka.io/pkg
+module github.com/hvritual/yunka.io/pkg
 
 go 1.25.0
 
 toolchain go1.25.13
-
-replace github.com/go-kit/kit v0.10.0 => ../compat/go-kit-kit-log
 
 require (
 	github.com/BurntSushi/toml v0.3.1

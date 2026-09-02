@@ -5,39 +5,39 @@
       "name": "contracts/proto/gateway/api_common.proto",
       "package": "io.yunka.gateway.rpc",
       "syntax": "proto3",
-      "goPackage": "yunka.io/gateway/rpc/meta;meta"
+      "goPackage": "github.com/hvritual/yunka.io/gateway/rpc/meta;meta"
     },
     {
       "name": "contracts/proto/gateway/common.proto",
       "package": "io.yunka.gateway.rpc",
       "syntax": "proto3",
-      "goPackage": "yunka.io/gateway/rpc/meta;meta"
+      "goPackage": "github.com/hvritual/yunka.io/gateway/rpc/meta;meta"
     },
     {
       "name": "contracts/proto/gateway/gateway.proto",
       "package": "io.yunka.gateway.rpc",
       "syntax": "proto3",
-      "goPackage": "yunka.io/gateway/rpc/meta;meta"
+      "goPackage": "github.com/hvritual/yunka.io/gateway/rpc/meta;meta"
     },
     {
       "name": "contracts/proto/legacy/api.proto",
       "syntax": "proto3",
-      "goPackage": "yunka.io/pkg/rpcmeta/legacy;legacy"
+      "goPackage": "github.com/hvritual/yunka.io/pkg/rpcmeta/legacy;legacy"
     },
     {
       "name": "contracts/proto/legacy/api_common.proto",
       "syntax": "proto3",
-      "goPackage": "yunka.io/pkg/rpcmeta/legacy;legacy"
+      "goPackage": "github.com/hvritual/yunka.io/pkg/rpcmeta/legacy;legacy"
     },
     {
       "name": "contracts/proto/legacy/common.proto",
       "syntax": "proto3",
-      "goPackage": "yunka.io/pkg/rpcmeta/legacy;legacy"
+      "goPackage": "github.com/hvritual/yunka.io/pkg/rpcmeta/legacy;legacy"
     },
     {
       "name": "contracts/proto/legacy/unit.proto",
       "syntax": "proto3",
-      "goPackage": "yunka.io/pkg/rpcmeta/legacy;legacy"
+      "goPackage": "github.com/hvritual/yunka.io/pkg/rpcmeta/legacy;legacy"
     }
   ],
   "messages": [

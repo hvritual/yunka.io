@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/urfave/cli"
-	"yunka.io/pkg/contract"
+	"github.com/hvritual/yunka.io/pkg/contract"
 )
 
 const AppName = "inspect"

@@ -1,8 +1,8 @@
 package role
 
 import (
-	"yunka.io/gateway/rpc/bridge"
-	"yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/gateway/rpc/bridge"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
 )
 
 // These compile-time assertions exercise the real in-repository business

@@ -64,4 +64,4 @@ Other `@yunka.<key> <value>` method directives are preserved in the manifest as 
 
 ## C6 canonical RPC source root
 
-`contracts/proto` is the single inventoried protobuf root. Physical source paths may move, but protobuf package names, message/service full names, field and enum numbers, and RPC method names remain compatibility-controlled. Standard Go output is generated with exact pinned `protoc-gen-go` and `protoc-gen-go-grpc` versions. Existing gateway business code continues importing `yunka.io/gateway/rpc/meta`; the old XR generator, duplicate roots, and custom memory dispatcher have been removed.
+`contracts/proto` is the single inventoried protobuf root. Physical source paths may move, but protobuf package names, message/service full names, field and enum numbers, and RPC method names remain compatibility-controlled. Standard Go output is generated with exact pinned `protoc-gen-go` and `protoc-gen-go-grpc` versions. Existing gateway business code continues importing `github.com/hvritual/yunka.io/gateway/rpc/meta`; the old XR generator, duplicate roots, and custom memory dispatcher have been removed.

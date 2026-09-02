@@ -10,8 +10,8 @@ import (
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	"yunka.io/framework/requestscope"
-	"yunka.io/gateway/dispatcher/intercept/role/db"
+	"github.com/hvritual/yunka.io/framework/requestscope"
+	"github.com/hvritual/yunka.io/gateway/dispatcher/intercept/role/db"
 )
 
 func TestRoleRequestScopeMySQLCommitAndRollback(t *testing.T) {

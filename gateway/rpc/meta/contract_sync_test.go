@@ -13,7 +13,7 @@ import (
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
-	contractcore "yunka.io/pkg/contract"
+	contractcore "github.com/hvritual/yunka.io/pkg/contract"
 )
 
 func TestCommittedGatewayDescriptorsMatchCanonicalProtoSource(t *testing.T) {

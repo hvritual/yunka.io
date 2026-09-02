@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"yunka.io/pkg/contract"
+	"github.com/hvritual/yunka.io/pkg/contract"
 )
 
 func testManifest() contract.Manifest {

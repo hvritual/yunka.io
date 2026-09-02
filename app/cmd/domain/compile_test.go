@@ -21,11 +21,11 @@ go 1.25.0
 
 require (
 	gorm.io/gorm v1.25.5
-	yunka.io/framework v0.0.0
+	github.com/hvritual/yunka.io/framework v0.0.0
 )
 
-replace yunka.io/framework => %s
-replace yunka.io/pkg => %s
+replace github.com/hvritual/yunka.io/framework => %s
+replace github.com/hvritual/yunka.io/pkg => %s
 replace github.com/go-kit/kit v0.10.0 => %s
 `, filepath.ToSlash(filepath.Join(repositoryRoot, "framework")), filepath.ToSlash(filepath.Join(repositoryRoot, "pkg")), filepath.ToSlash(filepath.Join(repositoryRoot, "compat", "go-kit-kit-log")))
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte(goMod), 0o640); err != nil {

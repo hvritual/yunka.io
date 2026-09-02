@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"yunka.io/pkg/assemblyplan"
+	"github.com/hvritual/yunka.io/pkg/assemblyplan"
 )
 
 type AssemblyCompilation struct {

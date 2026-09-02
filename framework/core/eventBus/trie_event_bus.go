@@ -5,7 +5,7 @@ import (
 	"github.com/pkg/errors"
 	"sync"
 	"time"
-	"yunka.io/pkg/trie"
+	"github.com/hvritual/yunka.io/pkg/trie"
 )
 
 /**

@@ -6,9 +6,9 @@ import (
 	"math/rand"
 	"sync"
 	"time"
-	log "yunka.io/pkg/logExt"
+	log "github.com/hvritual/yunka.io/pkg/logExt"
 
-	"yunka.io/pkg/registry"
+	"github.com/hvritual/yunka.io/pkg/registry"
 )
 
 // Cache is the registry cache interface

@@ -680,7 +680,7 @@ const file_legacy_api_common_proto_rawDesc = "" +
 	"\bIsCommon\x12\n" +
 	"\n" +
 	"\x06Common\x10\x00\x12\x10\n" +
-	"\fPrivateCheck\x10\x01B$Z\"yunka.io/pkg/rpcmeta/legacy;legacyb\x06proto3"
+	"\fPrivateCheck\x10\x01B$Z\"github.com/hvritual/yunka.io/pkg/rpcmeta/legacy;legacyb\x06proto3"
 
 var (
 	file_legacy_api_common_proto_rawDescOnce sync.Once

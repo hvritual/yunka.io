@@ -319,7 +319,7 @@ func renderOperationPolicy(service Service, naming serviceCodegenNaming) (string
 	if !naming.Multi {
 		var b strings.Builder
 		b.WriteString(GeneratedApplicationMarker + "\n\npackage policy\n\n")
-		b.WriteString("import \"yunka.io/gateway/authz\"\n\n")
+		b.WriteString("import \"github.com/hvritual/yunka.io/gateway/authz\"\n\n")
 		for _, method := range service.Methods {
 			operation := method.Operation
 			fmt.Fprintf(&b, "const Operation%s authz.OperationID = %q\n", method.Name, operation.ID)
@@ -356,7 +356,7 @@ func renderOperationPolicy(service Service, naming serviceCodegenNaming) (string
 
 	var b strings.Builder
 	b.WriteString(GeneratedApplicationMarker + "\n\npackage policy\n\n")
-	b.WriteString("import \"yunka.io/gateway/authz\"\n\n")
+	b.WriteString("import \"github.com/hvritual/yunka.io/gateway/authz\"\n\n")
 	for _, method := range service.Methods {
 		fmt.Fprintf(&b, "const %s authz.OperationID = %q\n", operationIdentifier(naming, method), method.Operation.ID)
 	}
@@ -436,7 +436,7 @@ func renderDomainPolicy(services []Service, namings map[string]serviceCodegenNam
 
 	var b strings.Builder
 	b.WriteString(GeneratedApplicationMarker + "\n\npackage policy\n\n")
-	b.WriteString("import \"yunka.io/gateway/authz\"\n\n")
+	b.WriteString("import \"github.com/hvritual/yunka.io/gateway/authz\"\n\n")
 	b.WriteString("func Permissions() []authz.PermissionKey {\n\treturn []authz.PermissionKey{")
 	for _, permission := range permissions {
 		fmt.Fprintf(&b, "%q,", permission)
@@ -488,7 +488,7 @@ func renderRPCAdapter(service Service, packages []protoGoPackage, rootImport str
 func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[string]Message, rootImport string, naming serviceCodegenNaming) (string, error) {
 	imports := newImportSet()
 	applicationAlias := imports.add(rootImport+"/"+service.Domain+"/application", "application")
-	imports.add("yunka.io/gateway/authz", "authz")
+	imports.add("github.com/hvritual/yunka.io/gateway/authz", "authz")
 	imports.add("google.golang.org/protobuf/encoding/protojson", "protojson")
 
 	var handlers strings.Builder

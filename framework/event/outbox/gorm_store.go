@@ -11,7 +11,7 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"yunka.io/framework/event"
+	"github.com/hvritual/yunka.io/framework/event"
 )
 
 const DefaultTable = "yunka_outbox"

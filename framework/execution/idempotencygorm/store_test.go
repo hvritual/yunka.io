@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"yunka.io/framework/execution"
+	"github.com/hvritual/yunka.io/framework/execution"
 )
 
 func TestRecordKeyHashesOpaqueIdempotencyKey(t *testing.T) {

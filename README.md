@@ -21,7 +21,7 @@ Exact tool versions are locked in `tools/toolchain.env`; local and CI verificati
 - `compat/go-kit-kit-log/`: repository-owned SLS logging compatibility module
 
 The modules are joined by the root `go.work`. `app` intentionally uses the distinct module
-path `yunka.io/app`; `framework` remains `yunka.io/framework`.
+path `yunka.io/app`; `framework` remains `github.com/hvritual/yunka.io/framework`.
 
 ## Documentation authority
 
@@ -116,7 +116,7 @@ commit a real key.
 ## Application lifecycle and health
 
 The typed App owns process-scoped capabilities and module instances. A capability or module may
-implement the following optional interfaces from `yunka.io/framework/core`:
+implement the following optional interfaces from `github.com/hvritual/yunka.io/framework/core`:
 
 - `Startable` for explicit startup work.
 - `Shutdowner` for context-aware graceful shutdown.

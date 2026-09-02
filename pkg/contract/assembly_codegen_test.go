@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"yunka.io/pkg/assemblyplan"
+	"github.com/hvritual/yunka.io/pkg/assemblyplan"
 )
 
 func c102AssemblyFixture(t *testing.T) (Manifest, assemblyplan.Plan) {

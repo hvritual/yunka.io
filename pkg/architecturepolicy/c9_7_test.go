@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"yunka.io/pkg/operationplan"
+	"github.com/hvritual/yunka.io/pkg/operationplan"
 )
 
 func TestC97ExecutionSemanticsBoundaries(t *testing.T) {
@@ -34,7 +34,7 @@ func TestC97ExecutionSemanticsBoundaries(t *testing.T) {
 		"framework/execution/scope":        scope,
 		"framework/execution/idempotency":  idempotency,
 	} {
-		for _, forbidden := range []string{"yunka.io/gateway", "gorm.io/", "database/sql"} {
+		for _, forbidden := range []string{"github.com/hvritual/yunka.io/gateway", "gorm.io/", "database/sql"} {
 			if strings.Contains(source, forbidden) {
 				t.Errorf("%s imports forbidden adapter/runtime dependency %q", name, forbidden)
 			}

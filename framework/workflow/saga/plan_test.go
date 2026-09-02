@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"yunka.io/framework/event"
-	"yunka.io/framework/event/outbox"
+	"github.com/hvritual/yunka.io/framework/event"
+	"github.com/hvritual/yunka.io/framework/event/outbox"
 )
 
 type txStore struct{ values []event.Envelope }

@@ -5,10 +5,10 @@ import (
 	"testing"
 
 	"github.com/valyala/fasthttp"
-	"yunka.io/framework/core/identity"
-	"yunka.io/framework/core/request"
-	"yunka.io/gateway/authz"
-	"yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/framework/core/identity"
+	"github.com/hvritual/yunka.io/framework/core/request"
+	"github.com/hvritual/yunka.io/gateway/authz"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
 )
 
 type middlewareChecker func(context.Context, string, []string, []authz.PermissionKey, authz.PermissionMode) (bool, error)

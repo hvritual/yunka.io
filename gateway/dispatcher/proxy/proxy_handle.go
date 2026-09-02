@@ -6,12 +6,12 @@ import (
 	"runtime/debug"
 
 	"github.com/valyala/fasthttp"
-	"yunka.io/framework/core/request"
-	"yunka.io/framework/core/runtimecontext"
-	"yunka.io/framework/observability"
-	"yunka.io/gateway/internal/resp"
-	"yunka.io/pkg/response"
-	"yunka.io/pkg/stringsExt"
+	"github.com/hvritual/yunka.io/framework/core/request"
+	"github.com/hvritual/yunka.io/framework/core/runtimecontext"
+	"github.com/hvritual/yunka.io/framework/observability"
+	"github.com/hvritual/yunka.io/gateway/internal/resp"
+	"github.com/hvritual/yunka.io/pkg/response"
+	"github.com/hvritual/yunka.io/pkg/stringsExt"
 )
 
 func (proxy *Proxy) serverHTTP(raw *fasthttp.RequestCtx) {

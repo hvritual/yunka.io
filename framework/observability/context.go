@@ -8,9 +8,9 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"yunka.io/framework/core/identity"
-	"yunka.io/framework/core/resilience"
-	"yunka.io/framework/core/runtimecontext"
+	"github.com/hvritual/yunka.io/framework/core/identity"
+	"github.com/hvritual/yunka.io/framework/core/resilience"
+	"github.com/hvritual/yunka.io/framework/core/runtimecontext"
 )
 
 func operationName(ctx context.Context) string {

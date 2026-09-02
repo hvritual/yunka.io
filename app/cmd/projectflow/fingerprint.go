@@ -14,8 +14,8 @@ import (
 	"time"
 
 	projectcmd "yunka.io/app/cmd/project"
-	contractcore "yunka.io/pkg/contract"
-	"yunka.io/pkg/fastfeedback"
+	contractcore "github.com/hvritual/yunka.io/pkg/contract"
+	"github.com/hvritual/yunka.io/pkg/fastfeedback"
 )
 
 // GenerateWithFastFeedback preserves the canonical Generate path and records

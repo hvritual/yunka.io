@@ -3,7 +3,7 @@ package core
 import (
 	"context"
 
-	"yunka.io/framework/core/modulecatalog"
+	"github.com/hvritual/yunka.io/framework/core/modulecatalog"
 )
 
 const DiagnosticsSchemaVersion = 1

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"yunka.io/framework/core/resilience"
-	"yunka.io/pkg/contract"
-	"yunka.io/pkg/selector"
+	"github.com/hvritual/yunka.io/framework/core/resilience"
+	"github.com/hvritual/yunka.io/pkg/contract"
+	"github.com/hvritual/yunka.io/pkg/selector"
 )
 
 type ContractSnapshot struct {

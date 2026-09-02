@@ -1,6 +1,6 @@
 package platform
 
-import "yunka.io/pkg/providerplan"
+import "github.com/hvritual/yunka.io/pkg/providerplan"
 
 // NewFromManifest is the canonical runtime entrypoint for declarative
 // infrastructure providers. The manifest selects typed factories; host-owned

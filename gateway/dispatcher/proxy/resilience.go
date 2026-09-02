@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"yunka.io/framework/core/resilience"
+	"github.com/hvritual/yunka.io/framework/core/resilience"
 )
 
 // runtimeMiddlewareStatus adapts transport-neutral resilience errors to HTTP

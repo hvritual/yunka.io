@@ -14,7 +14,7 @@ import (
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	"yunka.io/framework/event"
+	"github.com/hvritual/yunka.io/framework/event"
 )
 
 func integrationStore(t *testing.T, options ...GORMOption) *GORMStore {

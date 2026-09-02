@@ -8,7 +8,7 @@ import (
 	"math/rand"
 	"sync"
 	"time"
-	"yunka.io/pkg/util"
+	"github.com/hvritual/yunka.io/pkg/util"
 )
 
 /**

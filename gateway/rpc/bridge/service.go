@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
 )
 
 const DefaultGatewayServiceName = "GatewayService"

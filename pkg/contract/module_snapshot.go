@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"yunka.io/pkg/assemblyplan"
-	"yunka.io/pkg/modulespec"
+	"github.com/hvritual/yunka.io/pkg/assemblyplan"
+	"github.com/hvritual/yunka.io/pkg/modulespec"
 )
 
 // DiscoverModuleSnapshot compiles the static module snapshot from either the

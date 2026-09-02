@@ -10,7 +10,7 @@ import (
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	"yunka.io/framework/event/outbox"
+	"github.com/hvritual/yunka.io/framework/event/outbox"
 )
 
 func TestTransactionalOutboxSagaBoundary(t *testing.T) {

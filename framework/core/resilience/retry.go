@@ -5,8 +5,8 @@ import (
 	"math/rand/v2"
 	"time"
 
-	"yunka.io/framework/core/middleware"
-	"yunka.io/framework/core/runtimecontext"
+	"github.com/hvritual/yunka.io/framework/core/middleware"
+	"github.com/hvritual/yunka.io/framework/core/runtimecontext"
 )
 
 // RetryConfig is intentionally fail-safe: retries require MaxAttempts > 1,

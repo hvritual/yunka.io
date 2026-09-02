@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"go.opentelemetry.io/otel/metric"
-	"yunka.io/framework/core/middleware"
-	"yunka.io/framework/core/resilience"
+	"github.com/hvritual/yunka.io/framework/core/middleware"
+	"github.com/hvritual/yunka.io/framework/core/resilience"
 )
 
 // ResilienceMiddleware records the current W3 state after each logical call.

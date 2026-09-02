@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"yunka.io/framework/core/eventBus"
-	"yunka.io/framework/core/middleware"
-	"yunka.io/framework/core/runtimecontext"
+	"github.com/hvritual/yunka.io/framework/core/eventBus"
+	"github.com/hvritual/yunka.io/framework/core/middleware"
+	"github.com/hvritual/yunka.io/framework/core/runtimecontext"
 )
 
 type testPropagator struct{}

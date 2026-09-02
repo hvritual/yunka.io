@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	applicationgraph "yunka.io/pkg/applicationgraph"
-	"yunka.io/pkg/assemblyplan"
+	applicationgraph "github.com/hvritual/yunka.io/pkg/applicationgraph"
+	"github.com/hvritual/yunka.io/pkg/assemblyplan"
 )
 
 func TestRuntimeClosureDerivesSingleProcessOwnershipFromAssemblyPlan(t *testing.T) {

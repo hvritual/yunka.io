@@ -11,9 +11,9 @@ import (
 	grpcgo "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
-	"yunka.io/framework/core/runtimecontext"
-	"yunka.io/gateway/rpc/meta"
-	"yunka.io/pkg/rpcbridge"
+	"github.com/hvritual/yunka.io/framework/core/runtimecontext"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/pkg/rpcbridge"
 )
 
 type staticGatewayService struct {

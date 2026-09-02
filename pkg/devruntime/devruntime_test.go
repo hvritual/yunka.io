@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	applicationgraph "yunka.io/pkg/applicationgraph"
+	applicationgraph "github.com/hvritual/yunka.io/pkg/applicationgraph"
 )
 
 func TestBuildPlanTopologicalAndTargeted(t *testing.T) {

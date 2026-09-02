@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	grpcgo "google.golang.org/grpc"
-	"yunka.io/framework/core/runtimecontext"
+	"github.com/hvritual/yunka.io/framework/core/runtimecontext"
 )
 
 func TestUnaryClientInterceptorPublishesStandardGRPCMetadata(t *testing.T) {

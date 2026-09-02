@@ -104,8 +104,8 @@ func CheckAutoloadFile(path string) ([]Diagnostic, error) {
 		}
 		imports[name] = pathValue
 	}
-	if imports["modulecatalog"] != "yunka.io/framework/core/modulecatalog" {
-		diagnostics = append(diagnostics, Diagnostic{Message: "autoload must import yunka.io/framework/core/modulecatalog as modulecatalog"})
+	if imports["modulecatalog"] != "github.com/hvritual/yunka.io/framework/core/modulecatalog" {
+		diagnostics = append(diagnostics, Diagnostic{Message: "autoload must import github.com/hvritual/yunka.io/framework/core/modulecatalog as modulecatalog"})
 	}
 
 	initCount := 0
@@ -149,7 +149,7 @@ func isDescriptorRegistration(expression ast.Expr, imports map[string]string) bo
 		return false
 	}
 	identifier, ok := selector.X.(*ast.Ident)
-	if !ok || identifier.Name != "modulecatalog" || imports[identifier.Name] != "yunka.io/framework/core/modulecatalog" {
+	if !ok || identifier.Name != "modulecatalog" || imports[identifier.Name] != "github.com/hvritual/yunka.io/framework/core/modulecatalog" {
 		return false
 	}
 	descriptorCall, ok := call.Args[0].(*ast.CallExpr)
@@ -206,10 +206,10 @@ func checkTypedComposition(root string) ([]Diagnostic, error) {
 					diagnostics = append(diagnostics, Diagnostic{Path: filepath.ToSlash(relative), Message: "typed composition may not import reflect"})
 				}
 				switch pathValue {
-				case "yunka.io/framework/core/module", "yunka.io/pkg/di":
+				case "github.com/hvritual/yunka.io/framework/core/module", "github.com/hvritual/yunka.io/pkg/di":
 					relative, _ := filepath.Rel(root, path)
 					diagnostics = append(diagnostics, Diagnostic{Path: filepath.ToSlash(relative), Message: "typed composition may not import legacy reflection containers"})
-				case "yunka.io/framework/core/request":
+				case "github.com/hvritual/yunka.io/framework/core/request":
 					relative, _ := filepath.Rel(root, path)
 					diagnostics = append(diagnostics, Diagnostic{Path: filepath.ToSlash(relative), Message: "typed request scopes may not depend on legacy request.Runtime"})
 				}
@@ -275,10 +275,10 @@ func checkLegacyRuntimeRemoved(root string) ([]Diagnostic, error) {
 	}
 
 	forbiddenImports := map[string]struct{}{
-		"yunka.io/framework/core/module": {},
-		"yunka.io/framework/ingress":     {},
-		"yunka.io/pkg/di":                {},
-		"yunka.io/framework/infras/orm":  {},
+		"github.com/hvritual/yunka.io/framework/core/module": {},
+		"github.com/hvritual/yunka.io/framework/ingress":     {},
+		"github.com/hvritual/yunka.io/pkg/di":                {},
+		"github.com/hvritual/yunka.io/framework/infras/orm":  {},
 	}
 	forbiddenIdentifiers := map[string]struct{}{
 		"Runtime": {}, "BaseRuntime": {}, "WorkRuntime": {},
@@ -339,7 +339,7 @@ func checkLegacyRuntimeRemoved(root string) ([]Diagnostic, error) {
 						if aliases[identifier.Name] == "sync" && current.Sel.Name == "Pool" && isRequestLifetimePath(relativePath) {
 							diagnostics = append(diagnostics, Diagnostic{Path: relativePath, Message: "C7.3 request lifetime may not use sync.Pool"})
 						}
-						if aliases[identifier.Name] == "yunka.io/framework/core/request" && current.Sel.Name == "Runtime" {
+						if aliases[identifier.Name] == "github.com/hvritual/yunka.io/framework/core/request" && current.Sel.Name == "Runtime" {
 							diagnostics = append(diagnostics, Diagnostic{Path: relativePath, Message: "C7.3 request.Runtime is removed"})
 						}
 					}
@@ -386,10 +386,10 @@ func checkModuleDeveloperContract(root string) ([]Diagnostic, error) {
 	}
 	forbiddenImports := map[string]struct{}{
 		"reflect":                        {},
-		"yunka.io/framework/platform":    {},
-		"yunka.io/framework/core/module": {},
-		"yunka.io/framework/ingress":     {},
-		"yunka.io/pkg/di":                {},
+		"github.com/hvritual/yunka.io/framework/platform":    {},
+		"github.com/hvritual/yunka.io/framework/core/module": {},
+		"github.com/hvritual/yunka.io/framework/ingress":     {},
+		"github.com/hvritual/yunka.io/pkg/di":                {},
 	}
 	forbiddenCalls := map[string]struct{}{
 		"GetApp": {}, "GetService": {}, "GetRepo": {}, "GetInfra": {},

@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"yunka.io/app/cmd/projectflow"
-	"yunka.io/pkg/diagnostic"
+	"github.com/hvritual/yunka.io/pkg/diagnostic"
 )
 
 const (

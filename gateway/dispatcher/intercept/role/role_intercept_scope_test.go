@@ -6,8 +6,8 @@ import (
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"yunka.io/gateway/dispatcher/intercept/role/db"
-	"yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/gateway/dispatcher/intercept/role/db"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
 )
 
 type captureGatewayRegistrar struct {

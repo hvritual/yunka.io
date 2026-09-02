@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode"
-	"yunka.io/pkg/uuid"
+	"github.com/hvritual/yunka.io/pkg/uuid"
 )
 
 /**

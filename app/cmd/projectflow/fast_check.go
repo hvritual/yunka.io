@@ -4,7 +4,7 @@ import (
 	"context"
 	"path/filepath"
 
-	"yunka.io/pkg/fastfeedback"
+	"github.com/hvritual/yunka.io/pkg/fastfeedback"
 )
 
 type toolchainIdentityFunc func(context.Context, string) (string, error)

@@ -148,7 +148,7 @@ const file_legacy_common_proto_rawDesc = "" +
 	"\vNotResponse*\x1e\n" +
 	"\x06Switch\x12\t\n" +
 	"\x05Close\x10\x00\x12\t\n" +
-	"\x05Oopen\x10\x01B$Z\"yunka.io/pkg/rpcmeta/legacy;legacyb\x06proto3"
+	"\x05Oopen\x10\x01B$Z\"github.com/hvritual/yunka.io/pkg/rpcmeta/legacy;legacyb\x06proto3"
 
 var (
 	file_legacy_common_proto_rawDescOnce sync.Once

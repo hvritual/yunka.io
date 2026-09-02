@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/urfave/cli"
-	"yunka.io/pkg/diagnostic"
+	"github.com/hvritual/yunka.io/pkg/diagnostic"
 )
 
 const (

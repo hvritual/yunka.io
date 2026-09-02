@@ -3,8 +3,8 @@ package selector
 import (
 	"errors"
 
-	"yunka.io/pkg/registry"
-	registrycache "yunka.io/pkg/registry/cache"
+	"github.com/hvritual/yunka.io/pkg/registry"
+	registrycache "github.com/hvritual/yunka.io/pkg/registry/cache"
 )
 
 // The fake registry below does not implement a live watcher. Disable the

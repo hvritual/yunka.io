@@ -113,9 +113,9 @@ func multiRecordTemplate(spec Spec, object ObjectSpec, packageImport string) str
 func multiRepositoriesTemplate(spec Spec, packageImport string) string {
 	var b strings.Builder
 	b.WriteString(generatedDomainMarker + "\n\npackage persistence\n\n")
-	fmt.Fprintf(&b, "import (\n\t\"context\"\n\t\"errors\"\n\t\"time\"\n\n\t\"gorm.io/gorm\"\n\tdomain %q\n\tports %q\n\t\"yunka.io/framework/requestscope\"\n", packageImport+"/domain", packageImport+"/ports")
+	fmt.Fprintf(&b, "import (\n\t\"context\"\n\t\"errors\"\n\t\"time\"\n\n\t\"gorm.io/gorm\"\n\tdomain %q\n\tports %q\n\t\"github.com/hvritual/yunka.io/framework/requestscope\"\n", packageImport+"/domain", packageImport+"/ports")
 	if spec.TenantScoped {
-		b.WriteString("\tidentity \"yunka.io/framework/core/identity\"\n")
+		b.WriteString("\tidentity \"github.com/hvritual/yunka.io/framework/core/identity\"\n")
 	}
 	b.WriteString(")\n\n")
 	b.WriteString("// AutoMigrate is an explicit persistence helper. Application bootstrap decides when migrations run.\n")

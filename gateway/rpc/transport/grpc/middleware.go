@@ -9,10 +9,10 @@ import (
 	"google.golang.org/grpc/codes"
 	grpcmetadata "google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"yunka.io/framework/core/identity"
-	coremiddleware "yunka.io/framework/core/middleware"
-	"yunka.io/framework/core/runtimecontext"
-	"yunka.io/framework/observability"
+	"github.com/hvritual/yunka.io/framework/core/identity"
+	coremiddleware "github.com/hvritual/yunka.io/framework/core/middleware"
+	"github.com/hvritual/yunka.io/framework/core/runtimecontext"
+	"github.com/hvritual/yunka.io/framework/observability"
 )
 
 // UnaryServerInterceptor adapts the transport-neutral middleware chain to gRPC

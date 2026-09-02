@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"yunka.io/pkg/assemblyplan"
+	"github.com/hvritual/yunka.io/pkg/assemblyplan"
 )
 
 const c102QualificationModule = "example.com/c102qualification"
@@ -99,14 +99,14 @@ require (
 	google.golang.org/grpc v1.82.1
 	google.golang.org/protobuf v1.36.11
 	gorm.io/gorm v1.25.5
-	yunka.io/framework v0.0.0
-	yunka.io/gateway v0.0.0
-	yunka.io/pkg v0.0.0
+	github.com/hvritual/yunka.io/framework v0.0.0
+	github.com/hvritual/yunka.io/gateway v0.0.0
+	github.com/hvritual/yunka.io/pkg v0.0.0
 )
 
-replace yunka.io/framework => %s
-replace yunka.io/gateway => %s
-replace yunka.io/pkg => %s
+replace github.com/hvritual/yunka.io/framework => %s
+replace github.com/hvritual/yunka.io/gateway => %s
+replace github.com/hvritual/yunka.io/pkg => %s
 `, c102QualificationModule,
 		filepath.ToSlash(filepath.Join(repositoryRoot, "framework")),
 		filepath.ToSlash(filepath.Join(repositoryRoot, "gateway")),

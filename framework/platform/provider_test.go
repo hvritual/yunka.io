@@ -10,7 +10,7 @@ import (
 
 	"google.golang.org/grpc"
 	"gorm.io/gorm"
-	"yunka.io/framework/core/modulecatalog"
+	"github.com/hvritual/yunka.io/framework/core/modulecatalog"
 )
 
 type testConnection struct{}

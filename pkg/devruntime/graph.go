@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	applicationgraph "yunka.io/pkg/applicationgraph"
+	applicationgraph "github.com/hvritual/yunka.io/pkg/applicationgraph"
 )
 
 func BuildRuntimeGraph(plan Plan, report RuntimeReport) (applicationgraph.Graph, error) {

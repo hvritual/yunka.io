@@ -1,6 +1,6 @@
 package proxy
 
-import coremiddleware "yunka.io/framework/core/middleware"
+import coremiddleware "github.com/hvritual/yunka.io/framework/core/middleware"
 
 /**
  * @BelongProject yunka

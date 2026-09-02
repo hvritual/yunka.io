@@ -14,7 +14,7 @@ import (
 	"strings"
 	"sync"
 	"unicode"
-	"yunka.io/pkg/uuid"
+	"github.com/hvritual/yunka.io/pkg/uuid"
 )
 
 /**

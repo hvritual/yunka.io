@@ -9,13 +9,13 @@ import (
 
 	grpcgo "google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
-	"yunka.io/framework/core/identity"
-	coremiddleware "yunka.io/framework/core/middleware"
-	"yunka.io/framework/core/runtimecontext"
-	"yunka.io/framework/requestscope"
-	"yunka.io/gateway/rpc/bridge"
-	"yunka.io/gateway/rpc/meta"
-	"yunka.io/pkg/rpcbridge"
+	"github.com/hvritual/yunka.io/framework/core/identity"
+	coremiddleware "github.com/hvritual/yunka.io/framework/core/middleware"
+	"github.com/hvritual/yunka.io/framework/core/runtimecontext"
+	"github.com/hvritual/yunka.io/framework/requestscope"
+	"github.com/hvritual/yunka.io/gateway/rpc/bridge"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/pkg/rpcbridge"
 )
 
 type authenticatedScopedGatewayService struct {

@@ -2,7 +2,7 @@ package cryptoExt
 
 import (
 	"testing"
-	"yunka.io/pkg/uuid"
+	"github.com/hvritual/yunka.io/pkg/uuid"
 )
 
 /**

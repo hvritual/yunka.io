@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"yunka.io/pkg/assemblyplan"
-	"yunka.io/pkg/operationplan"
+	"github.com/hvritual/yunka.io/pkg/assemblyplan"
+	"github.com/hvritual/yunka.io/pkg/operationplan"
 )
 
 func assemblyManifestFixture() Manifest {

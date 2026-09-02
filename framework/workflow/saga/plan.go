@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"strings"
 
-	"yunka.io/framework/event"
-	"yunka.io/framework/event/outbox"
+	"github.com/hvritual/yunka.io/framework/event"
+	"github.com/hvritual/yunka.io/framework/event/outbox"
 )
 
 var ErrInvalidPlan = errors.New("saga: invalid plan")

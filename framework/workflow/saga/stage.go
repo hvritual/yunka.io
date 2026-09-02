@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"yunka.io/framework/event/outbox"
-	"yunka.io/framework/execution"
+	"github.com/hvritual/yunka.io/framework/event/outbox"
+	"github.com/hvritual/yunka.io/framework/execution"
 )
 
 type Stager interface {

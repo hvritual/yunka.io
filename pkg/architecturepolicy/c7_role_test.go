@@ -15,7 +15,7 @@ func TestC7GatewayRoleVerticalSliceDoesNotRegressToLegacyRuntime(t *testing.T) {
 		"gateway/rpc/transport/grpc/typed_bridge_integration_test.go",
 	}
 	forbidden := []string{
-		"yunka.io/framework/core/request",
+		"github.com/hvritual/yunka.io/framework/core/request",
 		"NewModuleGatewayProvider",
 		"GetService(",
 		"PutService(",

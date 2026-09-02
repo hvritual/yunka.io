@@ -299,10 +299,10 @@ func dependenciesTemplate(options Options) string {
 		imports = append(imports, `"gorm.io/gorm"`)
 	}
 	if options.EventBus {
-		imports = append(imports, `"yunka.io/framework/core/eventBus"`)
+		imports = append(imports, `"github.com/hvritual/yunka.io/framework/core/eventBus"`)
 	}
 	if options.Logger {
-		imports = append(imports, `"yunka.io/pkg/logExt"`)
+		imports = append(imports, `"github.com/hvritual/yunka.io/pkg/logExt"`)
 	}
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "package %s\n\n", options.Name)
@@ -395,7 +395,7 @@ func generatedWiringTemplate(options Options) string {
 	if usesFmt {
 		builder.WriteString("\t\"fmt\"\n")
 	}
-	builder.WriteString("\t\"yunka.io/framework/core/modulecatalog\"\n")
+	builder.WriteString("\t\"github.com/hvritual/yunka.io/framework/core/modulecatalog\"\n")
 	builder.WriteString(")\n\n")
 	builder.WriteString("func GeneratedDescriptor() modulecatalog.Descriptor {\n")
 	builder.WriteString("\treturn modulecatalog.Descriptor{\n")
@@ -482,7 +482,7 @@ func autoloadTemplate(packageImport string) string {
 	return fmt.Sprintf(`package autoload
 
 import (
-	"yunka.io/framework/core/modulecatalog"
+	"github.com/hvritual/yunka.io/framework/core/modulecatalog"
 	module %q
 )
 

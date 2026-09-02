@@ -6,9 +6,9 @@ import (
 	"sync"
 
 	"github.com/valyala/fasthttp"
-	coremiddleware "yunka.io/framework/core/middleware"
-	"yunka.io/gateway/dispatcher/router"
-	"yunka.io/pkg/logExt"
+	coremiddleware "github.com/hvritual/yunka.io/framework/core/middleware"
+	"github.com/hvritual/yunka.io/gateway/dispatcher/router"
+	"github.com/hvritual/yunka.io/pkg/logExt"
 )
 
 // Proxy owns routing and middleware composition. HTTP request contexts are

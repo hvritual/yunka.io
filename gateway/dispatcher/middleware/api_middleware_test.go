@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"github.com/valyala/fasthttp"
-	"yunka.io/framework/core/request"
-	"yunka.io/gateway/dispatcher/proxy"
-	"yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/framework/core/request"
+	"github.com/hvritual/yunka.io/gateway/dispatcher/proxy"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
 )
 
 type authCapture struct{ got bool }

@@ -4,11 +4,11 @@ import (
 	"context"
 	"github.com/valyala/fasthttp"
 
-	"yunka.io/framework/core/request"
-	"yunka.io/gateway/internal/resp"
-	utils "yunka.io/gateway/internal/util"
-	"yunka.io/gateway/rpc/meta"
-	"yunka.io/pkg/response"
+	"github.com/hvritual/yunka.io/framework/core/request"
+	"github.com/hvritual/yunka.io/gateway/internal/resp"
+	utils "github.com/hvritual/yunka.io/gateway/internal/util"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/pkg/response"
 )
 
 /**

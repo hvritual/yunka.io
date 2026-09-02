@@ -1,15 +1,15 @@
-module yunka.io/gateway
+module github.com/hvritual/yunka.io/gateway
 
 go 1.25.0
 
 toolchain go1.25.13
 
-replace github.com/go-kit/kit v0.10.0 => ../compat/go-kit-kit-log
-
 require (
 	github.com/aliyun/aliyun-log-go-sdk v0.1.127
 	github.com/buger/jsonparser v1.6.1
 	github.com/google/uuid v1.6.0
+	github.com/hvritual/yunka.io/framework v0.1.0-c41rc1
+	github.com/hvritual/yunka.io/pkg v0.1.0-c41rc1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/valyala/fasthttp v1.73.0
 	go.opentelemetry.io/otel/trace v1.44.0
@@ -18,8 +18,6 @@ require (
 	gorm.io/driver/mysql v1.5.2
 	gorm.io/driver/sqlite v1.5.2
 	gorm.io/gorm v1.25.5
-	yunka.io/framework v0.0.0-00010101000000-000000000000
-	yunka.io/pkg v0.0.0-00010101000000-000000000000
 )
 
 require (
@@ -29,7 +27,6 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/go-kit/kit v0.10.0 // indirect
-	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.5.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -85,7 +82,3 @@ require (
 	gopkg.in/go-playground/validator.v9 v9.31.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 )
-
-replace yunka.io/pkg => ../pkg
-
-replace yunka.io/framework => ../framework

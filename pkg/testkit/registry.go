@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"yunka.io/pkg/registry"
+	"github.com/hvritual/yunka.io/pkg/registry"
 )
 
 type Registry struct {

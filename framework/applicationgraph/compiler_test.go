@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	graph "yunka.io/pkg/applicationgraph"
+	graph "github.com/hvritual/yunka.io/pkg/applicationgraph"
 )
 
 type panicSource struct{}

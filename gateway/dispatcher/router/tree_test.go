@@ -2,7 +2,7 @@ package router
 
 import (
 	"testing"
-	"yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
 )
 
 /**

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	grpcgo "google.golang.org/grpc"
-	"yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
 )
 
 type typedTestGatewayService struct{}

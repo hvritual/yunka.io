@@ -8,7 +8,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"yunka.io/pkg/providerplan"
+	"github.com/hvritual/yunka.io/pkg/providerplan"
 )
 
 // BindManifest converts a validated provider declaration into the existing

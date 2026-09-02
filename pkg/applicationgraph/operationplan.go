@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"yunka.io/pkg/operationplan"
+	"github.com/hvritual/yunka.io/pkg/operationplan"
 )
 
 // AddOperationPlans projects the compiled C9 execution contract into the graph.

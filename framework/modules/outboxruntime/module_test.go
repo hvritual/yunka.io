@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"yunka.io/framework/core/eventBus"
-	"yunka.io/pkg/logExt"
+	"github.com/hvritual/yunka.io/framework/core/eventBus"
+	"github.com/hvritual/yunka.io/pkg/logExt"
 )
 
 func TestGeneratedDescriptorDeclaresCompleteCapabilities(t *testing.T) {

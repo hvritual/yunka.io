@@ -5,7 +5,7 @@ import (
 	"errors"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"time"
-	"yunka.io/pkg/registry"
+	"github.com/hvritual/yunka.io/pkg/registry"
 )
 
 /**

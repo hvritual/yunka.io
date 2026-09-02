@@ -7,11 +7,11 @@ import (
 	"strings"
 
 	"gorm.io/gorm"
-	"yunka.io/framework/requestscope"
-	"yunka.io/gateway/dispatcher/intercept"
-	"yunka.io/gateway/dispatcher/intercept/role/db"
-	"yunka.io/gateway/dispatcher/router"
-	"yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/framework/requestscope"
+	"github.com/hvritual/yunka.io/gateway/dispatcher/intercept"
+	"github.com/hvritual/yunka.io/gateway/dispatcher/intercept/role/db"
+	"github.com/hvritual/yunka.io/gateway/dispatcher/router"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
 )
 
 /**

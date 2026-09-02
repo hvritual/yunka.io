@@ -3,7 +3,7 @@ package authz
 import (
 	"strings"
 
-	"yunka.io/gateway/rpc/meta"
+	"github.com/hvritual/yunka.io/gateway/rpc/meta"
 )
 
 func PolicyFromRuntimeAPI(api *meta.RuntimeApi) Policy {

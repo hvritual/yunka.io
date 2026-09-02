@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-	"yunka.io/pkg/stringsExt"
+	"github.com/hvritual/yunka.io/pkg/stringsExt"
 )
 
 var errDummy = errors.New("dummy")

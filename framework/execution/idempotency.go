@@ -9,8 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	"yunka.io/framework/core/identity"
-	"yunka.io/pkg/operationplan"
+	"github.com/hvritual/yunka.io/framework/core/identity"
+	"github.com/hvritual/yunka.io/pkg/operationplan"
 )
 
 var (

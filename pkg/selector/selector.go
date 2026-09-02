@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"yunka.io/pkg/registry"
+	"github.com/hvritual/yunka.io/pkg/registry"
 )
 
 // Selector builds on the registry as a mechanism to pick nodes and record

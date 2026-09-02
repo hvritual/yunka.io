@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/urfave/cli"
-	"yunka.io/pkg/dependencypolicy"
+	"github.com/hvritual/yunka.io/pkg/dependencypolicy"
 )
 
 const AppName = "dependency"

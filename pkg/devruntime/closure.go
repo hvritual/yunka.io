@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	applicationgraph "yunka.io/pkg/applicationgraph"
+	applicationgraph "github.com/hvritual/yunka.io/pkg/applicationgraph"
 )
 
 // ValidateRuntimeClosure verifies that a runtime report is a current, complete

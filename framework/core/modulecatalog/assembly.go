@@ -1,6 +1,6 @@
 package modulecatalog
 
-import "yunka.io/pkg/assemblyplan"
+import "github.com/hvritual/yunka.io/pkg/assemblyplan"
 
 // AssemblyInputs converts an already-resolved static module plan into the
 // leaf-safe C10 AssemblyPlan input. Build functions and runtime providers are

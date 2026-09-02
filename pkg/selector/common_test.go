@@ -1,7 +1,7 @@
 package selector
 
 import (
-	"yunka.io/pkg/registry"
+	"github.com/hvritual/yunka.io/pkg/registry"
 )
 
 var (

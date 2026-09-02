@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"yunka.io/pkg/registry"
-	"yunka.io/pkg/registry/cache"
+	"github.com/hvritual/yunka.io/pkg/registry"
+	"github.com/hvritual/yunka.io/pkg/registry/cache"
 )
 
 type registrySelector struct {

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"yunka.io/pkg/contract"
-	"yunka.io/pkg/selector"
+	"github.com/hvritual/yunka.io/pkg/contract"
+	"github.com/hvritual/yunka.io/pkg/selector"
 )
 
 type fakeSelectorSnapshotter struct{}

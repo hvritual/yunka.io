@@ -59,14 +59,14 @@ go 1.25.0
 require (
 	google.golang.org/grpc v1.82.1
 	google.golang.org/protobuf v1.36.11
-	yunka.io/framework v0.0.0
-	yunka.io/gateway v0.0.0
-	yunka.io/pkg v0.0.0
+	github.com/hvritual/yunka.io/framework v0.0.0
+	github.com/hvritual/yunka.io/gateway v0.0.0
+	github.com/hvritual/yunka.io/pkg v0.0.0
 )
 
-replace yunka.io/framework => %s
-replace yunka.io/gateway => %s
-replace yunka.io/pkg => %s
+replace github.com/hvritual/yunka.io/framework => %s
+replace github.com/hvritual/yunka.io/gateway => %s
+replace github.com/hvritual/yunka.io/pkg => %s
 `, filepath.ToSlash(filepath.Join(repositoryRoot, "framework")), filepath.ToSlash(filepath.Join(repositoryRoot, "gateway")), filepath.ToSlash(filepath.Join(repositoryRoot, "pkg"))))
 	args := []string{"-I", contractsRoot, "-I", filepath.Join(repositoryRoot, "contracts", "proto")}
 	if include := standardProtoInclude(protoc); include != "" {
@@ -129,10 +129,10 @@ import (
     devicev1 "example.com/c9fixture/contracts/device/v1"
     rest "example.com/c9fixture/internal/device/transport/rest"
     rpc "example.com/c9fixture/internal/device/transport/rpc"
-    "yunka.io/framework/core/identity"
-    "yunka.io/framework/core/runtimecontext"
-    "yunka.io/framework/operation"
-    "yunka.io/gateway/authz"
+    "github.com/hvritual/yunka.io/framework/core/identity"
+    "github.com/hvritual/yunka.io/framework/core/runtimecontext"
+    "github.com/hvritual/yunka.io/framework/operation"
+    "github.com/hvritual/yunka.io/gateway/authz"
 )
 
 type checker struct {

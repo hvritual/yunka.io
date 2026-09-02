@@ -457,7 +457,7 @@ const file_gateway_gateway_proto_rawDesc = "" +
 	"\x0eGatewayService\x12s\n" +
 	"\x12BatchAddRuntimeApi\x12,.io.yunka.gateway.rpc.BatchRuntimeApiRequest\x1a/.io.yunka.gateway.rpc.OperateRuntimeApiResponse\x12r\n" +
 	"\x10DeleteRuntimeApi\x12-.io.yunka.gateway.rpc.DeleteRuntimeApiRequest\x1a/.io.yunka.gateway.rpc.OperateRuntimeApiResponse\x12`\n" +
-	"\x0eOperateRoleAPI\x12#.io.yunka.gateway.rpc.RoleModuleBtn\x1a).io.yunka.gateway.rpc.OperateRoleResponseB Z\x1eyunka.io/gateway/rpc/meta;metab\x06proto3"
+	"\x0eOperateRoleAPI\x12#.io.yunka.gateway.rpc.RoleModuleBtn\x1a).io.yunka.gateway.rpc.OperateRoleResponseB Z\x1egithub.com/hvritual/yunka.io/gateway/rpc/meta;metab\x06proto3"
 
 var (
 	file_gateway_gateway_proto_rawDescOnce sync.Once

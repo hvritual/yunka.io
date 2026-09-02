@@ -2,7 +2,7 @@ package proxy
 
 import (
 	"sync"
-	"yunka.io/pkg/stringsExt"
+	"github.com/hvritual/yunka.io/pkg/stringsExt"
 
 	"github.com/buger/jsonparser"
 )

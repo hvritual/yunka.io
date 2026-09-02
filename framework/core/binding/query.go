@@ -8,7 +8,7 @@ import (
 	"github.com/valyala/fasthttp"
 	"strconv"
 	"strings"
-	"yunka.io/pkg/stringsExt"
+	"github.com/hvritual/yunka.io/pkg/stringsExt"
 )
 
 func ishex(c byte) bool {

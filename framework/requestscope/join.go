@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"yunka.io/framework/core/identity"
-	"yunka.io/framework/core/runtimecontext"
-	"yunka.io/framework/execution"
+	"github.com/hvritual/yunka.io/framework/core/identity"
+	"github.com/hvritual/yunka.io/framework/core/runtimecontext"
+	"github.com/hvritual/yunka.io/framework/execution"
 )
 
 var ErrExecutionScopeUnavailable = errors.New("requestscope: execution scope has no unit of work")

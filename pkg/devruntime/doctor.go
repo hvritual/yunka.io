@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"strings"
 
-	applicationgraph "yunka.io/pkg/applicationgraph"
-	"yunka.io/pkg/contract"
+	applicationgraph "github.com/hvritual/yunka.io/pkg/applicationgraph"
+	"github.com/hvritual/yunka.io/pkg/contract"
 )
 
 type CheckStatus string

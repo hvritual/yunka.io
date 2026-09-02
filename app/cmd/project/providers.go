@@ -3,7 +3,7 @@ package project
 import (
 	"path/filepath"
 
-	"yunka.io/pkg/providerplan"
+	"github.com/hvritual/yunka.io/pkg/providerplan"
 )
 
 const ProviderManifestRelativePath = ".yunka/providers.json"

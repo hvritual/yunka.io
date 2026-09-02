@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"yunka.io/pkg/devruntime"
+	"github.com/hvritual/yunka.io/pkg/devruntime"
 )
 
 func TestRuntimeEvidenceReadyComesFromCanonicalReport(t *testing.T) {

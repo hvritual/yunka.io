@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"yunka.io/pkg/providerplan"
+	"github.com/hvritual/yunka.io/pkg/providerplan"
 )
 
 func TestNewFromManifestBuildsProviderWithoutOpeningResources(t *testing.T) {

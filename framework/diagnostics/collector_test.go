@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"yunka.io/framework/core"
+	"github.com/hvritual/yunka.io/framework/core"
 )
 
 func TestCollectorSortsAndIsolatesSourceFailure(t *testing.T) {

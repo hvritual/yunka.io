@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"yunka.io/pkg/logExt"
+	"github.com/hvritual/yunka.io/pkg/logExt"
 )
 
 // LegacyLogger adapts the existing logExt.Logger contract to W4 structured

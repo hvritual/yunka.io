@@ -3,7 +3,7 @@ package direct
 import (
 	"errors"
 
-	"yunka.io/pkg/registry"
+	"github.com/hvritual/yunka.io/pkg/registry"
 )
 
 type Watcher struct {

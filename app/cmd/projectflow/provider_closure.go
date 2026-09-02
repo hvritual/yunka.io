@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 
 	projectcmd "yunka.io/app/cmd/project"
-	contractcore "yunka.io/pkg/contract"
-	"yunka.io/pkg/providerplan"
+	contractcore "github.com/hvritual/yunka.io/pkg/contract"
+	"github.com/hvritual/yunka.io/pkg/providerplan"
 )
 
 func validateProviderClosure(project resolvedProject) (int, bool, error) {

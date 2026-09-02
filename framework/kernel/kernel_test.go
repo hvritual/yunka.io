@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"gorm.io/gorm"
-	"yunka.io/framework/core/modulecatalog"
-	"yunka.io/framework/platform"
-	"yunka.io/pkg/logExt"
+	"github.com/hvritual/yunka.io/framework/core/modulecatalog"
+	"github.com/hvritual/yunka.io/framework/platform"
+	"github.com/hvritual/yunka.io/pkg/logExt"
 )
 
 type kernelInstance string

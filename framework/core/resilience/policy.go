@@ -2,7 +2,7 @@ package resilience
 
 import (
 	grpcgo "google.golang.org/grpc"
-	"yunka.io/framework/core/middleware"
+	"github.com/hvritual/yunka.io/framework/core/middleware"
 )
 
 // RPCPolicyConfig composes one outbound RPC governance policy. Stateful
