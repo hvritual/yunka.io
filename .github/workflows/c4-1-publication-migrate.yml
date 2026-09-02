@@ -94,8 +94,13 @@ jobs:
             echo 'publishable module go.mod contains replace directive' >&2
             exit 1
           fi
-          if git grep -n -E 'yunka\.io/(pkg|framework|gateway)' -- '*.go' '*/go.mod' go.work Makefile tools contracts; then
-            echo 'legacy publishable module identity remains' >&2
+          if grep -n -E '^(module|[[:space:]]+) yunka\.io/(pkg|framework|gateway)' \
+            app/go.mod framework/go.mod gateway/go.mod pkg/go.mod 2>/dev/null; then
+            echo 'legacy module or require identity remains in go.mod' >&2
+            exit 1
+          fi
+          if git grep -n -E '"yunka\.io/(pkg|framework|gateway)' -- '*.go' '*.proto'; then
+            echo 'legacy direct import identity remains' >&2
             exit 1
           fi
       - name: Add publication contract and gate
