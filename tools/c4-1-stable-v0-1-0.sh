@@ -5,6 +5,7 @@ BRANCH="${BRANCH:-release/c4-1-v0.1.0}"
 STABLE_VERSION="${STABLE_VERSION:-v0.1.0}"
 MAIN_MERGE_SHA="${MAIN_MERGE_SHA:-94113e9fb9fd021f773efd626dba49489b5b2071}"
 PKG_QUALIFIED_SHA="${PKG_QUALIFIED_SHA:-abdcc78c571b68e3ece4fed0014c20f75cf163ec}"
+PKG_STABLE_SHA="${PKG_STABLE_SHA:-$MAIN_MERGE_SHA}"
 export GONOPROXY="${GONOPROXY:-github.com/hvritual/yunka.io/*}"
 export GONOSUMDB="${GONOSUMDB:-github.com/hvritual/yunka.io/*}"
 
@@ -17,6 +18,7 @@ git config user.name 'github-actions[bot]'
 git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 git merge-base --is-ancestor "$MAIN_MERGE_SHA" HEAD
 git merge-base --is-ancestor "$PKG_QUALIFIED_SHA" "$MAIN_MERGE_SHA"
+test "$PKG_STABLE_SHA" = "$MAIN_MERGE_SHA"
 make toolchain-check
 make rpc-tools
 make rpc-toolchain-check
@@ -24,15 +26,15 @@ test -z "$(git grep -n '^replace ' -- pkg/go.mod framework/go.mod gateway/go.mod
 test -z "$(git status --porcelain)"
 
 log "publish pkg ${STABLE_VERSION}"
-git diff --exit-code "$PKG_QUALIFIED_SHA" -- pkg
+git diff --exit-code "$PKG_QUALIFIED_SHA" "$PKG_STABLE_SHA" -- pkg
 if tag_exists pkg; then
   actual="$(tag_sha pkg)"
-  test "$actual" = "$PKG_QUALIFIED_SHA" || { echo "pkg stable tag points to unexpected sha: $actual" >&2; exit 1; }
+  test "$actual" = "$PKG_STABLE_SHA" || { echo "pkg stable tag points to unexpected sha: $actual" >&2; exit 1; }
 else
-  git tag "pkg/${STABLE_VERSION}" "$PKG_QUALIFIED_SHA"
+  git tag "pkg/${STABLE_VERSION}" "$PKG_STABLE_SHA"
   git push origin "refs/tags/pkg/${STABLE_VERSION}"
 fi
-test "$(tag_sha pkg)" = "$PKG_QUALIFIED_SHA"
+test "$(tag_sha pkg)" = "$PKG_STABLE_SHA"
 (
   cd pkg
   GOWORK=off go mod tidy -diff
