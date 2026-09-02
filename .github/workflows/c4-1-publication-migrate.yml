@@ -1,0 +1,227 @@
+name: c4-1-publication-migrate
+
+on:
+  push:
+    branches: [fix/c4-1-module-publication-convergence]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.event.head_commit.message == 'chore: bootstrap C4.1 publication migration'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      RC_VERSION: v0.1.0-c41rc1
+      BRANCH: fix/c4-1-module-publication-convergence
+    steps:
+      - name: Checkout migration branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/c4-1-module-publication-convergence
+          fetch-depth: 0
+      - name: Setup locked Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: 1.25.13
+          cache: false
+      - name: Rewrite publishable module identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            sed -i \
+              -e 's#yunka\.io/pkg#github.com/hvritual/yunka.io/pkg#g' \
+              -e 's#yunka\.io/framework#github.com/hvritual/yunka.io/framework#g' \
+              -e 's#yunka\.io/gateway#github.com/hvritual/yunka.io/gateway#g' \
+              "$file"
+          done < <(git grep -Ilz -E 'yunka\.io/(pkg|framework|gateway)' || true)
+
+          rm -rf compat/go-kit-kit-log
+          cat > go.work <<'EOF'
+          go 1.25.0
+
+          toolchain go1.25.13
+
+          use (
+            ./app
+            ./framework
+            ./gateway
+            ./pkg
+          )
+          EOF
+          sed -i 's/^MODULES := compat\/go-kit-kit-log /MODULES := /' Makefile
+
+          (cd pkg && go mod edit -dropreplace=github.com/go-kit/kit@v0.10.0)
+          (cd framework && \
+            go mod edit -dropreplace=github.com/go-kit/kit@v0.10.0 && \
+            go mod edit -dropreplace=github.com/hvritual/yunka.io/pkg && \
+            go mod edit -require=github.com/hvritual/yunka.io/pkg@${RC_VERSION})
+          (cd gateway && \
+            go mod edit -dropreplace=github.com/go-kit/kit@v0.10.0 && \
+            go mod edit -dropreplace=github.com/hvritual/yunka.io/pkg && \
+            go mod edit -dropreplace=github.com/hvritual/yunka.io/framework && \
+            go mod edit -require=github.com/hvritual/yunka.io/pkg@${RC_VERSION} && \
+            go mod edit -require=github.com/hvritual/yunka.io/framework@${RC_VERSION})
+          (cd app && \
+            go mod edit -dropreplace=github.com/go-kit/kit@v0.10.0 && \
+            go mod edit -dropreplace=github.com/hvritual/yunka.io/pkg && \
+            go mod edit -require=github.com/hvritual/yunka.io/pkg@${RC_VERSION})
+
+          # Tidy with temporary local replacements only for the command invocation.
+          (cd pkg && go mod tidy)
+          (cd framework && \
+            go mod edit -replace=github.com/hvritual/yunka.io/pkg=../pkg && \
+            go mod tidy && \
+            go mod edit -dropreplace=github.com/hvritual/yunka.io/pkg)
+          (cd gateway && \
+            go mod edit -replace=github.com/hvritual/yunka.io/pkg=../pkg && \
+            go mod edit -replace=github.com/hvritual/yunka.io/framework=../framework && \
+            go mod tidy && \
+            go mod edit -dropreplace=github.com/hvritual/yunka.io/pkg && \
+            go mod edit -dropreplace=github.com/hvritual/yunka.io/framework)
+          (cd app && \
+            go mod edit -replace=github.com/hvritual/yunka.io/pkg=../pkg && \
+            go mod tidy && \
+            go mod edit -dropreplace=github.com/hvritual/yunka.io/pkg)
+          rm -f go.work.sum
+          go work sync
+
+          if grep -n '^replace ' pkg/go.mod framework/go.mod gateway/go.mod; then
+            echo 'publishable module go.mod contains replace directive' >&2
+            exit 1
+          fi
+          if git grep -n -E 'yunka\.io/(pkg|framework|gateway)' -- '*.go' '*/go.mod' 'go.work' Makefile tools contracts; then
+            echo 'legacy publishable module identity remains' >&2
+            exit 1
+          fi
+      - name: Add publication contract and gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > tools/module-release.env <<'EOF'
+          YUNKA_MODULE_RELEASE=v0.1.0-c41rc1
+          YUNKA_PKG_MODULE=github.com/hvritual/yunka.io/pkg
+          YUNKA_FRAMEWORK_MODULE=github.com/hvritual/yunka.io/framework
+          YUNKA_GATEWAY_MODULE=github.com/hvritual/yunka.io/gateway
+          EOF
+          cat > tools/module-release-check.sh <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+          # shellcheck disable=SC1091
+          source "$ROOT/tools/module-release.env"
+          version="${YUNKA_RELEASE_VERSION:-$YUNKA_MODULE_RELEASE}"
+          fail() { echo "module-release-check: $*" >&2; exit 1; }
+          check_module() {
+            local rel="$1" expected="$2"
+            local actual
+            actual="$(cd "$ROOT/$rel" && GOWORK=off go list -m -f '{{.Path}}')"
+            [[ "$actual" == "$expected" ]] || fail "$rel declares $actual, expected $expected"
+            if grep -q '^replace ' "$ROOT/$rel/go.mod"; then
+              fail "$rel/go.mod contains a release-invalid replace directive"
+            fi
+            (cd "$ROOT/$rel" && GOWORK=off go list -m all >/dev/null)
+          }
+          check_module pkg "$YUNKA_PKG_MODULE"
+          check_module framework "$YUNKA_FRAMEWORK_MODULE"
+          check_module gateway "$YUNKA_GATEWAY_MODULE"
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          cd "$tmp"
+          go mod init yunka-release-probe >/dev/null
+          go get "$YUNKA_PKG_MODULE@$version"
+          go get "$YUNKA_FRAMEWORK_MODULE@$version"
+          go get "$YUNKA_GATEWAY_MODULE@$version"
+          GOWORK=off go list -m all >/dev/null
+          echo "module-release-check: external consumer resolved $version"
+          EOF
+          chmod +x tools/module-release-check.sh
+          cat > docs/waves/C4.1-module-publication-convergence.md <<'EOF'
+          # C4.1 Module Publication Convergence
+
+          ## Goal
+
+          Make Yunka's publishable Go modules independently consumable outside the repository workspace.
+
+          ## Canonical module identities
+
+          - `github.com/hvritual/yunka.io/pkg`
+          - `github.com/hvritual/yunka.io/framework`
+          - `github.com/hvritual/yunka.io/gateway`
+
+          `app` remains the repository-owned developer/tooling module and is not part of the public module release set.
+
+          ## Dependency order
+
+          `pkg -> framework -> gateway`.
+
+          Publishable module `go.mod` files must not contain local `replace` directives. The repository `go.work` is only a development composition surface and is not a release contract.
+
+          ## Compatibility decision
+
+          The repository-owned module that impersonated `github.com/go-kit/kit` is removed from the release graph. The Aliyun SLS SDK's historical `github.com/go-kit/kit/log` imports resolve through the actual upstream Go kit module instead of a consumer-invisible local replacement.
+
+          ## Qualification
+
+          C4.1 is qualified only when:
+
+          1. each publishable module resolves with `GOWORK=off`;
+          2. no publishable `go.mod` contains `replace`;
+          3. a clean external consumer can fetch the same release version of pkg/framework/gateway;
+          4. source-workspace tests still pass.
+
+          The first qualification release is `v0.1.0-c41rc1`; stable tags are created only after canonical integration.
+          EOF
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('Makefile')
+          s = p.read_text()
+          if 'module-release-check:' not in s:
+              s += '\n.PHONY: module-release-check\nmodule-release-check:\n\t@bash ./tools/module-release-check.sh\n'
+          p.write_text(s)
+          PY
+      - name: Verify source workspace before release candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          for module in pkg framework gateway app; do
+            echo "==> $module"
+            (cd "$module" && go test ./... && go vet ./... && go build ./...)
+          done
+      - name: Commit migration candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'build: make Yunka modules independently publishable'
+          git push origin "HEAD:${BRANCH}"
+          echo "MIGRATION_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Publish C4.1 qualification tags
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cleanup() {
+            git push origin \
+              :refs/tags/pkg/${RC_VERSION} \
+              :refs/tags/framework/${RC_VERSION} \
+              :refs/tags/gateway/${RC_VERSION} || true
+          }
+          trap cleanup ERR
+          git tag "pkg/${RC_VERSION}" "$MIGRATION_SHA"
+          git tag "framework/${RC_VERSION}" "$MIGRATION_SHA"
+          git tag "gateway/${RC_VERSION}" "$MIGRATION_SHA"
+          git push origin \
+            "refs/tags/pkg/${RC_VERSION}" \
+            "refs/tags/framework/${RC_VERSION}" \
+            "refs/tags/gateway/${RC_VERSION}"
+
+          for module in pkg framework gateway app; do
+            echo "==> GOWORK=off $module"
+            (cd "$module" && GOWORK=off go test ./... && GOWORK=off go vet ./... && GOWORK=off go build ./...)
+          done
+          bash ./tools/module-release-check.sh
+          trap - ERR
