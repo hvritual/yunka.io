@@ -2,14 +2,14 @@ name: c4-1-publication-migrate
 
 on:
   push:
-    branches: [fix/c4-1-module-publication-convergence]
+    branches:
+      - fix/c4-1-module-publication-convergence
 
 permissions:
   contents: write
 
 jobs:
   migrate:
-    if: github.event.head_commit.message == 'chore: bootstrap C4.1 publication migration'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -69,7 +69,6 @@ jobs:
             go mod edit -dropreplace=github.com/hvritual/yunka.io/pkg && \
             go mod edit -require=github.com/hvritual/yunka.io/pkg@${RC_VERSION})
 
-          # Tidy with temporary local replacements only for the command invocation.
           (cd pkg && go mod tidy)
           (cd framework && \
             go mod edit -replace=github.com/hvritual/yunka.io/pkg=../pkg && \
@@ -92,7 +91,7 @@ jobs:
             echo 'publishable module go.mod contains replace directive' >&2
             exit 1
           fi
-          if git grep -n -E 'yunka\.io/(pkg|framework|gateway)' -- '*.go' '*/go.mod' 'go.work' Makefile tools contracts; then
+          if git grep -n -E 'yunka\.io/(pkg|framework|gateway)' -- '*.go' '*/go.mod' go.work Makefile tools contracts; then
             echo 'legacy publishable module identity remains' >&2
             exit 1
           fi
@@ -110,7 +109,6 @@ jobs:
           #!/usr/bin/env bash
           set -euo pipefail
           ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-          # shellcheck disable=SC1091
           source "$ROOT/tools/module-release.env"
           version="${YUNKA_RELEASE_VERSION:-$YUNKA_MODULE_RELEASE}"
           fail() { echo "module-release-check: $*" >&2; exit 1; }
@@ -196,6 +194,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/c4-1-publication-migrate.yml
           git add -A
           git commit -m 'build: make Yunka modules independently publishable'
           git push origin "HEAD:${BRANCH}"
