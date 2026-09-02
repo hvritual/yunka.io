@@ -2,7 +2,8 @@
 
 > Document class: **STATUS**  
 > Authority: current framework/wave/release/pressure status  
-> Reconciled input baseline: `main@6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb`  
+> Live Git HEAD authority: resolve the `main` ref from Git/GitHub; it is not duplicated as a permanent fact here  
+> Behavioral reconciliation baseline: `6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb`  
 > Reconciled date: 2026-09-02  
 > Governance: [`DOCUMENTATION_GOVERNANCE.md`](DOCUMENTATION_GOVERNANCE.md)
 
@@ -14,7 +15,7 @@
 | C10 Runtime Assembly & Framework Productization | **Complete / qualified / merged** | issue #42 records ordered C10.1-C10.5 qualification and merge; roadmap is historical |
 | C11 Developer Experience Productization | **Complete / production-qualified / merged** | issue #60 records C11.1-C11.7 complete with real Biz consumer qualification; roadmap is historical |
 | Post-C11 five-gap DX convergence | **Complete / qualified / merged** | PR #104 merged the canonical four-command project closure without changing compiler/runtime/security/transaction semantics |
-| B12 multi-tenant Access/IAM consumer pressure | **Complete / qualified** | real Biz pressure discovered two generic Yunka gaps; both are closed and reverse-qualified; final Yunka baseline is the reconciled `main` above |
+| B12 multi-tenant Access/IAM consumer pressure | **Complete / qualified** | real Biz pressure discovered two generic Yunka gaps; both are closed and reverse-qualified against the behavioral reconciliation baseline |
 | Active numbered Yunka framework wave | **None selected** | new framework work remains pressure-driven rather than roadmap-driven |
 | Proven open Yunka P0/P1 runtime/compiler/authz/persistence defects | **0 known at reconciliation** | do not promote hypotheses into framework defects without executable consumer evidence |
 
@@ -77,7 +78,7 @@ The previous generator emitted colliding target-owned child-capability symbols i
 
 This removes symbol collisions and prevents capability widening by unioning unrelated target Operations. PB DSL, OperationPlan, AssemblyPlan, Executor, authorization, and root UoW semantics were not expanded.
 
-Evidence: Yunka issue #110; qualified integration PR #112; current reconciled baseline `main@6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb`; real Biz reverse qualification.
+Evidence: Yunka issue #110; qualified integration PR #112; behavioral framework baseline `6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb`; real Biz reverse qualification.
 
 ## Current pressure frontier
 
@@ -108,9 +109,10 @@ A deferred limitation does not become an active framework wave merely because it
 ## Status authority rules
 
 - Use this file for answers to **what is currently complete, active, qualified, deferred, or under pressure**.
+- Resolve the live `main` HEAD from Git/GitHub rather than copying it into durable memory or treating a historical SHA in this document as the live ref.
 - Use `PROJECT_MEMORY.md` for durable architecture/governance invariants.
 - Use `README.md` and current authoring guides for current developer-facing behavior.
 - Use exact qualification/release records for exact SHA/tree/consumer evidence.
 - Treat `HISTORICAL` roadmap status blocks in `docs/waves/**` as preserved planning snapshots, not current status truth.
 - Do not copy current HEAD, repository visibility, active PR/task state, or wave status into `PROJECT_MEMORY.md`.
-- Reconcile this file whenever a framework wave/pressure item changes current state or a new canonical release baseline supersedes the baseline recorded above.
+- Reconcile this file whenever framework/wave/pressure semantic status changes. A documentation-only Git commit does not require rewriting the behavioral reconciliation baseline merely because the live HEAD SHA changed.
