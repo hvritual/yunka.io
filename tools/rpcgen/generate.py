@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 
+MODULE_PREFIX = "github.com/hvritual/yunka.io"
 MANAGED_ROOTS = (
     Path("gateway/rpc/meta"),
     Path("pkg/rpcmeta/legacy"),
@@ -128,9 +129,9 @@ def main() -> int:
             f"--plugin=protoc-gen-go={protoc_gen_go}",
             f"--plugin=protoc-gen-go-grpc={protoc_gen_go_grpc}",
             f"--go_out={staged}",
-            "--go_opt=module=yunka.io",
+            f"--go_opt=module={MODULE_PREFIX}",
             f"--go-grpc_out={staged}",
-            "--go-grpc_opt=module=yunka.io,require_unimplemented_servers=false",
+            f"--go-grpc_opt=module={MODULE_PREFIX},require_unimplemented_servers=false",
             *PROTO_FILES,
         ]
         subprocess.run(command, cwd=repo, check=True)
