@@ -12,11 +12,12 @@ import (
 	"strings"
 
 	"yunka.io/pkg/assemblyplan"
+	"yunka.io/pkg/modulespec"
 )
 
-// DiscoverModuleSnapshot compiles the static module snapshot and Go bindings
-// from fixed generated module source files. No module package is imported or
-// executed by the compiler.
+// DiscoverModuleSnapshot compiles the static module snapshot from either the
+// canonical declarative module spec or the legacy generated module source.
+// No module package is imported or executed by the compiler.
 func DiscoverModuleSnapshot(root string) ([]assemblyplan.ModuleInput, []ModuleBinding, error) {
 	bindings, err := DiscoverModuleBindings(root)
 	if err != nil {
@@ -35,11 +36,50 @@ func DiscoverModuleSnapshot(root string) ([]assemblyplan.ModuleInput, []ModuleBi
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 	var modules []assemblyplan.ModuleInput
+	var legacyNames []string
 	for _, entry := range entries {
 		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
 		moduleRoot := filepath.Join(root, entry.Name())
+		specPath := filepath.Join(moduleRoot, modulespec.Filename)
+		if _, statErr := os.Stat(specPath); statErr == nil {
+			legacy, legacyErr := legacyModuleSourcePresent(moduleRoot)
+			if legacyErr != nil {
+				return nil, nil, legacyErr
+			}
+			if legacy {
+				return nil, nil, fmt.Errorf("contract module snapshot: module %s has both %s and legacy generated module source", entry.Name(), modulespec.Filename)
+			}
+			spec, loadErr := modulespec.Load(specPath)
+			if loadErr != nil {
+				return nil, nil, loadErr
+			}
+			if validateErr := modulespec.ValidateForModule(entry.Name(), spec); validateErr != nil {
+				return nil, nil, fmt.Errorf("contract module snapshot: module %s: %w", entry.Name(), validateErr)
+			}
+			modules = append(modules, assemblyplan.ModuleInput{
+				Name:      entry.Name(),
+				Version:   spec.Version,
+				DependsOn: append([]string(nil), spec.DependsOn...),
+				Requirements: assemblyplan.ModuleRequirements{
+					ConfigKey: spec.Requirements.ConfigKey,
+					Logger:    spec.Requirements.Logger,
+					Databases: append([]string(nil), spec.Requirements.Databases...),
+					EventBus:  spec.Requirements.EventBus,
+					RPC:       append([]string(nil), spec.Requirements.RPC...),
+				},
+				Evidence: assemblyplan.Evidence{
+					Ownership: assemblyplan.OwnershipCanonical,
+					Source:    modulespec.EvidenceSource,
+					Ref:       filepath.ToSlash(filepath.Join(entry.Name(), modulespec.Filename)),
+				},
+			})
+			continue
+		} else if !os.IsNotExist(statErr) {
+			return nil, nil, statErr
+		}
+
 		modulePath := filepath.Join(moduleRoot, "module.go")
 		generatedPath := filepath.Join(moduleRoot, "zz_yunka_module_gen.go")
 		if _, err := os.Stat(modulePath); os.IsNotExist(err) {
@@ -72,17 +112,27 @@ func DiscoverModuleSnapshot(root string) ([]assemblyplan.ModuleInput, []ModuleBi
 		if strings.TrimSpace(binding.ImportPath) == "" {
 			return nil, nil, fmt.Errorf("contract module snapshot: module %s has empty Go binding", name)
 		}
+		legacyNames = append(legacyNames, name)
 		modules = append(modules, module)
 	}
 	sort.Slice(modules, func(i, j int) bool { return modules[i].Name < modules[j].Name })
-	names := make([]string, 0, len(modules))
-	for _, module := range modules {
-		names = append(names, module.Name)
-	}
-	if err := ValidateModuleBindings(names, bindings); err != nil {
+	if err := ValidateModuleBindings(legacyNames, bindings); err != nil {
 		return nil, nil, err
 	}
 	return modules, bindings, nil
+}
+
+func legacyModuleSourcePresent(root string) (bool, error) {
+	for _, relative := range []string{"module.go", "zz_yunka_module_gen.go", filepath.Join("autoload", "register.go")} {
+		_, err := os.Stat(filepath.Join(root, relative))
+		if err == nil {
+			return true, nil
+		}
+		if !os.IsNotExist(err) {
+			return false, err
+		}
+	}
+	return false, nil
 }
 
 func parseGeneratedDescriptor(path, moduleName string) (assemblyplan.ModuleInput, error) {
@@ -152,7 +202,7 @@ func parseGeneratedDescriptor(path, moduleName string) (assemblyplan.ModuleInput
 			result.Requirements = requirements
 		case "Build":
 			// Build is intentionally runtime-only. The compiler validates that the
-			// generated descriptor has the field, but never executes or serializes it.
+			// legacy generated descriptor has the field, but never executes or serializes it.
 			if _, ok := value.(*ast.Ident); !ok {
 				return assemblyplan.ModuleInput{}, fmt.Errorf("contract module snapshot: %s Build must be a generated function identifier", path)
 			}

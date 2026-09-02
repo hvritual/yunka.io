@@ -290,9 +290,6 @@ func normalizeDescriptor(descriptor Descriptor) (Descriptor, error) {
 	if !moduleNamePattern.MatchString(descriptor.Name) {
 		return Descriptor{}, fmt.Errorf("modulecatalog: invalid module name %q", descriptor.Name)
 	}
-	if descriptor.Build == nil {
-		return Descriptor{}, fmt.Errorf("modulecatalog: module %q build function is required", descriptor.Name)
-	}
 	var err error
 	descriptor.DependsOn, err = normalizeNames(descriptor.DependsOn, descriptor.Name, "dependency")
 	if err != nil {

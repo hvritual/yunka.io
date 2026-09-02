@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"yunka.io/pkg/architecturepolicy"
+	"yunka.io/pkg/modulespec"
 )
 
 var requiredModuleFiles = []string{
@@ -47,6 +48,31 @@ func Check(root string) error {
 			continue
 		}
 		moduleRoot := filepath.Join(root, entry.Name())
+		specFile := filepath.Join(moduleRoot, modulespec.Filename)
+		if _, statErr := os.Stat(specFile); statErr == nil {
+			legacy, legacyErr := hasLegacyModuleSource(moduleRoot)
+			if legacyErr != nil {
+				failures = append(failures, fmt.Errorf("%s: declarative module: %w", entry.Name(), legacyErr))
+				continue
+			}
+			if legacy {
+				failures = append(failures, fmt.Errorf("%s: %s cannot coexist with legacy generated module files", entry.Name(), modulespec.Filename))
+				continue
+			}
+			spec, loadErr := modulespec.Load(specFile)
+			if loadErr != nil {
+				failures = append(failures, fmt.Errorf("%s: declarative module: %w", entry.Name(), loadErr))
+				continue
+			}
+			if validateErr := modulespec.ValidateForModule(entry.Name(), spec); validateErr != nil {
+				failures = append(failures, fmt.Errorf("%s: declarative module: %w", entry.Name(), validateErr))
+			}
+			continue
+		} else if !os.IsNotExist(statErr) {
+			failures = append(failures, fmt.Errorf("%s: declarative module stat: %w", entry.Name(), statErr))
+			continue
+		}
+
 		for _, relative := range requiredModuleFiles {
 			path := filepath.Join(moduleRoot, relative)
 			if _, err := os.Stat(path); err != nil {

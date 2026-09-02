@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"yunka.io/pkg/assemblyplan"
+	"yunka.io/pkg/modulespec"
 )
 
 const AssemblyModuleCodePath = "assembly/zz_yunka_modules_gen.go"
@@ -19,26 +20,51 @@ func RenderAssemblyModuleCode(plan assemblyplan.Plan, bindings []ModuleBinding) 
 	if err := assemblyplan.Validate(plan); err != nil {
 		return nil, fmt.Errorf("contract assembly module codegen: assembly plan: %w", err)
 	}
+	byModule := make(map[string]assemblyplan.Module, len(plan.Modules))
 	names := make([]string, 0, len(plan.Modules))
 	for _, module := range plan.Modules {
+		byModule[module.Name] = module
 		names = append(names, module.Name)
 	}
-	if err := ValidateModuleBindings(names, bindings); err != nil {
-		return nil, err
-	}
+	sort.Strings(names)
+
+	bindingNames := make([]string, 0, len(bindings))
 	byName := make(map[string]ModuleBinding, len(bindings))
 	for _, binding := range bindings {
+		bindingNames = append(bindingNames, binding.Name)
 		byName[binding.Name] = binding
 	}
-	sort.Strings(names)
+	if err := ValidateModuleBindings(bindingNames, bindings); err != nil {
+		return nil, err
+	}
+	for _, bindingName := range bindingNames {
+		module, exists := byModule[bindingName]
+		if !exists {
+			return nil, fmt.Errorf("contract module binding: generated Go binding %s is not selected by AssemblyPlan", bindingName)
+		}
+		if module.Evidence.Source == modulespec.EvidenceSource {
+			return nil, fmt.Errorf("contract assembly module codegen: declarative module %s must not have a generated Go binding", bindingName)
+		}
+	}
+	for _, module := range plan.Modules {
+		if module.Evidence.Source == "generated-module-source" {
+			if _, ok := byName[module.Name]; !ok {
+				return nil, fmt.Errorf("contract module binding: AssemblyPlan module %s has no explicit generated Go binding", module.Name)
+			}
+		}
+	}
+
 	imports := newImportSet()
 	imports.add("fmt", "fmt")
 	imports.add("yunka.io/framework/core/modulecatalog", "modulecatalog")
-	aliases := make(map[string]string, len(names))
+	aliases := make(map[string]string, len(bindings))
 	for _, name := range names {
-		binding := byName[name]
-		aliases[name] = imports.add(binding.ImportPath, safeFileName(name)+"module")
+		if binding, ok := byName[name]; ok {
+			aliases[name] = imports.add(binding.ImportPath, safeFileName(name)+"module")
+		}
 	}
+	dependencies := moduleDependencyMap(plan)
+
 	var b strings.Builder
 	b.WriteString(GeneratedAssemblyMarker + "\n\npackage assembly\n\nimport (\n")
 	b.WriteString(imports.render())
@@ -46,9 +72,12 @@ func RenderAssemblyModuleCode(plan assemblyplan.Plan, bindings []ModuleBinding) 
 	b.WriteString("func NewCatalog() (*modulecatalog.Catalog, error) {\n")
 	b.WriteString("\tcatalog := modulecatalog.New()\n")
 	for _, name := range names {
-		binding := byName[name]
-		alias := aliases[name]
-		fmt.Fprintf(&b, "\tif err := catalog.Register(%s.%s()); err != nil { return nil, fmt.Errorf(%q, err) }\n", alias, binding.DescriptorSymbol, "yunka assembly: register module "+name+": %w")
+		if binding, ok := byName[name]; ok {
+			alias := aliases[name]
+			fmt.Fprintf(&b, "\tif err := catalog.Register(%s.%s()); err != nil { return nil, fmt.Errorf(%q, err) }\n", alias, binding.DescriptorSymbol, "yunka assembly: register module "+name+": %w")
+			continue
+		}
+		writeInlineModuleRegistration(&b, byModule[name], dependencies[name])
 	}
 	b.WriteString("\tif _, err := catalog.Seal(); err != nil { return nil, fmt.Errorf(\"yunka assembly: seal module catalog: %w\", err) }\n")
 	b.WriteString("\treturn catalog, nil\n}\n")
@@ -57,6 +86,64 @@ func RenderAssemblyModuleCode(plan assemblyplan.Plan, bindings []ModuleBinding) 
 		return nil, fmt.Errorf("contract assembly module codegen: format %s: %w\n%s", AssemblyModuleCodePath, err, b.String())
 	}
 	return []GeneratedAssemblyFile{{Path: AssemblyModuleCodePath, Content: formatted}}, nil
+}
+
+func moduleDependencyMap(plan assemblyplan.Plan) map[string][]string {
+	result := make(map[string][]string, len(plan.Modules))
+	for _, dependency := range plan.ModuleDependencies {
+		result[dependency.From] = append(result[dependency.From], dependency.To)
+	}
+	for name := range result {
+		sort.Strings(result[name])
+	}
+	return result
+}
+
+func writeInlineModuleRegistration(builder *strings.Builder, module assemblyplan.Module, dependencies []string) {
+	builder.WriteString("\tif err := catalog.Register(modulecatalog.Descriptor{")
+	fmt.Fprintf(builder, "Name: %q, Version: %q, ", module.Name, module.Version)
+	if len(dependencies) > 0 {
+		builder.WriteString("DependsOn: []string{")
+		for index, dependency := range dependencies {
+			if index > 0 {
+				builder.WriteString(", ")
+			}
+			fmt.Fprintf(builder, "%q", dependency)
+		}
+		builder.WriteString("}, ")
+	}
+	builder.WriteString("Requirements: modulecatalog.Requirements{")
+	if module.Requirements.ConfigKey != "" {
+		fmt.Fprintf(builder, "ConfigKey: %q, ", module.Requirements.ConfigKey)
+	}
+	if module.Requirements.Logger {
+		builder.WriteString("Logger: true, ")
+	}
+	if len(module.Requirements.Databases) > 0 {
+		builder.WriteString("Databases: []modulecatalog.DatabaseRequirement{")
+		for index, database := range module.Requirements.Databases {
+			if index > 0 {
+				builder.WriteString(", ")
+			}
+			fmt.Fprintf(builder, "{Name: %q}", database)
+		}
+		builder.WriteString("}, ")
+	}
+	if module.Requirements.EventBus {
+		builder.WriteString("EventBus: true, ")
+	}
+	if len(module.Requirements.RPC) > 0 {
+		builder.WriteString("RPC: []modulecatalog.RPCRequirement{")
+		for index, rpc := range module.Requirements.RPC {
+			if index > 0 {
+				builder.WriteString(", ")
+			}
+			fmt.Fprintf(builder, "{Name: %q}", rpc)
+		}
+		builder.WriteString("}, ")
+	}
+	builder.WriteString("}}); err != nil { return nil, fmt.Errorf(")
+	fmt.Fprintf(builder, "%q, err) }\n", "yunka assembly: register module "+module.Name+": %w")
 }
 
 func WriteAssemblyModuleCode(root string, files []GeneratedAssemblyFile) error {

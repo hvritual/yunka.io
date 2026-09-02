@@ -62,6 +62,9 @@ func NewApp(options AppOptions) (*App, error) {
 		}
 	}
 	for _, descriptor := range plan.Descriptors {
+		if descriptor.Build == nil {
+			continue
+		}
 		if factory == nil {
 			return nil, application.compositionBuildError(fmt.Errorf("core: module %s requires a context factory", descriptor.Name))
 		}
