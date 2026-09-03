@@ -7,7 +7,7 @@
 
 This file records decisions and invariants that must remain active across future work. It is intentionally **not** a current-state ledger. Current HEADs, repository visibility, active PR/task state, wave progress, release tables, and other independently changing facts belong in `docs/STATUS.md`, Git/GitHub state, or exact qualification records.
 
-`AGENTS.md` is the repository-governance authority. If an older historical wave/issue/PR statement conflicts with an active invariant here or with `AGENTS.md`, follow the current authority and treat the older statement as historical evidence.
+`AGENTS.md` is the repository-governance authority. If an older historical wave/issue/PR statement conflicts with an active invariant here or with `AGENTS.md`, follow the current authority and treat the older entry as historical or stale.
 
 ## Mandatory task bootstrap
 
@@ -57,10 +57,21 @@ Every repository task must:
 ## Workspace and dependency baseline
 
 - The repository is a Go workspace rooted at `go.work`.
-- Product modules are `pkg`, `framework`, `gateway`, and `app`; the repository also owns the narrow `compat/go-kit-kit-log` compatibility module required by the pinned SLS SDK.
+- Product modules are `pkg`, `framework`, `gateway`, `infras`, and `app`; the repository also owns the narrow `compat/go-kit-kit-log` compatibility module required by the pinned SLS SDK.
 - Historical monolithic dependency/runtime surfaces may remain only in explicitly reviewed compatibility islands.
 - `tools/dependency-policy.json` is the durable dependency-graph guard.
-- Legacy protobuf/runtime dependencies must not spread into new framework/application code.
+- Legacy protobuf/runtime dependencies must not spread into new framework/application/infrastructure-plugin code.
+
+## Infrastructure extension module baseline
+
+- `github.com/hvritual/yunka.io/infras` is the separately versioned public infrastructure-extension module; releases use the module tag namespace `infras/vX.Y.Z`.
+- `infras` owns optional reusable infrastructure capability distributions and Yunka module adapters. It is not a second application framework and it does not own business domains.
+- Dependency direction is one-way: applications may depend on `infras`, and `infras` may depend on stable `framework`/`pkg` contracts as required; `framework` must never import or require `infras`.
+- Infrastructure plugins reuse `framework/core/modulecatalog`. They may be registered explicitly or enabled by blank-importing an `autoload` package whose sole side effect is `modulecatalog.MustRegister(module.GeneratedDescriptor())`.
+- Yunka infrastructure plugins are compile-time optional Go modules, not Go runtime `plugin`/`.so` shared objects. Type checking, deterministic dependency resolution, cross-platform builds, App lifecycle/health, and diagnostics remain canonical.
+- Existing `framework/infras/**` packages remain reviewed compatibility/internal surfaces until separately migrated. New public infrastructure capabilities must target the root `infras` module rather than expanding `framework/infras`.
+- Moving an implementation from `framework` to `infras` is a separate compatibility decision. A facade may initially delegate to one canonical framework runtime when that preserves a single semantic owner; duplicate infrastructure runtimes are forbidden.
+- Infrastructure plugins are process/App-scoped capabilities and must not retain request identity, request contexts, transactions, or repositories. Business audit rules, tenant/customer/device models, workflow/BPMN, data-scope semantics, and domain-specific policy do not become infrastructure merely because an operations platform consumes them.
 
 ## Explicit application composition baseline
 

@@ -41,6 +41,7 @@ jobs:
             app/go.sum
             framework/go.sum
             gateway/go.sum
+            infras/go.sum
             pkg/go.sum
 
       - name: Install locked protoc
@@ -74,6 +75,7 @@ jobs:
             pkg/go.mod pkg/go.sum \
             framework/go.mod framework/go.sum \
             gateway/go.mod gateway/go.sum \
+            infras/go.mod infras/go.sum \
             app/go.mod app/go.sum \
 
       - name: Contract reproducibility
@@ -115,6 +117,7 @@ jobs:
             pkg/go.mod pkg/go.sum \
             framework/go.mod framework/go.sum \
             gateway/go.mod gateway/go.sum \
+            infras/go.mod infras/go.sum \
             app/go.mod app/go.sum \
           make contract
           git diff --exit-code -- contracts/generated

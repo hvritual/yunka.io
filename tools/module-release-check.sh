@@ -17,6 +17,7 @@ check_module() {
 check_module pkg "$YUNKA_PKG_MODULE"
 check_module framework "$YUNKA_FRAMEWORK_MODULE"
 check_module gateway "$YUNKA_GATEWAY_MODULE"
+check_module infras "$YUNKA_INFRAS_MODULE"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 cd "$tmp"
@@ -24,5 +25,6 @@ GOWORK=off go mod init yunka-release-probe >/dev/null
 GOWORK=off go get "$YUNKA_PKG_MODULE@$version"
 GOWORK=off go get "$YUNKA_FRAMEWORK_MODULE@$version"
 GOWORK=off go get "$YUNKA_GATEWAY_MODULE@$version"
+GOWORK=off go get "$YUNKA_INFRAS_MODULE@$version"
 GOWORK=off go list -m all >/dev/null
 echo "module-release-check: external consumer resolved $version"
