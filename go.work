@@ -6,5 +6,6 @@ use (
 	./app
 	./framework
 	./gateway
+	./infras
 	./pkg
 )

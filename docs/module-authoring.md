@@ -17,6 +17,16 @@ go run ./cmd module new \
   --depends-on tenant
 ```
 
+Infrastructure-extension modules belong under the separately versioned `infras` Go module rather than expanding `framework/infras`. Use `../infras/modules` as the generation root when the capability is an optional reusable infrastructure plugin:
+
+```bash
+cd app
+go run ./cmd module new \
+  --root ../infras/modules \
+  --name cache \
+  --logger
+```
+
 The generator writes atomically:
 
 ```text
@@ -52,13 +62,19 @@ Import the generated autoload package once:
 import _ "yunka.io/framework/modules/billing/autoload"
 ```
 
+A separately versioned infrastructure plugin uses the same runtime contract and a different distribution module, for example:
+
+```go
+import _ "github.com/hvritual/yunka.io/infras/modules/outboxruntime/autoload"
+```
+
 The autoload package may only call:
 
 ```go
 modulecatalog.MustRegister(module.GeneratedDescriptor())
 ```
 
-It may not read configuration, perform I/O, start goroutines, or construct resources.
+It may not read configuration, perform I/O, start goroutines, or construct resources. `infras` does not introduce Go `.so`/runtime-plugin loading; infrastructure plugins remain normal compile-time Go dependencies so module identity, type checking, dependency resolution, lifecycle, and diagnostics stay deterministic.
 
 ## Validate
 
@@ -67,13 +83,19 @@ make module-check
 make verify
 ```
 
-`module-check` validates generated structure and autoload purity. The C7 architecture policy also rejects dependency acquisition, reflection composition, global lookups, and request-lifetime pools under module roots.
+`module-check` validates generated structure and autoload purity. The C7 architecture policy also rejects dependency acquisition, reflection composition, global lookups, and request-lifetime pools under module roots. Repository architecture tests additionally enforce the `framework -> infras` dependency prohibition and descriptor-only autoload packages under `infras/modules`.
 
 ## Lifecycle
 
 App-owned modules may implement `Start`, `Health`, and `Shutdown`. They must remain stateless with respect to individual requests. Request identity, metadata, trace state, transactions, and repositories must remain in `request.Context` and `requestscope`.
 
-`framework/modules/outboxruntime` is the reference lifecycle module: it declares Config + Logger + named DB + EventBus, owns one Dispatcher per App, and leaves transaction ownership with the existing outbox/request-scope APIs.
+`framework/modules/outboxruntime` is the canonical Outbox lifecycle implementation. `infras/modules/outboxruntime` initially exposes it as a separately versioned plugin facade, preserving one implementation and one descriptor while establishing the new infrastructure distribution boundary.
+
+## Infras ownership rule
+
+Use `infras` for optional reusable infrastructure capability distributions and adapters. `framework` remains the transport-neutral execution/lifecycle/security/contract runtime and must not import `infras`; dependencies point from infrastructure plugins toward stable framework contracts, never the reverse.
+
+Existing `framework/infras/**` packages are compatibility/internal surfaces and are not automatically migrated. New public Redis/cache, object-storage, search, background-job, broker, or similar capabilities should start in `infras` only after a stable generic boundary is proven.
 
 ## Migration checklist
 

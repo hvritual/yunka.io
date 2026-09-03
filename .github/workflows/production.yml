@@ -53,6 +53,7 @@ jobs:
             app/go.sum
             framework/go.sum
             gateway/go.sum
+            infras/go.sum
             pkg/go.sum
 
       - name: Install locked protoc

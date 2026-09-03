@@ -17,6 +17,7 @@
 | Post-C11 five-gap DX convergence | **Complete / qualified / merged** | PR #104 merged the canonical four-command project closure without changing compiler/runtime/security/transaction semantics |
 | B12 multi-tenant Access/IAM consumer pressure | **Complete / qualified** | real Biz pressure discovered two generic Yunka gaps; both are closed and reverse-qualified against the B12 behavioral baseline `6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb` |
 | Distributed execution trace closure | **Complete / production-qualified / merged** | issue #118 / PR #119; exact candidate `19bed965852d9dc2ef39e91dcadd7fb6bea4c871` passed CI #418 and production #178 and was merged unchanged into `main` |
+| Separately versioned infrastructure extension module | **Active delivery / qualification pending** | issue #121 introduces root `infras` module, independent `infras/vX.Y.Z` release surface, typed module-plugin boundary, and a canonical Outbox facade without changing runtime semantics |
 | Active numbered Yunka framework wave | **None selected** | new framework work remains pressure-driven rather than roadmap-driven |
 | Proven open Yunka P0/P1 runtime/compiler/authz/persistence/trace-closure defects | **0 known at reconciliation** | do not promote hypotheses into framework defects without executable consumer evidence |
 
@@ -108,6 +109,36 @@ Operation phase/outcome observations and Outbox lifecycle observations enter the
 This does **not** make a telemetry trace an authoritative external-effect receipt: a trace can establish technical execution and causality, while external side-effect confirmation still requires whatever authoritative readback/reconciliation contract the consuming domain needs.
 
 Evidence: exact candidate `19bed965852d9dc2ef39e91dcadd7fb6bea4c871`; CI #418 success; production #178 success on MySQL 8.4; merge PR #119.
+
+## Infrastructure extension module delivery
+
+Issue #121 establishes a new distribution boundary for optional framework infrastructure capabilities without widening the core runtime.
+
+### Module and release boundary
+
+**State: ACTIVE DELIVERY / QUALIFICATION PENDING.**
+
+The candidate adds root Go module `github.com/hvritual/yunka.io/infras` to the workspace and canonical repository gates. Its public releases use the independent module tag namespace `infras/vX.Y.Z`, analogous to the separately versioned `gateway` module.
+
+Dependency direction is intentionally one-way:
+
+```text
+application
+   ↓
+infras plugin
+   ↓
+framework stable contracts/runtime
+```
+
+`framework` is forbidden from importing `infras`. Existing `framework/infras/**` packages remain compatibility/internal surfaces in this delivery; no bulk migration is claimed.
+
+### Plugin boundary
+
+Infrastructure plugins reuse `framework/core/modulecatalog`. Programs may register a descriptor explicitly or enable a plugin with a descriptor-only blank import. The delivery does not introduce Go runtime `plugin`/`.so` loading or a second module/runtime registry.
+
+The initial `infras/modules/outboxruntime` plugin is a facade over the canonical `framework/modules/outboxruntime` descriptor and implementation. This establishes the separately versioned distribution surface while preserving one Outbox module identity, one config namespace, and one transaction/event runtime.
+
+Qualification must pass the repository CI, production, dependency, architecture, race, vulnerability, and zero-drift gates before this status can be promoted to complete/merged.
 
 ## Current pressure frontier
 

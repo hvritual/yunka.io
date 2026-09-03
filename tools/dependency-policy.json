@@ -5,6 +5,7 @@
     "pkg/go.mod",
     "framework/go.mod",
     "gateway/go.mod",
+    "infras/go.mod",
     "app/go.mod"
   ],
   "forbiddenModules": [

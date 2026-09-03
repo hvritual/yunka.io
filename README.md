@@ -1,7 +1,8 @@
 # yunka.io
 
 `yunka.io` is a Go framework repository containing shared packages, the core framework,
-the gateway, command-line tooling, and the RPC generator.
+the separately versioned infrastructure-extension and gateway modules, command-line tooling,
+and the RPC generator.
 
 ## Requirements
 
@@ -14,14 +15,18 @@ Exact tool versions are locked in `tools/toolchain.env`; local and CI verificati
 ## Repository layout
 
 - `pkg/`: shared leaf packages
-- `framework/`: application, module, request, ingress, and infrastructure abstractions
-- `gateway/`: HTTP gateway, authorization middleware, routing, and RPC adapters
+- `framework/`: application, module, request, ingress, execution, and platform abstractions
+- `gateway/`: separately versioned HTTP gateway, authorization middleware, routing, and RPC adapters
+- `infras/`: separately versioned optional infrastructure plugins and adapters
 - `app/`: the `yunka` command-line tool
 - `contracts/proto/`: the single canonical RPC protobuf source tree
 - `compat/go-kit-kit-log/`: repository-owned SLS logging compatibility module
 
 The modules are joined by the root `go.work`. `app` intentionally uses the distinct module
-path `yunka.io/app`; `framework` remains `github.com/hvritual/yunka.io/framework`.
+path `yunka.io/app`; `framework`, `gateway`, and `infras` use the public module paths
+`github.com/hvritual/yunka.io/framework`, `github.com/hvritual/yunka.io/gateway`, and
+`github.com/hvritual/yunka.io/infras`. Public multi-module releases use their module tag
+namespaces, including `infras/vX.Y.Z` for infrastructure plugins.
 
 ## Documentation authority
 
@@ -68,7 +73,21 @@ Because `go mod tidy` operates on one module at a time, each product module that
 
 `tools/dependency-policy.json` is enforced by `yunka dependency check` / `make dependency-check`. The gate validates the repository-local compatibility module, rejects unsplit etcd, grpc-gateway v1, monolithic genproto, any external replacement, a reintroduced genproto replace, and new legacy protobuf imports outside approved compatibility islands. Existing generated gateway/SMS protobuf files remain reviewed compatibility artifacts where still required; C4 did not rewrite them.
 
-The workspace contains four product modules plus the single logging compatibility module. C6 removed the isolated legacy RPC generator module.
+The workspace contains five product modules (`pkg`, `framework`, `gateway`, `infras`, `app`) plus the single logging compatibility module. C6 removed the isolated legacy RPC generator module.
+
+## Infrastructure extension module
+
+`infras` is the optional infrastructure distribution layer. It is independently versioned like `gateway` and depends on stable Yunka framework contracts; the core `framework` module must never depend on `infras`.
+
+Infrastructure plugins reuse the existing typed `modulecatalog` runtime rather than introducing a second plugin system. Applications may register a descriptor explicitly or enable a plugin through a descriptor-only blank import, for example:
+
+```go
+import _ "github.com/hvritual/yunka.io/infras/modules/outboxruntime/autoload"
+```
+
+The initial Outbox plugin is a facade over the canonical `framework/modules/outboxruntime` descriptor and implementation, so there remains one Outbox runtime, one configuration namespace, and one set of transaction/event semantics. Existing `framework/infras/**` paths remain compatibility/internal surfaces for now; new public infrastructure capabilities should target `infras` after a stable generic boundary is proven.
+
+Yunka does not use Go runtime `.so` plugins. Compile-time module plugins retain type safety, deterministic dependency resolution, cross-platform builds, App lifecycle ownership, health, and diagnostics. See [`infras/README.md`](infras/README.md) and [`docs/module-authoring.md`](docs/module-authoring.md).
 
 ## Static module catalog and typed bootstrap
 

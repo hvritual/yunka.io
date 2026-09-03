@@ -14,7 +14,7 @@ RPC_GEN_DRIVER ?= $(CURDIR)/tools/rpcgen/generate.py
 RPC_ABI_BASELINE ?= $(CURDIR)/contracts/baselines/c5-contract-manifest.json
 PYTHON ?= python3
 VULNCHECK ?= $(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
-MODULES := pkg framework gateway app
+MODULES := pkg framework gateway infras app
 
 .PHONY: toolchain-check rpc-tools rpc-toolchain-check rpc-generate rpc-check rpc-compat-check rpc-legacy-check rpc-consumer-check rpc-bridge-check dependency-check architecture-check module-check authz-check operation-check c7-check domain-check dsl-check c10-2-qualification-check c10-3-runtime-closure-check test race vet vuln tidy build contract rpc-contract-check contract-check integration verify verify-production
 
@@ -65,15 +65,15 @@ rpc-legacy-check:
 	for removed in app/cmd/rpc gateway/rpc/gender.sh gateway/rpc/pb gateway/rpc/transport/memory pkg/invoke gateway/rpc/client/legacy_factory.go; do \
 		test ! -e "$$removed" || { echo "rpc-legacy-check: stale legacy path $$removed" >&2; exit 1; }; \
 	done; \
-	stale="$$(find gateway pkg framework app -type f -name '*.xr_*.go' -print)"; \
+	stale="$$(find gateway pkg framework infras app -type f -name '*.xr_*.go' -print)"; \
 	test -z "$$stale" || { printf 'rpc-legacy-check: stale XR files\n%s\n' "$$stale" >&2; exit 1; }; \
-	if git grep -n -E 'protoc-gen-xr|xr-cluster|--go_out=plugins=grpc' -- go.work app gateway pkg framework tools ':!**/*_test.go'; then \
+	if git grep -n -E 'protoc-gen-xr|xr-cluster|--go_out=plugins=grpc' -- go.work app gateway pkg framework infras tools ':!**/*_test.go'; then \
 		echo "rpc-legacy-check: legacy generator reference remains" >&2; exit 1; \
 	fi; \
-	if git grep -n -E 'yunka\.io/pkg/invoke|invoke\.(Rpc(Client|Server)|Message|SrvHandler|RpcTimeOut)' -- app gateway framework pkg; then \
+	if git grep -n -E 'yunka\.io/pkg/invoke|invoke\.(Rpc(Client|Server)|Message|SrvHandler|RpcTimeOut)' -- app gateway framework infras pkg; then \
 		echo "rpc-legacy-check: legacy invoke runtime remains" >&2; exit 1; \
 	fi; \
-	if git grep -n 'github.com/golang/protobuf' -- gateway/rpc framework/core/middleware framework/core/resilience pkg/selector; then \
+	if git grep -n 'github.com/golang/protobuf' -- gateway/rpc framework/core/middleware framework/core/resilience infras pkg/selector; then \
 		echo "rpc-legacy-check: legacy protobuf import remains in RPC code" >&2; exit 1; \
 	fi; \
 	if grep -R -n -E 'sync\.Pool|reflect\.Value|RegisterServer\(name string|SrvHandler|messageFactories|handlerMap' \
@@ -151,7 +151,7 @@ test:
 	done
 
 race:
-	@set -eu; for module in pkg framework gateway; do \
+	@set -eu; for module in pkg framework gateway infras; do \
 		echo "==> go test -race ./$$module/..."; \
 		(cd $$module && CGO_ENABLED=1 $(GO) test -race ./...); \
 	done
