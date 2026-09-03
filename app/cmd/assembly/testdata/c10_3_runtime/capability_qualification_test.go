@@ -15,7 +15,6 @@ import (
 	"google.golang.org/grpc"
 	"github.com/hvritual/yunka.io/framework/core/modulecatalog"
 	"github.com/hvritual/yunka.io/framework/operation"
-	"github.com/hvritual/yunka.io/framework/platform"
 )
 
 type qualificationCacheValue struct{ prefix string }
@@ -30,7 +29,7 @@ type qualificationCacheModule struct {
 func (*qualificationCacheModule) Name() string { return "qualification-cache" }
 
 func (module *qualificationCacheModule) ExportCapabilities() []modulecatalog.CapabilityExport {
-	return []modulecatalog.CapabilityExport{modulecatalog.ExportCapability(module.key, module.cache)}
+	return []modulecatalog.CapabilityExport{module.key.Export(module.cache)}
 }
 
 type capabilityDeviceQueryService struct{ cache cachecontract.Cache }
@@ -61,26 +60,11 @@ var _ generatedassembly.ApplicationFactories = capabilityFactories{}
 
 func TestGeneratedAssemblyBindsExplicitTypedInfrastructureCapability(t *testing.T) {
 	ctx := context.Background()
-	key := modulecatalog.MustCapabilityKey[cachecontract.Cache](
-		"cache.qualification",
-		"example.com/c103qualification/contracts/cache",
-		"Cache",
-	)
-	provider, err := platform.New(platform.Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	descriptor := modulecatalog.Descriptor{
-		Name:     "qualification-cache",
-		Provides: []modulecatalog.CapabilityContract{key.Contract()},
-		Build: func(modulecatalog.BuildContext) (modulecatalog.Instance, error) {
-			return &qualificationCacheModule{key: key, cache: qualificationCacheValue{prefix: "typed-infra"}}, nil
-		},
-	}
+	provider := qualificationCapabilityPlatform(t)
 	executor := operation.NewExecutor(nil)
 	result, err := generatedassembly.Bootstrap(ctx, generatedassembly.BootstrapOptions{
 		Platform:          provider,
-		AdditionalModules: []modulecatalog.Descriptor{descriptor},
+		AdditionalModules: qualificationCapabilityDescriptors("typed-infra"),
 		Factories:         capabilityFactories{probe: newRuntimeProbe()},
 		Executor:          executor,
 		Transports:        generatedassembly.TransportBindings{HTTP: http.NewServeMux(), RPC: grpc.NewServer()},
