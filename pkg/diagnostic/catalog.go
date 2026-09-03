@@ -26,6 +26,8 @@ const (
 	CodeScaffoldOwnership = "YUNKA-DX-SCAFFOLD-003"
 	CodeScaffoldConflict  = "YUNKA-DX-SCAFFOLD-004"
 
+	CodeRuntimeFailure = "YUNKA-DX-RUNTIME-001"
+
 	CodeDoctorWorkspaceRoot    = "YUNKA-DX-PROJECT-101"
 	CodeDoctorGoWork           = "YUNKA-DX-TOOLCHAIN-101"
 	CodeDoctorToolchainLock    = "YUNKA-DX-TOOLCHAIN-102"
@@ -97,6 +99,10 @@ var definitionCatalog = map[string]Definition{
 	},
 	CodeScaffoldConflict: {
 		Code: CodeScaffoldConflict, Stage: "structural-scaffold", Meaning: "structural scaffold would overwrite or collide with an existing developer or canonical identity",
+	},
+	CodeRuntimeFailure: {
+		Code: CodeRuntimeFailure, Stage: "runtime-supervision", Meaning: "local runtime supervision failed",
+		Actions: []Action{{Kind: ActionCommand, Label: "Inspect developer environment", Value: "yunka doctor"}},
 	},
 	CodeDoctorWorkspaceRoot:    {Code: CodeDoctorWorkspaceRoot, Stage: "project", Meaning: "workspace root check reported a developer-environment issue"},
 	CodeDoctorGoWork:           {Code: CodeDoctorGoWork, Stage: "toolchain", Meaning: "Go workspace configuration check reported an issue", Location: "go.work"},

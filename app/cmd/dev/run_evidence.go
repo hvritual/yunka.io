@@ -25,11 +25,43 @@ func runWithEvidence(ctx context.Context, plan devruntime.Plan, root string, evi
 	return runWithEvidenceOptions(ctx, plan, root, evidence, stdout, stderr, devruntime.Run, devruntime.LoadRuntimeReport, defaultRuntimeEvidencePollInterval)
 }
 
+func runWithEventStream(ctx context.Context, plan devruntime.Plan, root string, events, processOutput io.Writer) error {
+	return runWithRuntimeProjectionOptions(ctx, plan, root, io.Discard, newRuntimeEventStream(events), processOutput, processOutput, devruntime.Run, devruntime.LoadRuntimeReport, defaultRuntimeEvidencePollInterval)
+}
+
 func runWithEvidenceOptions(
 	ctx context.Context,
 	plan devruntime.Plan,
 	root string,
 	evidence io.Writer,
+	stdout io.Writer,
+	stderr io.Writer,
+	run devRunFunc,
+	load runtimeReportLoadFunc,
+	pollInterval time.Duration,
+) error {
+	return runWithRuntimeProjectionOptions(ctx, plan, root, evidence, nil, stdout, stderr, run, load, pollInterval)
+}
+
+func runWithEventStreamOptions(
+	ctx context.Context,
+	plan devruntime.Plan,
+	root string,
+	events io.Writer,
+	processOutput io.Writer,
+	run devRunFunc,
+	load runtimeReportLoadFunc,
+	pollInterval time.Duration,
+) error {
+	return runWithRuntimeProjectionOptions(ctx, plan, root, io.Discard, newRuntimeEventStream(events), processOutput, processOutput, run, load, pollInterval)
+}
+
+func runWithRuntimeProjectionOptions(
+	ctx context.Context,
+	plan devruntime.Plan,
+	root string,
+	evidence io.Writer,
+	events *runtimeEventStream,
 	stdout io.Writer,
 	stderr io.Writer,
 	run devRunFunc,
@@ -53,12 +85,19 @@ func runWithEvidenceOptions(
 	}
 
 	renderDevPlan(evidence, plan)
+	if events != nil {
+		_ = events.plan(plan)
+		_ = events.evidence(plan)
+	}
 	if plan.Runtime == nil {
 		fmt.Fprintln(evidence, "DEV evidence runtime-report=disabled")
 		err := run(ctx, plan, devruntime.RunOptions{Root: root, Stdout: stdout, Stderr: stderr})
 		if err != nil {
 			fmt.Fprintln(evidence, "DEV FAILED runtime")
 			fmt.Fprintln(evidence, "DEV next: yunka doctor")
+			if events != nil {
+				_ = events.failure(plan, "", false)
+			}
 		}
 		return err
 	}
@@ -83,23 +122,33 @@ func runWithEvidenceOptions(
 
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
-	observed := runtimeEvidenceState{processStates: map[string]devruntime.ProcessState{}}
+	textObserved := runtimeEvidenceState{processStates: map[string]devruntime.ProcessState{}}
+	eventObserved := runtimeEventState{processStates: map[string]devruntime.ProcessState{}}
+	project := func(report devruntime.RuntimeReport) {
+		renderRuntimeEvidence(evidence, report, &textObserved)
+		if events != nil {
+			_ = events.report(plan, report, &eventObserved)
+		}
+	}
 	for {
 		select {
 		case runErr := <-result:
 			report, loadErr := load(root, statePath)
 			fresh := loadErr == nil && freshReport(report)
 			if fresh {
-				renderRuntimeEvidence(evidence, report, &observed)
+				project(report)
 			}
 			if runErr != nil {
-				if observed.runtimeState != devruntime.RuntimeRunFailed {
+				if textObserved.runtimeState != devruntime.RuntimeRunFailed {
 					fmt.Fprintln(evidence, "DEV FAILED runtime")
 				}
 				if fresh {
 					fmt.Fprintf(evidence, "DEV inspect: %s\n", runtimeStatusCommand(plan, statePath))
 				}
 				fmt.Fprintln(evidence, "DEV next: yunka doctor")
+				if events != nil {
+					_ = events.failure(plan, statePath, fresh)
+				}
 			}
 			return runErr
 		case <-ticker.C:
@@ -107,7 +156,7 @@ func runWithEvidenceOptions(
 			if err != nil || !freshReport(report) {
 				continue
 			}
-			renderRuntimeEvidence(evidence, report, &observed)
+			project(report)
 		}
 	}
 }
