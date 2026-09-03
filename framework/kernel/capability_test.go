@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/hvritual/yunka.io/framework/core"
 	"github.com/hvritual/yunka.io/framework/core/modulecatalog"
 )
 
@@ -63,5 +64,41 @@ func TestBootstrapRejectsAmbiguousBuildCallbacks(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("ambiguous build callbacks accepted")
+	}
+}
+
+func TestBootstrapMissingCapabilityFailsBeforeRegisterAndStart(t *testing.T) {
+	missing := modulecatalog.MustCapabilityKey[bootstrapCache]("cache.missing", "example.com/contracts/cache", "Cache")
+	registered := false
+	started := false
+	_, err := Bootstrap(context.Background(), BootstrapOptions[string]{
+		Kernel: Options{
+			Catalog: modulecatalog.New(),
+			RuntimeComponents: []core.RuntimeComponent{{
+				Name: "http",
+				StartFunc: func(context.Context) error {
+					started = true
+					return nil
+				},
+				ShutdownFunc: func(context.Context) error { return nil },
+			}},
+		},
+		BuildWithCapabilities: func(capabilities modulecatalog.CapabilitySet) (string, error) {
+			_, err := modulecatalog.ResolveCapability(capabilities, missing)
+			return "", err
+		},
+		Register: func(string) error {
+			registered = true
+			return nil
+		},
+	})
+	if err == nil {
+		t.Fatal("missing capability accepted")
+	}
+	if registered {
+		t.Fatal("transport registration occurred after capability resolution failure")
+	}
+	if started {
+		t.Fatal("runtime component started after capability resolution failure")
 	}
 }
