@@ -133,11 +133,26 @@ func reconcileFile(root string, contractValue ChangeContract, change FileChange)
 		change.Class = "outside"
 		return change, &ChangeViolation{Kind: "scope", Path: change.Path, Detail: "changed path is outside the canonical project-relative namespace"}, nil
 	}
-	if isGeneratedAllowed(contractValue, path) {
+
+	// Exact generated paths come from canonical generated-effect evidence and are
+	// safe to accept as expected derived output. Generated *scopes* are broader
+	// impact hints (for example the application codegen root), so they must not
+	// become a blanket mutation allowlist: AX2 must independently prove the
+	// concrete changed path is generator-owned.
+	if contains(contractValue.GeneratedPaths, path) {
 		change.Class = "generated"
 		change.Owner = "yunka-generator"
 		return change, nil, nil
 	}
+	if withinAnyScope(path, contractValue.GeneratedScopes) {
+		report, err := ownership.Build(root, []string{path})
+		if err == nil && len(report.Decisions) == 1 && report.Decisions[0].Mutation == ownership.MutationGeneratedOnly {
+			change.Class = "generated"
+			change.Owner = report.Decisions[0].Owner
+			return change, nil, nil
+		}
+	}
+
 	if !isEditableAllowed(contractValue, path) {
 		change.Class = "outside"
 		return change, &ChangeViolation{Kind: "scope", Path: path, Detail: "actual Git delta is outside the declared change contract"}, nil
