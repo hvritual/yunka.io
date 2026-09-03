@@ -112,7 +112,7 @@ var definitionCatalog = map[string]Definition{
 	CodeDoctorProtocGenGo:      {Code: CodeDoctorProtocGenGo, Stage: "toolchain", Meaning: "protoc-gen-go availability or version check reported an issue"},
 	CodeDoctorProtocGenGoGRPC:  {Code: CodeDoctorProtocGenGoGRPC, Stage: "toolchain", Meaning: "protoc-gen-go-grpc availability or version check reported an issue"},
 	CodeDoctorGCC:              {Code: CodeDoctorGCC, Stage: "toolchain", Meaning: "C compiler availability check reported an issue"},
-	CodeDoctorGit:              {Code: CodeDoctorGit, Stage: "toolchain", Meaning: "Git availability or version check reported an issue"},
+	CodeDoctorGit:              {Code: CodeDoctorGit, Stage: "toolchain", Meaning: "Git availability check reported an issue"},
 	CodeDoctorContractManifest: {Code: CodeDoctorContractManifest, Stage: "contract", Meaning: "generated contract manifest check reported an issue", Location: "contracts/generated/manifest.json"},
 	CodeDoctorContractGraph:    {Code: CodeDoctorContractGraph, Stage: "contract", Meaning: "application graph contract evidence check reported an issue", Location: "contracts/generated/manifest.json"},
 	CodeDoctorGitStatus:        {Code: CodeDoctorGitStatus, Stage: "developer-environment", Meaning: "Git worktree status check reported an issue"},
