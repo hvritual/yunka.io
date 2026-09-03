@@ -1,10 +1,12 @@
 # Framework Terminalization — T3 Advisor Evidence Contract
 
-> Document class: **CURRENT DELIVERY EVIDENCE**  
-> State: **T3 production-qualified and real-consumer pressure-qualified candidate; unmerged**  
+> Document class: **QUALIFICATION EVIDENCE**  
+> State: **T3 complete / production-qualified / real-consumer pressure-qualified / merged**  
 > Delivery PR: #143  
 > Base: `main@c661abd8c7a4bbc14309d1dc712d55b8b4149672`  
-> Final behavioral candidate so far: `5738ac71ef5e838fae9231e908ae1a87ee7e2b31`
+> Final behavioral candidate: `5738ac71ef5e838fae9231e908ae1a87ee7e2b31`  
+> Final PR head: `b1ff3515be70769f6a9aa7f1c6e95f0d8348467a`  
+> Canonical merge: `63aa9881f84aa3f1a53fa1a1f46b999ddbbdde83`
 
 ## Goal
 
@@ -97,6 +99,15 @@ The real consumer qualification proved:
    - non-empty advice against a zero-finding request.
 6. The temporary pressure fixture was removed and Biz Git status reconciled to the pre-qualification state.
 
+## Final delivery qualification and integration
+
+Final PR head `b1ff3515be70769f6a9aa7f1c6e95f0d8348467a` contained the qualified T3 behavior plus delivery evidence and STATUS reconciliation. It passed:
+
+- CI #517 / run `33815799648`, including full Verify and determinism
+- production #275 / run `33815799615`, including MySQL 8.4 and clean-worktree
+
+PR #143 then merged that exact head into canonical `main` as `63aa9881f84aa3f1a53fa1a1f46b999ddbbdde83`.
+
 ## Hard boundaries preserved
 
 T3 does not:
@@ -111,6 +122,6 @@ T3 does not:
 - infer that a recommendation is business/domain truth merely because it passed evidence binding;
 - modify Runtime, Executor, ExecutionScope/UoW, authorization, persistence, transport, compiler, or protobuf business semantics.
 
-## Delivery gate
+## Next gate
 
-PR #143 must still reconcile `docs/STATUS.md`, update its delivery description, and pass final-head CI + production qualification before merge is claimed. After T3 is merged, the next planned terminalization work is T4 ChangeSet/new-structure convergence; that work must not be started in this delivery.
+T3 is closed. The next planned terminalization work is T4 ChangeSet/new-structure convergence, but it is not active until a new isolated delivery is explicitly started from the reconciled canonical `main`.
