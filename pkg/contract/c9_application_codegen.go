@@ -380,6 +380,7 @@ func renderC9RESTAdapter(service Service, packages []protoGoPackage, messages ma
 	imports.add("yunka.io/framework/execution", "execution")
 	imports.add("yunka.io/framework/operation", "operation")
 	imports.add("yunka.io/gateway/authz", "authz")
+	imports.add("yunka.io/gateway/httpbinding", "httpbinding")
 	imports.add("google.golang.org/protobuf/encoding/protojson", "protojson")
 
 	handlerType := c9RESTHandlerName(naming)
@@ -400,11 +401,16 @@ func renderC9RESTAdapter(service Service, packages []protoGoPackage, messages ma
 			if len(method.HTTP) > 1 {
 				handlerName += strconv.Itoa(index + 1)
 			}
-			pattern := strings.ToUpper(binding.Method) + " " + binding.Path
-			fmt.Fprintf(&registrations, "\tmux.HandleFunc(%q, handler.%s)\n", pattern, handlerName)
+			if err := validateC9HTTPBindingPath(binding.Path); err != nil {
+				return "", fmt.Errorf("contract C9 application codegen: %s: %w", method.FullName, err)
+			}
+			fmt.Fprintf(&registrations, "\tif err := httpbinding.Register(mux, %q, %q, handler.%s); err != nil { return err }\n", strings.ToUpper(binding.Method), binding.Path, handlerName)
 			fmt.Fprintf(&handlers, "func (handler *%s) %s(writer http.ResponseWriter, request *http.Request) {\n", handlerType, handlerName)
 			fmt.Fprintf(&handlers, "\twire := &%s.%s{}\n", requestRef.Alias, requestRef.Type)
-			pathFields, _ := simplePathFields(binding.Path)
+			pathFields, err := simplePathFields(binding.Path)
+			if err != nil {
+				return "", fmt.Errorf("contract C9 application codegen: %s: %w", method.FullName, err)
+			}
 			if binding.Body == "*" {
 				imports.add("io", "io")
 				handlers.WriteString("\tbody, err := io.ReadAll(request.Body)\n\tif err != nil { http.Error(writer, \"invalid request body\", http.StatusBadRequest); return }\n\tif len(body) > 0 { if err := protojson.Unmarshal(body, wire); err != nil { http.Error(writer, \"invalid request body\", http.StatusBadRequest); return } }\n")
