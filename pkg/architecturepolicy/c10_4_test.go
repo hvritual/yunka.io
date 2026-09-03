@@ -19,26 +19,29 @@ func TestC104RuntimeBindingIsExplicitAndKeepsExistingOwners(t *testing.T) {
 	}
 
 	runtimeCodegen := read("pkg/contract/assembly_runtime_codegen.go")
+	capabilityCodegen := read("pkg/contract/assembly_capability_codegen.go")
 	kernelBootstrap := read("framework/kernel/bootstrap.go")
 	platformProvider := read("framework/platform/provider.go")
-	combined := runtimeCodegen + kernelBootstrap
+	combined := runtimeCodegen + capabilityCodegen + kernelBootstrap
 
 	for _, required := range []string{
 		"type RuntimeBinder func(context.Context, *platform.Provider) (RuntimeBindings, error)",
+		"type RuntimeCapabilityBinder func(context.Context, *platform.Provider, modulecatalog.CapabilitySet) (RuntimeBindings, error)",
 		"BindRuntime RuntimeBinder",
+		"BindRuntimeWithCapabilities RuntimeCapabilityBinder",
 		"kernel.Bootstrap(ctx",
-		"Build: func() (Applications, error)",
+		"BuildWithCapabilities: func(capabilities modulecatalog.CapabilitySet) (Applications, error)",
 		"runtime, err = options.BindRuntime(ctx, options.Platform)",
-		"BuildApplications(runtime.Factories, runtime.Executor)",
+		"BuildApplicationsWithCapabilities",
 		"RegisterTransports(options.Transports, applications, runtime.Executor)",
 	} {
-		if !strings.Contains(runtimeCodegen, required) {
+		if !strings.Contains(combined, required) {
 			t.Errorf("C10.4 runtime binding is missing explicit marker %q", required)
 		}
 	}
 
 	bootstrapIndex := strings.Index(runtimeCodegen, "kernel.Bootstrap(ctx")
-	buildIndex := strings.Index(runtimeCodegen, "Build: func() (Applications, error)")
+	buildIndex := strings.Index(runtimeCodegen, "BuildWithCapabilities: func(capabilities modulecatalog.CapabilitySet) (Applications, error)")
 	binderIndex := strings.Index(runtimeCodegen, "runtime, err = options.BindRuntime(ctx, options.Platform)")
 	if bootstrapIndex < 0 || buildIndex < bootstrapIndex || binderIndex < buildIndex {
 		t.Fatalf("runtime binder must remain inside kernel Bootstrap Build sequencing: bootstrap=%d build=%d binder=%d", bootstrapIndex, buildIndex, binderIndex)
@@ -50,16 +53,25 @@ func TestC104RuntimeBindingIsExplicitAndKeepsExistingOwners(t *testing.T) {
 		"reflect.", "plugin.Open", "go/packages", "ServiceLocator", "serviceLocator",
 		"map[string]any", "map[string]interface{}", "sync.Pool",
 	} {
-		if strings.Contains(runtimeCodegen, forbidden) {
+		if strings.Contains(runtimeCodegen+capabilityCodegen, forbidden) {
 			t.Errorf("C10.4 generated runtime binder duplicates ownership/discovery with %q", forbidden)
 		}
 	}
 
-	if !strings.Contains(kernelBootstrap, "app, err := New(options.Kernel)") || !strings.Contains(kernelBootstrap, "applications, err := options.Build()") {
-		t.Fatal("kernel Bootstrap no longer proves kernel.New before generated Build callback")
+	newIndex := strings.Index(kernelBootstrap, "app, capabilities, err := newWithCapabilities(options.Kernel)")
+	capabilityBuildIndex := strings.Index(kernelBootstrap, "applications, err = options.BuildWithCapabilities(capabilities)")
+	legacyBuildIndex := strings.Index(kernelBootstrap, "applications, err = options.Build()")
+	if newIndex < 0 || capabilityBuildIndex < newIndex || legacyBuildIndex < newIndex {
+		t.Fatalf("kernel Bootstrap must prepare the App/capability snapshot before either typed construction callback: new=%d capabilityBuild=%d legacyBuild=%d", newIndex, capabilityBuildIndex, legacyBuildIndex)
 	}
-	if strings.Index(kernelBootstrap, "app, err := New(options.Kernel)") > strings.Index(kernelBootstrap, "applications, err := options.Build()") {
-		t.Fatal("kernel Bootstrap must prepare/build the App before the generated runtime binder executes")
+	if !strings.Contains(kernelBootstrap, "if (options.Build == nil) == (options.BuildWithCapabilities == nil)") {
+		t.Fatal("kernel Bootstrap must fail closed unless exactly one build callback is configured")
+	}
+	if !strings.Contains(kernelBootstrap, "if err := options.Register(applications); err != nil") || strings.Index(kernelBootstrap, "if err := options.Register(applications); err != nil") < capabilityBuildIndex {
+		t.Fatal("kernel Bootstrap must register transports only after typed Application construction")
+	}
+	if !strings.Contains(kernelBootstrap, "if err := app.Start(ctx); err != nil") || strings.Index(kernelBootstrap, "if err := app.Start(ctx); err != nil") < capabilityBuildIndex {
+		t.Fatal("kernel Bootstrap must start the App only after typed Application construction")
 	}
 
 	for _, required := range []string{
