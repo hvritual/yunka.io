@@ -18,14 +18,14 @@ func Command() cli.Command {
 		Usage: "check the yunka developer environment without mutating it",
 		Flags: []cli.Flag{
 			cli.StringFlag{Name: "root", Value: "."},
-			cli.StringFlag{Name: "format", Value: "text", Usage: "text or json"},
+			cli.StringFlag{Name: "format", Value: "text", Usage: "text, json, or agent-json"},
 			cli.BoolFlag{Name: "strict", Usage: "treat warnings as failures"},
 		},
 		Action: func(c *cli.Context) error {
 			format := strings.ToLower(strings.TrimSpace(c.String("format")))
-			if format != "text" && format != "json" {
+			if format != "text" && format != "json" && format != "agent-json" {
 				item := diagnostic.MustDefinition(diagnostic.CodeUnsupportedOutputFormat).Diagnostic(diagnostic.SeverityError)
-				item.Detail = fmt.Sprintf("format %q is unsupported; use text or json", format)
+				item.Detail = fmt.Sprintf("format %q is unsupported; use text, json, or agent-json", format)
 				text, err := diagnostic.RenderText([]diagnostic.Diagnostic{item})
 				if err != nil {
 					return err
@@ -35,13 +35,20 @@ func Command() cli.Command {
 			}
 
 			report := devruntime.Doctor(context.Background(), devruntime.DoctorOptions{Root: c.String("root")})
-			if format == "json" {
+			switch format {
+			case "agent-json":
+				contents, err := renderDoctorAgentJSON(report, c.Bool("strict"))
+				if err != nil {
+					return err
+				}
+				fmt.Print(string(contents))
+			case "json":
 				contents, err := renderDoctorJSON(report, c.Bool("strict"))
 				if err != nil {
 					return err
 				}
 				fmt.Print(string(contents))
-			} else {
+			default:
 				text, err := renderDoctorText(report)
 				if err != nil {
 					return err
