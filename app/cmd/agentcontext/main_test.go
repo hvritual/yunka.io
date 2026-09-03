@@ -45,8 +45,8 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 	if !reflect.DeepEqual(first, second) {
 		t.Fatalf("context snapshot is not deterministic:\nfirst=%#v\nsecond=%#v", first, second)
 	}
-	if first.SchemaVersion != SchemaVersion {
-		t.Fatalf("schema version=%d want=%d", first.SchemaVersion, SchemaVersion)
+	if SchemaVersion != 3 || first.SchemaVersion != 3 {
+		t.Fatalf("schema version constant/snapshot=%d/%d want=3/3", SchemaVersion, first.SchemaVersion)
 	}
 	if first.Project.Profiled {
 		t.Fatal("conventional project unexpectedly reported as profiled")
@@ -77,6 +77,12 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 	if first.AgentProtocol.Audit != "yunka audit --format agent-json" {
 		t.Fatalf("audit command=%q", first.AgentProtocol.Audit)
 	}
+	if first.AgentProtocol.AdvisorRequest != "yunka advisor request --format agent-json" {
+		t.Fatalf("advisor request command=%q", first.AgentProtocol.AdvisorRequest)
+	}
+	if first.AgentProtocol.AdvisorValidate != "yunka advisor validate --request <request.json> --response <response.json> --format agent-json" {
+		t.Fatalf("advisor validate command=%q", first.AgentProtocol.AdvisorValidate)
+	}
 	if first.AgentProtocol.RuntimeEvent != "yunka dev --event-format jsonl" {
 		t.Fatalf("runtime event command=%q", first.AgentProtocol.RuntimeEvent)
 	}
@@ -90,6 +96,11 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 	}
 	if string(jsonOne) != string(jsonTwo) {
 		t.Fatal("machine-readable output is not byte-stable")
+	}
+	for _, expected := range []string{"\"schemaVersion\": 3", "\"advisorRequest\"", "\"advisorValidate\""} {
+		if !strings.Contains(string(jsonOne), expected) {
+			t.Fatalf("context v3 json missing %q:\n%s", expected, jsonOne)
+		}
 	}
 }
 

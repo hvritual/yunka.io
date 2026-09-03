@@ -20,6 +20,7 @@ var rootCommandCategories = map[string]string{
 	"check":      categoryDeveloperWorkflow,
 	"dev":        categoryDeveloperWorkflow,
 	"add":        categoryStructural,
+	"advisor":    categoryDiagnostics,
 	"audit":      categoryDiagnostics,
 	"context":    categoryDiagnostics,
 	"ownership":  categoryDiagnostics,
@@ -46,7 +47,7 @@ func applyDiscoverability(app *cli.App) {
 
   yunka init -> yunka generate -> yunka check -> yunka dev
 
-Use add for explicit structural authoring of Applications, Operations, event DTOs, and declarative modules without inferred business semantics. For AI/automation, start with context for the read-only project contract. Existing canonical Operations follow the bounded change protocol: change plan -> change begin -> change check -> change verify. New structure still begins with add, then returns to generate/check and the bounded change workflow once the Operation is canonical. Use audit for read-only deterministic framework-conformance evidence; findings report existing debt but do not block by default. Ownership is the lower-level mutation guard used by the change protocol. Use doctor/explain/inspect/graph for evidence and troubleshooting. Contract, assembly, module, domain, and dependency commands remain available as explicit expert architecture interfaces.`)
+Use add for explicit structural authoring of Applications, Operations, event DTOs, and declarative modules without inferred business semantics. For AI/automation, start with context for the read-only project contract. Existing canonical Operations follow the bounded change protocol: change plan -> change begin -> change check -> change verify. New structure still begins with add, then returns to generate/check and the bounded change workflow once the Operation is canonical. Use audit for read-only deterministic framework-conformance evidence; findings report existing debt but do not block by default. Use advisor to export that deterministic evidence for external AI reasoning and to validate evidence-bound advisory responses; Yunka does not invoke an LLM or authorize mutations through advisor. Ownership is the lower-level mutation guard used by the change protocol. Use doctor/explain/inspect/graph for evidence and troubleshooting. Contract, assembly, module, domain, and dependency commands remain available as explicit expert architecture interfaces.`)
 	for index := range app.Commands {
 		if category, ok := rootCommandCategories[app.Commands[index].Name]; ok {
 			app.Commands[index].Category = category

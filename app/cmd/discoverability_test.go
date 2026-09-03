@@ -12,6 +12,7 @@ import (
 func TestC116ARootCommandTaxonomyIsCompleteAndStable(t *testing.T) {
 	want := map[string]string{
 		"add":        categoryStructural,
+		"advisor":    categoryDiagnostics,
 		"api":        categorySupplementary,
 		"assembly":   categoryExpert,
 		"audit":      categoryDiagnostics,
@@ -99,7 +100,7 @@ func TestC116AApplyDiscoverabilityPreservesCommandsAndRendersHappyPath(t *testin
 	if !strings.Contains(app.Description, "explicit structural authoring") {
 		t.Fatalf("root description does not explain structural authoring: %q", app.Description)
 	}
-	for _, expected := range []string{"change plan", "change begin", "change check", "change verify", "Use audit for read-only deterministic"} {
+	for _, expected := range []string{"change plan", "change begin", "change check", "change verify", "Use audit for read-only deterministic", "Use advisor to export that deterministic evidence", "does not invoke an LLM or authorize mutations"} {
 		if !strings.Contains(app.Description, expected) {
 			t.Fatalf("root description does not expose control-plane capability %q: %q", expected, app.Description)
 		}
@@ -124,6 +125,7 @@ func TestC116AApplyDiscoverabilityPreservesCommandsAndRendersHappyPath(t *testin
 		"yunka init -> yunka generate -> yunka check -> yunka dev",
 		"change plan -> change begin -> change check -> change verify",
 		"add",
+		"advisor",
 		"audit",
 		"context",
 		"ownership",
