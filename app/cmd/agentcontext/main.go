@@ -17,14 +17,15 @@ import (
 
 const (
 	AppName       = "context"
-	SchemaVersion = 1
+	SchemaVersion = 2
 )
 
 type Snapshot struct {
-	SchemaVersion int                           `json:"schemaVersion"`
+	SchemaVersion int                            `json:"schemaVersion"`
 	Project       projectflow.ProjectDescriptor `json:"project"`
 	Locations     []Location                    `json:"locations"`
 	Commands      Commands                      `json:"commands"`
+	AgentProtocol AgentProtocol                 `json:"agentProtocol"`
 }
 
 type Location struct {
@@ -42,6 +43,16 @@ type Commands struct {
 	Check       string `json:"check"`
 	Dev         string `json:"dev"`
 	GraphImpact string `json:"graphImpact"`
+}
+
+type AgentProtocol struct {
+	NewStructure string `json:"newStructure"`
+	ExistingPlan string `json:"existingPlan"`
+	ChangeBegin  string `json:"changeBegin"`
+	ChangeCheck  string `json:"changeCheck"`
+	ChangeVerify string `json:"changeVerify"`
+	Audit        string `json:"audit"`
+	RuntimeEvent string `json:"runtimeEvent"`
 }
 
 func Command() cli.Command {
@@ -104,9 +115,18 @@ func Build(root string) (Snapshot, error) {
 		Locations:     locations,
 		Commands: Commands{
 			Generate:    "yunka generate",
-			Check:       "yunka check --format json",
+			Check:       "yunka check --format agent-json",
 			Dev:         "yunka dev",
 			GraphImpact: "yunka graph impact --format json --operation <operation>",
+		},
+		AgentProtocol: AgentProtocol{
+			NewStructure: "yunka add <application|operation|event|module> ...",
+			ExistingPlan: "yunka change plan --operation <operation> --format agent-json",
+			ChangeBegin:  "yunka change begin --operation <operation> --format agent-json",
+			ChangeCheck:  "yunka change check --format agent-json",
+			ChangeVerify: "yunka change verify --format agent-json",
+			Audit:        "yunka audit --format agent-json",
+			RuntimeEvent: "yunka dev --event-format jsonl",
 		},
 	}, nil
 }

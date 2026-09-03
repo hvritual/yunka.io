@@ -4,7 +4,7 @@
 > Authority: current framework/wave/release/pressure status  
 > Live Git HEAD authority: resolve the `main` ref from Git/GitHub; it is not duplicated as a permanent fact here  
 > Behavioral reconciliation baseline: `19bed965852d9dc2ef39e91dcadd7fb6bea4c871` (qualified candidate merged unchanged by PR #119)  
-> Reconciled date: 2026-09-03  
+> Reconciled date: 2026-09-04  
 > Governance: [`DOCUMENTATION_GOVERNANCE.md`](DOCUMENTATION_GOVERNANCE.md)
 
 ## Current framework state
@@ -16,6 +16,7 @@
 | C11 Developer Experience Productization | **Complete / production-qualified / merged** | issue #60 records C11.1-C11.7 complete with real Biz consumer qualification; roadmap is historical |
 | Post-C11 five-gap DX convergence | **Complete / qualified / merged** | PR #104 merged the canonical four-command project closure without changing compiler/runtime/security/transaction semantics |
 | Agent Experience control-plane convergence | **AX1-AX7 complete / production-qualified / pressure-qualified / merged** | AX1-AX6 merged through PRs #125, #126, #127, #129, #132, #133. AX7 strict pressure candidate `38036a66e0b264a87526f18aaa8494bea6355a28` proved a handwritten-placement escape in CI #489; minimal closure candidate `45526e6f79f5e9b430f30f641080738e45c5b72a` passed CI #491 and production #249; final PR head `d9038f37f467497dd36c7a45cfc6170b19922994` passed CI #493 and production #251 and merged through PR #138 as `67d8b99e641c4c3179dc31941927631f3d30b7fd` |
+| Framework Terminalization T0-T2 Audit foundation | **Production-qualified / real-consumer pressure-qualified candidate / unmerged** | PR #141. Final behavioral candidate `3348c7aaf613e6443b295d746f8bc659477f9c22` passed CI #506 and production #264. Biz B13 reverse qualification run `33777462988` proved clean-consumer zero findings and exact detection of `AUDIT-APP-001`, `AUDIT-AUTH-001`, `AUDIT-INFRA-001` under temporary adversarial pressure. Merge is not claimed until final docs-only head qualification and PR integration complete. |
 | B12 multi-tenant Access/IAM consumer pressure | **Complete / qualified** | real Biz pressure discovered two generic Yunka gaps; both are closed and reverse-qualified against the B12 behavioral baseline `6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb` |
 | Distributed execution trace closure | **Complete / production-qualified / merged** | issue #118 / PR #119; exact candidate `19bed965852d9dc2ef39e91dcadd7fb6bea4c871` passed CI #418 and production #178 and was merged unchanged into `main` |
 | Separately versioned infrastructure extension module | **Complete / production-qualified / merged** | issue #121 / PR #122; exact candidate `fc09f296cccb14ae18891bc43642d5efe43bd484` passed CI #430 and production #190, then merged as `70611d6cee5dd4e37ae6a803bcb38b938acd59c9`; independent `infras/vX.Y.Z` tag surface exists, but no `infras/v0.1.0` release tag is claimed yet |
@@ -249,6 +250,28 @@ Application protobuf declares `ApplicationDeclaration.capabilities` separately f
 The current declarative module authoring surface (`module.yunka.json` / `yunka module add`) still models module input `Requirements` only and does not synthesize `Descriptor.Provides`. An exporting plugin therefore composes its capability-providing descriptor explicitly in handwritten Go (without editing generated module source) and passes that descriptor to generated Assembly. This is an authoring/DX limitation, not a runtime/compiler binding gap.
 
 Evidence: issue #124; exact candidate `c3123fb4a3e7731f0edf5539c3d8003fc0e41bc7`; CI #475 and production #233 success; merge PR #131 as `d06a6330db9093e0bc586decb6bdc00122b4aa99`; exact-main push CI #476 and production #234 success.
+
+## Framework Terminalization candidate
+
+T0-T2 are complete on PR #141 as a **production-qualified and real-consumer pressure-qualified candidate**, but they are not yet merged and therefore are not promoted to canonical `main` behavior in this status.
+
+### T0 — Agent protocol reconciliation
+
+`yunka context --json` schema v2 makes the already-merged Agent protocol self-describing: explicit new-structure authoring, bounded existing-Operation changes, deterministic Audit, Agent JSON diagnostics, and JSONL runtime evidence all point at one control-plane flow.
+
+### T1 — Deterministic Audit MVP
+
+`yunka audit` is a read-only app/control-plane command. It derives evidence from canonical project/Manifest facts plus Go parser direct-import evidence and deliberately supports only narrow proven structural violations. It does not infer business correctness, DDD quality, architectural intent, or design hypotheses.
+
+The first proven rules are `AUDIT-APP-001`, `AUDIT-INFRA-001`, and `AUDIT-AUTH-001`. Real Biz pressure proved and closed the exact consumer module-identity compatibility needed for `yunka.io/framework/platform` and `yunka.io/gateway/authz` without widening the matcher to arbitrary suffixes.
+
+### T2 — Architecture Debt Delta
+
+`yunka audit --base <git-ref>` compares stable proven Finding IDs against an immutable Git baseline as `existing / new / fixed`. Baseline source/Manifest facts are read from Git objects without checkout, historical observations are not turned into blocking debt, and module-identity migration fails closed.
+
+Exact evidence is recorded in `docs/waves/TERMINALIZATION-t0-t2-audit.md`. Final behavioral candidate `3348c7aaf613e6443b295d746f8bc659477f9c22` passed CI #506 and production #264. Biz reverse qualification run `33777462988` returned zero clean findings and then detected all three expected new-debt rules under a temporary real-form adversarial fixture before restoring clean Git status.
+
+The next terminalization stage is **T3 — AI Architecture Advisor Evidence Contract**, but T3 must not be implemented on top of an unqualified or unmerged T0-T2 delivery. First qualify the final docs-only PR head and integrate PR #141. T3 remains outside the Yunka runtime and may consume deterministic Audit evidence only; it cannot self-authorize architecture authority expansion or business/domain design changes.
 
 ## Current pressure frontier
 
