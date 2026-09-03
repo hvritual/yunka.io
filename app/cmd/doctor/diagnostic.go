@@ -98,6 +98,18 @@ func renderDoctorJSON(report devruntime.DoctorReport, strict bool) ([]byte, erro
 	return append(contents, '\n'), nil
 }
 
+func renderDoctorAgentJSON(report devruntime.DoctorReport, strict bool) ([]byte, error) {
+	items, err := adaptDoctorReport(report)
+	if err != nil {
+		return nil, err
+	}
+	command := "yunka doctor"
+	if strict {
+		command += " --strict"
+	}
+	return diagnostic.RenderAgentJSON(command, items, !report.Failed(strict))
+}
+
 func renderDoctorText(report devruntime.DoctorReport) (string, error) {
 	items, err := adaptDoctorReport(report)
 	if err != nil {
