@@ -1,10 +1,12 @@
 # Framework Terminalization — T0-T2 Audit Foundation
 
-> Document class: **CURRENT DELIVERY EVIDENCE**
-> State: **T0-T2 production-qualified and real-consumer pressure-qualified candidate; unmerged**
+> Document class: **QUALIFICATION EVIDENCE**
+> State: **T0-T2 production-qualified, real-consumer pressure-qualified, and merged**
 > Delivery PR: #141
 > Base: `main@1901162383832e2d5c49809d579c72919ba8cfbd`
 > Final behavioral candidate: `3348c7aaf613e6443b295d746f8bc659477f9c22`
+> Final docs-only PR head: `df87a9fd29fb99e7957106301879686195c7c786`
+> Canonical merge: `d93fcc4b9c85840c95d9dcc310e34bfe46349450`
 
 ## Goal
 
@@ -114,6 +116,15 @@ AUDIT-INFRA-001
 
 The fixture was removed and Git status was reconciled to the pre-audit state. Evidence artifact ID: `9902173543`.
 
+## Final delivery qualification and integration
+
+Final docs-only PR head `df87a9fd29fb99e7957106301879686195c7c786` changed delivery/status evidence after the behavioral candidate and passed:
+
+- CI #507 / run `33778300974`, including full Verify and determinism
+- production #265 / run `33778301062`, including MySQL 8.4 and clean-worktree
+
+PR #141 then merged that exact qualified head into canonical `main` as `d93fcc4b9c85840c95d9dcc310e34bfe46349450`.
+
 ## Hard boundaries preserved
 
 This delivery does not:
@@ -129,4 +140,4 @@ This delivery does not:
 
 ## Next gate
 
-Do not proceed directly to automatic remediation. The next planned terminalization stage is T3: define an AI Architecture Advisor evidence contract that consumes deterministic Audit findings and can only produce evidence-bound recommendations/hypotheses. Yunka itself should remain LLM-independent, and any recommendation that widens authority or changes business/domain design remains human-approved rather than self-authorizing.
+T0-T2 are closed and merged. The next terminalization stage is T3: define an AI Architecture Advisor evidence contract that consumes deterministic Audit findings and can only produce evidence-bound recommendations/hypotheses. Yunka itself remains LLM-independent; advisor output is not executable truth, and recommendations that widen authority or change business/domain design remain human-approved rather than self-authorizing.
