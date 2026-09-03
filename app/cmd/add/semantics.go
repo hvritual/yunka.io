@@ -112,15 +112,13 @@ func renderRPCOperation(rpcName, requestType, responseType string, options Opera
 	b.WriteString("    option (yunka.dsl.v1.operation) = {\n")
 	fmt.Fprintf(&b, "      id: %q\n", options.OperationID)
 	fmt.Fprintf(&b, "      use_case: %q\n", options.UseCase)
-	if options.Access == "public" {
-		b.WriteString("      public: true\n")
-	} else {
-		b.WriteString("      public: false\n")
+	fmt.Fprintf(&b, "      public: %t\n", options.Access == "public")
+	fmt.Fprintf(&b, "      tenant_required: %t\n", options.Tenant == "required")
+	if options.Access == "protected" {
 		for _, permission := range options.Permissions {
 			fmt.Fprintf(&b, "      permissions: %q\n", permission)
 		}
 		fmt.Fprintf(&b, "      permission_mode: %s\n", permissionModeEnum(options.PermissionMode))
-		fmt.Fprintf(&b, "      tenant_required: %t\n", options.Tenant == "required")
 		for _, authentication := range options.Authentication {
 			fmt.Fprintf(&b, "      authentication: %s\n", authenticationEnum(authentication))
 		}
