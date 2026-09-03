@@ -15,11 +15,17 @@ func TestPlanOperationIsReadOnlyDeterministicAndMatchesApply(t *testing.T) {
 		ApplicationKey: "tenant/lifecycle",
 		OperationID:    "tenant.suspend",
 		UseCase:        "suspend_tenant",
-		Access:         "public",
-		Tenant:         "optional",
-		Transaction:    "none",
-		Idempotency:    "none",
-		Composition:    "none",
+		Access:         "protected",
+		Permissions:    []string{"tenant.manage"},
+		PermissionMode: "all",
+		Tenant:         "required",
+		Authentication: []string{"jwt"},
+		Transaction:    "local",
+		Idempotency:    "required",
+		Composition:    "local",
+		HTTPMethod:     "POST",
+		HTTPPath:       "/tenants/{id}:suspend",
+		HTTPBody:       "*",
 	}
 
 	first, err := PlanOperation(options)
@@ -32,6 +38,22 @@ func TestPlanOperationIsReadOnlyDeterministicAndMatchesApply(t *testing.T) {
 	}
 	if first.Kind != "operation-plan" || second.Kind != "operation-plan" {
 		t.Fatalf("plan kind first=%q second=%q", first.Kind, second.Kind)
+	}
+	wantSemantics := &OperationSemantics{
+		UseCase:        "suspend_tenant",
+		Access:         "protected",
+		Permissions:    []string{"tenant.manage"},
+		PermissionMode: "all",
+		Tenant:         "required",
+		Authentication: []string{"jwt"},
+		Transaction:    "local",
+		Idempotency:    "required",
+		Composition:    "local",
+		RequiresOperations: []string{},
+		HTTP: &OperationHTTPSemantics{Method: "POST", Path: "/tenants/{id}:suspend", Body: "*"},
+	}
+	if !reflect.DeepEqual(first.ExplicitSemantics, wantSemantics) {
+		t.Fatalf("explicit semantics=%#v want=%#v", first.ExplicitSemantics, wantSemantics)
 	}
 	firstJSON, err := Render(first, FormatAgentJSON)
 	if err != nil {
@@ -61,6 +83,9 @@ func TestPlanOperationIsReadOnlyDeterministicAndMatchesApply(t *testing.T) {
 	}
 	if applied.Kind != "operation" {
 		t.Fatalf("apply kind=%q", applied.Kind)
+	}
+	if applied.ExplicitSemantics != nil {
+		t.Fatalf("existing apply report unexpectedly exposes plan-only semantics: %#v", applied.ExplicitSemantics)
 	}
 	if !reflect.DeepEqual(first.Identity, applied.Identity) {
 		t.Fatalf("plan/apply identity drift:\nplan=%#v\napply=%#v", first.Identity, applied.Identity)
