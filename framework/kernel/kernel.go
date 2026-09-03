@@ -27,6 +27,11 @@ type Options struct {
 // descriptor catalog populated by blank-import autoload packages. The catalog
 // stores descriptors only; all runtime state belongs to the returned App.
 func New(options Options) (*core.App, error) {
+	application, _, err := newWithCapabilities(options)
+	return application, err
+}
+
+func newWithCapabilities(options Options) (*core.App, modulecatalog.CapabilitySet, error) {
 	catalog := options.Catalog
 	if catalog == nil {
 		catalog = modulecatalog.Default()
@@ -34,14 +39,14 @@ func New(options Options) (*core.App, error) {
 	if options.Platform != nil {
 		if options.ContextFactory != nil || options.Config != nil || options.Logger != nil ||
 			options.Databases != nil || options.EventBus != nil || options.RPC != nil {
-			return nil, errors.New("kernel: Platform cannot be combined with direct capability options or ContextFactory")
+			return nil, modulecatalog.EmptyCapabilitySet(), errors.New("kernel: Platform cannot be combined with direct capability options or ContextFactory")
 		}
 		options.ContextFactory = options.Platform
 		options.Config = options.Platform.Config()
 		options.Logger = options.Platform.Logger()
 		options.EventBus = options.Platform.EventBus()
 	}
-	return core.NewApp(core.AppOptions{
+	return core.NewAppWithCapabilities(core.AppOptions{
 		Config: options.Config, Logger: options.Logger, Databases: options.Databases,
 		EventBus: options.EventBus, RPC: options.RPC,
 		Catalog: catalog, ContextFactory: options.ContextFactory,
