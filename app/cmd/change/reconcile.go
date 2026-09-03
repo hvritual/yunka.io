@@ -1,0 +1,296 @@
+package change
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"os/exec"
+	"sort"
+	"strings"
+
+	"github.com/urfave/cli"
+	"yunka.io/app/cmd/ownership"
+	"yunka.io/app/cmd/projectflow"
+)
+
+const ChangeReconciliationSchemaVersion = 1
+
+type FileChange struct {
+	Status       string `json:"status"`
+	Path         string `json:"path"`
+	PreviousPath string `json:"previousPath,omitempty"`
+	Class        string `json:"class"`
+	Owner        string `json:"owner,omitempty"`
+}
+
+type ChangeViolation struct {
+	Kind   string `json:"kind"`
+	Path   string `json:"path"`
+	Detail string `json:"detail"`
+}
+
+type Reconciliation struct {
+	SchemaVersion int               `json:"schemaVersion"`
+	BaseSHA       string            `json:"baseSha"`
+	OperationID   string            `json:"operationId"`
+	Changes       []FileChange      `json:"changes"`
+	Violations    []ChangeViolation `json:"violations"`
+}
+
+func checkCommand() cli.Command {
+	return cli.Command{
+		Name:  "check",
+		Usage: "quickly reconcile the actual Git delta with the active change contract",
+		Flags: []cli.Flag{
+			cli.StringFlag{Name: "root", Value: ".", Usage: "project root"},
+			cli.StringFlag{Name: "contract", Value: DefaultChangeContractPath, Usage: "change contract path"},
+			cli.StringFlag{Name: "format", Value: FormatText, Usage: "output format: text, json, or agent-json"},
+		},
+		Action: func(c *cli.Context) error {
+			descriptor, err := projectflow.DescribeProject(projectflow.Options{Root: c.String("root")})
+			if err != nil {
+				return printFailure("yunka change check", c.String("format"), Diagnose(&Failure{Kind: FailureEvidence, Err: fmt.Errorf("change check: resolve project: %w", err)}), 1)
+			}
+			contractValue, _, err := LoadChangeContract(descriptor.Root, c.String("contract"))
+			if err != nil {
+				return printFailure("yunka change check", c.String("format"), Diagnose(&Failure{Kind: FailureEvidence, Err: fmt.Errorf("change check: load contract: %w", err)}), 1)
+			}
+			report, err := ReconcileGitDelta(descriptor.Root, contractValue)
+			if err != nil {
+				return printFailure("yunka change check", c.String("format"), Diagnose(&Failure{Kind: FailureEvidence, Err: err}), 1)
+			}
+			output, err := RenderReconciliation(report, c.String("format"))
+			if err != nil {
+				return err
+			}
+			fmt.Print(output)
+			if len(report.Violations) > 0 {
+				return cli.NewExitError("", 1)
+			}
+			return nil
+		},
+	}
+}
+
+func ReconcileGitDelta(root string, contractValue ChangeContract) (Reconciliation, error) {
+	if contractValue.SchemaVersion != ChangeContractSchemaVersion {
+		return Reconciliation{}, fmt.Errorf("change check: unsupported contract schemaVersion %d", contractValue.SchemaVersion)
+	}
+	changes, err := gitChanges(root, contractValue.BaseSHA)
+	if err != nil {
+		return Reconciliation{}, err
+	}
+	report := Reconciliation{
+		SchemaVersion: ChangeReconciliationSchemaVersion,
+		BaseSHA:       contractValue.BaseSHA,
+		OperationID:   contractValue.Operation.OperationID,
+	}
+	for _, change := range changes {
+		classified, violation, err := reconcileFile(root, contractValue, change)
+		if err != nil {
+			return Reconciliation{}, err
+		}
+		report.Changes = append(report.Changes, classified)
+		if violation != nil {
+			report.Violations = append(report.Violations, *violation)
+		}
+		if change.PreviousPath != "" && change.PreviousPath != change.Path {
+			previous := FileChange{Status: "D", Path: change.PreviousPath}
+			_, previousViolation, err := reconcileFile(root, contractValue, previous)
+			if err != nil {
+				return Reconciliation{}, err
+			}
+			if previousViolation != nil {
+				report.Violations = append(report.Violations, *previousViolation)
+			}
+		}
+	}
+	sort.Slice(report.Changes, func(i, j int) bool {
+		if report.Changes[i].Path != report.Changes[j].Path {
+			return report.Changes[i].Path < report.Changes[j].Path
+		}
+		return report.Changes[i].Status < report.Changes[j].Status
+	})
+	sort.Slice(report.Violations, func(i, j int) bool {
+		if report.Violations[i].Path != report.Violations[j].Path {
+			return report.Violations[i].Path < report.Violations[j].Path
+		}
+		return report.Violations[i].Kind < report.Violations[j].Kind
+	})
+	if report.Changes == nil {
+		report.Changes = []FileChange{}
+	}
+	if report.Violations == nil {
+		report.Violations = []ChangeViolation{}
+	}
+	return report, nil
+}
+
+func reconcileFile(root string, contractValue ChangeContract, change FileChange) (FileChange, *ChangeViolation, error) {
+	path := cleanProjectPath(change.Path)
+	change.Path = path
+	if path == "" {
+		change.Class = "outside"
+		return change, &ChangeViolation{Kind: "scope", Path: change.Path, Detail: "changed path is outside the canonical project-relative namespace"}, nil
+	}
+	if isGeneratedAllowed(contractValue, path) {
+		change.Class = "generated"
+		change.Owner = "yunka-generator"
+		return change, nil, nil
+	}
+	if !isEditableAllowed(contractValue, path) {
+		change.Class = "outside"
+		return change, &ChangeViolation{Kind: "scope", Path: path, Detail: "actual Git delta is outside the declared change contract"}, nil
+	}
+	report, err := ownership.Build(root, []string{path})
+	if err != nil {
+		return FileChange{}, nil, fmt.Errorf("change check: classify %s: %w", path, err)
+	}
+	if len(report.Decisions) != 1 {
+		return FileChange{}, nil, fmt.Errorf("change check: ownership returned %d decisions for %s", len(report.Decisions), path)
+	}
+	decision := report.Decisions[0]
+	change.Owner = decision.Owner
+	if !decision.SafeAutoEdit {
+		change.Class = "ownership-blocked"
+		return change, &ChangeViolation{Kind: "ownership", Path: path, Detail: decision.Reason}, nil
+	}
+	change.Class = "editable"
+	return change, nil, nil
+}
+
+func isEditableAllowed(contractValue ChangeContract, path string) bool {
+	return contains(contractValue.EditablePaths, path) || withinAnyScope(path, contractValue.EditableScopes)
+}
+
+func isGeneratedAllowed(contractValue ChangeContract, path string) bool {
+	return contains(contractValue.GeneratedPaths, path) || withinAnyScope(path, contractValue.GeneratedScopes)
+}
+
+func gitChanges(root, baseSHA string) ([]FileChange, error) {
+	baseSHA = strings.TrimSpace(baseSHA)
+	if baseSHA == "" {
+		return nil, fmt.Errorf("change check: base SHA is required")
+	}
+	tracked, err := runGitBytes(root, "diff", "--name-status", "-z", "--find-renames", baseSHA, "--")
+	if err != nil {
+		return nil, fmt.Errorf("change check: Git diff: %w", err)
+	}
+	changes, err := parseNameStatusZ(tracked)
+	if err != nil {
+		return nil, err
+	}
+	untracked, err := runGitBytes(root, "ls-files", "--others", "--exclude-standard", "-z")
+	if err != nil {
+		return nil, fmt.Errorf("change check: Git untracked files: %w", err)
+	}
+	for _, path := range splitNUL(untracked) {
+		path = cleanProjectPath(path)
+		if path == "" {
+			continue
+		}
+		changes = append(changes, FileChange{Status: "A", Path: path})
+	}
+	return dedupeFileChanges(changes), nil
+}
+
+func runGitBytes(root string, args ...string) ([]byte, error) {
+	command := exec.Command("git", append([]string{"-C", root}, args...)...)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		detail := strings.TrimSpace(stderr.String())
+		if detail == "" {
+			detail = err.Error()
+		}
+		return nil, fmt.Errorf("git %s: %s", strings.Join(args, " "), detail)
+	}
+	return stdout.Bytes(), nil
+}
+
+func parseNameStatusZ(data []byte) ([]FileChange, error) {
+	tokens := splitNUL(data)
+	var result []FileChange
+	for index := 0; index < len(tokens); {
+		status := strings.TrimSpace(tokens[index])
+		index++
+		if status == "" {
+			continue
+		}
+		if index >= len(tokens) {
+			return nil, fmt.Errorf("change check: malformed Git name-status output after %s", status)
+		}
+		path := cleanProjectPath(tokens[index])
+		index++
+		change := FileChange{Status: status, Path: path}
+		if strings.HasPrefix(status, "R") || strings.HasPrefix(status, "C") {
+			if index >= len(tokens) {
+				return nil, fmt.Errorf("change check: malformed Git rename/copy output after %s", status)
+			}
+			change.PreviousPath = path
+			change.Path = cleanProjectPath(tokens[index])
+			index++
+		}
+		result = append(result, change)
+	}
+	return result, nil
+}
+
+func splitNUL(data []byte) []string {
+	parts := bytes.Split(data, []byte{0})
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if len(part) == 0 {
+			continue
+		}
+		result = append(result, string(part))
+	}
+	return result
+}
+
+func dedupeFileChanges(values []FileChange) []FileChange {
+	seen := map[string]FileChange{}
+	for _, value := range values {
+		key := value.Status + "\x00" + value.PreviousPath + "\x00" + value.Path
+		seen[key] = value
+	}
+	result := make([]FileChange, 0, len(seen))
+	for _, value := range seen {
+		result = append(result, value)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Path != result[j].Path {
+			return result[i].Path < result[j].Path
+		}
+		return result[i].Status < result[j].Status
+	})
+	return result
+}
+
+func RenderReconciliation(report Reconciliation, format string) (string, error) {
+	format = strings.ToLower(strings.TrimSpace(format))
+	if format == FormatJSON || format == FormatAgentJSON {
+		data, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			return "", err
+		}
+		return string(append(data, '\n')), nil
+	}
+	if format != "" && format != FormatText {
+		return "", fmt.Errorf("change check: unsupported format %q", format)
+	}
+	var builder strings.Builder
+	fmt.Fprintf(&builder, "operation %s\n", report.OperationID)
+	fmt.Fprintf(&builder, "base      %s\n", report.BaseSHA)
+	fmt.Fprintf(&builder, "changes   %d\n", len(report.Changes))
+	for _, item := range report.Changes {
+		fmt.Fprintf(&builder, "  %-4s %-18s %s\n", item.Status, item.Class, item.Path)
+	}
+	fmt.Fprintf(&builder, "violations %d\n", len(report.Violations))
+	for _, item := range report.Violations {
+		fmt.Fprintf(&builder, "  %s %s — %s\n", item.Kind, item.Path, item.Detail)
+	}
+	return builder.String(), nil
+}
