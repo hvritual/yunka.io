@@ -10,12 +10,16 @@ const (
 	CodeUnsupportedOutputFormat = "YUNKA-DX-DEV-001"
 	CodeDeveloperWorkflowFailed = "YUNKA-DX-DEV-999"
 
-	CodeProjectResolve          = "YUNKA-DX-PROJECT-001"
-	CodeContractFailure        = "YUNKA-DX-CONTRACT-001"
-	CodeContractDrift          = "YUNKA-DX-CONTRACT-002"
-	CodeModuleFailure          = "YUNKA-DX-MODULE-001"
-	CodeAssemblyFailure        = "YUNKA-DX-ASSEMBLY-001"
-	CodeAssemblyDrift          = "YUNKA-DX-ASSEMBLY-002"
+	CodeProjectResolve   = "YUNKA-DX-PROJECT-001"
+	CodeContractFailure = "YUNKA-DX-CONTRACT-001"
+	CodeContractDrift   = "YUNKA-DX-CONTRACT-002"
+	CodeModuleFailure   = "YUNKA-DX-MODULE-001"
+	CodeAssemblyFailure = "YUNKA-DX-ASSEMBLY-001"
+	CodeAssemblyDrift   = "YUNKA-DX-ASSEMBLY-002"
+
+	CodeChangeOperation = "YUNKA-DX-CHANGE-001"
+	CodeChangeIntent    = "YUNKA-DX-CHANGE-002"
+	CodeChangeEvidence  = "YUNKA-DX-CHANGE-003"
 
 	CodeDoctorWorkspaceRoot    = "YUNKA-DX-PROJECT-101"
 	CodeDoctorGoWork           = "YUNKA-DX-TOOLCHAIN-101"
@@ -63,6 +67,17 @@ var definitionCatalog = map[string]Definition{
 	CodeAssemblyDrift: {
 		Code: CodeAssemblyDrift, Stage: "assembly", Meaning: "generated runtime assembly artifacts are stale",
 		Actions: []Action{{Kind: ActionCommand, Label: "Regenerate", Value: "yunka generate"}},
+	},
+	CodeChangeOperation: {
+		Code: CodeChangeOperation, Stage: "change-planning", Meaning: "requested operation cannot be resolved to one existing canonical operation",
+		Actions: []Action{{Kind: ActionCommand, Label: "Inspect operations", Value: "yunka graph find --kind operation"}},
+	},
+	CodeChangeIntent: {
+		Code: CodeChangeIntent, Stage: "change-planning", Meaning: "change intent is missing or unsupported",
+	},
+	CodeChangeEvidence: {
+		Code: CodeChangeEvidence, Stage: "change-planning", Meaning: "canonical evidence required to build a change plan is unavailable or invalid",
+		Actions: []Action{{Kind: ActionCommand, Label: "Regenerate canonical facts", Value: "yunka generate"}, {Kind: ActionCommand, Label: "Validate canonical facts", Value: "yunka check --format agent-json"}},
 	},
 	CodeDoctorWorkspaceRoot:    {Code: CodeDoctorWorkspaceRoot, Stage: "project", Meaning: "workspace root check reported a developer-environment issue"},
 	CodeDoctorGoWork:           {Code: CodeDoctorGoWork, Stage: "toolchain", Meaning: "Go workspace configuration check reported an issue", Location: "go.work"},

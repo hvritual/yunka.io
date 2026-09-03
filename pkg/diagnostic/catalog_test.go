@@ -7,8 +7,8 @@ import (
 
 func TestDefinitionCatalogIsDeterministicAndValid(t *testing.T) {
 	definitions := Definitions()
-	if len(definitions) != 21 {
-		t.Fatalf("definitions=%d want 21", len(definitions))
+	if len(definitions) != 24 {
+		t.Fatalf("definitions=%d want 24", len(definitions))
 	}
 	previous := ""
 	seen := map[string]bool{}
@@ -26,6 +26,12 @@ func TestDefinitionCatalogIsDeterministicAndValid(t *testing.T) {
 		}
 		if _, err := Normalize([]Diagnostic{definition.Diagnostic(SeverityInfo)}); err != nil {
 			t.Fatalf("invalid definition %s: %v", definition.Code, err)
+		}
+	}
+	for _, code := range []string{CodeChangeOperation, CodeChangeIntent, CodeChangeEvidence} {
+		definition, ok := LookupDefinition(code)
+		if !ok || definition.Stage != "change-planning" {
+			t.Fatalf("change definition %s=%#v ok=%v", code, definition, ok)
 		}
 	}
 }
