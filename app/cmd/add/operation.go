@@ -166,6 +166,7 @@ func changeOperation(options OperationOptions, apply bool) (Report, error) {
 	}
 	if !apply {
 		report.Kind = "operation-plan"
+		report.ExplicitSemantics = explicitOperationSemantics(options)
 		report.NextActions = []NextAction{}
 		report.Notes = append([]string{"Plan only: no project files were written; rerun the same explicit add operation request without --plan to apply after review."}, report.Notes...)
 		normalizeReport(&report)
