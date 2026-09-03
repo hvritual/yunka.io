@@ -168,6 +168,7 @@ func changeOperation(options OperationOptions, apply bool) (Report, error) {
 		report.Kind = "operation-plan"
 		report.NextActions = []NextAction{}
 		report.Notes = append([]string{"Plan only: no project files were written; rerun the same explicit add operation request without --plan to apply after review."}, report.Notes...)
+		normalizeReport(&report)
 		return report, nil
 	}
 
@@ -185,5 +186,6 @@ func changeOperation(options OperationOptions, apply bool) (Report, error) {
 		return Report{}, sourceFailure(source.Relative, err)
 	}
 
+	normalizeReport(&report)
 	return report, nil
 }
