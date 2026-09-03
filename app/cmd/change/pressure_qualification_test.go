@@ -2,7 +2,6 @@ package change
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -59,24 +58,24 @@ func TestAX7RealConsumerAdversarialPressure(t *testing.T) {
 		fixture.Reset(t)
 		mutateRPCOption(t, fixture, "Suspend", "tenant_required: true", "tenant_required: false")
 		generatePressureProject(t, fixture)
-		assertSemanticViolation(t, fixture, SemanticTenant)
+		assertOperationSemanticViolation(t, fixture, SemanticTenant)
 	})
 
 	t.Run("permission semantic drift is rejected", func(t *testing.T) {
 		fixture.Reset(t)
 		mutateRPCOption(t, fixture, "Suspend", `permissions: "tenant.suspend"`, `permissions: "tenant.admin"`)
 		generatePressureProject(t, fixture)
-		assertSemanticViolation(t, fixture, SemanticPermission)
+		assertOperationSemanticViolation(t, fixture, SemanticPermission)
 	})
 
 	t.Run("transaction semantic drift is rejected", func(t *testing.T) {
 		fixture.Reset(t)
 		mutateRPCOption(t, fixture, "Suspend", "TRANSACTION_LOCAL", "TRANSACTION_NONE")
 		generatePressureProject(t, fixture)
-		assertSemanticViolation(t, fixture, SemanticTransaction)
+		assertOperationSemanticViolation(t, fixture, SemanticTransaction)
 	})
 
-	t.Run("undeclared capability cannot silently enter canonical assembly", func(t *testing.T) {
+	t.Run("undeclared capability semantic drift is rejected", func(t *testing.T) {
 		fixture.Reset(t)
 		contents := readPressureFile(t, fixture.protoFile())
 		old := "    name: \"lifecycle\"\n"
@@ -85,11 +84,8 @@ func TestAX7RealConsumerAdversarialPressure(t *testing.T) {
 			t.Fatalf("application declaration not found in pressure fixture:\n%s", contents)
 		}
 		writePressureFile(t, fixture.protoFile(), strings.Replace(contents, old, replacement, 1))
-		if _, err := projectflow.Generate(context.Background(), projectflow.Options{Root: fixture.Root, ProtoPaths: []string{fixture.ProtoPath}}); err == nil {
-			t.Fatal("undeclared capability unexpectedly entered canonical assembly without a provider")
-		} else if !strings.Contains(strings.ToLower(err.Error()), "capabil") {
-			t.Fatalf("capability pressure failed for an unrelated reason: %v", err)
-		}
+		generatePressureProject(t, fixture)
+		assertApplicationSemanticViolation(t, fixture, SemanticCapabilities)
 	})
 
 	t.Run("unrelated operation semantic drift is rejected", func(t *testing.T) {
@@ -116,7 +112,7 @@ func TestAX7RealConsumerAdversarialPressure(t *testing.T) {
 			t.Fatal(err)
 		}
 		if attestation.Conformant {
-			t.Fatalf("AX7 pressure proved an architecture-placement escape: arbitrary handwritten file inside the broad application scope was accepted; preserve this failure before adding Architecture Delta/placement evidence")
+			t.Fatalf("AX7 pressure proved an architecture-placement escape: arbitrary handwritten file inside the broad application scope was accepted; preserve this failure before adding placement evidence")
 		}
 	})
 }
@@ -232,18 +228,28 @@ func mutateRPCOption(t *testing.T, fixture pressureFixture, rpcName, old, replac
 	writePressureFile(t, fixture.protoFile(), contents[:start]+block+contents[end:])
 }
 
-func assertSemanticViolation(t *testing.T, fixture pressureFixture, category string) {
+func assertOperationSemanticViolation(t *testing.T, fixture pressureFixture, category string) {
+	t.Helper()
+	assertSemanticViolation(t, fixture, category, "tenant.suspend")
+}
+
+func assertApplicationSemanticViolation(t *testing.T, fixture pressureFixture, category string) {
+	t.Helper()
+	assertSemanticViolation(t, fixture, category, "application:tenant/lifecycle")
+}
+
+func assertSemanticViolation(t *testing.T, fixture pressureFixture, category, subject string) {
 	t.Helper()
 	report, err := ReconcileSemanticDelta(fixture.Root, fixture.Contract)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, violation := range report.Violations {
-		if violation.Category == category && violation.Subject == "tenant.suspend" {
+		if violation.Category == category && violation.Subject == subject {
 			return
 		}
 	}
-	t.Fatalf("missing %s semantic violation: %#v", category, report)
+	t.Fatalf("missing %s semantic violation for %s: %#v", category, subject, report)
 }
 
 func assertViolation(t *testing.T, report Reconciliation, kind, path string) {
@@ -293,5 +299,3 @@ func readPressureFile(t *testing.T, path string) string {
 	}
 	return string(contents)
 }
-
-var _ = fmt.Sprintf
