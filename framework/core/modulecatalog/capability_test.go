@@ -60,6 +60,26 @@ func TestCatalogSealFailsClosedOnDuplicateProvider(t *testing.T) {
 	}
 }
 
+func TestCatalogDuplicateProviderDiagnosticIsRegistrationOrderIndependent(t *testing.T) {
+	key := MustCapabilityKey[testCache]("cache.default", "example.com/contracts/cache", "Cache")
+	seal := func(names ...string) string {
+		catalog := New()
+		for _, name := range names {
+			catalog.MustRegister(capabilityDescriptor(name, key))
+		}
+		_, err := catalog.Seal()
+		if err == nil {
+			t.Fatal("duplicate provider accepted")
+		}
+		return err.Error()
+	}
+	first := seal("redis-b", "redis-a")
+	second := seal("redis-a", "redis-b")
+	if first != second {
+		t.Fatalf("duplicate provider diagnostic depends on registration order:\nfirst=%q\nsecond=%q", first, second)
+	}
+}
+
 func TestCapabilityExportFailsClosedWhenUndeclaredOrMissing(t *testing.T) {
 	key := MustCapabilityKey[testCache]("cache.default", "example.com/contracts/cache", "Cache")
 	module := capabilityTestModule{name: "redis-cache", exports: []CapabilityExport{ExportCapability(key, testCacheValue{})}}
