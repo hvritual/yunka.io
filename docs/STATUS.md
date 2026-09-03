@@ -15,7 +15,7 @@
 | C10 Runtime Assembly & Framework Productization | **Complete / qualified / merged** | issue #42 records ordered C10.1-C10.5 qualification and merge; roadmap is historical |
 | C11 Developer Experience Productization | **Complete / production-qualified / merged** | issue #60 records C11.1-C11.7 complete with real Biz consumer qualification; roadmap is historical |
 | Post-C11 five-gap DX convergence | **Complete / qualified / merged** | PR #104 merged the canonical four-command project closure without changing compiler/runtime/security/transaction semantics |
-| Agent Experience control-plane convergence | **AX1-AX6 complete / production-qualified / merged; AX7.1-AX7.5 production-qualified / pressure-closed candidate on PR #138; merge pending** | AX1-AX6 are merged through PRs #125, #126, #127, #129, #132, #133. AX7 pressure candidate `38036a66e0b264a87526f18aaa8494bea6355a28` proved a handwritten-placement escape in CI #489; minimal closure candidate `45526e6f79f5e9b430f30f641080738e45c5b72a` passed CI #491 and production #249 |
+| Agent Experience control-plane convergence | **AX1-AX7 complete / production-qualified / pressure-qualified / merged** | AX1-AX6 merged through PRs #125, #126, #127, #129, #132, #133. AX7 strict pressure candidate `38036a66e0b264a87526f18aaa8494bea6355a28` proved a handwritten-placement escape in CI #489; minimal closure candidate `45526e6f79f5e9b430f30f641080738e45c5b72a` passed CI #491 and production #249; final PR head `d9038f37f467497dd36c7a45cfc6170b19922994` passed CI #493 and production #251 and merged through PR #138 as `67d8b99e641c4c3179dc31941927631f3d30b7fd` |
 | B12 multi-tenant Access/IAM consumer pressure | **Complete / qualified** | real Biz pressure discovered two generic Yunka gaps; both are closed and reverse-qualified against the B12 behavioral baseline `6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb` |
 | Distributed execution trace closure | **Complete / production-qualified / merged** | issue #118 / PR #119; exact candidate `19bed965852d9dc2ef39e91dcadd7fb6bea4c871` passed CI #418 and production #178 and was merged unchanged into `main` |
 | Separately versioned infrastructure extension module | **Complete / production-qualified / merged** | issue #121 / PR #122; exact candidate `fc09f296cccb14ae18891bc43642d5efe43bd484` passed CI #430 and production #190, then merged as `70611d6cee5dd4e37ae6a803bcb38b938acd59c9`; independent `infras/vX.Y.Z` tag surface exists, but no `infras/v0.1.0` release tag is claimed yet |
@@ -45,7 +45,7 @@ Current top-level generation/check owns the canonical managed project closure: D
 
 ## Agent Experience control-plane convergence
 
-AX1-AX6 are closed and merged. AX7.1-AX7.5 are production-qualified and adversarial-pressure closed on PR #138 but remain unmerged until canonical integration. These capabilities productize an AI/automation-facing control plane around the existing canonical project/compiler/runtime contracts rather than introducing a second compiler, business DSL, ownership manifest, or runtime.
+AX1-AX7 are closed, production-qualified, and merged. They productize an AI/automation-facing control plane around the existing canonical project/compiler/runtime contracts rather than introducing a second compiler, business DSL, ownership manifest, or runtime.
 
 ### AX1 — Context Contract
 
@@ -87,27 +87,6 @@ Evidence: PR #129.
 
 AX5 exact candidate `c3fbfb425aa910b2bbbf0428d6bef543ca5fa7de` passed CI run `33739090019` including full Verify and determinism, production run `33739090079` on MySQL 8.4 with clean-worktree, and canonical scaffold compile qualification through Contract compile/lint/artifact rendering/application codegen. PR #132 merged it as `54093423d9d838c9f0f9f24ca589e54f66963746`.
 
-The merged AX1-AX6 Agent-facing authoring loop is:
-
-```text
-yunka context --json
-    ↓
-new structure: yunka add ...
-existing operation: yunka change plan ...
-    ↓
-yunka ownership check ...   # for subsequent handwritten mutation targets
-    ↓
-Agent/developer edits developer-owned business semantics only
-    ↓
-yunka generate
-    ↓
-yunka check --format agent-json
-    ↓
-yunka dev
-    ↓
-Ready / Diagnostics / Graph / Runtime Closure evidence
-```
-
 ### AX6 — Runtime Event Stream
 
 **State: COMPLETE / PRODUCTION-QUALIFIED / MERGED.**
@@ -118,7 +97,7 @@ Evidence: PR #133; exact candidate `7538b8279ef16adf19cd258a837fa0a13f98042f`; C
 
 ### AX7 — Bounded Change Contract / Conformance
 
-**State: AX7.1-AX7.5 PRODUCTION-QUALIFIED / PRESSURE-CLOSED CANDIDATE / UNMERGED.**
+**State: COMPLETE / PRODUCTION-QUALIFIED / PRESSURE-QUALIFIED / MERGED.**
 
 PR #138 adds a transient, Git-baselined Change Contract around existing canonical Operations. `yunka change begin` records only target identity, allowed semantic categories, and derived editable/generated boundaries; it does not copy Manifest/OperationPlan/Application Graph facts into another Source of Truth. `yunka change check` reconciles tracked and untracked Git delta against those bounds plus AX2 ownership. Broad generated-impact scopes do not authorize handwritten mutations unless AX2 independently classifies the concrete path as `generated-only`.
 
@@ -130,7 +109,31 @@ AX7.5 then deliberately pressure-tested scope, generated-file tampering, tenant/
 
 The promoted closure is deliberately smaller than an Architecture Delta analyzer: existing handwritten M/D changes remain eligible inside the declared Application scope, while A/R/C handwritten destinations require an exact Change Contract `EditablePaths` declaration before mutation and still pass AX2 ownership. Explicit exact new paths remain supported. Final behavioral candidate `45526e6f79f5e9b430f30f641080738e45c5b72a` passed CI #491 / run `33749854560` including full Verify and determinism, and production #249 / run `33749854762` on MySQL 8.4 including clean-worktree verification.
 
+Final PR head `d9038f37f467497dd36c7a45cfc6170b19922994` changed only `docs/STATUS.md` and `docs/waves/AX7-change-contract.md` after the behavioral candidate, passed CI #493 / run `33750319832` plus production #251 / run `33750319803`, and merged through PR #138 as `67d8b99e641c4c3179dc31941927631f3d30b7fd`.
+
 No AST/SSA/DDD analyzer or repository-wide Architecture Delta engine was introduced because pressure did not justify one.
+
+The merged Agent change flow for an existing Operation is now:
+
+```text
+yunka context --json
+    ↓
+yunka change plan --operation <id> --format json
+    ↓
+yunka change begin --operation <id> [--intent ...] [--path ...] [--allow-semantic ...]
+    ↓
+Agent edits only declared developer-owned targets
+    ↓
+yunka change check
+    ↓
+yunka generate
+    ↓
+yunka change verify --format agent-json
+    ↓
+yunka dev --event-format jsonl   # when runtime qualification is required
+```
+
+New structure still begins with explicit `yunka add ...`; AX7 does not infer undeclared Operations or business semantics.
 
 ## B12 framework-pressure disposition
 
@@ -251,7 +254,7 @@ Evidence: issue #124; exact candidate `c3123fb4a3e7731f0edf5539c3d8003fc0e41bc7`
 
 The active real-consumer frontier is **B13 cross-tenant delegation and delegated device access** in `hvritual/biz` issue #11.
 
-AX7.5 adversarial change-conformance pressure is **closed on PR #138**. It proved one generic handwritten-placement escape and qualified the minimal exact-path closure described above; it is no longer an active pressure stream.
+AX7.5 adversarial change-conformance pressure is **closed and merged through PR #138**. It proved one generic handwritten-placement escape and qualified the minimal exact-path closure described above; it is no longer an active pressure stream.
 
 B13 remains real-consumer runtime/domain pressure and is not a proven Yunka defect. It tests whether the existing public seams can safely express:
 
