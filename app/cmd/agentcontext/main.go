@@ -46,15 +46,15 @@ type Commands struct {
 }
 
 type AgentProtocol struct {
-	NewStructure   string `json:"newStructure"`
-	ExistingPlan   string `json:"existingPlan"`
-	ChangeBegin    string `json:"changeBegin"`
-	ChangeCheck    string `json:"changeCheck"`
-	ChangeVerify   string `json:"changeVerify"`
-	Audit          string `json:"audit"`
-	AdvisorRequest string `json:"advisorRequest"`
+	NewStructure    string `json:"newStructure"`
+	ExistingPlan    string `json:"existingPlan"`
+	ChangeBegin     string `json:"changeBegin"`
+	ChangeCheck     string `json:"changeCheck"`
+	ChangeVerify    string `json:"changeVerify"`
+	Audit           string `json:"audit"`
+	AdvisorRequest  string `json:"advisorRequest"`
 	AdvisorValidate string `json:"advisorValidate"`
-	RuntimeEvent   string `json:"runtimeEvent"`
+	RuntimeEvent    string `json:"runtimeEvent"`
 }
 
 func Command() cli.Command {
@@ -122,15 +122,15 @@ func Build(root string) (Snapshot, error) {
 			GraphImpact: "yunka graph impact --format json --operation <operation>",
 		},
 		AgentProtocol: AgentProtocol{
-			NewStructure:   "yunka add <application|operation|event|module> ...",
-			ExistingPlan:   "yunka change plan --operation <operation> --format agent-json",
-			ChangeBegin:    "yunka change begin --operation <operation> --format agent-json",
-			ChangeCheck:    "yunka change check --format agent-json",
-			ChangeVerify:   "yunka change verify --format agent-json",
-			Audit:          "yunka audit --format agent-json",
-			AdvisorRequest: "yunka advisor request --format agent-json",
+			NewStructure:    "yunka add <application|operation|event|module> ...",
+			ExistingPlan:    "yunka change plan --operation <operation> --format agent-json",
+			ChangeBegin:     "yunka change begin --operation <operation> --format agent-json",
+			ChangeCheck:     "yunka change check --format agent-json",
+			ChangeVerify:    "yunka change verify --format agent-json",
+			Audit:           "yunka audit --format agent-json",
+			AdvisorRequest:  "yunka advisor request --format agent-json",
 			AdvisorValidate: "yunka advisor validate --request <request.json> --response <response.json> --format agent-json",
-			RuntimeEvent:   "yunka dev --event-format jsonl",
+			RuntimeEvent:    "yunka dev --event-format jsonl",
 		},
 	}, nil
 }
