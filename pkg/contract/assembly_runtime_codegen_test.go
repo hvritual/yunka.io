@@ -24,18 +24,23 @@ func TestBindAssemblyRuntimeGeneratesCanonicalKernelBootstrapAndInventory(t *tes
 	for _, required := range []string{
 		"type RuntimeBindings struct",
 		"type RuntimeBinder func(context.Context, *platform.Provider) (RuntimeBindings, error)",
+		"type RuntimeCapabilityBinder func(context.Context, *platform.Provider, modulecatalog.CapabilitySet) (RuntimeBindings, error)",
 		"type BootstrapOptions struct",
 		"Platform *platform.Provider",
+		"AdditionalModules []modulecatalog.Descriptor",
+		"BindRuntimeWithCapabilities RuntimeCapabilityBinder",
 		"RuntimeComponents []core.RuntimeComponent",
 		"func RuntimeInventory() core.RuntimeInventory",
 		`[]string{"/v1/devices:transfer"}`,
 		"RPCClientConfigured: false",
 		"RPCServerCount:      1",
 		"func Bootstrap(ctx context.Context, options BootstrapOptions) (kernel.BootstrapResult[Applications], error)",
-		"catalog, err := NewCatalog()",
+		"catalog, err := NewCatalog(options.AdditionalModules...)",
 		"kernel.Bootstrap(ctx, kernel.BootstrapOptions[Applications]",
+		"BuildWithCapabilities: func(capabilities modulecatalog.CapabilitySet)",
 		"BuildApplications(options.Factories, options.Executor)",
 		"runtime, err = options.BindRuntime(ctx, options.Platform)",
+		"runtime, err = options.BindRuntimeWithCapabilities(ctx, options.Platform, capabilities)",
 		"BuildApplications(runtime.Factories, runtime.Executor)",
 		"RegisterTransports(options.Transports, applications, options.Executor)",
 		"RegisterTransports(options.Transports, applications, runtime.Executor)",
@@ -63,10 +68,10 @@ func TestBindAssemblyRuntimeGeneratesCanonicalKernelBootstrapAndInventory(t *tes
 	}
 
 	bootstrapIndex := strings.Index(source, "kernel.Bootstrap(ctx")
-	buildIndex := strings.Index(source, "Build: func()")
-	binderIndex := strings.Index(source, "runtime, err = options.BindRuntime(ctx, options.Platform)")
+	buildIndex := strings.Index(source, "BuildWithCapabilities: func(")
+	binderIndex := strings.Index(source, "runtime, err = options.BindRuntimeWithCapabilities(ctx, options.Platform, capabilities)")
 	if bootstrapIndex < 0 || buildIndex < bootstrapIndex || binderIndex < buildIndex {
-		t.Fatalf("runtime binder escaped kernel Build sequencing: bootstrap=%d build=%d binder=%d\n%s", bootstrapIndex, buildIndex, binderIndex, source)
+		t.Fatalf("runtime capability binder escaped kernel Build sequencing: bootstrap=%d build=%d binder=%d\n%s", bootstrapIndex, buildIndex, binderIndex, source)
 	}
 }
 
