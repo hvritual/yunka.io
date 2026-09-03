@@ -45,8 +45,9 @@ func TestBindAssemblyRuntimeGeneratesCanonicalKernelBootstrapAndInventory(t *tes
 		"RegisterTransports(options.Transports, applications, options.Executor)",
 		"RegisterTransports(options.Transports, applications, runtime.Executor)",
 	} {
-		if !strings.Contains(source, required) {
-			t.Fatalf("runtime-bound assembly missing %q:\n%s", required, source)
+		requiredNormalized := strings.Join(strings.Fields(required), " ")
+		if !strings.Contains(normalized, requiredNormalized) {
+			t.Fatalf("runtime-bound assembly missing semantic token sequence %q:\n%s", required, source)
 		}
 	}
 	for _, required := range []string{
