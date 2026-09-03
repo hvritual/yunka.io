@@ -52,7 +52,7 @@ func TestC102AssemblyCompilerRemainsStructuralAndOneWay(t *testing.T) {
 		"autoload",
 		"GeneratedDescriptor",
 		"func NewCatalog(additional ...modulecatalog.Descriptor)",
-		"for _, descriptor := range additional",
+		"catalog.Register(descriptor)",
 		"func BindAssemblyCapabilities",
 		"BuildApplicationsWithCapabilities",
 		"CompileBoundAssembly",
