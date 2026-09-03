@@ -35,19 +35,37 @@ func OutboxObserver(provider *Provider) outbox.Observer {
 }
 
 func (observer *outboxObserver) Published(ctx context.Context, record outbox.Record) {
+	ctx = outboxTraceContext(ctx, record)
 	observer.provider.Emit(ctx, Event{Name: "outbox.published", Severity: slog.LevelInfo, Attributes: outboxEventAttributes(record)})
 }
 
 func (observer *outboxObserver) Retried(ctx context.Context, record outbox.Record, cause error, next time.Time) {
+	ctx = outboxTraceContext(ctx, record)
 	attributes := outboxEventAttributes(record)
 	attributes["next_attempt_at"] = next.UTC().Format(time.RFC3339Nano)
 	observer.provider.Emit(ctx, Event{Name: "outbox.retry", Severity: slog.LevelWarn, Attributes: attributes, Err: cause})
 }
 
 func (observer *outboxObserver) DeadLettered(ctx context.Context, record outbox.Record, cause error) {
+	ctx = outboxTraceContext(ctx, record)
 	observer.provider.Emit(ctx, Event{Name: "outbox.deadletter", Severity: slog.LevelError, Attributes: outboxEventAttributes(record), Err: cause})
 }
 
+func outboxTraceContext(ctx context.Context, record outbox.Record) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return EventPropagator().Extract(ctx, record.Envelope)
+}
+
 func outboxEventAttributes(record outbox.Record) map[string]any {
-	return map[string]any{"event_id": record.ID, "topic": record.Envelope.Topic, "type": record.Envelope.Type, "attempt": record.Attempts}
+	return map[string]any{
+		"event_id":       record.ID,
+		"topic":          record.Envelope.Topic,
+		"type":           record.Envelope.Type,
+		"source":         record.Envelope.Source,
+		"correlation_id": record.Envelope.CorrelationID,
+		"causation_id":   record.Envelope.CausationID,
+		"attempt":        record.Attempts,
+	}
 }
