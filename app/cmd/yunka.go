@@ -21,6 +21,7 @@ import (
 	"yunka.io/app/cmd/graph"
 	"yunka.io/app/cmd/inspect"
 	"yunka.io/app/cmd/module"
+	"yunka.io/app/cmd/ownership"
 	"yunka.io/app/cmd/project"
 )
 
@@ -43,6 +44,7 @@ func main() {
 		project.Command(),
 		inspect.Command(),
 		module.Command(),
+		ownership.Command(),
 		{
 			Name:    api.AppName,
 			Aliases: []string{"a"},
