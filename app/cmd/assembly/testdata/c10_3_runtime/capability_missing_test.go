@@ -13,25 +13,22 @@ import (
 	"google.golang.org/grpc"
 	"github.com/hvritual/yunka.io/framework/core"
 	"github.com/hvritual/yunka.io/framework/operation"
-	"github.com/hvritual/yunka.io/framework/platform"
 )
 
 func TestGeneratedAssemblyMissingTypedCapabilityFailsBeforeRegistrationOrStart(t *testing.T) {
-	provider, err := platform.New(platform.Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	provider := qualificationCapabilityPlatform(t)
 	mux := http.NewServeMux()
 	grpcServer := grpc.NewServer()
 	var starts atomic.Int32
-	_, err = generatedassembly.Bootstrap(context.Background(), generatedassembly.BootstrapOptions{
+	_, err := generatedassembly.Bootstrap(context.Background(), generatedassembly.BootstrapOptions{
 		Platform:   provider,
 		Factories:  capabilityFactories{probe: newRuntimeProbe()},
 		Executor:   operation.NewExecutor(nil),
 		Transports: generatedassembly.TransportBindings{HTTP: mux, RPC: grpcServer},
 		RuntimeComponents: []core.RuntimeComponent{{
-			Name:      "must-not-start",
-			StartFunc: func(context.Context) error { starts.Add(1); return nil },
+			Name:         "must-not-start",
+			StartFunc:    func(context.Context) error { starts.Add(1); return nil },
+			ShutdownFunc: func(context.Context) error { return nil },
 		}},
 	})
 	if err == nil || !strings.Contains(err.Error(), `capability "cache.qualification" is not provided`) {
