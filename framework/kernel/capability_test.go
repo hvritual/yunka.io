@@ -22,7 +22,7 @@ type bootstrapCapabilityModule struct {
 
 func (module bootstrapCapabilityModule) Name() string { return "cache-provider" }
 func (module bootstrapCapabilityModule) ExportCapabilities() []modulecatalog.CapabilityExport {
-	return []modulecatalog.CapabilityExport{modulecatalog.ExportCapability(module.key, bootstrapCacheValue{name: "redis"})}
+	return []modulecatalog.CapabilityExport{module.key.Export(bootstrapCacheValue{name: "redis"})}
 }
 
 func TestBootstrapPassesTypedCapabilitiesOnlyToConstructionCallback(t *testing.T) {
