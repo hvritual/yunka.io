@@ -33,11 +33,11 @@ const (
 )
 
 type Operation struct {
-	ID         string            `json:"id"`
-	Name       string            `json:"name"`
-	Domain     string            `json:"domain,omitempty"`
-	Application string           `json:"application,omitempty"`
-	Attributes map[string]string `json:"attributes,omitempty"`
+	ID          string            `json:"id"`
+	Name        string            `json:"name"`
+	Domain      string            `json:"domain,omitempty"`
+	Application string            `json:"application,omitempty"`
+	Attributes  map[string]string `json:"attributes,omitempty"`
 }
 
 type EditableTarget struct {
@@ -115,8 +115,8 @@ func (failure *Failure) Unwrap() error {
 func Command() cli.Command {
 	return cli.Command{
 		Name:        AppName,
-		Usage:       "plan an evidence-backed change for an existing canonical operation",
-		Subcommands: []cli.Command{planCommand()},
+		Usage:       "plan, constrain, and verify evidence-backed changes for existing canonical operations",
+		Subcommands: []cli.Command{planCommand(), beginCommand(), checkCommand(), verifyCommand()},
 	}
 }
 
