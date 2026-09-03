@@ -33,7 +33,7 @@ func capabilityDescriptor(name string, key CapabilityKey[testCache]) Descriptor 
 
 func TestCapabilityExportResolveIsTyped(t *testing.T) {
 	key := MustCapabilityKey[testCache]("cache.default", "example.com/contracts/cache", "Cache")
-	module := capabilityTestModule{name: "redis-cache", exports: []CapabilityExport{ExportCapability(key, testCacheValue{prefix: "redis:"})}}
+	module := capabilityTestModule{name: "redis-cache", exports: []CapabilityExport{key.Export(testCacheValue{prefix: "redis:"})}}
 	set, err := CollectCapabilities([]Descriptor{capabilityDescriptor("redis-cache", key)}, []Instance{module})
 	if err != nil {
 		t.Fatal(err)
@@ -82,7 +82,7 @@ func TestCatalogDuplicateProviderDiagnosticIsRegistrationOrderIndependent(t *tes
 
 func TestCapabilityExportFailsClosedWhenUndeclaredOrMissing(t *testing.T) {
 	key := MustCapabilityKey[testCache]("cache.default", "example.com/contracts/cache", "Cache")
-	module := capabilityTestModule{name: "redis-cache", exports: []CapabilityExport{ExportCapability(key, testCacheValue{})}}
+	module := capabilityTestModule{name: "redis-cache", exports: []CapabilityExport{key.Export(testCacheValue{})}}
 	if _, err := CollectCapabilities([]Descriptor{{Name: "redis-cache", Build: func(BuildContext) (Instance, error) { return nil, nil }}}, []Instance{module}); err == nil || !strings.Contains(err.Error(), "declares none") {
 		t.Fatalf("undeclared export error=%v", err)
 	}
@@ -93,7 +93,7 @@ func TestCapabilityExportFailsClosedWhenUndeclaredOrMissing(t *testing.T) {
 
 func TestCapabilityResolveFailsClosedOnContractMismatch(t *testing.T) {
 	providerKey := MustCapabilityKey[testCache]("cache.default", "example.com/contracts/cache", "Cache")
-	module := capabilityTestModule{name: "redis-cache", exports: []CapabilityExport{ExportCapability(providerKey, testCacheValue{})}}
+	module := capabilityTestModule{name: "redis-cache", exports: []CapabilityExport{providerKey.Export(testCacheValue{})}}
 	set, err := CollectCapabilities([]Descriptor{capabilityDescriptor("redis-cache", providerKey)}, []Instance{module})
 	if err != nil {
 		t.Fatal(err)
@@ -113,7 +113,7 @@ func TestCapabilityResolveFailsClosedOnRuntimeTypeMismatch(t *testing.T) {
 	}
 	set, err := CollectCapabilities([]Descriptor{descriptor}, []Instance{capabilityTestModule{
 		name:    "broken-cache",
-		exports: []CapabilityExport{ExportCapability(wrongKey, "not-a-cache")},
+		exports: []CapabilityExport{wrongKey.Export("not-a-cache")},
 	}})
 	if err != nil {
 		t.Fatal(err)
