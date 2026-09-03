@@ -36,14 +36,35 @@ type NextAction struct {
 	Purpose string `json:"purpose"`
 }
 
+type OperationHTTPSemantics struct {
+	Method string `json:"method"`
+	Path   string `json:"path"`
+	Body   string `json:"body,omitempty"`
+}
+
+type OperationSemantics struct {
+	UseCase             string                  `json:"useCase"`
+	Access              string                  `json:"access"`
+	Permissions         []string                `json:"permissions"`
+	PermissionMode      string                  `json:"permissionMode,omitempty"`
+	Tenant              string                  `json:"tenant"`
+	Authentication      []string                `json:"authentication"`
+	Transaction         string                  `json:"transaction"`
+	Idempotency         string                  `json:"idempotency"`
+	Composition         string                  `json:"composition"`
+	RequiresOperations  []string                `json:"requiresOperations"`
+	HTTP                *OperationHTTPSemantics `json:"http,omitempty"`
+}
+
 type Report struct {
-	SchemaVersion int               `json:"schemaVersion"`
-	Kind          string            `json:"kind"`
-	Identity      map[string]string `json:"identity"`
-	Mutations     []Mutation        `json:"mutations"`
-	Effects       []Effect          `json:"generatedEffects,omitempty"`
-	NextActions   []NextAction      `json:"nextActions,omitempty"`
-	Notes         []string          `json:"notes,omitempty"`
+	SchemaVersion     int                 `json:"schemaVersion"`
+	Kind              string              `json:"kind"`
+	Identity          map[string]string   `json:"identity"`
+	Mutations         []Mutation          `json:"mutations"`
+	Effects           []Effect            `json:"generatedEffects,omitempty"`
+	ExplicitSemantics *OperationSemantics `json:"explicitSemantics,omitempty"`
+	NextActions       []NextAction        `json:"nextActions,omitempty"`
+	Notes             []string            `json:"notes,omitempty"`
 }
 
 type ApplicationOptions struct {
