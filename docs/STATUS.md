@@ -15,10 +15,11 @@
 | C10 Runtime Assembly & Framework Productization | **Complete / qualified / merged** | issue #42 records ordered C10.1-C10.5 qualification and merge; roadmap is historical |
 | C11 Developer Experience Productization | **Complete / production-qualified / merged** | issue #60 records C11.1-C11.7 complete with real Biz consumer qualification; roadmap is historical |
 | Post-C11 five-gap DX convergence | **Complete / qualified / merged** | PR #104 merged the canonical four-command project closure without changing compiler/runtime/security/transaction semantics |
+| Agent Experience control-plane convergence | **AX1-AX5 complete / production-qualified / merged; AX6 not started** | PRs #125, #126, #127, #129, and #132 add context, ownership, agent diagnostics, change planning, and explicit structural scaffolds; these remain developer/control-plane capabilities and do not establish a new numbered runtime wave |
 | B12 multi-tenant Access/IAM consumer pressure | **Complete / qualified** | real Biz pressure discovered two generic Yunka gaps; both are closed and reverse-qualified against the B12 behavioral baseline `6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb` |
 | Distributed execution trace closure | **Complete / production-qualified / merged** | issue #118 / PR #119; exact candidate `19bed965852d9dc2ef39e91dcadd7fb6bea4c871` passed CI #418 and production #178 and was merged unchanged into `main` |
 | Separately versioned infrastructure extension module | **Complete / production-qualified / merged** | issue #121 / PR #122; exact candidate `fc09f296cccb14ae18891bc43642d5efe43bd484` passed CI #430 and production #190, then merged as `70611d6cee5dd4e37ae6a803bcb38b938acd59c9`; independent `infras/vX.Y.Z` tag surface exists, but no `infras/v0.1.0` release tag is claimed yet |
-| Active numbered Yunka framework wave | **None selected** | new framework work remains pressure-driven rather than roadmap-driven |
+| Active numbered Yunka framework wave | **None selected** | new framework work remains pressure-driven rather than roadmap-driven; AX control-plane work does not by itself create a numbered framework wave |
 | Proven open Yunka P0/P1 runtime/compiler/authz/persistence/trace-closure defects | **0 known at reconciliation** | do not promote hypotheses into framework defects without executable consumer evidence |
 
 ## Current developer workflow
@@ -40,6 +41,73 @@ Ready / Health / Diagnostics / Graph / Runtime Closure evidence
 ```
 
 Current top-level generation/check owns the canonical managed project closure: Domain generation/check, standard protobuf Go/gRPC generation/check, typed Provider preflight, Contract, Module, Assembly, and read-only drift validation. `yunka dev` reuses the canonical DevRuntime/readiness/runtime-closure model.
+
+## Agent Experience control-plane convergence
+
+AX1-AX5 are closed and merged. They productize an AI/automation-facing control plane around the existing canonical project/compiler/runtime contracts rather than introducing a second compiler, business DSL, ownership manifest, or runtime.
+
+### AX1 — Context Contract
+
+**State: COMPLETE / QUALIFIED / MERGED.**
+
+`yunka context --json` exposes the canonical project descriptor, key source/generated locations, file evidence, and next-step commands through the same project resolution used by `generate/check`. It is read-only and does not persist another Source of Truth.
+
+Evidence: PR #125.
+
+### AX2 — Derived Ownership Guard
+
+**State: COMPLETE / QUALIFIED / MERGED.**
+
+`yunka ownership inspect|check` derives `editable`, `generated-only`, and `unclassified` mutation decisions from canonical project/profile, contract-source, protobuf-output, Domain-generator, and generated-marker facts. Declarative modules are writable only at `modules/<name>/module.yunka.json`; arbitrary module runtime files remain unclassified.
+
+Evidence: PR #126.
+
+### AX3 — Agent Diagnostic Contract
+
+**State: COMPLETE / QUALIFIED / MERGED.**
+
+`check`, `generate`, and `doctor` support opt-in `agent-json` projections with stable diagnostic identity plus `cause`, `target`, `remediation`, and `retry` fields. Existing human text/JSON contracts remain compatible.
+
+Evidence: PR #127.
+
+### AX4 — Evidence-backed Change Planning
+
+**State: COMPLETE / QUALIFIED / MERGED.**
+
+`yunka change plan` resolves only existing canonical Operations, rebuilds static impact from canonical Contract + OperationPlan facts in memory, integrates AX2 ownership for exact editable targets, emits unresolved targets when evidence cannot uniquely locate handwritten source, and reports generated effects, canonical risk facts, and verification gates without inferring business semantics.
+
+Evidence: PR #129.
+
+### AX5 — Explicit Structural Scaffolds
+
+**State: COMPLETE / PRODUCTION-QUALIFIED / MERGED.**
+
+`yunka add` now provides explicit structural authoring for Application, Operation, event DTO, and declarative module scaffolds. Operation access, tenant binding, permissions/authentication, transaction, idempotency, composition, dependencies, and optional HTTP binding come only from explicit caller input. The scaffold creates developer-owned contract structure and a handwritten implementation landing file with TODO guidance; it does not generate business logic, persistence behavior, Saga/Outbox policy, event publication, external-effect semantics, or a second runtime path.
+
+AX5 exact candidate `c3fbfb425aa910b2bbbf0428d6bef543ca5fa7de` passed CI run `33739090019` including full Verify and determinism, production run `33739090079` on MySQL 8.4 with clean-worktree, and canonical scaffold compile qualification through Contract compile/lint/artifact rendering/application codegen. PR #132 merged it as `54093423d9d838c9f0f9f24ca589e54f66963746`.
+
+The Agent-facing authoring loop is now:
+
+```text
+yunka context --json
+    ↓
+new structure: yunka add ...
+existing operation: yunka change plan ...
+    ↓
+yunka ownership check ...   # for subsequent handwritten mutation targets
+    ↓
+Agent/developer edits developer-owned business semantics only
+    ↓
+yunka generate
+    ↓
+yunka check --format agent-json
+    ↓
+yunka dev
+    ↓
+Ready / Diagnostics / Graph / Runtime Closure evidence
+```
+
+AX6 runtime event-stream work is **not started** in this reconciliation. Any AX6 implementation must preserve the AX1-AX5 source-of-truth, ownership, compiler, Executor, authorization, and root UoW boundaries.
 
 ## B12 framework-pressure disposition
 

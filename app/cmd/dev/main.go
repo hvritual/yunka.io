@@ -22,7 +22,7 @@ func Command() cli.Command {
 	return cli.Command{
 		Name:        AppName,
 		Usage:       "start the declared local runtime, or use plan/run/status for explicit control",
-		Flags:       commonFlags(),
+		Flags:       runFlags(),
 		Action:      runAction,
 		Subcommands: []cli.Command{planCommand(), runCommand(), statusCommand()},
 	}
@@ -36,6 +36,14 @@ func commonFlags() []cli.Flag {
 		cli.StringSliceFlag{Name: "target,t"},
 		cli.BoolFlag{Name: "closure", Usage: "require complete graph ownership and enable schema-v3 runtime artifacts"},
 	}
+}
+
+func runFlags() []cli.Flag {
+	return append(commonFlags(), cli.StringFlag{
+		Name:  "event-format",
+		Value: eventFormatText,
+		Usage: "runtime evidence output: text or jsonl; jsonl reserves stdout for machine events and sends child output to stderr",
+	})
 }
 
 func planCommand() cli.Command {
@@ -61,7 +69,7 @@ func planCommand() cli.Command {
 
 func runCommand() cli.Command {
 	return cli.Command{
-		Name: "run", Usage: "start and supervise the resolved process plan; commands are argv arrays and never executed through a shell", Flags: commonFlags(),
+		Name: "run", Usage: "start and supervise the resolved process plan; commands are argv arrays and never executed through a shell", Flags: runFlags(),
 		Action: runAction,
 	}
 }
@@ -73,13 +81,20 @@ func runAction(c *cli.Context) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return runWithEvidence(ctx, plan, c.String("root"), os.Stderr, os.Stdout, os.Stderr)
+	switch strings.ToLower(strings.TrimSpace(c.String("event-format"))) {
+	case "", eventFormatText:
+		return runWithEvidence(ctx, plan, c.String("root"), os.Stderr, os.Stdout, os.Stderr)
+	case eventFormatJSONL:
+		return runWithEventStream(ctx, plan, c.String("root"), os.Stdout, os.Stderr)
+	default:
+		return fmt.Errorf("dev: unsupported event format %q; use text or jsonl", c.String("event-format"))
+	}
 }
 
 func statusCommand() cli.Command {
 	flags := append(commonFlags(),
 		cli.StringFlag{Name: "state", Value: devruntime.DefaultRuntimeStatePath},
-		cli.StringFlag{Name: "format", Value: "text", Usage: "text or json"},
+		cli.StringFlag{Name: "format", Value: "text", Usage: "text, json, or jsonl"},
 	)
 	return cli.Command{
 		Name:  "status",
@@ -122,13 +137,19 @@ func statusCommand() cli.Command {
 					return err
 				}
 			}
-			if strings.EqualFold(c.String("format"), "json") {
+			switch strings.ToLower(strings.TrimSpace(c.String("format"))) {
+			case "", "text":
+				return devruntime.FormatRuntimeReport(os.Stdout, report)
+			case "json":
 				encoder := json.NewEncoder(os.Stdout)
 				encoder.SetEscapeHTML(false)
 				encoder.SetIndent("", "  ")
 				return encoder.Encode(report)
+			case eventFormatJSONL:
+				return renderRuntimeStatusEvents(os.Stdout, closurePlan, statePath, report, c.Bool("closure"))
+			default:
+				return fmt.Errorf("dev status: unsupported format %q; use text, json, or jsonl", c.String("format"))
 			}
-			return devruntime.FormatRuntimeReport(os.Stdout, report)
 		},
 	}
 }
