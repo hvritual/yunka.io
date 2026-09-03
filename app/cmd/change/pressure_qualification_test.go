@@ -76,7 +76,7 @@ func TestAX7RealConsumerAdversarialPressure(t *testing.T) {
 		assertSemanticViolation(t, fixture, SemanticTransaction)
 	})
 
-	t.Run("undeclared capability drift is rejected", func(t *testing.T) {
+	t.Run("undeclared capability cannot silently enter canonical assembly", func(t *testing.T) {
 		fixture.Reset(t)
 		contents := readPressureFile(t, fixture.protoFile())
 		old := "    name: \"lifecycle\"\n"
@@ -85,8 +85,11 @@ func TestAX7RealConsumerAdversarialPressure(t *testing.T) {
 			t.Fatalf("application declaration not found in pressure fixture:\n%s", contents)
 		}
 		writePressureFile(t, fixture.protoFile(), strings.Replace(contents, old, replacement, 1))
-		generatePressureProject(t, fixture)
-		assertSemanticViolation(t, fixture, SemanticCapabilities)
+		if _, err := projectflow.Generate(context.Background(), projectflow.Options{Root: fixture.Root, ProtoPaths: []string{fixture.ProtoPath}}); err == nil {
+			t.Fatal("undeclared capability unexpectedly entered canonical assembly without a provider")
+		} else if !strings.Contains(strings.ToLower(err.Error()), "capabil") {
+			t.Fatalf("capability pressure failed for an unrelated reason: %v", err)
+		}
 	})
 
 	t.Run("unrelated operation semantic drift is rejected", func(t *testing.T) {
@@ -147,6 +150,9 @@ func newPressureFixture(t *testing.T) pressureFixture {
 		}); err != nil {
 			t.Fatalf("add operation %s: %v", operation.id, err)
 		}
+	}
+	if _, err := add.AddModule(add.ModuleOptions{Root: root, Name: "baseline", Version: "v0.1.0"}); err != nil {
+		t.Fatalf("add baseline module: %v", err)
 	}
 
 	_, currentFile, _, ok := runtime.Caller(0)
