@@ -44,6 +44,13 @@ func NewAgentEnvelope(command string, diagnostics []Diagnostic, ok bool) (AgentE
 	if err != nil {
 		return AgentEnvelope{}, err
 	}
+	if ok {
+		for _, item := range normalized {
+			if item.Severity == SeverityError {
+				return AgentEnvelope{}, errors.New("diagnostic: successful agent envelope cannot contain error diagnostics")
+			}
+		}
+	}
 	items := make([]AgentDiagnostic, 0, len(normalized))
 	for _, item := range normalized {
 		projected := AgentDiagnostic{
