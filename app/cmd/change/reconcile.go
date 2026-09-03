@@ -157,6 +157,21 @@ func reconcileFile(root string, contractValue ChangeContract, change FileChange)
 		change.Class = "outside"
 		return change, &ChangeViolation{Kind: "scope", Path: path, Detail: "actual Git delta is outside the declared change contract"}, nil
 	}
+
+	// Pressure-proven AX7 placement rule: a broad Application scope proves only
+	// where existing handwritten implementation may live. It does not prove that
+	// an Agent may introduce a new handwritten file there. Added, renamed, or
+	// copied destinations therefore require an exact EditablePaths declaration
+	// captured by `yunka change begin --path ...` before the mutation.
+	if requiresExactPlacement(change) && !contains(contractValue.EditablePaths, path) {
+		change.Class = "placement-blocked"
+		return change, &ChangeViolation{
+			Kind:   "placement",
+			Path:   path,
+			Detail: "new handwritten path inside a candidate editable scope requires an explicit exact path in the change contract; declare it with `yunka change begin --path <path>` before creating, renaming, or copying the file",
+		}, nil
+	}
+
 	report, err := ownership.Build(root, []string{path})
 	if err != nil {
 		return FileChange{}, nil, fmt.Errorf("change check: classify %s: %w", path, err)
@@ -172,6 +187,11 @@ func reconcileFile(root string, contractValue ChangeContract, change FileChange)
 	}
 	change.Class = "editable"
 	return change, nil, nil
+}
+
+func requiresExactPlacement(change FileChange) bool {
+	status := strings.ToUpper(strings.TrimSpace(change.Status))
+	return strings.HasPrefix(status, "A") || strings.HasPrefix(status, "R") || strings.HasPrefix(status, "C")
 }
 
 func isEditableAllowed(contractValue ChangeContract, path string) bool {
