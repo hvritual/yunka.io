@@ -73,13 +73,14 @@ rpc-legacy-check:
 	if git grep -n -E 'yunka\.io/pkg/invoke|invoke\.(Rpc(Client|Server)|Message|SrvHandler|RpcTimeOut)' -- app gateway framework infras pkg; then \
 		echo "rpc-legacy-check: legacy invoke runtime remains" >&2; exit 1; \
 	fi; \
-	if git grep -n 'github.com/golang/protobuf' -- gateway/rpc framework/core/middleware framework/core/resilience infras pkg/selector; then \
+	if git grep -n 'github.com/golang/protobuf' -- gateway/rpc framework/core/middleware framework/core/resilience infras/modules pkg/selector; then \
 		echo "rpc-legacy-check: legacy protobuf import remains in RPC code" >&2; exit 1; \
 	fi; \
 	if grep -R -n -E 'sync\.Pool|reflect\.Value|RegisterServer\(name string|SrvHandler|messageFactories|handlerMap' \
 		gateway/rpc/bridge gateway/rpc/client gateway/rpc/handle \
 		gateway/rpc/method gateway/rpc/server gateway/rpc/transport pkg/rpcbridge; then \
-		echo "rpc-legacy-check: hidden registry, reflection, or pooling remains" >&2; exit 1; \
+		echo "rpc-bridge-check: typed bridge contains hidden registration, reflection, or pooling" >&2; \
+		exit 1; \
 	fi
 
 rpc-consumer-check:
