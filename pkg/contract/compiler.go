@@ -164,6 +164,9 @@ func ManifestFromDescriptorSet(data []byte, roots []string) (Manifest, error) {
 	if err := applyDSLDeclarations(&manifest, data); err != nil {
 		return Manifest{}, err
 	}
+	if err := applyDSLCapabilityDeclarations(&manifest, data); err != nil {
+		return Manifest{}, err
+	}
 	manifest.Normalize()
 	return manifest, nil
 }
