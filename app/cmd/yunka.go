@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"sort"
+	"yunka.io/app/cmd/agentcontext"
 	"yunka.io/app/cmd/api"
 	"yunka.io/app/cmd/assembly"
 	"yunka.io/app/cmd/check"
@@ -28,6 +29,7 @@ func main() {
 	app.Name = `yunka`
 	app.Version = "0.0.1"
 	app.Commands = []cli.Command{
+		agentcontext.Command(),
 		assembly.Command(),
 		check.Command(),
 		contract.Command(),
