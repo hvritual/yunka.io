@@ -7,6 +7,7 @@ import (
 
 	"github.com/hvritual/yunka.io/framework/event"
 	"github.com/hvritual/yunka.io/framework/event/outbox"
+	"github.com/hvritual/yunka.io/framework/observability"
 )
 
 const ModuleName = "outboxruntime"
@@ -33,15 +34,17 @@ func NewModule(dependencies Dependencies) (*Module, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
+	propagator := observability.EventPropagator()
 	store, err := outbox.NewGORMStore(
 		dependencies.PrimaryDatabase,
 		outbox.WithTable(config.Table),
 		outbox.WithSkipLocked(config.SkipLocked),
+		outbox.WithPropagator(propagator),
 	)
 	if err != nil {
 		return nil, err
 	}
-	broker := event.NewLocalBroker(dependencies.EventBus)
+	broker := event.NewLocalBroker(dependencies.EventBus, event.WithPropagator(propagator))
 	dispatcher, err := outbox.NewDispatcher(store, broker, outbox.DispatcherConfig{
 		WorkerID:               config.WorkerID,
 		PollInterval:           config.PollInterval,

@@ -13,6 +13,7 @@ import (
 	"github.com/hvritual/yunka.io/framework/core/middleware"
 	"github.com/hvritual/yunka.io/framework/core/resilience"
 	"github.com/hvritual/yunka.io/framework/core/runtimecontext"
+	"github.com/hvritual/yunka.io/framework/operation"
 )
 
 // Middleware creates one operation span, records common metrics, emits a
@@ -36,6 +37,7 @@ func (provider *Provider) Middleware() middleware.Middleware {
 			if spanContext := span.SpanContext(); spanContext.IsValid() {
 				ctx = runtimecontext.WithTraceID(ctx, spanContext.TraceID().String())
 			}
+			ctx = operation.WithObserver(ctx, OperationObserver(provider))
 			start := time.Now()
 			defer func() {
 				if recovered := recover(); recovered != nil {

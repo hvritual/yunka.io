@@ -388,10 +388,17 @@ func normalizeRuntimePlan(plan operationplan.Plan) operationplan.Plan {
 
 func (runtime *executor) observe(ctx context.Context, operationID string, kind InvocationKind, phase Phase, outcome Outcome) {
 	event := Event{OperationID: operationID, Kind: kind, Phase: phase, Outcome: outcome}
+	observe := func(observer Observer) {
+		if observer == nil {
+			return
+		}
+		defer func() { _ = recover() }()
+		observer.Observe(ctx, event)
+	}
 	for _, observer := range runtime.observers {
-		func() {
-			defer func() { _ = recover() }()
-			observer.Observe(ctx, event)
-		}()
+		observe(observer)
+	}
+	for _, observer := range observersFromContext(ctx) {
+		observe(observer)
 	}
 }

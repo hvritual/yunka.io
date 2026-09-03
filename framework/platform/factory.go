@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"github.com/hvritual/yunka.io/framework/observability"
 )
 
 // DatabaseFactory creates one named database resource during Provider.Prepare.
@@ -171,7 +172,9 @@ func (config GRPCConfig) validate(name string) error {
 }
 
 // GRPCFactory creates App-owned grpc.ClientConn instances with explicit
-// transport credentials.
+// transport credentials. Canonical W3C propagation is installed after
+// application-provided dial options so callers cannot silently omit it while
+// retaining the ability to compose their own observability/resilience clients.
 type GRPCFactory struct {
 	Configurations map[string]GRPCConfig
 }
@@ -185,9 +188,13 @@ func (factory GRPCFactory) Open(_ context.Context, name string) (RPCResource, er
 	if err := config.validate(name); err != nil {
 		return RPCResource{}, err
 	}
-	options := make([]grpc.DialOption, 0, len(config.DialOptions)+1)
+	options := make([]grpc.DialOption, 0, len(config.DialOptions)+3)
 	options = append(options, grpc.WithTransportCredentials(config.Credentials))
 	options = append(options, config.DialOptions...)
+	options = append(options,
+		grpc.WithChainUnaryInterceptor(observability.UnaryClientPropagationInterceptor()),
+		grpc.WithChainStreamInterceptor(observability.StreamClientPropagationInterceptor()),
+	)
 	connection, err := grpc.NewClient(strings.TrimSpace(config.Target), options...)
 	if err != nil {
 		return RPCResource{}, fmt.Errorf("platform: create RPC target %q: %w", name, err)

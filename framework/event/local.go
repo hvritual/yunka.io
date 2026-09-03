@@ -64,15 +64,12 @@ func (broker *LocalBroker) Publish(ctx context.Context, envelope Envelope) error
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	normalized, err := envelope.Normalize()
+	prepared, err := PrepareForPublish(ctx, envelope, broker.propagator)
 	if err != nil {
 		return err
 	}
-	if broker.propagator != nil {
-		broker.propagator.Inject(ctx, &normalized)
-	}
-	delivery := &localDelivery{ctx: ctx, envelope: normalized.Clone()}
-	if err := broker.bus.Publish(normalized.Topic, delivery); err != nil {
+	delivery := &localDelivery{ctx: ctx, envelope: prepared.Clone()}
+	if err := broker.bus.Publish(prepared.Topic, delivery); err != nil {
 		return err
 	}
 	return delivery.err()
@@ -108,10 +105,11 @@ func (broker *LocalBroker) Subscribe(ctx context.Context, topic string, handler 
 			return
 		}
 		envelope := delivery.envelope.Clone()
-		// Event handling starts a new trust context. Only explicitly supported
-		// propagation data (for example W3C trace context) is extracted; caller
-		// identity is never inherited implicitly from the publisher context.
+		// Event handling starts a new trust context. Preserve only cancellation,
+		// explicit event causality, and supported propagation data (for example
+		// W3C trace context). Caller identity is never inherited implicitly.
 		handlerCtx := context.Context(signalOnlyContext{Context: delivery.ctx})
+		handlerCtx = WithEnvelopeContext(handlerCtx, envelope)
 		if broker.propagator != nil {
 			handlerCtx = broker.propagator.Extract(handlerCtx, envelope)
 		}
