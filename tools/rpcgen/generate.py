@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import filecmp
 import os
 from pathlib import Path
@@ -110,16 +109,6 @@ def install_outputs(repo: Path, staged: Path) -> None:
         os.replace(temporary, target)
 
 
-def emit_qualification_drift(staged: Path) -> None:
-    target = staged / "pkg" / "contractdsl" / "v1" / "options.pb.go"
-    if not target.is_file():
-        return
-    encoded = base64.b64encode(target.read_bytes()).decode("ascii")
-    print("RPC_QUALIFICATION_OPTIONS_PB_GO_BASE64_BEGIN", file=sys.stderr)
-    print(encoded, file=sys.stderr)
-    print("RPC_QUALIFICATION_OPTIONS_PB_GO_BASE64_END", file=sys.stderr)
-
-
 def main() -> int:
     args = parser().parse_args()
     repo = Path(args.repo_root).resolve()
@@ -151,7 +140,6 @@ def main() -> int:
             if drift:
                 for item in drift:
                     print(f"RPC DRIFT: {item}", file=sys.stderr)
-                emit_qualification_drift(staged)
                 return 1
             print(f"rpc-check: {len(generated_files(staged))} generated files are current")
             return 0
