@@ -12,6 +12,16 @@ const (
 	RuleAuthorizationBypass         = "AUDIT-AUTH-001"
 )
 
+var frameworkPlatformImports = map[string]struct{}{
+	"github.com/hvritual/yunka.io/framework/platform": {},
+	"yunka.io/framework/platform":                    {},
+}
+
+var gatewayAuthorizationImports = map[string]struct{}{
+	"github.com/hvritual/yunka.io/gateway/authz": {},
+	"yunka.io/gateway/authz":                    {},
+}
+
 type RuleOptions struct {
 	GoModule        string
 	GeneratedGoRoot string
@@ -32,6 +42,7 @@ func EvaluateSource(snapshot SourceSnapshot, options RuleOptions) []Finding {
 			continue
 		}
 		for _, importPath := range file.Imports {
+			importPath = strings.TrimSpace(importPath)
 			if targetDomain, boundary, ok := crossDomainRepositoryImport(importPath, goModule, generatedRoot, domains); ok && targetDomain != sourceDomain {
 				findings = append(findings, Finding{
 					ID:        findingID(RuleCrossDomainRepositoryBypass, file.Path, importPath),
@@ -46,8 +57,7 @@ func EvaluateSource(snapshot SourceSnapshot, options RuleOptions) []Finding {
 					},
 				})
 			}
-			switch strings.TrimSpace(importPath) {
-			case "github.com/hvritual/yunka.io/framework/platform":
+			if _, ok := frameworkPlatformImports[importPath]; ok {
 				findings = append(findings, Finding{
 					ID:        findingID(RulePlatformProviderBypass, file.Path, importPath),
 					Rule:      RulePlatformProviderBypass,
@@ -60,7 +70,8 @@ func EvaluateSource(snapshot SourceSnapshot, options RuleOptions) []Finding {
 						{Kind: EvidenceSource, Source: "go.import", Path: file.Path, Detail: importPath},
 					},
 				})
-			case "github.com/hvritual/yunka.io/gateway/authz":
+			}
+			if _, ok := gatewayAuthorizationImports[importPath]; ok {
 				findings = append(findings, Finding{
 					ID:        findingID(RuleAuthorizationBypass, file.Path, importPath),
 					Rule:      RuleAuthorizationBypass,

@@ -65,6 +65,60 @@ func TestEvaluateSourceProducesOnlyCanonicalDirectImportViolations(t *testing.T)
 	}
 }
 
+func TestEvaluateSourceRecognizesQualifiedConsumerModuleAliases(t *testing.T) {
+	snapshot := SourceSnapshot{
+		SourceRoot: "internal",
+		Files: []GoSourceFile{{
+			Path:    "internal/access/application/service.go",
+			Package: "application",
+			Imports: []string{
+				"github.com/hvritual/biz/internal/deviceops/ports",
+				"yunka.io/framework/platform",
+				"yunka.io/gateway/authz",
+			},
+		}},
+	}
+	findings := EvaluateSource(snapshot, RuleOptions{
+		GoModule:        "github.com/hvritual/biz",
+		GeneratedGoRoot: "internal",
+		DeclaredDomains: []string{"access", "deviceops"},
+	})
+	if len(findings) != 3 {
+		t.Fatalf("findings=%d want=3: %#v", len(findings), findings)
+	}
+	seen := map[string]bool{}
+	for _, finding := range findings {
+		seen[finding.Rule] = true
+	}
+	for _, rule := range []string{RuleCrossDomainRepositoryBypass, RulePlatformProviderBypass, RuleAuthorizationBypass} {
+		if !seen[rule] {
+			t.Fatalf("qualified consumer alias did not produce %s: %#v", rule, findings)
+		}
+	}
+}
+
+func TestEvaluateSourceDoesNotInferArbitrarySuffixAsYunkaModule(t *testing.T) {
+	snapshot := SourceSnapshot{
+		SourceRoot: "internal",
+		Files: []GoSourceFile{{
+			Path:    "internal/tenant/application/service.go",
+			Package: "application",
+			Imports: []string{
+				"example.org/not-yunka/framework/platform",
+				"example.org/not-yunka/gateway/authz",
+			},
+		}},
+	}
+	findings := EvaluateSource(snapshot, RuleOptions{
+		GoModule:        "example.com/demo",
+		GeneratedGoRoot: "internal",
+		DeclaredDomains: []string{"tenant"},
+	})
+	if len(findings) != 0 {
+		t.Fatalf("arbitrary import suffix was inferred as Yunka architecture evidence: %#v", findings)
+	}
+}
+
 func TestEvaluateSourceDoesNotInferUndeclaredDomainBoundary(t *testing.T) {
 	snapshot := SourceSnapshot{
 		SourceRoot: "internal",
