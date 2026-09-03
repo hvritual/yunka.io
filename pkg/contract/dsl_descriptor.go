@@ -251,46 +251,13 @@ func parseApplicationDeclaration(data []byte) (*ApplicationDeclaration, error) {
 					result.Operations = append(result.Operations, *operation)
 				}
 			}
-		case 4:
-			if field.Type == 2 {
-				capability, err := parseCapabilityRequirement(field.Bytes)
-				if err != nil {
-					return err
-				}
-				if capability != nil {
-					result.Capabilities = append(result.Capabilities, *capability)
-				}
-			}
 		}
 		return nil
 	}); err != nil {
 		return nil, err
 	}
 	result.Requires = stableStrings(result.Requires)
-	result.Capabilities = normalizeCapabilityRequirements(result.Capabilities)
 	return result, nil
-}
-
-func parseCapabilityRequirement(data []byte) (*CapabilityRequirement, error) {
-	if len(data) == 0 {
-		return nil, nil
-	}
-	result := &CapabilityRequirement{}
-	if err := scanWire(data, func(field wireField) error {
-		switch field.Number {
-		case 1:
-			result.Name = string(field.Bytes)
-		case 2:
-			result.Package = string(field.Bytes)
-		case 3:
-			result.Type = string(field.Bytes)
-		}
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-	value := normalizeCapabilityRequirement(*result)
-	return &value, nil
 }
 
 func parseOperationDeclaration(data []byte) (*OperationDeclaration, error) {
@@ -481,7 +448,6 @@ func applyDSLDeclarations(manifest *Manifest, data []byte) error {
 			if declaration.Application != nil {
 				copy := *declaration.Application
 				copy.Requires = append([]string(nil), declaration.Application.Requires...)
-				copy.Capabilities = append([]CapabilityRequirement(nil), declaration.Application.Capabilities...)
 				copy.Operations = make([]OperationDeclaration, len(declaration.Application.Operations))
 				for index, operation := range declaration.Application.Operations {
 					copy.Operations[index] = cloneOperationDeclaration(operation)
@@ -624,6 +590,7 @@ func sortedOperationIDs(manifest Manifest) []string {
 				if strings.TrimSpace(operation.ID) != "" {
 					ids = append(ids, strings.TrimSpace(operation.ID))
 				}
+			}
 		}
 		for _, method := range service.Methods {
 			if method.Operation != nil && strings.TrimSpace(method.Operation.ID) != "" {
