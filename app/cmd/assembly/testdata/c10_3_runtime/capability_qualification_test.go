@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"testing"
 
+	cachecontract "example.com/c103qualification/contracts/cache"
 	devicev1 "example.com/c103qualification/contracts/device/v1"
 	generatedassembly "example.com/c103qualification/internal/assembly"
 	deviceapplication "example.com/c103qualification/internal/device/application"
@@ -17,17 +18,13 @@ import (
 	"github.com/hvritual/yunka.io/framework/platform"
 )
 
-type qualificationCache interface {
-	Prefix() string
-}
-
 type qualificationCacheValue struct{ prefix string }
 
 func (cache qualificationCacheValue) Prefix() string { return cache.prefix }
 
 type qualificationCacheModule struct {
-	key   modulecatalog.CapabilityKey[qualificationCache]
-	cache qualificationCache
+	key   modulecatalog.CapabilityKey[cachecontract.Cache]
+	cache cachecontract.Cache
 }
 
 func (*qualificationCacheModule) Name() string { return "qualification-cache" }
@@ -36,16 +33,13 @@ func (module *qualificationCacheModule) ExportCapabilities() []modulecatalog.Cap
 	return []modulecatalog.CapabilityExport{modulecatalog.ExportCapability(module.key, module.cache)}
 }
 
-type capabilityDeviceQueryService struct{ cache qualificationCache }
+type capabilityDeviceQueryService struct{ cache cachecontract.Cache }
 
 func (service *capabilityDeviceQueryService) GetDevice(_ context.Context, request *devicev1.GetDeviceRequest) (*devicev1.DeviceDTO, error) {
 	return &devicev1.DeviceDTO{Id: request.GetId(), Serial: service.cache.Prefix() + ":assembled-runtime"}, nil
 }
 
-type capabilityFactories struct {
-	probe *runtimeProbe
-	cache qualificationCache
-}
+type capabilityFactories struct{ probe *runtimeProbe }
 
 func (factory capabilityFactories) BuildSiteManagement(generatedassembly.SiteManagementDependencies) (siteapplication.SiteApplication, error) {
 	return &siteService{probe: factory.probe}, nil
@@ -55,8 +49,8 @@ func (factory capabilityFactories) BuildInventoryCatalog(generatedassembly.Inven
 	return &inventoryService{probe: factory.probe}, nil
 }
 
-func (factory capabilityFactories) BuildDeviceQuery(generatedassembly.DeviceQueryDependencies) (deviceapplication.QueryApplication, error) {
-	return &capabilityDeviceQueryService{cache: factory.cache}, nil
+func (factory capabilityFactories) BuildDeviceQuery(dependencies generatedassembly.DeviceQueryDependencies) (deviceapplication.QueryApplication, error) {
+	return &capabilityDeviceQueryService{cache: dependencies.CacheQualification}, nil
 }
 
 func (factory capabilityFactories) BuildDeviceTransfer(dependencies generatedassembly.DeviceTransferDependencies) (deviceapplication.TransferApplication, error) {
@@ -67,7 +61,7 @@ var _ generatedassembly.ApplicationFactories = capabilityFactories{}
 
 func TestGeneratedAssemblyBindsExplicitTypedInfrastructureCapability(t *testing.T) {
 	ctx := context.Background()
-	key := modulecatalog.MustCapabilityKey[qualificationCache](
+	key := modulecatalog.MustCapabilityKey[cachecontract.Cache](
 		"cache.qualification",
 		"example.com/c103qualification/contracts/cache",
 		"Cache",
@@ -87,17 +81,9 @@ func TestGeneratedAssemblyBindsExplicitTypedInfrastructureCapability(t *testing.
 	result, err := generatedassembly.Bootstrap(ctx, generatedassembly.BootstrapOptions{
 		Platform:          provider,
 		AdditionalModules: []modulecatalog.Descriptor{descriptor},
-		BindRuntimeWithCapabilities: func(_ context.Context, _ *platform.Provider, capabilities modulecatalog.CapabilitySet) (generatedassembly.RuntimeBindings, error) {
-			cache, err := modulecatalog.ResolveCapability(capabilities, key)
-			if err != nil {
-				return generatedassembly.RuntimeBindings{}, err
-			}
-			return generatedassembly.RuntimeBindings{
-				Factories: capabilityFactories{probe: newRuntimeProbe(), cache: cache},
-				Executor:  executor,
-			}, nil
-		},
-		Transports: generatedassembly.TransportBindings{HTTP: http.NewServeMux(), RPC: grpc.NewServer()},
+		Factories:         capabilityFactories{probe: newRuntimeProbe()},
+		Executor:          executor,
+		Transports:        generatedassembly.TransportBindings{HTTP: http.NewServeMux(), RPC: grpc.NewServer()},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -109,7 +95,7 @@ func TestGeneratedAssemblyBindsExplicitTypedInfrastructureCapability(t *testing.
 		t.Fatal(err)
 	}
 	if response.GetSerial() != "typed-infra:assembled-runtime" {
-		t.Fatalf("typed capability was not injected into Application factory: serial=%q", response.GetSerial())
+		t.Fatalf("typed capability was not injected into generated Application dependencies: serial=%q", response.GetSerial())
 	}
 	if got := len(result.App.Diagnostics(ctx).Modules); got != 4 {
 		t.Fatalf("runtime composed module count=%d want=4", got)
