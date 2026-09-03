@@ -11,6 +11,7 @@ import (
 
 func TestC116ARootCommandTaxonomyIsCompleteAndStable(t *testing.T) {
 	want := map[string]string{
+		"add":        categoryStructural,
 		"api":        categorySupplementary,
 		"assembly":   categoryExpert,
 		"change":     categoryDiagnostics,
@@ -94,6 +95,9 @@ func TestC116AApplyDiscoverabilityPreservesCommandsAndRendersHappyPath(t *testin
 	if !strings.Contains(app.Description, "yunka init -> yunka generate -> yunka check -> yunka dev") {
 		t.Fatalf("root description does not contain happy path: %q", app.Description)
 	}
+	if !strings.Contains(app.Description, "explicit structural authoring") {
+		t.Fatalf("root description does not explain structural authoring: %q", app.Description)
+	}
 	if strings.Contains(strings.ToLower(app.Description), "deprecated") || strings.Contains(strings.ToLower(app.Description), "legacy") {
 		t.Fatalf("root description introduced unsupported deprecation language: %q", app.Description)
 	}
@@ -107,10 +111,12 @@ func TestC116AApplyDiscoverabilityPreservesCommandsAndRendersHappyPath(t *testin
 	help := output.String()
 	for _, expected := range []string{
 		"Developer workflow",
+		"Structural authoring",
 		"Diagnostics and inspection",
 		"Expert architecture",
 		"Supplementary tooling",
 		"yunka init -> yunka generate -> yunka check -> yunka dev",
+		"add",
 		"context",
 		"ownership",
 		"change",
