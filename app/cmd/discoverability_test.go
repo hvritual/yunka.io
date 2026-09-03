@@ -14,6 +14,7 @@ func TestC116ARootCommandTaxonomyIsCompleteAndStable(t *testing.T) {
 		"add":        categoryStructural,
 		"api":        categorySupplementary,
 		"assembly":   categoryExpert,
+		"audit":      categoryDiagnostics,
 		"change":     categoryDiagnostics,
 		"check":      categoryDeveloperWorkflow,
 		"context":    categoryDiagnostics,
@@ -98,9 +99,9 @@ func TestC116AApplyDiscoverabilityPreservesCommandsAndRendersHappyPath(t *testin
 	if !strings.Contains(app.Description, "explicit structural authoring") {
 		t.Fatalf("root description does not explain structural authoring: %q", app.Description)
 	}
-	for _, expected := range []string{"change plan", "change begin", "change check", "change verify"} {
+	for _, expected := range []string{"change plan", "change begin", "change check", "change verify", "Use audit for read-only deterministic"} {
 		if !strings.Contains(app.Description, expected) {
-			t.Fatalf("root description does not expose bounded change protocol %q: %q", expected, app.Description)
+			t.Fatalf("root description does not expose control-plane capability %q: %q", expected, app.Description)
 		}
 	}
 	if strings.Contains(strings.ToLower(app.Description), "deprecated") || strings.Contains(strings.ToLower(app.Description), "legacy") {
@@ -123,6 +124,7 @@ func TestC116AApplyDiscoverabilityPreservesCommandsAndRendersHappyPath(t *testin
 		"yunka init -> yunka generate -> yunka check -> yunka dev",
 		"change plan -> change begin -> change check -> change verify",
 		"add",
+		"audit",
 		"context",
 		"ownership",
 		"change",

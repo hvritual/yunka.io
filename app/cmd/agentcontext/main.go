@@ -51,6 +51,7 @@ type AgentProtocol struct {
 	ChangeBegin  string `json:"changeBegin"`
 	ChangeCheck  string `json:"changeCheck"`
 	ChangeVerify string `json:"changeVerify"`
+	Audit        string `json:"audit"`
 	RuntimeEvent string `json:"runtimeEvent"`
 }
 
@@ -124,6 +125,7 @@ func Build(root string) (Snapshot, error) {
 			ChangeBegin:  "yunka change begin --operation <operation> --format agent-json",
 			ChangeCheck:  "yunka change check --format agent-json",
 			ChangeVerify: "yunka change verify --format agent-json",
+			Audit:        "yunka audit --format agent-json",
 			RuntimeEvent: "yunka dev --event-format jsonl",
 		},
 	}, nil

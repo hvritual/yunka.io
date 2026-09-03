@@ -12,7 +12,7 @@ const SchemaVersion = 1
 type FindingClass string
 
 const (
-	FindingProvenViolation    FindingClass = "proven_violation"
+	FindingProvenViolation     FindingClass = "proven_violation"
 	FindingEvidenceObservation FindingClass = "evidence_observation"
 )
 
@@ -51,11 +51,17 @@ type Finding struct {
 type Report struct {
 	SchemaVersion int             `json:"schemaVersion"`
 	Project       ProjectIdentity `json:"project"`
+	Source        SourceSnapshot  `json:"source"`
 	Findings      []Finding       `json:"findings"`
 }
 
 func NewReport(project ProjectIdentity) Report {
-	return Report{SchemaVersion: SchemaVersion, Project: project, Findings: []Finding{}}
+	return Report{
+		SchemaVersion: SchemaVersion,
+		Project:       project,
+		Source:        SourceSnapshot{Files: []GoSourceFile{}},
+		Findings:      []Finding{},
+	}
 }
 
 func Normalize(report *Report) {
@@ -63,6 +69,7 @@ func Normalize(report *Report) {
 		return
 	}
 	report.Project.GoModule = strings.TrimSpace(report.Project.GoModule)
+	NormalizeSource(&report.Source)
 	for index := range report.Findings {
 		finding := &report.Findings[index]
 		finding.ID = strings.TrimSpace(finding.ID)
@@ -90,6 +97,14 @@ func Normalize(report *Report) {
 func Validate(report Report) error {
 	if report.SchemaVersion != SchemaVersion {
 		return fmt.Errorf("audit: unsupported schemaVersion %d", report.SchemaVersion)
+	}
+	for _, file := range report.Source.Files {
+		if file.Path == "" {
+			return fmt.Errorf("audit: source file path is required")
+		}
+		if file.Package == "" {
+			return fmt.Errorf("audit: source file %s package is required", file.Path)
+		}
 	}
 	seen := make(map[string]struct{}, len(report.Findings))
 	for _, finding := range report.Findings {
@@ -189,6 +204,11 @@ func supportedEvidenceKind(kind EvidenceKind) bool {
 
 func cloneReport(report Report) Report {
 	result := report
+	result.Source.Files = make([]GoSourceFile, len(report.Source.Files))
+	for index, file := range report.Source.Files {
+		result.Source.Files[index] = file
+		result.Source.Files[index].Imports = append([]string(nil), file.Imports...)
+	}
 	result.Findings = make([]Finding, len(report.Findings))
 	for index, finding := range report.Findings {
 		result.Findings[index] = finding

@@ -10,6 +10,7 @@ import (
 	"yunka.io/app/cmd/agentcontext"
 	"yunka.io/app/cmd/api"
 	"yunka.io/app/cmd/assembly"
+	"yunka.io/app/cmd/audit"
 	"yunka.io/app/cmd/change"
 	"yunka.io/app/cmd/check"
 	"yunka.io/app/cmd/contract"
@@ -35,6 +36,7 @@ func main() {
 		add.Command(),
 		agentcontext.Command(),
 		assembly.Command(),
+		audit.Command(),
 		change.Command(),
 		check.Command(),
 		contract.Command(),

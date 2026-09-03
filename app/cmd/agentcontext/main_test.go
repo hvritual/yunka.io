@@ -74,6 +74,9 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 	if first.AgentProtocol.ChangeVerify != "yunka change verify --format agent-json" {
 		t.Fatalf("change verify command=%q", first.AgentProtocol.ChangeVerify)
 	}
+	if first.AgentProtocol.Audit != "yunka audit --format agent-json" {
+		t.Fatalf("audit command=%q", first.AgentProtocol.Audit)
+	}
 	if first.AgentProtocol.RuntimeEvent != "yunka dev --event-format jsonl" {
 		t.Fatalf("runtime event command=%q", first.AgentProtocol.RuntimeEvent)
 	}
