@@ -34,7 +34,10 @@ func DescribeProject(options Options) (ProjectDescriptor, error) {
 	if err != nil {
 		return ProjectDescriptor{}, err
 	}
+	return describeResolvedProject(project), nil
+}
 
+func describeResolvedProject(project resolvedProject) ProjectDescriptor {
 	descriptor := ProjectDescriptor{
 		Root:               project.Root,
 		Profiled:           project.Profiled,
@@ -57,7 +60,7 @@ func DescribeProject(options Options) (ProjectDescriptor, error) {
 		descriptor.ContractSourceKind = "proto-root"
 		descriptor.ContractSource = relative(project.Root, project.ProtoDir)
 	}
-	return descriptor, nil
+	return descriptor
 }
 
 // ResolveDescriptorPath resolves a descriptor-relative location against the

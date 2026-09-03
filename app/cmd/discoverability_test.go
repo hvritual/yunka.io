@@ -27,6 +27,7 @@ func TestC116ARootCommandTaxonomyIsCompleteAndStable(t *testing.T) {
 		"init":       categoryDeveloperWorkflow,
 		"inspect":    categoryDiagnostics,
 		"module":     categoryExpert,
+		"ownership":  categoryDiagnostics,
 	}
 	if len(rootCommandCategories) != len(want) {
 		t.Fatalf("root category inventory=%d want %d", len(rootCommandCategories), len(want))
@@ -110,6 +111,7 @@ func TestC116AApplyDiscoverabilityPreservesCommandsAndRendersHappyPath(t *testin
 		"Supplementary tooling",
 		"yunka init -> yunka generate -> yunka check -> yunka dev",
 		"context",
+		"ownership",
 		"explain",
 	} {
 		if !strings.Contains(help, expected) {

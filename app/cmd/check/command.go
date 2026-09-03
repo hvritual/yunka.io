@@ -19,7 +19,7 @@ func Command() cli.Command {
 			cli.StringFlag{Name: "root", Value: ".", Usage: "project root"},
 			cli.StringFlag{Name: "protoc", EnvVar: "PROTOC", Usage: "protoc binary; defaults to PATH"},
 			cli.StringSliceFlag{Name: "proto-path", Usage: "additional protoc import path; expert escape hatch, may be repeated"},
-			cli.StringFlag{Name: "format", Value: dxoutput.FormatText, Usage: "output format: text or json"},
+			cli.StringFlag{Name: "format", Value: dxoutput.FormatText, Usage: "output format: text, json, or agent-json"},
 			cli.BoolFlag{Name: "full", Usage: "ignore fast-feedback evidence and run the canonical full check"},
 		},
 		Action: func(c *cli.Context) error {
