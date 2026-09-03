@@ -69,6 +69,8 @@ Every repository task must:
 - Dependency direction is one-way: applications may depend on `infras`, and `infras` may depend on stable `framework`/`pkg` contracts as required; `framework` must never import or require `infras`.
 - Infrastructure plugins reuse `framework/core/modulecatalog`. They may be registered explicitly or enabled by blank-importing an `autoload` package whose sole side effect is `modulecatalog.MustRegister(module.GeneratedDescriptor())`.
 - Yunka infrastructure plugins are compile-time optional Go modules, not Go runtime `plugin`/`.so` shared objects. Type checking, deterministic dependency resolution, cross-platform builds, App lifecycle/health, and diagnostics remain canonical.
+- `modulecatalog.Descriptor.Provides` is the canonical static declaration of process/App-scoped capability exports; identity is the logical capability name plus Go contract package/type. A `CapabilityExporter` instance must exactly satisfy its descriptor declarations, and undeclared/missing/mismatched/duplicate providers fail before App start.
+- Exported capability values remain owned by the provider module/App lifecycle. `CapabilitySet` is an immutable bootstrap-time binding view only; business runtime code must not retain it or acquire capabilities through string lookup, reflection, or a global registry.
 - Existing `framework/infras/**` packages remain reviewed compatibility/internal surfaces until separately migrated. New public infrastructure capabilities must target the root `infras` module rather than expanding `framework/infras`.
 - Moving an implementation from `framework` to `infras` is a separate compatibility decision. A facade may initially delegate to one canonical framework runtime when that preserves a single semantic owner; duplicate infrastructure runtimes are forbidden.
 - Infrastructure plugins are process/App-scoped capabilities and must not retain request identity, request contexts, transactions, or repositories. Business audit rules, tenant/customer/device models, workflow/BPMN, data-scope semantics, and domain-specific policy do not become infrastructure merely because an operations platform consumes them.
@@ -82,6 +84,9 @@ Every repository task must:
 - Runtime reflection may be used for ordinary data binding/serialization, not dependency discovery or business dispatch.
 - Static module catalog registration is descriptor-only. Autoload registration may not read runtime configuration, perform I/O, create infrastructure/services, or start goroutines.
 - Module startup order comes from explicit dependency DAG facts and is deterministic.
+- `ApplicationDeclaration.capabilities` declares typed process/App-scoped infrastructure constructor dependencies separately from cross-Application `requires` and Operation `requires_operations`. The compiler carries logical key plus Go contract identity through AssemblyPlan into generated typed Application dependency structs.
+- Typed infrastructure capability resolution occurs only during bootstrap/Application construction, before transport registration and App start; generated business Applications receive ordinary Go typed dependencies and do not receive a resolver.
+- Separately versioned plugin descriptors consumed by generated Assembly are explicit composition inputs (`AdditionalModules`); generated Assembly must not discover optional infrastructure through a package-global default catalog.
 
 ## Platform ownership and request scope
 
@@ -150,7 +155,7 @@ Every repository task must:
 
 ## Contract and DSL baseline
 
-- Protobuf is the canonical writable DSL for RPC, explicit REST bindings, DTOs, Domain/Application declarations, stable Operation IDs, authentication/tenant requirements, Permission requirements, composition, and currently supported execution-policy facts.
+- Protobuf is the canonical writable DSL for RPC, explicit REST bindings, DTOs, Domain/Application declarations, stable Operation IDs, authentication/tenant requirements, Permission requirements, typed Application infrastructure capability requirements, composition, and currently supported execution-policy facts.
 - Runtime does not parse descriptors/comments per request to infer behavior; contract intent is compiled into deterministic derived artifacts.
 - Generated contract, OpenAPI, TypeScript, OperationPlan, and AssemblyPlan artifacts are derived evidence and are never hand-edited.
 - HTTP paths are emitted only from explicit bindings. An internal RPC/Operation without an external binding must not receive an invented route.
@@ -183,6 +188,7 @@ Every repository task must:
 ## Application composition and least-authority capability baseline
 
 - `ApplicationDeclaration.requires` declares typed Application dependencies.
+- `ApplicationDeclaration.capabilities` declares typed process/App-scoped infrastructure constructor dependencies; it is not an Application edge, Operation edge, runtime service locator, or business capability taxonomy.
 - `OperationDeclaration.requires_operations` declares explicit child Operation dependencies.
 - Application dependency cycles/missing capabilities fail at compile/lint time.
 - Composite permission closure is statically validated and includes transitive required Operation permissions.
