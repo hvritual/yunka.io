@@ -7,26 +7,34 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/health"
+	grpc_health_v1 "google.golang.org/grpc/health/grpc_health_v1"
 	grpcmetadata "google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
-	"google.golang.org/protobuf/types/known/emptypb"
-	"go.opentelemetry.io/otel/trace"
 )
 
 func TestGRPCFactoryAlwaysPropagatesW3CTraceContext(t *testing.T) {
 	listener := bufconn.Listen(1024 * 1024)
 	received := make(chan grpcmetadata.MD, 1)
-	server := grpc.NewServer(grpc.UnknownServiceHandler(func(_ interface{}, stream grpc.ServerStream) error {
-		metadata, _ := grpcmetadata.FromIncomingContext(stream.Context())
-		received <- metadata.Copy()
-		request := &emptypb.Empty{}
-		_ = stream.RecvMsg(request)
-		return status.Error(codes.Unimplemented, "test completed")
+	server := grpc.NewServer(grpc.UnaryInterceptor(func(
+		ctx context.Context,
+		request interface{},
+		info *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler,
+	) (interface{}, error) {
+		metadata, _ := grpcmetadata.FromIncomingContext(ctx)
+		select {
+		case received <- metadata.Copy():
+		default:
+		}
+		return handler(ctx, request)
 	}))
+	healthServer := health.NewServer()
+	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
+	grpc_health_v1.RegisterHealthServer(server, healthServer)
 	go func() { _ = server.Serve(listener) }()
 	t.Cleanup(func() {
 		server.Stop()
@@ -35,7 +43,7 @@ func TestGRPCFactoryAlwaysPropagatesW3CTraceContext(t *testing.T) {
 
 	factory := GRPCFactory{Configurations: map[string]GRPCConfig{
 		"downstream": {
-			Target:      "bufnet",
+			Target:      "passthrough:///bufnet",
 			Credentials: insecure.NewCredentials(),
 			DialOptions: []grpc.DialOption{
 				grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }),
@@ -63,7 +71,12 @@ func TestGRPCFactoryAlwaysPropagatesW3CTraceContext(t *testing.T) {
 		SpanID:     spanID,
 		TraceFlags: trace.FlagsSampled,
 	}))
-	_ = resource.Connection.Invoke(callContext, "/test.Service/Call", &emptypb.Empty{}, &emptypb.Empty{})
+	callContext, cancel := context.WithTimeout(callContext, 3*time.Second)
+	defer cancel()
+	client := grpc_health_v1.NewHealthClient(resource.Connection)
+	if _, err := client.Check(callContext, &grpc_health_v1.HealthCheckRequest{}); err != nil {
+		t.Fatalf("health call failed: %v", err)
+	}
 
 	select {
 	case metadata := <-received:
@@ -74,7 +87,7 @@ func TestGRPCFactoryAlwaysPropagatesW3CTraceContext(t *testing.T) {
 		if !strings.Contains(values[0], traceID.String()) || !strings.Contains(values[0], spanID.String()) {
 			t.Fatalf("traceparent=%q does not contain trace=%s span=%s", values[0], traceID, spanID)
 		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("downstream server did not receive the propagated call")
+	case <-time.After(time.Second):
+		t.Fatal("downstream server did not observe propagated metadata")
 	}
 }
