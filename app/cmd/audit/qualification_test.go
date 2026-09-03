@@ -98,6 +98,9 @@ func writeAuditProjectFile(t *testing.T, path, contents string) {
 	}
 }
 
+// auditTreeDigest measures developer-visible project contents, not Git's
+// internal object/index metadata. Audit may execute read-only Git plumbing for
+// baseline evidence; repository-internal metadata is not a project mutation.
 func auditTreeDigest(root string) (string, error) {
 	var records []string
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
@@ -105,6 +108,9 @@ func auditTreeDigest(root string) (string, error) {
 			return err
 		}
 		if info.IsDir() {
+			if path != root && info.Name() == ".git" {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		contents, err := os.ReadFile(path)
