@@ -79,8 +79,8 @@ func TestAX7RealConsumerAdversarialPressure(t *testing.T) {
 	t.Run("undeclared capability drift is rejected", func(t *testing.T) {
 		fixture.Reset(t)
 		contents := readPressureFile(t, fixture.protoFile())
-		old := `option (yunka.dsl.v1.application) = { name: "lifecycle" };`
-		replacement := `option (yunka.dsl.v1.application) = { name: "lifecycle" capabilities: { name: "cache" go_package: "example.com/cache" go_type: "Cache" } };`
+		old := "    name: \"lifecycle\"\n"
+		replacement := old + "    capabilities: { name: \"cache\" go_package: \"example.com/cache\" go_type: \"Cache\" }\n"
 		if !strings.Contains(contents, old) {
 			t.Fatalf("application declaration not found in pressure fixture:\n%s", contents)
 		}
