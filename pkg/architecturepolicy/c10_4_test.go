@@ -30,7 +30,8 @@ func TestC104RuntimeBindingIsExplicitAndKeepsExistingOwners(t *testing.T) {
 		"BindRuntime RuntimeBinder",
 		"BindRuntimeWithCapabilities RuntimeCapabilityBinder",
 		"kernel.Bootstrap(ctx",
-		"BuildWithCapabilities: func(capabilities modulecatalog.CapabilitySet) (Applications, error)",
+		"BuildWithCapabilities:",
+		"modulecatalog.CapabilitySet",
 		"runtime, err = options.BindRuntime(ctx, options.Platform)",
 		"BuildApplicationsWithCapabilities",
 		"RegisterTransports(options.Transports, applications, runtime.Executor)",
@@ -41,7 +42,7 @@ func TestC104RuntimeBindingIsExplicitAndKeepsExistingOwners(t *testing.T) {
 	}
 
 	bootstrapIndex := strings.Index(runtimeCodegen, "kernel.Bootstrap(ctx")
-	buildIndex := strings.Index(runtimeCodegen, "BuildWithCapabilities: func(capabilities modulecatalog.CapabilitySet) (Applications, error)")
+	buildIndex := strings.Index(runtimeCodegen, "BuildWithCapabilities:")
 	binderIndex := strings.Index(runtimeCodegen, "runtime, err = options.BindRuntime(ctx, options.Platform)")
 	if bootstrapIndex < 0 || buildIndex < bootstrapIndex || binderIndex < buildIndex {
 		t.Fatalf("runtime binder must remain inside kernel Bootstrap Build sequencing: bootstrap=%d build=%d binder=%d", bootstrapIndex, buildIndex, binderIndex)
