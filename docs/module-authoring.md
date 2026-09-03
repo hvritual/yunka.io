@@ -49,8 +49,9 @@ A module may receive only platform inputs declared by `Descriptor.Requirements`:
 - a module-scoped logger;
 - named GORM databases;
 - the App-owned EventBus;
-- named gRPC connections;
-- explicit module dependencies.
+- named gRPC connections.
+
+Module-to-module ordering/dependency facts are declared separately in `Descriptor.DependsOn`.
 
 The module must not acquire DSNs, TLS material, root configuration, environment values, database/RPC factories, a global App, or another service at runtime. Database and RPC construction belongs to `platform.Provider`; request transactions and repositories belong to `requestscope`.
 
@@ -162,7 +163,7 @@ Existing `framework/infras/**` packages are compatibility/internal surfaces and 
 
 ## Migration checklist
 
-1. Declare module inputs in `Descriptor.Requirements` and exported process/App capabilities in `Descriptor.Provides`.
+1. Declare module platform inputs in `Descriptor.Requirements`, module dependencies in `Descriptor.DependsOn`, and exported process/App capabilities in `Descriptor.Provides`.
 2. Export only declared values through `CapabilityExporter`; keep provider construction compiler checked.
 3. Declare each consuming Application capability explicitly in protobuf with matching logical key and Go package/type identity.
 4. Remove environment/global/service-locator access.
