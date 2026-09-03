@@ -98,6 +98,11 @@ func TestC116AApplyDiscoverabilityPreservesCommandsAndRendersHappyPath(t *testin
 	if !strings.Contains(app.Description, "explicit structural authoring") {
 		t.Fatalf("root description does not explain structural authoring: %q", app.Description)
 	}
+	for _, expected := range []string{"change plan", "change begin", "change check", "change verify"} {
+		if !strings.Contains(app.Description, expected) {
+			t.Fatalf("root description does not expose bounded change protocol %q: %q", expected, app.Description)
+		}
+	}
 	if strings.Contains(strings.ToLower(app.Description), "deprecated") || strings.Contains(strings.ToLower(app.Description), "legacy") {
 		t.Fatalf("root description introduced unsupported deprecation language: %q", app.Description)
 	}
@@ -116,6 +121,7 @@ func TestC116AApplyDiscoverabilityPreservesCommandsAndRendersHappyPath(t *testin
 		"Expert architecture",
 		"Supplementary tooling",
 		"yunka init -> yunka generate -> yunka check -> yunka dev",
+		"change plan -> change begin -> change check -> change verify",
 		"add",
 		"context",
 		"ownership",

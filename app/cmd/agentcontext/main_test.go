@@ -59,8 +59,23 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 	}
 	assertLocation(t, first, "operation-plans", "generated", "present")
 	assertLocation(t, first, "provider-manifest", "managed", "missing")
-	if first.Commands.Check != "yunka check --format json" {
+	if first.Commands.Check != "yunka check --format agent-json" {
 		t.Fatalf("check command=%q", first.Commands.Check)
+	}
+	if first.AgentProtocol.ExistingPlan != "yunka change plan --operation <operation> --format agent-json" {
+		t.Fatalf("change plan command=%q", first.AgentProtocol.ExistingPlan)
+	}
+	if first.AgentProtocol.ChangeBegin != "yunka change begin --operation <operation> --format agent-json" {
+		t.Fatalf("change begin command=%q", first.AgentProtocol.ChangeBegin)
+	}
+	if first.AgentProtocol.ChangeCheck != "yunka change check --format agent-json" {
+		t.Fatalf("change check command=%q", first.AgentProtocol.ChangeCheck)
+	}
+	if first.AgentProtocol.ChangeVerify != "yunka change verify --format agent-json" {
+		t.Fatalf("change verify command=%q", first.AgentProtocol.ChangeVerify)
+	}
+	if first.AgentProtocol.RuntimeEvent != "yunka dev --event-format jsonl" {
+		t.Fatalf("runtime event command=%q", first.AgentProtocol.RuntimeEvent)
 	}
 	jsonOne, err := MarshalJSON(first)
 	if err != nil {
