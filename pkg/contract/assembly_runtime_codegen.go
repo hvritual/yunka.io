@@ -57,7 +57,12 @@ func addAssemblyRuntimeImports(source string) (string, error) {
 		}
 		existing[path] = struct{}{}
 	}
-	required := []string{"context", "fmt", "github.com/hvritual/yunka.io/framework/core"}
+	required := []string{
+		"context",
+		"fmt",
+		"github.com/hvritual/yunka.io/framework/core",
+		"github.com/hvritual/yunka.io/framework/core/modulecatalog",
+	}
 	var additions strings.Builder
 	for _, path := range required {
 		if _, ok := existing[path]; ok {
@@ -86,11 +91,16 @@ func renderAssemblyRuntimeDeclarations(routes []string, rpcClientConfigured bool
 	b.WriteString("// RuntimeBinder constructs consumer-owned execution/application bindings only after kernel.New has prepared the App-owned Platform Provider.\n")
 	b.WriteString("// It does not own lifecycle, discover services, or introduce a second authorization/transaction runtime.\n")
 	b.WriteString("type RuntimeBinder func(context.Context, *platform.Provider) (RuntimeBindings, error)\n\n")
+	b.WriteString("// RuntimeCapabilityBinder additionally receives the immutable bootstrap-time typed infrastructure capability snapshot.\n")
+	b.WriteString("// Consumers resolve typed values here and pass them into their own ApplicationFactories; business runtime code should not retain the set.\n")
+	b.WriteString("type RuntimeCapabilityBinder func(context.Context, *platform.Provider, modulecatalog.CapabilitySet) (RuntimeBindings, error)\n\n")
 	b.WriteString("type BootstrapOptions struct {\n")
 	b.WriteString("\tPlatform *platform.Provider\n")
 	b.WriteString("\tFactories ApplicationFactories\n")
 	b.WriteString("\tExecutor operation.Executor\n")
+	b.WriteString("\tAdditionalModules []modulecatalog.Descriptor\n")
 	b.WriteString("\tBindRuntime RuntimeBinder\n")
+	b.WriteString("\tBindRuntimeWithCapabilities RuntimeCapabilityBinder\n")
 	b.WriteString("\tTransports TransportBindings\n")
 	b.WriteString("\tRuntimeComponents []core.RuntimeComponent\n")
 	b.WriteString("}\n\n")
@@ -105,8 +115,9 @@ func renderAssemblyRuntimeDeclarations(routes []string, rpcClientConfigured bool
 	fmt.Fprintf(&b, "\t\tRPCServerCount: %d,\n", rpcServerCount)
 	b.WriteString("\t}\n}\n\n")
 	b.WriteString("func Bootstrap(ctx context.Context, options BootstrapOptions) (kernel.BootstrapResult[Applications], error) {\n")
-	b.WriteString("\tif options.BindRuntime != nil && (options.Factories != nil || options.Executor != nil) { return kernel.BootstrapResult[Applications]{}, fmt.Errorf(\"yunka assembly: BindRuntime cannot be combined with prebuilt Factories or Executor\") }\n")
-	b.WriteString("\tcatalog, err := NewCatalog()\n")
+	b.WriteString("\tif options.BindRuntime != nil && options.BindRuntimeWithCapabilities != nil { return kernel.BootstrapResult[Applications]{}, fmt.Errorf(\"yunka assembly: BindRuntime and BindRuntimeWithCapabilities are mutually exclusive\") }\n")
+	b.WriteString("\tif (options.BindRuntime != nil || options.BindRuntimeWithCapabilities != nil) && (options.Factories != nil || options.Executor != nil) { return kernel.BootstrapResult[Applications]{}, fmt.Errorf(\"yunka assembly: runtime binders cannot be combined with prebuilt Factories or Executor\") }\n")
+	b.WriteString("\tcatalog, err := NewCatalog(options.AdditionalModules...)\n")
 	b.WriteString("\tif err != nil { return kernel.BootstrapResult[Applications]{}, fmt.Errorf(\"yunka assembly: build module catalog: %w\", err) }\n")
 	b.WriteString("\tkernelOptions := KernelOptions(KernelDependencies{Platform: options.Platform, Catalog: catalog})\n")
 	b.WriteString("\tkernelOptions.RuntimeComponents = append([]core.RuntimeComponent(nil), options.RuntimeComponents...)\n")
@@ -114,15 +125,19 @@ func renderAssemblyRuntimeDeclarations(routes []string, rpcClientConfigured bool
 	b.WriteString("\tvar runtime RuntimeBindings\n")
 	b.WriteString("\treturn kernel.Bootstrap(ctx, kernel.BootstrapOptions[Applications]{\n")
 	b.WriteString("\t\tKernel: kernelOptions,\n")
-	b.WriteString("\t\tBuild: func() (Applications, error) {\n")
-	b.WriteString("\t\t\tif options.BindRuntime == nil { runtime = RuntimeBindings{Factories: options.Factories, Executor: options.Executor}; return BuildApplications(options.Factories, options.Executor) }\n")
-	b.WriteString("\t\t\tif options.Platform == nil { return Applications{}, fmt.Errorf(\"yunka assembly: Platform is required for BindRuntime\") }\n")
-	b.WriteString("\t\t\truntime, err = options.BindRuntime(ctx, options.Platform)\n")
+	b.WriteString("\t\tBuildWithCapabilities: func(capabilities modulecatalog.CapabilitySet) (Applications, error) {\n")
+	b.WriteString("\t\t\tif options.BindRuntime == nil && options.BindRuntimeWithCapabilities == nil { runtime = RuntimeBindings{Factories: options.Factories, Executor: options.Executor}; return BuildApplications(options.Factories, options.Executor) }\n")
+	b.WriteString("\t\t\tif options.Platform == nil { return Applications{}, fmt.Errorf(\"yunka assembly: Platform is required for runtime binding\") }\n")
+	b.WriteString("\t\t\tif options.BindRuntimeWithCapabilities != nil {\n")
+	b.WriteString("\t\t\t\truntime, err = options.BindRuntimeWithCapabilities(ctx, options.Platform, capabilities)\n")
+	b.WriteString("\t\t\t} else {\n")
+	b.WriteString("\t\t\t\truntime, err = options.BindRuntime(ctx, options.Platform)\n")
+	b.WriteString("\t\t\t}\n")
 	b.WriteString("\t\t\tif err != nil { return Applications{}, fmt.Errorf(\"yunka assembly: bind runtime after Platform preparation: %w\", err) }\n")
 	b.WriteString("\t\t\treturn BuildApplications(runtime.Factories, runtime.Executor)\n")
 	b.WriteString("\t\t},\n")
 	b.WriteString("\t\tRegister: func(applications Applications) error {\n")
-	b.WriteString("\t\t\tif options.BindRuntime == nil { return RegisterTransports(options.Transports, applications, options.Executor) }\n")
+	b.WriteString("\t\t\tif options.BindRuntime == nil && options.BindRuntimeWithCapabilities == nil { return RegisterTransports(options.Transports, applications, options.Executor) }\n")
 	b.WriteString("\t\t\treturn RegisterTransports(options.Transports, applications, runtime.Executor)\n")
 	b.WriteString("\t\t},\n")
 	b.WriteString("\t})\n}\n")
