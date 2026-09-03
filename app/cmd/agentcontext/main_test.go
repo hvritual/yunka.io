@@ -1,0 +1,145 @@
+package agentcontext
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "go.mod"), "module example.com/demo\n\ngo 1.25.0\n")
+	if err := os.MkdirAll(filepath.Join(root, "contracts", "proto"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(root, "contracts", "proto", "demo.proto"), "syntax = \"proto3\";\n")
+	mustWrite(t, filepath.Join(root, "contracts", "generated", "manifest.json"), "{\"schemaVersion\":1}\n")
+	mustWrite(t, filepath.Join(root, "contracts", "generated", "operation-plans.json"), "[]\n")
+	mustWrite(t, filepath.Join(root, "contracts", "generated", "assembly-plan.json"), "{}\n")
+	mustWrite(t, filepath.Join(root, "contracts", "generated", "application-graph.json"), "{}\n")
+
+	before, err := treeDigest(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := Build(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := Build(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := treeDigest(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if before != after {
+		t.Fatalf("context command mutated project: before=%s after=%s", before, after)
+	}
+	if !reflect.DeepEqual(first, second) {
+		t.Fatalf("context snapshot is not deterministic:\nfirst=%#v\nsecond=%#v", first, second)
+	}
+	if first.SchemaVersion != SchemaVersion {
+		t.Fatalf("schema version=%d want=%d", first.SchemaVersion, SchemaVersion)
+	}
+	if first.Project.Profiled {
+		t.Fatal("conventional project unexpectedly reported as profiled")
+	}
+	if first.Project.GoModule != "example.com/demo" {
+		t.Fatalf("go module=%q", first.Project.GoModule)
+	}
+	if first.Project.ContractSourceKind != "proto-root" || first.Project.ContractSource != "contracts/proto" {
+		t.Fatalf("contract source=%s %s", first.Project.ContractSourceKind, first.Project.ContractSource)
+	}
+	assertLocation(t, first, "operation-plans", "generated", "present")
+	assertLocation(t, first, "provider-manifest", "managed", "missing")
+	if first.Commands.Check != "yunka check --format json" {
+		t.Fatalf("check command=%q", first.Commands.Check)
+	}
+	jsonOne, err := MarshalJSON(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonTwo, err := MarshalJSON(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(jsonOne) != string(jsonTwo) {
+		t.Fatal("machine-readable output is not byte-stable")
+	}
+}
+
+func TestBuildReportsMissingGeneratedArtifactsWithoutInventingSemantics(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "go.mod"), "module example.com/demo\n\ngo 1.25.0\n")
+	if err := os.MkdirAll(filepath.Join(root, "contracts", "proto"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot, err := Build(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := assertLocation(t, snapshot, "assembly-plan", "generated", "missing")
+	if item.Remediation != "run `yunka generate`" {
+		t.Fatalf("remediation=%q", item.Remediation)
+	}
+}
+
+func assertLocation(t *testing.T, snapshot Snapshot, name, role, state string) Location {
+	t.Helper()
+	for _, item := range snapshot.Locations {
+		if item.Name == name {
+			if item.Role != role || item.State != state {
+				t.Fatalf("location %s role/state=%s/%s want=%s/%s", name, item.Role, item.State, role, state)
+			}
+			return item
+		}
+	}
+	t.Fatalf("location %s not found", name)
+	return Location{}
+}
+
+func mustWrite(t *testing.T, path, contents string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func treeDigest(root string) (string, error) {
+	var records []string
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		digest := sha256.Sum256(contents)
+		records = append(records, filepath.ToSlash(rel)+":"+hex.EncodeToString(digest[:]))
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256([]byte(strings.Join(records, "\n")))
+	return hex.EncodeToString(digest[:]), nil
+}

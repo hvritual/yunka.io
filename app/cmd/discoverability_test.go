@@ -14,6 +14,7 @@ func TestC116ARootCommandTaxonomyIsCompleteAndStable(t *testing.T) {
 		"api":        categorySupplementary,
 		"assembly":   categoryExpert,
 		"check":      categoryDeveloperWorkflow,
+		"context":    categoryDiagnostics,
 		"contract":   categoryExpert,
 		"dependency": categoryExpert,
 		"dev":        categoryDeveloperWorkflow,
@@ -108,6 +109,7 @@ func TestC116AApplyDiscoverabilityPreservesCommandsAndRendersHappyPath(t *testin
 		"Expert architecture",
 		"Supplementary tooling",
 		"yunka init -> yunka generate -> yunka check -> yunka dev",
+		"context",
 		"explain",
 	} {
 		if !strings.Contains(help, expected) {
