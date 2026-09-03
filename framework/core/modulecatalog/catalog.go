@@ -128,6 +128,16 @@ func (catalog *Catalog) Len() int {
 }
 
 func resolvePlan(descriptors map[string]Descriptor) (Plan, error) {
+	providers := make(map[string]string)
+	for name, descriptor := range descriptors {
+		for _, capability := range descriptor.Provides {
+			if previous, duplicate := providers[capability.Name]; duplicate {
+				return Plan{}, fmt.Errorf("modulecatalog: capability %q has multiple providers: %q and %q", capability.Name, previous, name)
+			}
+			providers[capability.Name] = name
+		}
+	}
+
 	indegree := make(map[string]int, len(descriptors))
 	dependents := make(map[string][]string, len(descriptors))
 	for name := range descriptors {
