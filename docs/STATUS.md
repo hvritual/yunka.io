@@ -15,10 +15,11 @@
 | C10 Runtime Assembly & Framework Productization | **Complete / qualified / merged** | issue #42 records ordered C10.1-C10.5 qualification and merge; roadmap is historical |
 | C11 Developer Experience Productization | **Complete / production-qualified / merged** | issue #60 records C11.1-C11.7 complete with real Biz consumer qualification; roadmap is historical |
 | Post-C11 five-gap DX convergence | **Complete / qualified / merged** | PR #104 merged the canonical four-command project closure without changing compiler/runtime/security/transaction semantics |
-| Agent Experience control-plane convergence | **AX1-AX5 complete / production-qualified / merged; AX6 not started** | PRs #125, #126, #127, #129, and #132 add context, ownership, agent diagnostics, change planning, and explicit structural scaffolds; these remain developer/control-plane capabilities and do not establish a new numbered runtime wave |
+| Agent Experience control-plane convergence | **AX1-AX6 complete / production-qualified / merged; AX7 not started** | PRs #125, #126, #127, #129, #132, and #133 add context, ownership, agent diagnostics, change planning, explicit structural scaffolds, and a canonical JSONL runtime event projection; these remain developer/control-plane capabilities and do not establish a new numbered runtime wave |
 | B12 multi-tenant Access/IAM consumer pressure | **Complete / qualified** | real Biz pressure discovered two generic Yunka gaps; both are closed and reverse-qualified against the B12 behavioral baseline `6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb` |
 | Distributed execution trace closure | **Complete / production-qualified / merged** | issue #118 / PR #119; exact candidate `19bed965852d9dc2ef39e91dcadd7fb6bea4c871` passed CI #418 and production #178 and was merged unchanged into `main` |
 | Separately versioned infrastructure extension module | **Complete / production-qualified / merged** | issue #121 / PR #122; exact candidate `fc09f296cccb14ae18891bc43642d5efe43bd484` passed CI #430 and production #190, then merged as `70611d6cee5dd4e37ae6a803bcb38b938acd59c9`; independent `infras/vX.Y.Z` tag surface exists, but no `infras/v0.1.0` release tag is claimed yet |
+| Typed infrastructure capability export / binding | **Complete / production-qualified / merged** | issue #124 / PR #131; exact candidate `c3123fb4a3e7731f0edf5539c3d8003fc0e41bc7` passed CI #475 and production #233 after synchronization with AX6 main, merged as `d06a6330db9093e0bc586decb6bdc00122b4aa99`, and exact-main push CI #476 / production #234 also passed |
 | Active numbered Yunka framework wave | **None selected** | new framework work remains pressure-driven rather than roadmap-driven; AX control-plane work does not by itself create a numbered framework wave |
 | Proven open Yunka P0/P1 runtime/compiler/authz/persistence/trace-closure defects | **0 known at reconciliation** | do not promote hypotheses into framework defects without executable consumer evidence |
 
@@ -44,7 +45,7 @@ Current top-level generation/check owns the canonical managed project closure: D
 
 ## Agent Experience control-plane convergence
 
-AX1-AX5 are closed and merged. They productize an AI/automation-facing control plane around the existing canonical project/compiler/runtime contracts rather than introducing a second compiler, business DSL, ownership manifest, or runtime.
+AX1-AX6 are closed and merged. They productize an AI/automation-facing control plane around the existing canonical project/compiler/runtime contracts rather than introducing a second compiler, business DSL, ownership manifest, or runtime.
 
 ### AX1 — Context Contract
 
@@ -107,7 +108,15 @@ yunka dev
 Ready / Diagnostics / Graph / Runtime Closure evidence
 ```
 
-AX6 runtime event-stream work is **not started** in this reconciliation. Any AX6 implementation must preserve the AX1-AX5 source-of-truth, ownership, compiler, Executor, authorization, and root UoW boundaries.
+### AX6 — Runtime Event Stream
+
+**State: COMPLETE / PRODUCTION-QUALIFIED / MERGED.**
+
+`yunka dev [run] --event-format jsonl` exposes a stable machine-readable projection of the existing dev plan and canonical RuntimeReport while reserving stdout for JSONL events and keeping child process output off the machine channel. `yunka dev status --format jsonl` provides the finite snapshot form. Runtime/application state, diagnostics, and closure-complete evidence remain projections of existing runtime truth; AX6 does not add a second supervisor, readiness model, Executor path, security model, or persistence format.
+
+Evidence: PR #133; exact candidate `7538b8279ef16adf19cd258a837fa0a13f98042f`; CI run `33740395756` PASS; production run `33740395812` PASS on MySQL 8.4 with clean-worktree; merged as `ee0f1097fa6eaed900a92cd9563cca31dbfedab1`.
+
+AX7 real-Agent end-to-end qualification is **not started** in this reconciliation.
 
 ## B12 framework-pressure disposition
 
@@ -210,6 +219,20 @@ Evidence: exact candidate `fc09f296cccb14ae18891bc43642d5efe43bd484`; CI #430 su
 
 The independent release/tag mechanism is now part of the repository contract, but this status does **not** claim that an `infras/v0.1.0` tag or release has already been published. Publication is a separate release action.
 
+## Typed infrastructure capability binding
+
+Issue #124 / PR #131 closes the typed provider-to-Application constructor path required by separately versioned infrastructure plugins.
+
+**State: COMPLETE / PRODUCTION-QUALIFIED / MERGED.**
+
+A module descriptor may declare `Descriptor.Provides` entries identified by a logical capability name plus Go package/type identity. A built module that provides values implements `modulecatalog.CapabilityExporter`; descriptor promises and runtime exports must match exactly. Duplicate providers, undeclared exports, missing exports, contract mismatches, and non-assignable values fail before App start. Capability values remain owned by the provider module/App lifecycle.
+
+Application protobuf declares `ApplicationDeclaration.capabilities` separately from cross-Application `requires` and Operation `requires_operations`. The compiler carries capability identity into Manifest/AssemblyPlan and generated Application dependency structs. Generated Assembly resolves the typed value only during Application construction and passes a normal Go interface through generated `*Dependencies`; business runtime code does not retain `CapabilitySet` and there is no `app.Get(string)`, reflection DI, or public untyped service locator. Separately versioned plugin descriptors are explicit `AdditionalModules` composition inputs.
+
+The current declarative module authoring surface (`module.yunka.json` / `yunka module add`) still models module input `Requirements` only and does not synthesize `Descriptor.Provides`. An exporting plugin therefore composes its capability-providing descriptor explicitly in handwritten Go (without editing generated module source) and passes that descriptor to generated Assembly. This is an authoring/DX limitation, not a runtime/compiler binding gap.
+
+Evidence: issue #124; exact candidate `c3123fb4a3e7731f0edf5539c3d8003fc0e41bc7`; CI #475 and production #233 success; merge PR #131 as `d06a6330db9093e0bc586decb6bdc00122b4aa99`; exact-main push CI #476 and production #234 success.
+
 ## Current pressure frontier
 
 The active real-consumer frontier is **B13 cross-tenant delegation and delegated device access** in `hvritual/biz` issue #11.
@@ -233,6 +256,7 @@ These are explicit limitations/non-goals, not current release blockers:
 
 - `FP-C9-005` — Saga step/topology evidence is not represented as a complete Application Graph/Diagnostics topology: **OPEN / DEFERRED**. PR #119 adds Trace/Event/Operation evidence correlation but does not claim full Saga topology representation in Application Graph.
 - Durable Operation idempotency provides duplicate-execution suppression; response/result replay remains outside the current contract unless future real pressure justifies it.
+- Declarative module specs currently author module input `Requirements` but do not synthesize typed capability `Descriptor.Provides`; exporting infra plugins use explicit handwritten descriptor composition until real DX pressure justifies extending module-spec authoring.
 
 A deferred limitation does not become an active framework wave merely because it is listed here.
 
