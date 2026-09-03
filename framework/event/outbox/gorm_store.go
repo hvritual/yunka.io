@@ -20,6 +20,7 @@ type GORMStore struct {
 	db         *gorm.DB
 	table      string
 	skipLocked bool
+	propagator event.Propagator
 }
 
 type GORMOption func(*GORMStore) error
@@ -44,6 +45,17 @@ func WithSkipLocked(enabled bool) GORMOption {
 		return nil
 	}
 }
+
+// WithPropagator injects canonical distributed propagation metadata before an
+// event is serialized into the durable Outbox. This happens at the original
+// caller/transaction boundary rather than later in the dispatcher worker.
+func WithPropagator(propagator event.Propagator) GORMOption {
+	return func(store *GORMStore) error {
+		store.propagator = propagator
+		return nil
+	}
+}
+
 func NewGORMStore(db *gorm.DB, options ...GORMOption) (*GORMStore, error) {
 	if db == nil {
 		return nil, errors.New("outbox: gorm database is required")
@@ -83,7 +95,8 @@ func (store *GORMStore) Enqueue(ctx context.Context, envelope event.Envelope) er
 	if store == nil || store.db == nil {
 		return errors.New("outbox: gorm store is nil")
 	}
-	return store.insert(store.db.WithContext(nonNilContext(ctx)), envelope)
+	ctx = nonNilContext(ctx)
+	return store.insert(ctx, store.db.WithContext(ctx), envelope)
 }
 
 // EnqueueTx writes through an already-open *gorm.DB transaction. For atomic
@@ -94,11 +107,19 @@ func (store *GORMStore) EnqueueTx(ctx context.Context, tx any, envelope event.En
 	if !ok || db == nil {
 		return ErrInvalidTx
 	}
-	return store.insert(db.WithContext(nonNilContext(ctx)), envelope)
+	ctx = nonNilContext(ctx)
+	return store.insert(ctx, db.WithContext(ctx), envelope)
 }
 
-func (store *GORMStore) insert(db *gorm.DB, envelope event.Envelope) error {
-	normalized, err := envelope.Normalize()
+func (store *GORMStore) prepare(ctx context.Context, envelope event.Envelope) (event.Envelope, error) {
+	if store == nil {
+		return event.Envelope{}, errors.New("outbox: gorm store is nil")
+	}
+	return event.PrepareForPublish(nonNilContext(ctx), envelope, store.propagator)
+}
+
+func (store *GORMStore) insert(ctx context.Context, db *gorm.DB, envelope event.Envelope) error {
+	normalized, err := store.prepare(ctx, envelope)
 	if err != nil {
 		return err
 	}
