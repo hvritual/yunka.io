@@ -20,6 +20,7 @@ var rootCommandCategories = map[string]string{
 	"dev":        categoryDeveloperWorkflow,
 	"context":    categoryDiagnostics,
 	"ownership":  categoryDiagnostics,
+	"change":     categoryDiagnostics,
 	"doctor":     categoryDiagnostics,
 	"explain":    categoryDiagnostics,
 	"inspect":    categoryDiagnostics,
@@ -42,7 +43,7 @@ func applyDiscoverability(app *cli.App) {
 
   yunka init -> yunka generate -> yunka check -> yunka dev
 
-Use context for a read-only AI/automation project snapshot and ownership to guard automated file mutations. Use doctor/explain/inspect/graph for evidence and troubleshooting. Contract, assembly, module, domain, and dependency commands remain available as explicit expert architecture interfaces.`)
+Use context for a read-only AI/automation project snapshot, ownership to guard automated file mutations, and change plan to derive evidence-backed impact and verification gates for an existing operation. Use doctor/explain/inspect/graph for evidence and troubleshooting. Contract, assembly, module, domain, and dependency commands remain available as explicit expert architecture interfaces.`)
 	for index := range app.Commands {
 		if category, ok := rootCommandCategories[app.Commands[index].Name]; ok {
 			app.Commands[index].Category = category
