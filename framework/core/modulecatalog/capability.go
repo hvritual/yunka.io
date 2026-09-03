@@ -120,6 +120,7 @@ func ResolveCapability[T any](set CapabilitySet, key CapabilityKey[T]) (T, error
 // missing, duplicate, or contract-mismatched exports fail before App start.
 func CollectCapabilities(descriptors []Descriptor, instances []Instance) (CapabilitySet, error) {
 	declared := make(map[string]map[string]CapabilityContract, len(descriptors))
+	moduleNames := make([]string, 0, len(descriptors))
 	for _, descriptor := range descriptors {
 		normalized, err := normalizeDescriptor(descriptor)
 		if err != nil {
@@ -130,7 +131,9 @@ func CollectCapabilities(descriptors []Descriptor, instances []Instance) (Capabi
 			contracts[contract.Name] = contract
 		}
 		declared[normalized.Name] = contracts
+		moduleNames = append(moduleNames, normalized.Name)
 	}
+	sort.Strings(moduleNames)
 
 	byModule := make(map[string]Instance, len(instances))
 	for _, instance := range instances {
@@ -145,7 +148,8 @@ func CollectCapabilities(descriptors []Descriptor, instances []Instance) (Capabi
 	}
 
 	values := make(map[string]capabilityValue)
-	for moduleName, contracts := range declared {
+	for _, moduleName := range moduleNames {
+		contracts := declared[moduleName]
 		instance := byModule[moduleName]
 		exporter, exportsCapabilities := instance.(CapabilityExporter)
 		if len(contracts) == 0 {
@@ -160,12 +164,29 @@ func CollectCapabilities(descriptors []Descriptor, instances []Instance) (Capabi
 		if !exportsCapabilities {
 			return CapabilitySet{}, fmt.Errorf("modulecatalog: module %q declares capabilities but instance does not export them", moduleName)
 		}
-		seen := make(map[string]struct{}, len(contracts))
-		for _, export := range exporter.ExportCapabilities() {
-			contract, err := normalizeCapabilityContract(export.contract)
+
+		exports := append([]CapabilityExport(nil), exporter.ExportCapabilities()...)
+		for index := range exports {
+			contract, err := normalizeCapabilityContract(exports[index].contract)
 			if err != nil {
 				return CapabilitySet{}, fmt.Errorf("modulecatalog: module %q capability export: %w", moduleName, err)
 			}
+			exports[index].contract = contract
+		}
+		sort.Slice(exports, func(i, j int) bool {
+			left, right := exports[i].contract, exports[j].contract
+			if left.Name != right.Name {
+				return left.Name < right.Name
+			}
+			if left.Package != right.Package {
+				return left.Package < right.Package
+			}
+			return left.Type < right.Type
+		})
+
+		seen := make(map[string]struct{}, len(contracts))
+		for _, export := range exports {
+			contract := export.contract
 			declaredContract, ok := contracts[contract.Name]
 			if !ok {
 				return CapabilitySet{}, fmt.Errorf("modulecatalog: module %q exports undeclared capability %q", moduleName, contract.Name)
@@ -182,17 +203,28 @@ func CollectCapabilities(descriptors []Descriptor, instances []Instance) (Capabi
 			}
 			values[contract.Name] = capabilityValue{module: moduleName, contract: contract, value: export.value}
 		}
+		contractNames := make([]string, 0, len(contracts))
 		for name := range contracts {
+			contractNames = append(contractNames, name)
+		}
+		sort.Strings(contractNames)
+		for _, name := range contractNames {
 			if _, ok := seen[name]; !ok {
 				return CapabilitySet{}, fmt.Errorf("modulecatalog: module %q did not export declared capability %q", moduleName, name)
 			}
 		}
 	}
-	for moduleName, instance := range byModule {
+
+	builtNames := make([]string, 0, len(byModule))
+	for moduleName := range byModule {
+		builtNames = append(builtNames, moduleName)
+	}
+	sort.Strings(builtNames)
+	for _, moduleName := range builtNames {
 		if _, known := declared[moduleName]; known {
 			continue
 		}
-		if exporter, ok := instance.(CapabilityExporter); ok && len(exporter.ExportCapabilities()) > 0 {
+		if exporter, ok := byModule[moduleName].(CapabilityExporter); ok && len(exporter.ExportCapabilities()) > 0 {
 			return CapabilitySet{}, fmt.Errorf("modulecatalog: built module %q is not present in sealed descriptor plan", moduleName)
 		}
 	}
