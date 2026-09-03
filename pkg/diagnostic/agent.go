@@ -18,16 +18,16 @@ type AgentDiagnostic struct {
 	Severity    Severity   `json:"severity"`
 	Stage       string     `json:"stage"`
 	Cause       AgentCause `json:"cause"`
-	Target      *Location  `json:"target,omitempty"`
-	Remediation []Action   `json:"remediation,omitempty"`
-	Retry       *Action    `json:"retry,omitempty"`
+	Target      *Location  `json:"target"`
+	Remediation []Action   `json:"remediation"`
+	Retry       *Action    `json:"retry"`
 }
 
 type AgentEnvelope struct {
 	SchemaVersion int               `json:"schemaVersion"`
 	Command       string            `json:"command"`
 	OK            bool              `json:"ok"`
-	Diagnostics   []AgentDiagnostic `json:"diagnostics,omitempty"`
+	Diagnostics   []AgentDiagnostic `json:"diagnostics"`
 }
 
 // NewAgentEnvelope projects the canonical Diagnostic presentation contract into
@@ -55,7 +55,7 @@ func NewAgentEnvelope(command string, diagnostics []Diagnostic, ok bool) (AgentE
 				Detail:  item.Detail,
 			},
 			Target:      cloneLocation(item.Location),
-			Remediation: append([]Action(nil), item.Actions...),
+			Remediation: append([]Action{}, item.Actions...),
 		}
 		if !ok && item.Severity != SeverityInfo {
 			projected.Retry = &Action{
