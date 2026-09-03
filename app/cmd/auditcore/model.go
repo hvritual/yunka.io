@@ -48,11 +48,20 @@ type Finding struct {
 	Evidence  []Evidence   `json:"evidence"`
 }
 
+type DebtDelta struct {
+	BaseRef  string    `json:"baseRef"`
+	BaseSHA  string    `json:"baseSha"`
+	Existing []Finding `json:"existing"`
+	New      []Finding `json:"new"`
+	Fixed    []Finding `json:"fixed"`
+}
+
 type Report struct {
 	SchemaVersion int             `json:"schemaVersion"`
 	Project       ProjectIdentity `json:"project"`
 	Source        SourceSnapshot  `json:"source"`
 	Findings      []Finding       `json:"findings"`
+	Debt          *DebtDelta      `json:"debt,omitempty"`
 }
 
 func NewReport(project ProjectIdentity) Report {
@@ -70,27 +79,25 @@ func Normalize(report *Report) {
 	}
 	report.Project.GoModule = strings.TrimSpace(report.Project.GoModule)
 	NormalizeSource(&report.Source)
-	for index := range report.Findings {
-		finding := &report.Findings[index]
-		finding.ID = strings.TrimSpace(finding.ID)
-		finding.Rule = strings.TrimSpace(finding.Rule)
-		finding.Subject = strings.TrimSpace(finding.Subject)
-		finding.Summary = strings.TrimSpace(finding.Summary)
-		finding.Invariant = strings.TrimSpace(finding.Invariant)
-		finding.Evidence = normalizeEvidence(finding.Evidence)
-	}
-	sort.Slice(report.Findings, func(i, j int) bool {
-		left, right := report.Findings[i], report.Findings[j]
-		if left.ID != right.ID {
-			return left.ID < right.ID
-		}
-		if left.Rule != right.Rule {
-			return left.Rule < right.Rule
-		}
-		return left.Subject < right.Subject
-	})
+	normalizeFindings(report.Findings)
 	if report.Findings == nil {
 		report.Findings = []Finding{}
+	}
+	if report.Debt != nil {
+		report.Debt.BaseRef = strings.TrimSpace(report.Debt.BaseRef)
+		report.Debt.BaseSHA = strings.TrimSpace(report.Debt.BaseSHA)
+		normalizeFindings(report.Debt.Existing)
+		normalizeFindings(report.Debt.New)
+		normalizeFindings(report.Debt.Fixed)
+		if report.Debt.Existing == nil {
+			report.Debt.Existing = []Finding{}
+		}
+		if report.Debt.New == nil {
+			report.Debt.New = []Finding{}
+		}
+		if report.Debt.Fixed == nil {
+			report.Debt.Fixed = []Finding{}
+		}
 	}
 }
 
@@ -106,43 +113,21 @@ func Validate(report Report) error {
 			return fmt.Errorf("audit: source file %s package is required", file.Path)
 		}
 	}
-	seen := make(map[string]struct{}, len(report.Findings))
-	for _, finding := range report.Findings {
-		if finding.ID == "" {
-			return fmt.Errorf("audit: finding id is required")
+	if err := validateFindings(report.Findings, false); err != nil {
+		return err
+	}
+	if report.Debt != nil {
+		if report.Debt.BaseRef == "" || report.Debt.BaseSHA == "" {
+			return fmt.Errorf("audit: debt baseline ref and SHA are required")
 		}
-		if _, duplicate := seen[finding.ID]; duplicate {
-			return fmt.Errorf("audit: duplicate finding id %q", finding.ID)
+		if err := validateFindings(report.Debt.Existing, true); err != nil {
+			return fmt.Errorf("audit: existing debt: %w", err)
 		}
-		seen[finding.ID] = struct{}{}
-		if finding.Rule == "" {
-			return fmt.Errorf("audit: finding %s rule is required", finding.ID)
+		if err := validateFindings(report.Debt.New, true); err != nil {
+			return fmt.Errorf("audit: new debt: %w", err)
 		}
-		if finding.Subject == "" {
-			return fmt.Errorf("audit: finding %s subject is required", finding.ID)
-		}
-		if finding.Summary == "" {
-			return fmt.Errorf("audit: finding %s summary is required", finding.ID)
-		}
-		switch finding.Class {
-		case FindingProvenViolation:
-			if finding.Invariant == "" {
-				return fmt.Errorf("audit: proven finding %s invariant is required", finding.ID)
-			}
-		case FindingEvidenceObservation:
-		default:
-			return fmt.Errorf("audit: finding %s class %q is unsupported", finding.ID, finding.Class)
-		}
-		if len(finding.Evidence) == 0 {
-			return fmt.Errorf("audit: finding %s evidence is required", finding.ID)
-		}
-		for _, evidence := range finding.Evidence {
-			if !supportedEvidenceKind(evidence.Kind) {
-				return fmt.Errorf("audit: finding %s evidence kind %q is unsupported", finding.ID, evidence.Kind)
-			}
-			if evidence.Source == "" {
-				return fmt.Errorf("audit: finding %s evidence source is required", finding.ID)
-			}
+		if err := validateFindings(report.Debt.Fixed, true); err != nil {
+			return fmt.Errorf("audit: fixed debt: %w", err)
 		}
 	}
 	return nil
@@ -159,6 +144,74 @@ func Marshal(report Report) ([]byte, error) {
 		return nil, err
 	}
 	return append(contents, '\n'), nil
+}
+
+func normalizeFindings(values []Finding) {
+	for index := range values {
+		finding := &values[index]
+		finding.ID = strings.TrimSpace(finding.ID)
+		finding.Rule = strings.TrimSpace(finding.Rule)
+		finding.Subject = strings.TrimSpace(finding.Subject)
+		finding.Summary = strings.TrimSpace(finding.Summary)
+		finding.Invariant = strings.TrimSpace(finding.Invariant)
+		finding.Evidence = normalizeEvidence(finding.Evidence)
+	}
+	sort.Slice(values, func(i, j int) bool {
+		left, right := values[i], values[j]
+		if left.ID != right.ID {
+			return left.ID < right.ID
+		}
+		if left.Rule != right.Rule {
+			return left.Rule < right.Rule
+		}
+		return left.Subject < right.Subject
+	})
+}
+
+func validateFindings(values []Finding, provenOnly bool) error {
+	seen := make(map[string]struct{}, len(values))
+	for _, finding := range values {
+		if finding.ID == "" {
+			return fmt.Errorf("finding id is required")
+		}
+		if _, duplicate := seen[finding.ID]; duplicate {
+			return fmt.Errorf("duplicate finding id %q", finding.ID)
+		}
+		seen[finding.ID] = struct{}{}
+		if finding.Rule == "" {
+			return fmt.Errorf("finding %s rule is required", finding.ID)
+		}
+		if finding.Subject == "" {
+			return fmt.Errorf("finding %s subject is required", finding.ID)
+		}
+		if finding.Summary == "" {
+			return fmt.Errorf("finding %s summary is required", finding.ID)
+		}
+		switch finding.Class {
+		case FindingProvenViolation:
+			if finding.Invariant == "" {
+				return fmt.Errorf("proven finding %s invariant is required", finding.ID)
+			}
+		case FindingEvidenceObservation:
+			if provenOnly {
+				return fmt.Errorf("finding %s class %q cannot participate in debt delta", finding.ID, finding.Class)
+			}
+		default:
+			return fmt.Errorf("finding %s class %q is unsupported", finding.ID, finding.Class)
+		}
+		if len(finding.Evidence) == 0 {
+			return fmt.Errorf("finding %s evidence is required", finding.ID)
+		}
+		for _, evidence := range finding.Evidence {
+			if !supportedEvidenceKind(evidence.Kind) {
+				return fmt.Errorf("finding %s evidence kind %q is unsupported", finding.ID, evidence.Kind)
+			}
+			if evidence.Source == "" {
+				return fmt.Errorf("finding %s evidence source is required", finding.ID)
+			}
+		}
+	}
+	return nil
 }
 
 func normalizeEvidence(values []Evidence) []Evidence {
@@ -202,6 +255,20 @@ func supportedEvidenceKind(kind EvidenceKind) bool {
 	}
 }
 
+func cloneFinding(value Finding) Finding {
+	result := value
+	result.Evidence = append([]Evidence(nil), value.Evidence...)
+	return result
+}
+
+func cloneFindings(values []Finding) []Finding {
+	result := make([]Finding, len(values))
+	for index, finding := range values {
+		result[index] = cloneFinding(finding)
+	}
+	return result
+}
+
 func cloneReport(report Report) Report {
 	result := report
 	result.Source.Files = make([]GoSourceFile, len(report.Source.Files))
@@ -209,10 +276,13 @@ func cloneReport(report Report) Report {
 		result.Source.Files[index] = file
 		result.Source.Files[index].Imports = append([]string(nil), file.Imports...)
 	}
-	result.Findings = make([]Finding, len(report.Findings))
-	for index, finding := range report.Findings {
-		result.Findings[index] = finding
-		result.Findings[index].Evidence = append([]Evidence(nil), finding.Evidence...)
+	result.Findings = cloneFindings(report.Findings)
+	if report.Debt != nil {
+		debt := *report.Debt
+		debt.Existing = cloneFindings(report.Debt.Existing)
+		debt.New = cloneFindings(report.Debt.New)
+		debt.Fixed = cloneFindings(report.Debt.Fixed)
+		result.Debt = &debt
 	}
 	return result
 }
