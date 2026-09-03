@@ -71,6 +71,49 @@ func TestBuildProjectFailureJSONHasStableCodeAndNoAbsoluteRoot(t *testing.T) {
 	}
 }
 
+func TestBuildAgentJSONProjectsFailureAndRetry(t *testing.T) {
+	root := t.TempDir()
+	_, workflowErr := projectflow.Check(nil, projectflow.Options{Root: root})
+	if workflowErr == nil {
+		t.Fatal("expected project failure")
+	}
+	result, err := Build("yunka check", FormatAgentJSON, projectflow.Report{}, workflowErr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ExitCode != 1 {
+		t.Fatalf("exit=%d", result.ExitCode)
+	}
+	for _, expected := range []string{
+		`"code": "YUNKA-DX-PROJECT-001"`,
+		`"cause"`,
+		`"target"`,
+		`"remediation"`,
+		`"retry"`,
+		`"value": "yunka check"`,
+	} {
+		if !strings.Contains(result.Output, expected) {
+			t.Fatalf("agent output missing %s:\n%s", expected, result.Output)
+		}
+	}
+	if strings.Contains(result.Output, root) {
+		t.Fatalf("agent JSON leaked temp root: %s", result.Output)
+	}
+}
+
+func TestBuildAgentJSONSuccessHasStableEmptyDiagnostics(t *testing.T) {
+	result, err := Build("yunka check", FormatAgentJSON, projectflow.Report{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ExitCode != 0 {
+		t.Fatalf("exit=%d", result.ExitCode)
+	}
+	if !strings.Contains(result.Output, `"ok": true`) || !strings.Contains(result.Output, `"diagnostics": []`) {
+		t.Fatalf("unexpected agent success output: %s", result.Output)
+	}
+}
+
 func TestBuildRejectsUnsupportedFormatWithStableCLIError(t *testing.T) {
 	result, err := Build("yunka check", "yaml", projectflow.Report{}, nil)
 	if err != nil {
