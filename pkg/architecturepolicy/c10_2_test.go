@@ -18,22 +18,24 @@ func TestC102AssemblyCompilerRemainsStructuralAndOneWay(t *testing.T) {
 		return string(content)
 	}
 	compiler := read("pkg/contract/assembly_codegen.go")
+	capabilityCompiler := read("pkg/contract/assembly_capability_codegen.go")
 	join := read("pkg/contract/assembly_compiler.go")
 	moduleBinding := read("pkg/contract/module_binding.go")
 	moduleSnapshot := read("pkg/contract/module_snapshot.go")
 	moduleCodegen := read("pkg/contract/assembly_module_codegen.go")
 	cli := read("app/cmd/assembly/command.go")
+	combined := compiler + capabilityCompiler + join + moduleBinding + moduleSnapshot + moduleCodegen + cli
 
 	for _, forbidden := range []string{
 		"reflect.", "plugin.Open", "go/packages", "filepath.Walk", "ServiceLocator", "serviceLocator",
 		"map[string]any", "map[string]interface{}", "exec.Command(",
 	} {
-		if strings.Contains(compiler+join+moduleBinding+moduleSnapshot+moduleCodegen+cli, forbidden) {
+		if strings.Contains(combined, forbidden) {
 			t.Errorf("C10.2 compiler contains forbidden runtime/discovery token %q", forbidden)
 		}
 	}
 	for _, forbidden := range []string{"kernel.New(", ".Start("} {
-		if strings.Contains(compiler+join+moduleCodegen, forbidden) {
+		if strings.Contains(compiler+capabilityCompiler+join+moduleCodegen, forbidden) {
 			t.Errorf("C10.2 generated compiler surface crosses into C10.3 runtime closure with %q", forbidden)
 		}
 	}
@@ -49,11 +51,14 @@ func TestC102AssemblyCompilerRemainsStructuralAndOneWay(t *testing.T) {
 		"ModuleName",
 		"autoload",
 		"GeneratedDescriptor",
-		"func NewCatalog()",
+		"func NewCatalog(additional ...modulecatalog.Descriptor)",
+		"for _, descriptor := range additional",
+		"func BindAssemblyCapabilities",
+		"BuildApplicationsWithCapabilities",
 		"CompileBoundAssembly",
 		"assembly check ok",
 	} {
-		if !strings.Contains(compiler+join+moduleBinding+moduleSnapshot+moduleCodegen+cli, required) {
+		if !strings.Contains(combined, required) {
 			t.Errorf("C10.2 compiler is missing structural reuse marker %q", required)
 		}
 	}
@@ -63,7 +68,7 @@ func TestC102AssemblyCompilerRemainsStructuralAndOneWay(t *testing.T) {
 	if strings.Contains(moduleBinding, "Name: entry.Name()") || strings.Contains(moduleSnapshot, "Name: entry.Name()") {
 		t.Error("C10.2 must not derive module identity from directory names")
 	}
-	if strings.Contains(moduleCodegen, "modulecatalog.Default()") {
-		t.Error("C10.2 generated module composition must construct an explicit catalog")
+	if strings.Contains(moduleCodegen+capabilityCompiler, "modulecatalog.Default()") {
+		t.Error("C10.2 generated composition must remain explicit and must not discover a default catalog")
 	}
 }
