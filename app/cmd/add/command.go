@@ -151,6 +151,7 @@ func applicationCommand() cli.Command {
 
 func operationCommand() cli.Command {
 	flags := append(commonFlags(),
+		cli.BoolFlag{Name: "plan", Usage: "validate and print prospective structural mutations/effects without writing files"},
 		cli.StringFlag{Name: "use-case", Usage: "explicit stable use_case business key"},
 		cli.StringFlag{Name: "rpc-name", Usage: "optional protobuf RPC method name; defaults structurally from operation ID"},
 		cli.StringFlag{Name: "request-type", Usage: "optional request DTO message name; defaults to <RPC>Request"},
@@ -173,7 +174,7 @@ func operationCommand() cli.Command {
 		Usage: "add a typed RPC Operation using only explicit semantic facts supplied by the caller",
 		Flags: flags,
 		Action: func(c *cli.Context) error {
-			report, err := AddOperation(OperationOptions{
+			options := OperationOptions{
 				Root:               c.String("root"),
 				ApplicationKey:     c.Args().Get(0),
 				OperationID:        c.Args().Get(1),
@@ -194,7 +195,12 @@ func operationCommand() cli.Command {
 				HTTPMethod:         c.String("http-method"),
 				HTTPPath:           c.String("http-path"),
 				HTTPBody:           c.String("http-body"),
-			})
+			}
+			if c.Bool("plan") {
+				report, err := PlanOperation(options)
+				return finish(c, "yunka add operation --plan", report, err)
+			}
+			report, err := AddOperation(options)
 			return finish(c, "yunka add operation", report, err)
 		},
 	}
