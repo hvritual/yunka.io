@@ -1,4 +1,4 @@
-package audit
+package auditcore
 
 import (
 	"encoding/json"

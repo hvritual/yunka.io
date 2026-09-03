@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	auditcore "github.com/hvritual/yunka.io/pkg/audit"
+	"yunka.io/app/cmd/auditcore"
 )
 
 func TestRenderAuditReportIsStableAndNonBlocking(t *testing.T) {

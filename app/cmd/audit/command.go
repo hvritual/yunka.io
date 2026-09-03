@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	auditcore "github.com/hvritual/yunka.io/pkg/audit"
 	"github.com/hvritual/yunka.io/pkg/contract"
 	"github.com/urfave/cli"
+	"yunka.io/app/cmd/auditcore"
 	"yunka.io/app/cmd/projectflow"
 )
 
