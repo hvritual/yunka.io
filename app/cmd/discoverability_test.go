@@ -13,6 +13,7 @@ func TestC116ARootCommandTaxonomyIsCompleteAndStable(t *testing.T) {
 	want := map[string]string{
 		"api":        categorySupplementary,
 		"assembly":   categoryExpert,
+		"change":     categoryDiagnostics,
 		"check":      categoryDeveloperWorkflow,
 		"context":    categoryDiagnostics,
 		"contract":   categoryExpert,
@@ -112,6 +113,7 @@ func TestC116AApplyDiscoverabilityPreservesCommandsAndRendersHappyPath(t *testin
 		"yunka init -> yunka generate -> yunka check -> yunka dev",
 		"context",
 		"ownership",
+		"change",
 		"explain",
 	} {
 		if !strings.Contains(help, expected) {
