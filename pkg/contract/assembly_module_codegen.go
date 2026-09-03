@@ -69,7 +69,9 @@ func RenderAssemblyModuleCode(plan assemblyplan.Plan, bindings []ModuleBinding) 
 	b.WriteString(GeneratedAssemblyMarker + "\n\npackage assembly\n\nimport (\n")
 	b.WriteString(imports.render())
 	b.WriteString(")\n\n")
-	b.WriteString("func NewCatalog() (*modulecatalog.Catalog, error) {\n")
+	b.WriteString("// NewCatalog constructs the generated canonical catalog plus explicitly supplied external module descriptors.\n")
+	b.WriteString("// Additional descriptors are a bootstrap-time composition input, not runtime service discovery.\n")
+	b.WriteString("func NewCatalog(additional ...modulecatalog.Descriptor) (*modulecatalog.Catalog, error) {\n")
 	b.WriteString("\tcatalog := modulecatalog.New()\n")
 	for _, name := range names {
 		if binding, ok := byName[name]; ok {
@@ -79,6 +81,9 @@ func RenderAssemblyModuleCode(plan assemblyplan.Plan, bindings []ModuleBinding) 
 		}
 		writeInlineModuleRegistration(&b, byModule[name], dependencies[name])
 	}
+	b.WriteString("\tfor _, descriptor := range additional {\n")
+	b.WriteString("\t\tif err := catalog.Register(descriptor); err != nil { return nil, fmt.Errorf(\"yunka assembly: register additional module %s: %w\", descriptor.Name, err) }\n")
+	b.WriteString("\t}\n")
 	b.WriteString("\tif _, err := catalog.Seal(); err != nil { return nil, fmt.Errorf(\"yunka assembly: seal module catalog: %w\", err) }\n")
 	b.WriteString("\treturn catalog, nil\n}\n")
 	formatted, err := format.Source([]byte(b.String()))
