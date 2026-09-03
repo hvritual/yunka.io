@@ -3,8 +3,8 @@
 > Document class: **STATUS**  
 > Authority: current framework/wave/release/pressure status  
 > Live Git HEAD authority: resolve the `main` ref from Git/GitHub; it is not duplicated as a permanent fact here  
-> Behavioral reconciliation baseline: `6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb`  
-> Reconciled date: 2026-09-02  
+> Behavioral reconciliation baseline: `19bed965852d9dc2ef39e91dcadd7fb6bea4c871` (qualified candidate merged unchanged by PR #119)  
+> Reconciled date: 2026-09-03  
 > Governance: [`DOCUMENTATION_GOVERNANCE.md`](DOCUMENTATION_GOVERNANCE.md)
 
 ## Current framework state
@@ -15,9 +15,10 @@
 | C10 Runtime Assembly & Framework Productization | **Complete / qualified / merged** | issue #42 records ordered C10.1-C10.5 qualification and merge; roadmap is historical |
 | C11 Developer Experience Productization | **Complete / production-qualified / merged** | issue #60 records C11.1-C11.7 complete with real Biz consumer qualification; roadmap is historical |
 | Post-C11 five-gap DX convergence | **Complete / qualified / merged** | PR #104 merged the canonical four-command project closure without changing compiler/runtime/security/transaction semantics |
-| B12 multi-tenant Access/IAM consumer pressure | **Complete / qualified** | real Biz pressure discovered two generic Yunka gaps; both are closed and reverse-qualified against the behavioral reconciliation baseline |
+| B12 multi-tenant Access/IAM consumer pressure | **Complete / qualified** | real Biz pressure discovered two generic Yunka gaps; both are closed and reverse-qualified against the B12 behavioral baseline `6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb` |
+| Distributed execution trace closure | **Complete / production-qualified / merged** | issue #118 / PR #119; exact candidate `19bed965852d9dc2ef39e91dcadd7fb6bea4c871` passed CI #418 and production #178 and was merged unchanged into `main` |
 | Active numbered Yunka framework wave | **None selected** | new framework work remains pressure-driven rather than roadmap-driven |
-| Proven open Yunka P0/P1 runtime/compiler/authz/persistence defects | **0 known at reconciliation** | do not promote hypotheses into framework defects without executable consumer evidence |
+| Proven open Yunka P0/P1 runtime/compiler/authz/persistence/trace-closure defects | **0 known at reconciliation** | do not promote hypotheses into framework defects without executable consumer evidence |
 
 ## Current developer workflow
 
@@ -80,6 +81,34 @@ This removes symbol collisions and prevents capability widening by unioning unre
 
 Evidence: Yunka issue #110; qualified integration PR #112; behavioral framework baseline `6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb`; real Biz reverse qualification.
 
+## Distributed execution trace closure
+
+Issue #118 / PR #119 closed the previously observed gaps between available telemetry primitives and a correct-by-default cross-system trace chain.
+
+### P1 — canonical RPC propagation
+
+**State: CLOSED / MERGED.**
+
+App-owned gRPC connections created through the canonical Platform RPC factory now install W3C Trace Context/Baggage propagation for unary and streaming calls. Observability client interceptors inject the client-span context at the transport boundary, so a Yunka consumer does not need to remember a separate propagation interceptor merely to preserve trace continuity.
+
+### P1 — durable Outbox/Event trace and causality
+
+**State: CLOSED / MERGED.**
+
+Event publication has one canonical preparation boundary. A child event emitted from an event-consumer context inherits the parent correlation chain and defaults `CausationID` to the parent Event ID unless the caller supplied an explicit non-default value. Transactional Outbox staging injects propagation metadata before durable serialization, so delayed/restarted dispatcher workers do not depend on the original request context still existing.
+
+Authenticated Principal identity is still not inherited across event trust boundaries.
+
+### P2 — TraceID evidence analysis
+
+**State: CLOSED / MERGED.**
+
+Operation phase/outcome observations and Outbox lifecycle observations enter the same trace-correlated telemetry stream through request-scoped observers. `framework/diagnostics.TraceAnalyzer` is the vendor-neutral read-only aggregation contract for `span`, `log`, `operation`, and `event` evidence supplied by backend adapters.
+
+This does **not** make a telemetry trace an authoritative external-effect receipt: a trace can establish technical execution and causality, while external side-effect confirmation still requires whatever authoritative readback/reconciliation contract the consuming domain needs.
+
+Evidence: exact candidate `19bed965852d9dc2ef39e91dcadd7fb6bea4c871`; CI #418 success; production #178 success on MySQL 8.4; merge PR #119.
+
 ## Current pressure frontier
 
 The active real-consumer frontier is **B13 cross-tenant delegation and delegated device access** in `hvritual/biz` issue #11.
@@ -101,7 +130,7 @@ No Yunka primitive should be added preemptively. If the current APIs cannot expr
 
 These are explicit limitations/non-goals, not current release blockers:
 
-- `FP-C9-005` — Saga step/topology evidence is not represented as a complete Application Graph/Diagnostics topology: **OPEN / DEFERRED**. Existing Saga/Outbox execution semantics are not thereby classified as broken.
+- `FP-C9-005` — Saga step/topology evidence is not represented as a complete Application Graph/Diagnostics topology: **OPEN / DEFERRED**. PR #119 adds Trace/Event/Operation evidence correlation but does not claim full Saga topology representation in Application Graph.
 - Durable Operation idempotency provides duplicate-execution suppression; response/result replay remains outside the current contract unless future real pressure justifies it.
 
 A deferred limitation does not become an active framework wave merely because it is listed here.

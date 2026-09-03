@@ -28,7 +28,7 @@ Every repository task must:
 - Local Git is preferred when a usable checkout and authorization are available.
 - The authorized GitHub Connector is a valid write path when local Git is unavailable.
 - Normal implementation work uses an isolated task branch and repository review/merge flow.
-- Do not move/overwrite `main`, force-update a branch, discard user changes, or destroy history without explicit user authorization.
+- Do not move/overwrite `main`, force-update a branch, discard user changes, or destroy history without explicit authorization.
 - Environment-local credentials and tokens are secrets and are never durable project state.
 
 ## Documentation governance baseline
@@ -98,6 +98,7 @@ Every repository task must:
 - `contracts/proto` is the only canonical RPC protobuf source tree.
 - Standard generated grpc-go clients/servers, typed registration, standard full method names, and `bufconn` tests are the only RPC runtime/test transport.
 - Historical XR generation, custom invoke transport, generated memory dispatcher, string handler registries, message pools, and the old `app/cmd/rpc` generator are retired.
+- App-owned gRPC connections created by the canonical Platform RPC factory install W3C Trace Context/Baggage propagation for unary and streaming calls by default; a consumer may compose observability/resilience interceptors without owning trace continuity itself.
 - Remote RPC identity is never trusted merely because metadata contains caller fields.
 - Production server identity is established through a server-side `CredentialVerifier` before authorization.
 - Static service tokens are a bootstrap workload-identity adapter, not an end-user credential model, and require privacy/integrity-protected transport by default.
@@ -118,6 +119,9 @@ Every repository task must:
 - Preferred SLS architecture is OTLP -> Collector for traces/metrics and JSON stdout -> LoongCollector for logs/events.
 - Application code does not depend directly on Aliyun SLS APIs for business execution.
 - W3C Trace Context is the canonical distributed propagation format.
+- Request-scoped Operation observers may emit phase/outcome evidence into the active trace/log stream, but observers are observational only and may not participate in authorization, transaction, idempotency, or application execution decisions.
+- `framework/diagnostics.TraceAnalyzer` is the vendor-neutral read-only aggregation contract for backend-provided `span`, `log`, `operation`, and `event` evidence; SLS/other telemetry query implementations remain adapters outside the framework execution path.
+- Trace evidence establishes technical execution and causality, not authoritative confirmation of an external side effect; remote-effect truth remains a separate consumer/domain concern unless a future proven framework pressure establishes a generic contract.
 - Identity attributes are excluded from telemetry by default and require explicit opt-in/privacy review.
 
 ## Event, Outbox, and Saga baseline
@@ -125,8 +129,10 @@ Every repository task must:
 - `framework/event.Envelope` is the canonical business-event transport contract.
 - Event IDs remain stable across retries and are consumer idempotency keys.
 - Event delivery is at-least-once; non-idempotent consumers must deduplicate by Envelope ID.
+- Canonical event publish preparation owns event causality propagation: when a child event carries only the Normalize-generated self-correlation default, it inherits the parent correlation chain and defaults `CausationID` to the consumed parent Event ID; explicit non-default causality remains caller-owned.
 - Event handling starts a new trust boundary; authenticated Principal identity is not inherited implicitly across remote event delivery.
 - Transactional Outbox atomicity exists only when the business write and outbox insert join the exact same local transaction.
+- Transactional Outbox staging injects canonical propagation metadata before durable Envelope serialization, so delayed/restarted dispatcher workers do not depend on the originating request context remaining alive.
 - MySQL claim semantics use `READ COMMITTED` plus bounded `FOR UPDATE SKIP LOCKED` acquisition and lease ownership.
 - Lease reclaim, bounded retry/backoff, dead-letter semantics, and published retention are explicit.
 - `framework/workflow/saga` is the explicit remote Saga/Outbox boundary and never implies distributed database transaction/2PC.
@@ -194,6 +200,7 @@ Every repository task must:
 - Every node/edge carries declared, observed, or explicitly inferred evidence; absence of evidence remains absence of an edge.
 - Contract/OperationPlan facts contribute Domain/Application/Operation/Permission/message/binding/dependency evidence.
 - Runtime Health/routes/RPC/event inventory and resilience/selector snapshots may contribute observed evidence through explicit adapters.
+- Trace evidence aggregation is read-only runtime evidence and does not by itself create Application Graph edges or imply complete Saga topology.
 - Graph/diagnostics never infer architecture from grep, package names, method naming, or raw URL patterns.
 - W07 diagnostics are read-only and must not expose credentials, payloads, caller identity, grant scopes, or secret configuration values.
 
