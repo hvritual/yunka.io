@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/hvritual/yunka.io/pkg/modulespec"
 	"github.com/urfave/cli"
 	"yunka.io/app/cmd/dxoutput"
 	"yunka.io/app/cmd/projectflow"
@@ -151,6 +152,9 @@ func (current classifier) classify(path string) Decision {
 	if project.ContractSourceKind == "inventory" && relative == clean(project.ContractSource) {
 		return decision(relative, "developer-config", MutationEditable, true, "path is the canonical contract source inventory")
 	}
+	if declarativeModuleSpecPath(relative, project.ModulesRoot) {
+		return decision(relative, "developer-module", MutationEditable, true, "path is the canonical declarative module spec location")
+	}
 	for _, config := range []string{project.Profile, project.ProviderManifest, project.DevManifest} {
 		if strings.TrimSpace(config) != "" && relative == clean(config) {
 			return decision(relative, "developer-config", MutationEditable, true, "path is an explicit Yunka developer configuration surface")
@@ -220,6 +224,20 @@ func clean(path string) string {
 		return ""
 	}
 	return strings.TrimPrefix(path, "./")
+}
+
+func declarativeModuleSpecPath(path, root string) bool {
+	path = clean(path)
+	root = clean(root)
+	if root == "" || path == "" {
+		return false
+	}
+	relative, err := filepath.Rel(filepath.FromSlash(root), filepath.FromSlash(path))
+	if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return false
+	}
+	parts := strings.Split(filepath.ToSlash(relative), "/")
+	return len(parts) == 2 && parts[0] != "" && parts[1] == modulespec.Filename
 }
 
 func reservedGeneratedPath(path string) bool {

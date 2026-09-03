@@ -22,6 +22,9 @@ func TestBuildDerivesSafeMutationBoundariesWithoutOwnershipManifest(t *testing.T
 		"internal/tenant/application/existing_gen.go",
 		"internal/tenant/application/zz_yunka_future_gen.go",
 		"internal/tenant/application/suspend.go",
+		"modules/audit/module.yunka.json",
+		"modules/audit/runtime.go",
+		"modules/module.yunka.json",
 		".yunka/providers.json",
 		".yunka/protobuf-go.json",
 		"README.md",
@@ -41,6 +44,9 @@ func TestBuildDerivesSafeMutationBoundariesWithoutOwnershipManifest(t *testing.T
 	assertDecision(t, report, "internal/tenant/application/existing_gen.go", "yunka-generator", MutationGeneratedOnly, false)
 	assertDecision(t, report, "internal/tenant/application/zz_yunka_future_gen.go", "yunka-generator", MutationGeneratedOnly, false)
 	assertDecision(t, report, "internal/tenant/application/suspend.go", "developer-code", MutationEditable, true)
+	assertDecision(t, report, "modules/audit/module.yunka.json", "developer-module", MutationEditable, true)
+	assertDecision(t, report, "modules/audit/runtime.go", "unclassified", MutationUnclassified, false)
+	assertDecision(t, report, "modules/module.yunka.json", "unclassified", MutationUnclassified, false)
 	assertDecision(t, report, ".yunka/providers.json", "developer-config", MutationEditable, true)
 	assertDecision(t, report, ".yunka/protobuf-go.json", "protobuf-go-generator", MutationGeneratedOnly, false)
 	assertDecision(t, report, "README.md", "unclassified", MutationUnclassified, false)

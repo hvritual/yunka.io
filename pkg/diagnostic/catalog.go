@@ -21,6 +21,11 @@ const (
 	CodeChangeIntent    = "YUNKA-DX-CHANGE-002"
 	CodeChangeEvidence  = "YUNKA-DX-CHANGE-003"
 
+	CodeScaffoldRequest   = "YUNKA-DX-SCAFFOLD-001"
+	CodeScaffoldSource    = "YUNKA-DX-SCAFFOLD-002"
+	CodeScaffoldOwnership = "YUNKA-DX-SCAFFOLD-003"
+	CodeScaffoldConflict  = "YUNKA-DX-SCAFFOLD-004"
+
 	CodeDoctorWorkspaceRoot    = "YUNKA-DX-PROJECT-101"
 	CodeDoctorGoWork           = "YUNKA-DX-TOOLCHAIN-101"
 	CodeDoctorToolchainLock    = "YUNKA-DX-TOOLCHAIN-102"
@@ -78,6 +83,20 @@ var definitionCatalog = map[string]Definition{
 	CodeChangeEvidence: {
 		Code: CodeChangeEvidence, Stage: "change-planning", Meaning: "canonical evidence required to build a change plan is unavailable or invalid",
 		Actions: []Action{{Kind: ActionCommand, Label: "Regenerate canonical facts", Value: "yunka generate"}, {Kind: ActionCommand, Label: "Validate canonical facts", Value: "yunka check --format agent-json"}},
+	},
+	CodeScaffoldRequest: {
+		Code: CodeScaffoldRequest, Stage: "structural-scaffold", Meaning: "structural scaffold request is incomplete or invalid",
+	},
+	CodeScaffoldSource: {
+		Code: CodeScaffoldSource, Stage: "structural-scaffold", Meaning: "canonical source evidence is missing, ambiguous, or incompatible with the requested scaffold",
+		Actions: []Action{{Kind: ActionCommand, Label: "Inspect project context", Value: "yunka context --json"}},
+	},
+	CodeScaffoldOwnership: {
+		Code: CodeScaffoldOwnership, Stage: "structural-scaffold", Meaning: "AX2 ownership does not prove a scaffold mutation target safe for automatic editing",
+		Actions: []Action{{Kind: ActionCommand, Label: "Inspect ownership", Value: "yunka ownership inspect --format json"}},
+	},
+	CodeScaffoldConflict: {
+		Code: CodeScaffoldConflict, Stage: "structural-scaffold", Meaning: "structural scaffold would overwrite or collide with an existing developer or canonical identity",
 	},
 	CodeDoctorWorkspaceRoot:    {Code: CodeDoctorWorkspaceRoot, Stage: "project", Meaning: "workspace root check reported a developer-environment issue"},
 	CodeDoctorGoWork:           {Code: CodeDoctorGoWork, Stage: "toolchain", Meaning: "Go workspace configuration check reported an issue", Location: "go.work"},
