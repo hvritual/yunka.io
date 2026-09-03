@@ -322,6 +322,7 @@ func TestFullAssembledRuntimeClosure(t *testing.T) {
 
 	result, err := generatedassembly.Bootstrap(ctx, generatedassembly.BootstrapOptions{
 		Platform:          provider,
+		AdditionalModules: qualificationCapabilityDescriptors("full-closure"),
 		Factories:         factories{probe: probe},
 		Executor:          executor,
 		Transports:        generatedassembly.TransportBindings{HTTP: mux, RPC: grpcServer},
@@ -467,7 +468,7 @@ func TestFullAssembledRuntimeClosure(t *testing.T) {
 
 	// Diagnostics are secret-free runtime evidence from the same live App.
 	coreReport := result.App.Diagnostics(ctx)
-	if coreReport.Runtime.RouteCount != 1 || coreReport.Runtime.RPCServerCount != 1 || len(coreReport.Modules) != 3 || len(coreReport.Components) != 4 {
+	if coreReport.Runtime.RouteCount != 1 || coreReport.Runtime.RPCServerCount != 1 || len(coreReport.Modules) != 4 || len(coreReport.Components) != 4 {
 		t.Fatalf("core diagnostics=%+v", coreReport)
 	}
 	collector, err := frameworkdiagnostics.New(result.App)
@@ -511,6 +512,7 @@ func TestFullAssembledRuntimeClosure(t *testing.T) {
 		graph.ID(graph.NodeModule, "device"),
 		graph.ID(graph.NodeModule, "inventory"),
 		graph.ID(graph.NodeModule, "site"),
+		graph.ID(graph.NodeModule, "qualification-cache"),
 		graph.ID(graph.NodeRuntimeComponent, "http-server"),
 		graph.ID(graph.NodeRuntimeComponent, "grpc-server"),
 	} {
