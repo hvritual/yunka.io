@@ -21,13 +21,14 @@ func TestC103RuntimeClosureKeepsCoreAppAsSingleLifecycleOwner(t *testing.T) {
 	component := read("framework/core/runtime_component.go")
 	bootstrap := read("framework/kernel/bootstrap.go")
 	runtimeCodegen := read("pkg/contract/assembly_runtime_codegen.go")
+	capabilityCodegen := read("pkg/contract/assembly_capability_codegen.go")
 	graphAdapter := read("framework/applicationgraph/compiler.go")
 	httpAdapter := read("framework/runtimecomponent/http.go")
 	grpcAdapter := read("framework/runtimecomponent/grpc.go")
 	devPlan := read("pkg/devruntime/plan.go")
 	devClosure := read("pkg/devruntime/closure.go")
 	devCommand := read("app/cmd/dev/main.go")
-	combined := component + bootstrap + runtimeCodegen + graphAdapter + httpAdapter + grpcAdapter
+	combined := component + bootstrap + runtimeCodegen + capabilityCodegen + graphAdapter + httpAdapter + grpcAdapter
 
 	for _, forbidden := range []string{
 		"reflect.", "plugin.Open", "go/packages", "ServiceLocator", "serviceLocator",
@@ -42,13 +43,13 @@ func TestC103RuntimeClosureKeepsCoreAppAsSingleLifecycleOwner(t *testing.T) {
 		"gateway/authz", "execution.New", "NewExecutionScope", "BeginTransaction", "BeginTx(",
 		"transaction.New", "idempotency.New", "modulecatalog.Default()",
 	} {
-		if strings.Contains(runtimeCodegen, forbidden) {
+		if strings.Contains(runtimeCodegen+capabilityCodegen, forbidden) {
 			t.Errorf("generated C10.3 runtime duplicates canonical execution/lifecycle ownership with %q", forbidden)
 		}
 	}
 
 	for _, forbidden := range []string{".Start(ctx", ".Shutdown(ctx", "func ("} {
-		if strings.Contains(runtimeCodegen, forbidden) {
+		if strings.Contains(runtimeCodegen+capabilityCodegen, forbidden) {
 			t.Errorf("generated C10.3 assembly owns lifecycle directly with %q", forbidden)
 		}
 	}
@@ -61,9 +62,12 @@ func TestC103RuntimeClosureKeepsCoreAppAsSingleLifecycleOwner(t *testing.T) {
 		"func Bootstrap[Applications any]",
 		"app.Start(ctx)",
 		"func BindAssemblyRuntime",
-		"catalog, err := NewCatalog()",
+		"func BindAssemblyCapabilityRuntime",
+		"catalog, err := NewCatalog(options.AdditionalModules...)",
 		"kernel.Bootstrap(ctx",
-		"BuildApplications(options.Factories, options.Executor)",
+		"BuildWithCapabilities:",
+		"modulecatalog.CapabilitySet",
+		"BuildApplicationsWithCapabilities",
 		"RegisterTransports(options.Transports, applications, options.Executor)",
 		"func RuntimeInventory() core.RuntimeInventory",
 		"snapshot.Components",

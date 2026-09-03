@@ -25,13 +25,22 @@ type AppOptions struct {
 }
 
 func NewApp(options AppOptions) (*App, error) {
+	application, _, err := NewAppWithCapabilities(options)
+	return application, err
+}
+
+// NewAppWithCapabilities constructs one isolated App and returns the immutable
+// capability snapshot exported by its composed modules. The snapshot is meant
+// for bootstrap-time typed application construction; the App does not expose a
+// runtime service-locator API.
+func NewAppWithCapabilities(options AppOptions) (*App, modulecatalog.CapabilitySet, error) {
 	components, err := normalizeRuntimeComponents(options.RuntimeComponents)
 	if err != nil {
-		return nil, err
+		return nil, modulecatalog.EmptyCapabilitySet(), err
 	}
 	inventory, err := normalizeRuntimeInventory(options.RuntimeInventory)
 	if err != nil {
-		return nil, err
+		return nil, modulecatalog.EmptyCapabilitySet(), err
 	}
 	application := &App{
 		globalLogger:      options.Logger,
@@ -42,11 +51,11 @@ func NewApp(options AppOptions) (*App, error) {
 	}
 	application.setState(AppStateNew)
 	if options.Catalog == nil {
-		return application, nil
+		return application, modulecatalog.EmptyCapabilitySet(), nil
 	}
 	plan, err := options.Catalog.Seal()
 	if err != nil {
-		return nil, err
+		return nil, modulecatalog.EmptyCapabilitySet(), err
 	}
 	factory := options.ContextFactory
 	if factory == nil && len(plan.Descriptors) > 0 {
@@ -58,7 +67,7 @@ func NewApp(options AppOptions) (*App, error) {
 	if factory != nil {
 		application.compositionFactory = factory
 		if err := factory.Prepare(plan.Requirements()); err != nil {
-			return nil, application.compositionBuildError(fmt.Errorf("core: prepare module capabilities: %w", err))
+			return nil, modulecatalog.EmptyCapabilitySet(), application.compositionBuildError(fmt.Errorf("core: prepare module capabilities: %w", err))
 		}
 	}
 	for _, descriptor := range plan.Descriptors {
@@ -66,26 +75,30 @@ func NewApp(options AppOptions) (*App, error) {
 			continue
 		}
 		if factory == nil {
-			return nil, application.compositionBuildError(fmt.Errorf("core: module %s requires a context factory", descriptor.Name))
+			return nil, modulecatalog.EmptyCapabilitySet(), application.compositionBuildError(fmt.Errorf("core: module %s requires a context factory", descriptor.Name))
 		}
 		buildContext, err := factory.ForModule(descriptor)
 		if err != nil {
-			return nil, application.compositionBuildError(fmt.Errorf("core: module %s context: %w", descriptor.Name, err))
+			return nil, modulecatalog.EmptyCapabilitySet(), application.compositionBuildError(fmt.Errorf("core: module %s context: %w", descriptor.Name, err))
 		}
 		instance, err := descriptor.Build(buildContext)
 		if err != nil {
-			return nil, application.compositionBuildError(fmt.Errorf("core: build module %s: %w", descriptor.Name, err))
+			return nil, modulecatalog.EmptyCapabilitySet(), application.compositionBuildError(fmt.Errorf("core: build module %s: %w", descriptor.Name, err))
 		}
 		if instance == nil {
-			return nil, application.compositionBuildError(fmt.Errorf("core: build module %s returned nil instance", descriptor.Name))
+			return nil, modulecatalog.EmptyCapabilitySet(), application.compositionBuildError(fmt.Errorf("core: build module %s returned nil instance", descriptor.Name))
 		}
 		if strings.TrimSpace(instance.Name()) != descriptor.Name {
 			cause := fmt.Errorf("core: built module name %q does not match descriptor %q", instance.Name(), descriptor.Name)
-			return nil, application.compositionBuildError(errors.Join(cause, shutdownComposedInstance(context.Background(), instance)))
+			return nil, modulecatalog.EmptyCapabilitySet(), application.compositionBuildError(errors.Join(cause, shutdownComposedInstance(context.Background(), instance)))
 		}
 		application.registerComposedModule(instance)
 	}
-	return application, nil
+	capabilities, err := modulecatalog.CollectCapabilities(plan.Descriptors, application.composedModuleSnapshot())
+	if err != nil {
+		return nil, modulecatalog.EmptyCapabilitySet(), application.compositionBuildError(fmt.Errorf("core: collect module capability exports: %w", err))
+	}
+	return application, capabilities, nil
 }
 
 func (app *App) compositionBuildError(cause error) error {

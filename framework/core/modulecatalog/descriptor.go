@@ -55,11 +55,12 @@ type Instance interface {
 type BuildFunc func(BuildContext) (Instance, error)
 
 type Descriptor struct {
-	Name         string       `json:"name"`
-	Version      string       `json:"version,omitempty"`
-	DependsOn    []string     `json:"dependsOn,omitempty"`
-	Requirements Requirements `json:"requirements,omitempty"`
-	Build        BuildFunc    `json:"-"`
+	Name         string               `json:"name"`
+	Version      string               `json:"version,omitempty"`
+	DependsOn    []string             `json:"dependsOn,omitempty"`
+	Requirements Requirements         `json:"requirements,omitempty"`
+	Provides     []CapabilityContract `json:"provides,omitempty"`
+	Build        BuildFunc            `json:"-"`
 }
 
 type ConfigProvider interface {
@@ -304,6 +305,13 @@ func normalizeDescriptor(descriptor Descriptor) (Descriptor, error) {
 	if err != nil {
 		return Descriptor{}, err
 	}
+	descriptor.Provides, err = normalizeCapabilityContracts(descriptor.Name, descriptor.Provides)
+	if err != nil {
+		return Descriptor{}, err
+	}
+	if len(descriptor.Provides) > 0 && descriptor.Build == nil {
+		return Descriptor{}, fmt.Errorf("modulecatalog: module %q declares capabilities but has no Build function", descriptor.Name)
+	}
 	return descriptor, nil
 }
 
@@ -416,5 +424,6 @@ func cloneDescriptor(descriptor Descriptor) Descriptor {
 	clone.DependsOn = append([]string(nil), descriptor.DependsOn...)
 	clone.Requirements.Databases = append([]DatabaseRequirement(nil), descriptor.Requirements.Databases...)
 	clone.Requirements.RPC = append([]RPCRequirement(nil), descriptor.Requirements.RPC...)
+	clone.Provides = append([]CapabilityContract(nil), descriptor.Provides...)
 	return clone
 }

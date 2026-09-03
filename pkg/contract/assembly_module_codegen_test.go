@@ -28,8 +28,10 @@ func TestRenderAssemblyModuleCodeUsesExplicitBindingsOnly(t *testing.T) {
 	source := string(files[0].Content)
 	for _, required := range []string{
 		`devicemodule "example.com/product/modules/device"`,
-		"func NewCatalog() (*modulecatalog.Catalog, error)",
+		"func NewCatalog(additional ...modulecatalog.Descriptor) (*modulecatalog.Catalog, error)",
 		"catalog.Register(devicemodule.GeneratedDescriptor())",
+		"for _, descriptor := range additional",
+		"catalog.Register(descriptor)",
 		"catalog.Seal()",
 	} {
 		if !strings.Contains(source, required) {

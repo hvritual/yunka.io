@@ -10,7 +10,14 @@ message TransferDeviceRequest { string id = 1; string site_id = 2; string sku = 
 message TransferDeviceResponse { bool transferred = 1; }
 
 service DeviceQueryService {
-  option (yunka.dsl.v1.application) = { name: "query" };
+  option (yunka.dsl.v1.application) = {
+    name: "query"
+    capabilities: {
+      name: "cache.qualification"
+      go_package: "example.com/c103qualification/contracts/cache"
+      go_type: "Cache"
+    }
+  };
   rpc GetDevice(GetDeviceRequest) returns (DeviceDTO) {
     option (yunka.dsl.v1.operation) = {
       id: "device.get"

@@ -42,6 +42,10 @@ func CompileAssembly(manifest Manifest, modules []assemblyplan.ModuleInput, opti
 	if err != nil {
 		return AssemblyCompilation{}, err
 	}
+	files, err = BindAssemblyCapabilities(plan, files)
+	if err != nil {
+		return AssemblyCompilation{}, err
+	}
 	compilation := AssemblyCompilation{Plan: plan, PlanJSON: planJSON, GoFiles: files}
 	if err := validateAssemblyCompilation(compilation); err != nil {
 		return AssemblyCompilation{}, err
@@ -64,6 +68,10 @@ func CompileBoundAssembly(manifest Manifest, modules []assemblyplan.ModuleInput,
 		return AssemblyCompilation{}, err
 	}
 	runtimeFiles, err := BindAssemblyRuntime(manifest, compilation.Plan, compilation.GoFiles)
+	if err != nil {
+		return AssemblyCompilation{}, err
+	}
+	runtimeFiles, err = BindAssemblyCapabilityRuntime(compilation.Plan, runtimeFiles)
 	if err != nil {
 		return AssemblyCompilation{}, err
 	}

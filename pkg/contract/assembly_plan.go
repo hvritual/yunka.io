@@ -51,11 +51,29 @@ func CompileAssemblyPlan(manifest Manifest, operations operationplan.Set, module
 			return assemblyplan.Plan{}, fmt.Errorf("contract assembly plan: typed application %s requires domain and application name", service.FullName)
 		}
 		id := domain + "/" + name
+		capabilities := make([]assemblyplan.CapabilityRequirement, 0, len(service.Application.Capabilities))
+		for _, capability := range service.Application.Capabilities {
+			if err := validateCapabilityRequirement(id, capability); err != nil {
+				return assemblyplan.Plan{}, err
+			}
+			capability = normalizeCapabilityRequirement(capability)
+			capabilities = append(capabilities, assemblyplan.CapabilityRequirement{
+				Name:    capability.Name,
+				Package: capability.Package,
+				Type:    capability.Type,
+				Evidence: assemblyplan.Evidence{
+					Ownership: assemblyplan.OwnershipReused,
+					Source:    ManifestFilename,
+					Ref:       "applications/" + id + "/capabilities/" + capability.Name,
+				},
+			})
+		}
 		candidate := assemblyplan.ApplicationInput{
-			ID:        id,
-			Domain:    domain,
-			Name:      name,
-			DependsOn: append([]string(nil), service.Application.Requires...),
+			ID:           id,
+			Domain:       domain,
+			Name:         name,
+			DependsOn:    append([]string(nil), service.Application.Requires...),
+			Capabilities: capabilities,
 			Evidence: assemblyplan.Evidence{
 				Ownership: assemblyplan.OwnershipReused,
 				Source:    ManifestFilename,
@@ -63,7 +81,7 @@ func CompileAssemblyPlan(manifest Manifest, operations operationplan.Set, module
 			},
 		}
 		if current, exists := applications[id]; exists {
-			if strings.Join(current.DependsOn, "\x00") != strings.Join(candidate.DependsOn, "\x00") {
+			if applicationInputKey(current) != applicationInputKey(candidate) {
 				return assemblyplan.Plan{}, fmt.Errorf("contract assembly plan: application %s has inconsistent dependency declarations", id)
 			}
 			continue
@@ -123,4 +141,12 @@ func CompileAssemblyPlan(manifest Manifest, operations operationplan.Set, module
 		return assemblyplan.Plan{}, fmt.Errorf("contract assembly plan: %w", err)
 	}
 	return plan, nil
+}
+
+func applicationInputKey(input assemblyplan.ApplicationInput) string {
+	parts := []string{strings.Join(input.DependsOn, "\x00")}
+	for _, capability := range input.Capabilities {
+		parts = append(parts, capability.Name+"\x00"+capability.Package+"\x00"+capability.Type)
+	}
+	return strings.Join(parts, "\x01")
 }

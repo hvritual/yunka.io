@@ -128,12 +128,30 @@ func (catalog *Catalog) Len() int {
 }
 
 func resolvePlan(descriptors map[string]Descriptor) (Plan, error) {
+	names := make([]string, 0, len(descriptors))
+	for name := range descriptors {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	providers := make(map[string]string)
+	for _, name := range names {
+		descriptor := descriptors[name]
+		for _, capability := range descriptor.Provides {
+			if previous, duplicate := providers[capability.Name]; duplicate {
+				return Plan{}, fmt.Errorf("modulecatalog: capability %q has multiple providers: %q and %q", capability.Name, previous, name)
+			}
+			providers[capability.Name] = name
+		}
+	}
+
 	indegree := make(map[string]int, len(descriptors))
 	dependents := make(map[string][]string, len(descriptors))
-	for name := range descriptors {
+	for _, name := range names {
 		indegree[name] = 0
 	}
-	for name, descriptor := range descriptors {
+	for _, name := range names {
+		descriptor := descriptors[name]
 		for _, dependency := range descriptor.DependsOn {
 			if _, exists := descriptors[dependency]; !exists {
 				return Plan{}, fmt.Errorf("modulecatalog: module %q dependency %q is not registered", name, dependency)
@@ -147,12 +165,11 @@ func resolvePlan(descriptors map[string]Descriptor) (Plan, error) {
 	}
 
 	ready := make([]string, 0, len(descriptors))
-	for name, degree := range indegree {
-		if degree == 0 {
+	for _, name := range names {
+		if indegree[name] == 0 {
 			ready = append(ready, name)
 		}
 	}
-	sort.Strings(ready)
 	ordered := make([]Descriptor, 0, len(descriptors))
 	for len(ready) > 0 {
 		name := ready[0]
@@ -167,12 +184,11 @@ func resolvePlan(descriptors map[string]Descriptor) (Plan, error) {
 	}
 	if len(ordered) != len(descriptors) {
 		unresolved := make([]string, 0)
-		for name, degree := range indegree {
-			if degree > 0 {
+		for _, name := range names {
+			if indegree[name] > 0 {
 				unresolved = append(unresolved, name)
 			}
 		}
-		sort.Strings(unresolved)
 		return Plan{}, fmt.Errorf("modulecatalog: dependency cycle among %s", strings.Join(unresolved, ", "))
 	}
 	return Plan{Descriptors: ordered}, nil

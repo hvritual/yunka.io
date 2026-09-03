@@ -6,15 +6,18 @@ import (
 	"fmt"
 
 	"github.com/hvritual/yunka.io/framework/core"
+	"github.com/hvritual/yunka.io/framework/core/modulecatalog"
 )
 
-// BootstrapOptions describes structural assembly sequencing only. The Build and
-// Register callbacks are generated/typed by callers; Bootstrap does not inspect
-// packages, discover services, or own business execution semantics.
+// BootstrapOptions describes structural assembly sequencing only. Build and
+// BuildWithCapabilities are mutually exclusive typed construction callbacks;
+// Bootstrap does not inspect packages, discover services, or own business
+// execution semantics.
 type BootstrapOptions[Applications any] struct {
-	Kernel   Options
-	Build    func() (Applications, error)
-	Register func(Applications) error
+	Kernel                Options
+	Build                 func() (Applications, error)
+	BuildWithCapabilities func(modulecatalog.CapabilitySet) (Applications, error)
+	Register              func(Applications) error
 }
 
 // BootstrapResult exposes the already-existing core.App lifecycle owner plus
@@ -26,13 +29,14 @@ type BootstrapResult[Applications any] struct {
 }
 
 // Bootstrap closes structural assembly through the existing App lifecycle:
-// construct App -> build typed Applications -> register explicit transports ->
-// start App. Failures before Start clean up the constructed App; Start itself
-// already performs fail-closed rollback of App-owned resources.
+// construct App/modules -> snapshot typed module capability exports -> build
+// typed Applications -> register explicit transports -> start App. Capability
+// resolution therefore exists only during construction; business runtime code
+// receives typed dependencies and does not retain a service locator.
 func Bootstrap[Applications any](ctx context.Context, options BootstrapOptions[Applications]) (BootstrapResult[Applications], error) {
 	var zero BootstrapResult[Applications]
-	if options.Build == nil {
-		return zero, errors.New("kernel: bootstrap build callback is required")
+	if (options.Build == nil) == (options.BuildWithCapabilities == nil) {
+		return zero, errors.New("kernel: exactly one bootstrap build callback is required")
 	}
 	if options.Register == nil {
 		return zero, errors.New("kernel: bootstrap register callback is required")
@@ -40,11 +44,16 @@ func Bootstrap[Applications any](ctx context.Context, options BootstrapOptions[A
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	app, err := New(options.Kernel)
+	app, capabilities, err := newWithCapabilities(options.Kernel)
 	if err != nil {
 		return zero, fmt.Errorf("kernel: bootstrap application: %w", err)
 	}
-	applications, err := options.Build()
+	var applications Applications
+	if options.BuildWithCapabilities != nil {
+		applications, err = options.BuildWithCapabilities(capabilities)
+	} else {
+		applications, err = options.Build()
+	}
 	if err != nil {
 		return zero, errors.Join(fmt.Errorf("kernel: bootstrap applications: %w", err), shutdownBeforeStart(app))
 	}

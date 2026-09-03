@@ -32,10 +32,17 @@ type DTODeclaration struct {
 	Kind string `json:"kind"`
 }
 
+type CapabilityRequirement struct {
+	Name    string `json:"name"`
+	Package string `json:"package"`
+	Type    string `json:"type"`
+}
+
 type ApplicationDeclaration struct {
-	Name       string                 `json:"name"`
-	Requires   []string               `json:"requires,omitempty"`
-	Operations []OperationDeclaration `json:"operations,omitempty"`
+	Name         string                  `json:"name"`
+	Requires     []string                `json:"requires,omitempty"`
+	Capabilities []CapabilityRequirement `json:"capabilities,omitempty"`
+	Operations   []OperationDeclaration  `json:"operations,omitempty"`
 }
 
 type ExecutionPolicy struct {
@@ -162,6 +169,7 @@ func (manifest *Manifest) Normalize() {
 		if manifest.Services[i].Application != nil {
 			manifest.Services[i].Application.Name = strings.TrimSpace(manifest.Services[i].Application.Name)
 			manifest.Services[i].Application.Requires = stableStrings(manifest.Services[i].Application.Requires)
+			manifest.Services[i].Application.Capabilities = normalizeCapabilityRequirements(manifest.Services[i].Application.Capabilities)
 			for j := range manifest.Services[i].Application.Operations {
 				normalizeOperationDeclaration(&manifest.Services[i].Application.Operations[j])
 			}

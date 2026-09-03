@@ -32,10 +32,11 @@ type Evidence struct {
 }
 
 type Application struct {
-	ID       string   `json:"id"`
-	Domain   string   `json:"domain"`
-	Name     string   `json:"name"`
-	Evidence Evidence `json:"evidence"`
+	ID           string                  `json:"id"`
+	Domain       string                  `json:"domain"`
+	Name         string                  `json:"name"`
+	Capabilities []CapabilityRequirement `json:"capabilities,omitempty"`
+	Evidence     Evidence                `json:"evidence"`
 }
 
 type Dependency struct {
@@ -104,11 +105,12 @@ type Plan struct {
 }
 
 type ApplicationInput struct {
-	ID        string
-	Domain    string
-	Name      string
-	DependsOn []string
-	Evidence  Evidence
+	ID           string
+	Domain       string
+	Name         string
+	DependsOn    []string
+	Capabilities []CapabilityRequirement
+	Evidence     Evidence
 }
 
 type BindingInput struct {
@@ -149,7 +151,8 @@ func Compile(input Input) (Plan, error) {
 	plan := Plan{SchemaVersion: SchemaVersion, Identity: input.Identity}
 	for _, item := range input.Applications {
 		plan.Applications = append(plan.Applications, Application{
-			ID: item.ID, Domain: item.Domain, Name: item.Name, Evidence: item.Evidence,
+			ID: item.ID, Domain: item.Domain, Name: item.Name,
+			Capabilities: append([]CapabilityRequirement(nil), item.Capabilities...), Evidence: item.Evidence,
 		})
 		for _, dependency := range item.DependsOn {
 			plan.ApplicationDependencies = append(plan.ApplicationDependencies, Dependency{
@@ -231,6 +234,7 @@ func Normalize(plan Plan) Plan {
 		item.ID = strings.TrimSpace(item.ID)
 		item.Domain = strings.TrimSpace(item.Domain)
 		item.Name = strings.TrimSpace(item.Name)
+		item.Capabilities = normalizeCapabilityRequirements(item.Capabilities)
 		item.Evidence = normalizeEvidence(item.Evidence)
 	}
 	sort.Slice(plan.Applications, func(i, j int) bool { return plan.Applications[i].ID < plan.Applications[j].ID })
@@ -321,6 +325,9 @@ func Validate(plan Plan) error {
 		}
 		if _, duplicate := applications[item.ID]; duplicate {
 			return fmt.Errorf("assemblyplan: duplicate application %s", item.ID)
+		}
+		if err := validateCapabilityRequirements(item.ID, item.Capabilities); err != nil {
+			return err
 		}
 		if err := validateEvidence(item.Evidence, "application "+item.ID); err != nil {
 			return err
@@ -490,6 +497,7 @@ func normalizeInput(input Input) Input {
 		item.Domain = strings.TrimSpace(item.Domain)
 		item.Name = strings.TrimSpace(item.Name)
 		item.DependsOn = stableStrings(item.DependsOn)
+		item.Capabilities = normalizeCapabilityRequirements(item.Capabilities)
 		item.Evidence = normalizeEvidence(item.Evidence)
 	}
 	sort.Slice(input.Applications, func(i, j int) bool { return input.Applications[i].ID < input.Applications[j].ID })
