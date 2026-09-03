@@ -21,13 +21,13 @@ func TestBuildChangeSetComposesExistingV1AndCreatePlanOnOneBase(t *testing.T) {
 	if root != fixture.Root || value.SchemaVersion != ChangeSetSchemaVersion || len(value.Subjects) != 2 {
 		t.Fatalf("change set=%#v root=%q", value, root)
 	}
-	if value.Subjects[0].Existing == nil || value.Subjects[0].Existing.Operation.OperationID != "tenant.suspend" {
-		t.Fatalf("existing subject=%#v", value.Subjects[0])
+	if value.Subjects[0].Create == nil || value.Subjects[0].Create.Operation.OperationID != "tenant.archive" {
+		t.Fatalf("canonical first subject=%#v", value.Subjects[0])
 	}
-	if value.Subjects[1].Create == nil || value.Subjects[1].Create.Operation.OperationID != "tenant.archive" {
-		t.Fatalf("create subject=%#v", value.Subjects[1])
+	if value.Subjects[1].Existing == nil || value.Subjects[1].Existing.Operation.OperationID != "tenant.suspend" {
+		t.Fatalf("canonical second subject=%#v", value.Subjects[1])
 	}
-	create := value.Subjects[1].Create
+	create := value.Subjects[0].Create
 	if create.PlanDigest == "" || create.Expected.Semantics.UseCase != "archive_tenant" || len(create.EditablePaths) != 2 || len(create.GeneratedPaths) == 0 {
 		t.Fatalf("create subject evidence=%#v", create)
 	}
