@@ -49,7 +49,7 @@ T4.2 does not introduce broad generated-directory authority. Protobuf Go outputs
 - exact candidate: `07a1210d06020a01380b5d51f5812408e6e553c2`
 - CI #549 / run `33835565704`: **PASS**
 - production #307 / run `33835565727`: **PASS** on MySQL 8.4 with clean-worktree verification
-- Biz B13 pressure base: `506e9c117822855db318f8b4b6689d318a62ced1`
+- Biz B13 pressure base: `506e9c117822855db318f8b4b6689d318a62ded1`
 - Biz reverse qualification commit: `dfd500c4626c491dc5fdf39ec7fad26ccf5755d2`
 - Biz reverse qualification run `33835971657`: **PASS**
 - canonical merge commit: `15f19ff0845e421039ffb675937bf23c3bb8a79d`
