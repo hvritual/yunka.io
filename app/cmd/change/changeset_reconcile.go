@@ -3,7 +3,6 @@ package change
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 
 	"yunka.io/app/cmd/projectflow"
@@ -11,7 +10,7 @@ import (
 )
 
 const (
-	ChangeSetCheckSchemaVersion    = 1
+	ChangeSetCheckSchemaVersion     = 1
 	ChangeSetSemanticSchemaVersion = 1
 )
 
@@ -224,14 +223,13 @@ func compareCreateOperation(expected CreateOperationChange, left operationplan.P
 	var expectedHTTP []operationplan.HTTPBinding
 	if semantics.HTTP != nil {
 		expectedHTTP = []operationplan.HTTPBinding{{Method: semantics.HTTP.Method, Path: semantics.HTTP.Path, Body: semantics.HTTP.Body}}
-	} else {
-		expectedHTTP = []operationplan.HTTPBinding{}
 	}
 	appendMismatch(SemanticTransport, "bindings.http", expectedHTTP, right.Bindings.HTTP)
 	if expected.Expected.Service != "" && expected.Expected.RPC != "" {
-		suffix := "/" + expected.Expected.Service + "/" + expected.Expected.RPC
-		if !strings.HasSuffix(right.Bindings.RPC, suffix) {
-			deltas = append(deltas, SemanticDelta{Category: SemanticTransport, Subject: "operation:" + operationID, Field: "bindings.rpc", Before: jsonValue(suffix), After: jsonValue(right.Bindings.RPC), Allowed: false})
+		unqualified := "/" + expected.Expected.Service + "/" + expected.Expected.RPC
+		qualifiedSuffix := "." + expected.Expected.Service + "/" + expected.Expected.RPC
+		if right.Bindings.RPC != unqualified && !strings.HasSuffix(right.Bindings.RPC, qualifiedSuffix) {
+			deltas = append(deltas, SemanticDelta{Category: SemanticTransport, Subject: "operation:" + operationID, Field: "bindings.rpc", Before: jsonValue(unqualified), After: jsonValue(right.Bindings.RPC), Allowed: false})
 		}
 	}
 	return deltas
@@ -281,24 +279,4 @@ func RenderChangeSetCheck(report ChangeSetCheckReport, format string) (string, e
 	fmt.Fprintf(&builder, "semantic violations %d\n", len(report.Semantic.Violations))
 	fmt.Fprintf(&builder, "conformant           %t\n", report.Conformant)
 	return builder.String(), nil
-}
-
-func normalizedSemanticValues(values []SemanticDelta) []SemanticDelta {
-	result := append([]SemanticDelta(nil), values...)
-	sortSemanticDeltas(result)
-	return result
-}
-
-func stableSemanticJSON(values []SemanticDelta) string {
-	data, _ := json.Marshal(normalizedSemanticValues(values))
-	return string(data)
-}
-
-func sortedOperationIDs(subjects map[string]ChangeSetSubject) []string {
-	ids := make([]string, 0, len(subjects))
-	for id := range subjects {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-	return ids
 }
