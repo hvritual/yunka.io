@@ -17,7 +17,7 @@ import (
 
 const (
 	AppName       = "context"
-	SchemaVersion = 3
+	SchemaVersion = 4
 )
 
 type Snapshot struct {
@@ -46,15 +46,21 @@ type Commands struct {
 }
 
 type AgentProtocol struct {
-	NewStructure    string `json:"newStructure"`
-	ExistingPlan    string `json:"existingPlan"`
-	ChangeBegin     string `json:"changeBegin"`
-	ChangeCheck     string `json:"changeCheck"`
-	ChangeVerify    string `json:"changeVerify"`
-	Audit           string `json:"audit"`
-	AdvisorRequest  string `json:"advisorRequest"`
-	AdvisorValidate string `json:"advisorValidate"`
-	RuntimeEvent    string `json:"runtimeEvent"`
+	NewStructure      string `json:"newStructure"`
+	NewOperationPlan  string `json:"newOperationPlan"`
+	NewOperationApply string `json:"newOperationApply"`
+	ExistingPlan      string `json:"existingPlan"`
+	ChangeBegin       string `json:"changeBegin"`
+	ChangeCheck       string `json:"changeCheck"`
+	ChangeVerify      string `json:"changeVerify"`
+	ChangeSetBegin    string `json:"changeSetBegin"`
+	ChangeSetCheck    string `json:"changeSetCheck"`
+	RemediationBind   string `json:"remediationBind"`
+	RemediationCheck  string `json:"remediationCheck"`
+	Audit             string `json:"audit"`
+	AdvisorRequest    string `json:"advisorRequest"`
+	AdvisorValidate   string `json:"advisorValidate"`
+	RuntimeEvent      string `json:"runtimeEvent"`
 }
 
 func Command() cli.Command {
@@ -122,15 +128,21 @@ func Build(root string) (Snapshot, error) {
 			GraphImpact: "yunka graph impact --format json --operation <operation>",
 		},
 		AgentProtocol: AgentProtocol{
-			NewStructure:    "yunka add <application|operation|event|module> ...",
-			ExistingPlan:    "yunka change plan --operation <operation> --format agent-json",
-			ChangeBegin:     "yunka change begin --operation <operation> --format agent-json",
-			ChangeCheck:     "yunka change check --format agent-json",
-			ChangeVerify:    "yunka change verify --format agent-json",
-			Audit:           "yunka audit --format agent-json",
-			AdvisorRequest:  "yunka advisor request --format agent-json",
-			AdvisorValidate: "yunka advisor validate --request <request.json> --response <response.json> --format agent-json",
-			RuntimeEvent:    "yunka dev --event-format jsonl",
+			NewStructure:      "yunka add <application|event|module> ...",
+			NewOperationPlan:  "yunka add operation <application> <operation> ... --plan --format agent-json",
+			NewOperationApply: "yunka add operation <application> <operation> ... --format agent-json",
+			ExistingPlan:      "yunka change plan --operation <operation> --format agent-json",
+			ChangeBegin:       "yunka change begin --operation <operation> --format agent-json",
+			ChangeCheck:       "yunka change check --format agent-json",
+			ChangeVerify:      "yunka change verify --format agent-json",
+			ChangeSetBegin:    "yunka change set begin [--contract <contract.json>] [--create-plan <plan.json>] --format agent-json",
+			ChangeSetCheck:    "yunka change set check --format agent-json",
+			RemediationBind:   "yunka change set remediation bind --finding <finding-id> --format agent-json",
+			RemediationCheck:  "yunka change set remediation check --format agent-json",
+			Audit:             "yunka audit --format agent-json",
+			AdvisorRequest:    "yunka advisor request --format agent-json",
+			AdvisorValidate:   "yunka advisor validate --request <request.json> --response <response.json> --format agent-json",
+			RuntimeEvent:      "yunka dev --event-format jsonl",
 		},
 	}, nil
 }
