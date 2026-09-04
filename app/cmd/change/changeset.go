@@ -56,7 +56,7 @@ type ChangeSet struct {
 func BuildChangeSet(root, base string, existingContracts, createPlans []string) (ChangeSet, string, error) {
 	inputs, err := projectflow.DescribeOwnershipInputs(projectflow.Options{Root: root})
 	if err != nil {
-		return ChangeSet{}, "", &Failure{Kind: FailureEvidence, Err: err}
+		return ChangeSet{}, "", &Failure{Kind: FailureEvidence, Err: fmt.Errorf("change set begin: resolve project ownership facts: %w", err)}
 	}
 	descriptor := inputs.Project
 	if err := ensureCleanWorktree(descriptor.Root); err != nil {
@@ -177,7 +177,7 @@ func createOperationChange(plan add.Report) (CreateOperationChange, error) {
 func reserveChangeSetOperation(seen map[string]struct{}, operationID string) error {
 	operationID = strings.TrimSpace(operationID)
 	if operationID == "" {
-		return &etlFailure{Kind: FailureEvidence, Err: fmt.Errorf("change set begin: subject operationId is required")}
+		return &Failure{Kind: FailureEvidence, Err: fmt.Errorf("change set begin: subject operationId is required")}
 	}
 	if _, duplicate := seen[operationID]; duplicate {
 		return &Failure{Kind: FailureIntent, Err: fmt.Errorf("change set begin: duplicate subject operation %s", operationID)}
@@ -217,7 +217,7 @@ func normalizeChangeSet(value *ChangeSet) {
 func normalizeCreateOperationChange(value *CreateOperationChange) {
 	if value == nil {
 		return
-	}	
+	}
 	value.Operation.OperationID = strings.TrimSpace(value.Operation.OperationID)
 	value.Operation.Domain = strings.TrimSpace(value.Operation.Domain)
 	value.Operation.Application = strings.TrimSpace(value.Operation.Application)
@@ -315,7 +315,7 @@ func LoadChangeSet(root, input string) (ChangeSet, string, error) {
 
 func validateChangeSet(value ChangeSet) error {
 	if value.SchemaVersion != ChangeSetSchemaVersion {
-		return fmt.Errorf("unsupported change set schemaVersion %d", ChangeSetSchemaVersion)
+		return fmt.Errorf("unsupported change set schemaVersion %d", value.SchemaVersion)
 	}
 	if strings.TrimSpace(value.BaseSHA) == "" {
 		return fmt.Errorf("change set: baseSha is required")
