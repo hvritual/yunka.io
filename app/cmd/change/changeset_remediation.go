@@ -90,13 +90,9 @@ func WriteRemediationBinding(root, output string, value RemediationBinding) (str
 	if err := validateRemediationBinding(value); err != nil {
 		return "", err
 	}
-	output = strings.TrimSpace(output)
-	if output == "" {
-		output = DefaultRemediationBindingPath
-	}
-	path := output
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(root, filepath.FromSlash(path))
+	path, display, err := resolveGitPrivateStatePath(root, output, DefaultRemediationBindingPath)
+	if err != nil {
+		return "", err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return "", err
@@ -109,20 +105,13 @@ func WriteRemediationBinding(root, output string, value RemediationBinding) (str
 	if err := os.WriteFile(path, contents, 0o600); err != nil {
 		return "", err
 	}
-	if relative, err := filepath.Rel(root, path); err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return filepath.ToSlash(relative), nil
-	}
-	return filepath.ToSlash(path), nil
+	return display, nil
 }
 
 func LoadRemediationBinding(root, input string) (RemediationBinding, string, error) {
-	input = strings.TrimSpace(input)
-	if input == "" {
-		input = DefaultRemediationBindingPath
-	}
-	path := input
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(root, filepath.FromSlash(path))
+	path, display, err := resolveGitPrivateStatePath(root, input, DefaultRemediationBindingPath)
+	if err != nil {
+		return RemediationBinding{}, "", err
 	}
 	contents, err := os.ReadFile(path)
 	if err != nil {
@@ -136,7 +125,7 @@ func LoadRemediationBinding(root, input string) (RemediationBinding, string, err
 	if err := validateRemediationBinding(value); err != nil {
 		return RemediationBinding{}, "", err
 	}
-	return value, filepath.ToSlash(path), nil
+	return value, display, nil
 }
 
 func ReconcileRemediation(root string, value ChangeSet, binding RemediationBinding) (RemediationCheckReport, error) {
@@ -327,8 +316,7 @@ func validateRemediationBinding(value RemediationBinding) error {
 		if strings.TrimSpace(id) == "" {
 			return fmt.Errorf("change remediation: finding id is required")
 		}
-	}
-	return nil
+	\treturn nil
 }
 
 func findingIDSet(values []auditcore.Finding) map[string]struct{} {
