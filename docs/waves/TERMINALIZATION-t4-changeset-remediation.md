@@ -39,7 +39,7 @@ Normal `yunka add operation` remains the mutation command; the plan itself does 
 
 `yunka change set begin|check` composes existing AX7 Change Contract v1 subjects and create-Operation plan subjects on one immutable Git baseline.
 
-The default transient ChangeSet is Git-private at `.git/yunka/change-set.json`. Set-wide reconciliation compares the actual Git delta with exact writable/generated boundaries and then re-reads canonical semantics, including access, permission, tenant, authentication, transaction, idempotency, composition, dependency, HTTP, RPC/service, and DTO facts.
+The default transient ChangeSet is logically exposed as `.git/yunka/change-set.json`. Its physical storage is Git-private and resolved through Git's actual directory, so ordinary repositories, linked worktrees, and submodules do not require `.git` to be a directory. Set-wide reconciliation compares the actual Git delta with exact writable/generated boundaries and then re-reads canonical semantics, including access, permission, tenant, authentication, transaction, idempotency, composition, dependency, HTTP, RPC/service, and DTO facts.
 
 T4.2 does not introduce broad generated-directory authority. Protobuf Go outputs remain exact-path/evidence-backed.
 
@@ -49,7 +49,7 @@ T4.2 does not introduce broad generated-directory authority. Protobuf Go outputs
 - exact candidate: `07a1210d06020a01380b5d51f5812408e6e553c2`
 - CI #549 / run `33835565704`: **PASS**
 - production #307 / run `33835565727`: **PASS** on MySQL 8.4 with clean-worktree verification
-- Biz B13 pressure base: `506e9c117822855db318f8b4b6689d318a62ded1`
+- Biz B13 pressure base: `506e9c117822855db318f8b4b6689d318a62ced1`
 - Biz reverse qualification commit: `dfd500c4626c491dc5fdf39ec7fad26ccf5755d2`
 - Biz reverse qualification run `33835971657`: **PASS**
 - canonical merge commit: `15f19ff0845e421039ffb675937bf23c3bb8a79d`
@@ -60,7 +60,7 @@ The real consumer run proved matching protected/api-key/read-only creation to be
 
 T4.3 keeps remediation proof separate from ChangeSet mutation authority.
 
-`yunka change set remediation bind --finding <id>` creates a Git-private binding at `.git/yunka/change-remediation.json` that records:
+`yunka change set remediation bind --finding <id>` creates a Git-private binding logically exposed as `.git/yunka/change-remediation.json` that records:
 
 - immutable ChangeSet base SHA;
 - normalized ChangeSet digest;
@@ -85,18 +85,20 @@ T4.2 `change set begin|check` machine contracts remain unchanged; remediation is
 
 Behavioral implementation candidate `d527d2bbfb1c9bcd89598c680b81679def68f488` first passed CI #551 and production #309 before final protocol discoverability reconciliation.
 
-The final protocol candidate is:
+Protocol candidate `2ade49e1fc6ef9a49f1f7ced6dc9979919d3100a` then passed CI #556 / run `33837678059` and production #314 / run `33837678104`, including Agent Context schema v4 discoverability.
 
-`2ade49e1fc6ef9a49f1f7ced6dc9979919d3100a`
+After PR #146 was marked ready, automated review identified a portability defect: both T4 Git-private defaults treated `<root>/.git` as a physical directory, which fails for linked worktrees/submodules where `.git` is a file. The closure preserves the logical machine paths but resolves their physical storage with Git's own `rev-parse --git-path` semantics. A real linked-worktree regression now proves both ChangeSet and remediation state can be written/read with `.git` as a regular file while Git status remains clean.
 
-It adds Agent Context schema v4 discoverability for prospective Operation planning, ChangeSet begin/check, Operation apply, and remediation bind/check without widening runtime or mutation semantics.
+The post-review exact candidate is:
 
-Exact final-candidate framework evidence:
+`a584da287d52271a4a05ad80167f89fdbe0d3ee0`
 
-- CI #556 / run `33837678059`: **PASS**
-- production #314 / run `33837678104`: **PASS** on MySQL 8.4 with clean-worktree verification
+Exact framework evidence:
 
-An intermediate discoverability-only candidate failed because it changed an existing root-help sentence required by a compatibility test; the final candidate restored that wording without weakening the test or changing T4.3 behavior.
+- CI #563 / run `33842121802`: **PASS** including full Verify, determinism, and linked-worktree regression
+- production #321 / run `33842121900`: **PASS** on MySQL 8.4 with clean-worktree verification
+
+No ChangeSet/remediation schema, mutation authority, Runtime, Executor, UoW, Authz, Persistence, or protobuf business semantics changed in this closure.
 
 ## Real Biz B13 remediation pressure
 
@@ -104,21 +106,21 @@ Consumer pressure base:
 
 `506e9c117822855db318f8b4b6689d318a62ded1`
 
-Final replay qualification branch commit:
+Post-review replay qualification branch commit:
 
-`2306a74a98bf594bb0a9c0f28e783c8c76f50b9c`
+`d2e26f9eeebce1f9989d88ebaaf07f0d3f6196a3`
 
 Qualification run:
 
-`33838460057` — **PASS**
+`33842351609` — **PASS**
 
 Evidence artifact:
 
-- artifact ID: `9924084745`
-- digest: `sha256:5f6c27d3a0fe9c4ae87e8b3137aadc74df72437d7364b83b7fc2111ab626b0d4`
-- size: 6166 bytes
+- artifact ID: `9925335952`
+- digest: `sha256:891d92a07de5b555b15f22a33776060f35f8dc9339e4ba126643b366a3c0f1d4`
+- size: 6159 bytes
 
-The wrapper changed only the exact Yunka candidate SHA from the earlier behavior replay; the pressure body remained unchanged.
+The effective qualification tree restores the previously qualified wrapper and changes the exact Yunka candidate to `a584da28...`; the pressure script remains unchanged.
 
 The CI-local bad baseline created the proven finding:
 
@@ -126,11 +128,11 @@ The CI-local bad baseline created the proven finding:
 
 with immutable temporary consumer baseline:
 
-`b9c675b6c776d008e199a9cf957306d22fa87f45`
+`b64b5daabbe8afe1c6926ffd92fe9295c1bc3701`
 
 and ChangeSet digest:
 
-`1d59ae480d47d3d318478a5cd4c07b97e6134b17586ba7b23e76244f85c2e0eb`
+`8f8008b99f8689b405d7e42b7145d4b5c2c419f7be969d6f8da8ca2d01827eca`
 
 ### Pressure A — declared target remains unchanged
 
