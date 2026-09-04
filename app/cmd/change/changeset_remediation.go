@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"yunka.io/app/cmd/audit"
@@ -28,21 +27,21 @@ type RemediationBinding struct {
 }
 
 type RemediationAuditReport struct {
-	BaseSHA   string   `json:"baseSha"`
-	Targets   []string `json:"targets"`
-	Fixed     []string `json:"fixed"`
-	Remaining []string `json:"remaining"`
-	NewDebt   []string `json:"newDebt"`
-	Conformant bool    `json:"conformant"`
+	BaseSHA    string   `json:"baseSha"`
+	Targets    []string `json:"targets"`
+	Fixed      []string `json:"fixed"`
+	Remaining  []string `json:"remaining"`
+	NewDebt    []string `json:"newDebt"`
+	Conformant bool     `json:"conformant"`
 }
 
 type RemediationCheckReport struct {
-	SchemaVersion int                    `json:"schemaVersion"`
-	BaseSHA       string                 `json:"baseSha"`
-	ChangeSetDigest string               `json:"changeSetDigest"`
-	ChangeSet     ChangeSetCheckReport   `json:"changeSet"`
-	Audit         RemediationAuditReport `json:"audit"`
-	Conformant    bool                   `json:"conformant"`
+	SchemaVersion   int                    `json:"schemaVersion"`
+	BaseSHA         string                 `json:"baseSha"`
+	ChangeSetDigest string                 `json:"changeSetDigest"`
+	ChangeSet       ChangeSetCheckReport   `json:"changeSet"`
+	Audit           RemediationAuditReport `json:"audit"`
+	Conformant      bool                   `json:"conformant"`
 }
 
 func BuildRemediationBinding(root string, value ChangeSet, findingIDs []string) (RemediationBinding, error) {
@@ -172,7 +171,10 @@ func ReconcileRemediation(root string, value ChangeSet, binding RemediationBindi
 		return RemediationCheckReport{}, fmt.Errorf("change remediation check: audit did not resolve ChangeSet base %s", value.BaseSHA)
 	}
 
-	baseline := findingIDSet(append(cloneAuditFindings(auditReport.Debt.Existing), auditReport.Debt.Fixed...))
+	baseline := findingIDSet(auditReport.Debt.Existing)
+	for _, finding := range auditReport.Debt.Fixed {
+		baseline[finding.ID] = struct{}{}
+	}
 	fixedSet := findingIDSet(auditReport.Debt.Fixed)
 	auditResult := RemediationAuditReport{
 		BaseSHA: value.BaseSHA,
@@ -337,14 +339,4 @@ func findingIDSet(values []auditcore.Finding) map[string]struct{} {
 		}
 	}
 	return result
-}
-
-func cloneAuditFindings(values []auditcore.Finding) []auditcore.Finding {
-	result := make([]auditcore.Finding, len(values))
-	copy(result, values)
-	return result
-}
-
-func sortRemediationIDs(values []string) {
-	sort.Strings(values)
 }
