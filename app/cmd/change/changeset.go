@@ -54,10 +54,11 @@ type ChangeSet struct {
 }
 
 func BuildChangeSet(root, base string, existingContracts, createPlans []string) (ChangeSet, string, error) {
-	descriptor, err := projectflow.DescribeProject(projectflow.Options{Root: root})
+	inputs, err := projectflow.DescribeOwnershipInputs(projectflow.Options{Root: root})
 	if err != nil {
-		return ChangeSet{}, "", &Failure{Kind: FailureEvidence, Err: fmt.Errorf("change set begin: resolve project: %w", err)}
+		return ChangeSet{}, "", &Failure{Kind: FailureEvidence, Err: fmt.Errorf("change set begin: resolve project ownership facts: %w", err)}
 	}
+	descriptor := inputs.Project
 	if err := ensureCleanWorktree(descriptor.Root); err != nil {
 		return ChangeSet{}, "", &Failure{Kind: FailureEvidence, Err: err}
 	}
@@ -118,6 +119,12 @@ func BuildChangeSet(root, base string, existingContracts, createPlans []string) 
 		if err != nil {
 			return ChangeSet{}, "", &Failure{Kind: FailureEvidence, Err: err}
 		}
+		// The protobuf ownership manifest is the canonical AX2 proof for these
+		// derived files. Materialize its exact paths into the transient ChangeSet
+		// rather than granting a broad generated directory scope or copying the
+		// ownership manifest into a second source of truth.
+		create.GeneratedPaths = append(create.GeneratedPaths, inputs.ProtobufGoGeneratedFiles...)
+		normalizeCreateOperationChange(&create)
 		value.Subjects = append(value.Subjects, ChangeSetSubject{Kind: ChangeSubjectCreateOperation, Create: &create})
 	}
 	normalizeChangeSet(&value)
