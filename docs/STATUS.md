@@ -18,7 +18,7 @@
 | Agent Experience control-plane convergence | **AX1-AX7 complete / production-qualified / pressure-qualified / merged** | AX1-AX6 merged through PRs #125, #126, #127, #129, #132, #133. AX7 strict pressure candidate `38036a66e0b264a87526f18aaa8494bea6355a28` proved a handwritten-placement escape in CI #489; minimal closure candidate `45526e6f79f5e9b430f30f641080738e45c5b72a` passed CI #491 and production #249; final PR head `d9038f37f467497dd36c7a45cfc6170b19922994` passed CI #493 and production #251 and merged through PR #138 as `67d8b99e641c4c3179dc31941927631f3d30b7fd` |
 | Framework Terminalization T0-T2 Audit foundation | **Complete / production-qualified / real-consumer pressure-qualified / merged** | PR #141. Final behavioral candidate `3348c7aaf613e6443b295d746f8bc659477f9c22` passed CI #506 and production #264. Biz B13 reverse qualification run `33777462988` proved clean-consumer zero findings and exact detection of `AUDIT-APP-001`, `AUDIT-AUTH-001`, `AUDIT-INFRA-001` under temporary adversarial pressure. Final docs-only PR head `df87a9fd29fb99e7957106301879686195c7c786` passed CI #507 / run `33778300974` and production #265 / run `33778301062`, then merged as `d93fcc4b9c85840c95d9dcc310e34bfe46349450`. |
 | Framework Terminalization T3 Advisor evidence contract | **Complete / production-qualified / real-consumer pressure-qualified / merged** | PR #143. T3.1 candidate `01260e60b0043c726aecd5808bd352e41ef8fb94` passed CI #512 and production #270; T3.2 behavioral candidate `5738ac71ef5e838fae9231e908ae1a87ee7e2b31` passed CI #515 and production #273. Biz B13 adversarial qualification run `33815375770` proved schema-v3 discoverability, valid evidence-bound `advisory_only` attestation, and fail-closed rejection of unknown Finding, `safe_to_merge`, digest drift, `apply_patch`, and zero-evidence advice. Final PR head `b1ff3515be70769f6a9aa7f1c6e95f0d8348467a` passed CI #517 / run `33815799648` and production #275 / run `33815799615`, then merged as `63aa9881f84aa3f1a53fa1a1f46b999ddbbdde83`. |
-| Framework Terminalization T4 ChangeSet + remediation convergence | **T4.1/T4.2 complete / production-qualified / real-consumer-qualified / merged; T4.3 production-qualified / real-consumer-qualified / integration pending** | PR #145 merged T4.1/T4.2 candidate `07a1210d06020a01380b5d51f5812408e6e553c2` as `15f19ff0845e421039ffb675937bf23c3bb8a79d` after CI #549, production #307, and Biz run `33835971657`. PR #146 final protocol candidate `2ade49e1fc6ef9a49f1f7ced6dc9979919d3100a` passed CI #556 / run `33837678059` and production #314 / run `33837678104`; Biz final replay run `33838460057` passed with artifact `9924084745`. Exact evidence: `docs/waves/TERMINALIZATION-t4-changeset-remediation.md`. |
+| Framework Terminalization T4 ChangeSet + remediation convergence | **Complete / production-qualified / real-consumer-qualified / merged** | PR #145 merged T4.1/T4.2 candidate `07a1210d06020a01380b5d51f5812408e6e553c2` as `15f19ff0845e421039ffb675937bf23c3bb8a79d`. PR #146 post-review behavior candidate `a584da287d52271a4a05ad80167f89fdbe0d3ee0` passed CI #563 / run `33842121802` and production #321 / run `33842121900`; Biz replay run `33842351609` passed with artifact `9925335952`. Final PR head `8cc3967a1b2baaf5eecbbb22fa21d65eb2c80c2b` passed CI #565 / run `33844574960` and production #323 / run `33844574953`, merged as `ba896a8776987e91d2525f6bb15a188653857980`, and post-merge main CI `33844917226` plus production `33844917372` both passed. Exact evidence: `docs/waves/TERMINALIZATION-t4-changeset-remediation.md`. |
 | B12 multi-tenant Access/IAM consumer pressure | **Complete / qualified** | real Biz pressure discovered two generic Yunka gaps; both are closed and reverse-qualified against the B12 behavioral baseline `6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb` |
 | Distributed execution trace closure | **Complete / production-qualified / merged** | issue #118 / PR #119; exact candidate `19bed965852d9dc2ef39e91dcadd7fb6bea4c871` passed CI #418 and production #178 and was merged unchanged into `main` |
 | Separately versioned infrastructure extension module | **Complete / production-qualified / merged** | issue #121 / PR #122; exact candidate `fc09f296cccb14ae18891bc43642d5efe43bd484` passed CI #430 and production #190, then merged as `70611d6cee5dd4e37ae6a803bcb38b938acd59c9`; independent `infras/vX.Y.Z` tag surface exists, but no `infras/v0.1.0` release tag is claimed yet |
@@ -297,11 +297,11 @@ Biz B13 pressure tree `506e9c117822855db318f8b4b6689d318a62ded1` was qualified a
 
 The same real-consumer run proved fail-closed rejection of an unknown Finding ID, injected `authority: safe_to_merge`, request-digest drift, unsupported `apply_patch`, and non-empty advice against a zero-finding request. The temporary fixture was removed and Biz Git status was reconciled to its pre-qualification state.
 
-Final PR head `b1ff3515be70769f6a9aa7f1c6e95f0d8348467a` passed CI #517 / run `33815799648` and production #275 / run `33815799615`, then was integrated through PR #143 as `63aa9881f84aa3f1a53fa1a1f46b999ddbbdde83`. Exact evidence is recorded in `docs/waves/TERMINALIZATION-t3-advisor.md`. T3 is closed. T4.1/T4.2 are merged through PR #145; T4.3 is the active integration candidate described below.
+Final PR head `b1ff3515be70769f6a9aa7f1c6e95f0d8348467a` passed CI #517 / run `33815799648` and production #275 / run `33815799615`, then was integrated through PR #143 as `63aa9881f84aa3f1a53fa1a1f46b999ddbbdde83`. Exact evidence is recorded in `docs/waves/TERMINALIZATION-t3-advisor.md`. T3 is closed. T4 is complete and merged through PRs #145 and #146; T5 Proof-of-Change aggregation has not started.
 
 ## Framework Terminalization T4
 
-T4.1/T4.2 are **complete, production-qualified, real-consumer-qualified, and merged through PR #145**. T4.3 is **production-qualified and real-consumer-qualified in PR #146, with canonical integration still pending**.
+T4 is **complete, production-qualified, real-consumer-qualified, and merged through PRs #145 and #146**.
 
 T4 extends the AX/T0-T3 control plane; it does not introduce a second runtime, compiler, authorization path, persistence layer, architecture Source of Truth, or LLM execution path.
 
@@ -313,7 +313,7 @@ The current new-Operation flow is therefore plan-first rather than "write first,
 
 ### T4.2 — ChangeSet v2
 
-`yunka change set begin|check` composes existing AX7 Change Contract v1 subjects and create-Operation plans on one immutable Git baseline. The default transient state remains Git-private at `.git/yunka/change-set.json`.
+`yunka change set begin|check` composes existing AX7 Change Contract v1 subjects and create-Operation plans on one immutable Git baseline. The logical default transient path remains `.git/yunka/change-set.json`; physical Git-private storage is resolved through Git's actual directory so linked worktrees and submodules do not require `.git` to be a directory.
 
 Set-wide reconciliation validates actual Git delta, AX2 ownership, exact generated boundaries, and canonical semantic readback without treating another declared subject in the same ChangeSet as unrelated drift. The ChangeSet does not replace protobuf, Manifest, OperationPlan, or Application Graph as a Source of Truth.
 
@@ -321,15 +321,15 @@ T4.1/T4.2 exact candidate `07a1210d06020a01380b5d51f5812408e6e553c2` passed CI #
 
 ### T4.3 — Audit remediation proof binding
 
-`yunka change set remediation bind --finding <id>` binds exact proven Audit findings to the active ChangeSet base and normalized ChangeSet digest in Git-private `.git/yunka/change-remediation.json`. The binding grants no additional mutation authority.
+`yunka change set remediation bind --finding <id>` binds exact proven Audit findings to the active ChangeSet base and normalized ChangeSet digest. The logical binding path remains `.git/yunka/change-remediation.json`, while physical Git-private storage is resolved through Git's actual directory. The binding grants no additional mutation authority.
 
 `yunka change set remediation check` composes normal ChangeSet reconciliation with Audit debt comparison. It passes only when the ChangeSet is conformant, every bound target is in `fixed`, no target remains, and no new proven Audit debt is introduced. Unknown findings, stale/tampered digests, base mismatch, and targets absent from the immutable base fail closed. Existing unrelated historical debt is not promoted into blocking debt merely because one finding is being remediated.
 
-The final T4.3 protocol candidate `2ade49e1fc6ef9a49f1f7ced6dc9979919d3100a` also upgrades `yunka context --json` to schema v4 so AI/automation can discover the plan-first new-Operation, ChangeSet, apply, and remediation protocols without guessing command order.
+Agent Context schema v4 exposes the plan-first new-Operation, ChangeSet, apply, and remediation protocols without widening Advisor authority.
 
-Framework evidence: CI #556 / run `33837678059` **PASS**; production #314 / run `33837678104` **PASS** on MySQL 8.4 with clean-worktree verification.
+After ready-for-review pressure exposed the linked-worktree `.git` portability defect, exact post-review candidate `a584da287d52271a4a05ad80167f89fdbe0d3ee0` resolved both ChangeSet and remediation state through Git-native `rev-parse --git-path` semantics. It passed CI #563 / run `33842121802` including linked-worktree regression and determinism, and production #321 / run `33842121900` on MySQL 8.4 with clean-worktree verification.
 
-Final Biz B13 replay used qualification commit `2306a74a98bf594bb0a9c0f28e783c8c76f50b9c` and run `33838460057`, which **PASS**ed the unchanged remediation pressure body against exact Yunka `2ade49e1fc6ef9a49f1f7ced6dc9979919d3100a`. Evidence artifact `9924084745` has digest `sha256:5f6c27d3a0fe9c4ae87e8b3137aadc74df72437d7364b83b7fc2111ab626b0d4`.
+Final Biz B13 replay used qualification commit `d2e26f9eeebce1f9989d88ebaaf07f0d3f6196a3` and run `33842351609`, which **PASS**ed the unchanged remediation pressure body against exact Yunka `a584da287d52271a4a05ad80167f89fdbe0d3ee0`. Evidence artifact `9925335952` has digest `sha256:891d92a07de5b555b15f22a33776060f35f8dc9339e4ba126643b366a3c0f1d4`.
 
 The real consumer pressure proved all three required states:
 
@@ -343,6 +343,8 @@ old target fixed but replacement introduces AUDIT-AUTH-001
 actual violating file removed inside ChangeSet scope
   -> fixed target + zero remaining + zero new debt -> PASS
 ```
+
+Final PR head `8cc3967a1b2baaf5eecbbb22fa21d65eb2c80c2b` passed CI #565 / run `33844574960` and production #323 / run `33844574953`, then merged through PR #146 as `ba896a8776987e91d2525f6bb15a188653857980`. Exact-main post-merge CI run `33844917226` and production run `33844917372` both passed.
 
 Exact evidence is recorded in `docs/waves/TERMINALIZATION-t4-changeset-remediation.md`.
 
@@ -359,7 +361,7 @@ Audit remediation:
 audit -> change set remediation bind -> bounded edit -> change set remediation check
 ```
 
-T5 Proof-of-Change aggregation has **not** started. T4.3 must first complete canonical integration and post-merge reconciliation.
+T5 Proof-of-Change aggregation has **not** started.
 
 ## Current pressure frontier
 
