@@ -45,8 +45,8 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 	if !reflect.DeepEqual(first, second) {
 		t.Fatalf("context snapshot is not deterministic:\nfirst=%#v\nsecond=%#v", first, second)
 	}
-	if SchemaVersion != 3 || first.SchemaVersion != 3 {
-		t.Fatalf("schema version constant/snapshot=%d/%d want=3/3", SchemaVersion, first.SchemaVersion)
+	if SchemaVersion != 4 || first.SchemaVersion != 4 {
+		t.Fatalf("schema version constant/snapshot=%d/%d want=4/4", SchemaVersion, first.SchemaVersion)
 	}
 	if first.Project.Profiled {
 		t.Fatal("conventional project unexpectedly reported as profiled")
@@ -62,6 +62,15 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 	if first.Commands.Check != "yunka check --format agent-json" {
 		t.Fatalf("check command=%q", first.Commands.Check)
 	}
+	if first.AgentProtocol.NewStructure != "yunka add <application|event|module> ..." {
+		t.Fatalf("new structure command=%q", first.AgentProtocol.NewStructure)
+	}
+	if first.AgentProtocol.NewOperationPlan != "yunka add operation <application> <operation> ... --plan --format agent-json" {
+		t.Fatalf("new operation plan command=%q", first.AgentProtocol.NewOperationPlan)
+	}
+	if first.AgentProtocol.NewOperationApply != "yunka add operation <application> <operation> ... --format agent-json" {
+		t.Fatalf("new operation apply command=%q", first.AgentProtocol.NewOperationApply)
+	}
 	if first.AgentProtocol.ExistingPlan != "yunka change plan --operation <operation> --format agent-json" {
 		t.Fatalf("change plan command=%q", first.AgentProtocol.ExistingPlan)
 	}
@@ -73,6 +82,18 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 	}
 	if first.AgentProtocol.ChangeVerify != "yunka change verify --format agent-json" {
 		t.Fatalf("change verify command=%q", first.AgentProtocol.ChangeVerify)
+	}
+	if first.AgentProtocol.ChangeSetBegin != "yunka change set begin [--contract <contract.json>] [--create-plan <plan.json>] --format agent-json" {
+		t.Fatalf("change set begin command=%q", first.AgentProtocol.ChangeSetBegin)
+	}
+	if first.AgentProtocol.ChangeSetCheck != "yunka change set check --format agent-json" {
+		t.Fatalf("change set check command=%q", first.AgentProtocol.ChangeSetCheck)
+	}
+	if first.AgentProtocol.RemediationBind != "yunka change set remediation bind --finding <finding-id> --format agent-json" {
+		t.Fatalf("remediation bind command=%q", first.AgentProtocol.RemediationBind)
+	}
+	if first.AgentProtocol.RemediationCheck != "yunka change set remediation check --format agent-json" {
+		t.Fatalf("remediation check command=%q", first.AgentProtocol.RemediationCheck)
 	}
 	if first.AgentProtocol.Audit != "yunka audit --format agent-json" {
 		t.Fatalf("audit command=%q", first.AgentProtocol.Audit)
@@ -97,9 +118,19 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 	if string(jsonOne) != string(jsonTwo) {
 		t.Fatal("machine-readable output is not byte-stable")
 	}
-	for _, expected := range []string{"\"schemaVersion\": 3", "\"advisorRequest\"", "\"advisorValidate\""} {
+	for _, expected := range []string{
+		"\"schemaVersion\": 4",
+		"\"newOperationPlan\"",
+		"\"newOperationApply\"",
+		"\"changeSetBegin\"",
+		"\"changeSetCheck\"",
+		"\"remediationBind\"",
+		"\"remediationCheck\"",
+		"\"advisorRequest\"",
+		"\"advisorValidate\"",
+	} {
 		if !strings.Contains(string(jsonOne), expected) {
-			t.Fatalf("context v3 json missing %q:\n%s", expected, jsonOne)
+			t.Fatalf("context v4 json missing %q:\n%s", expected, jsonOne)
 		}
 	}
 }
