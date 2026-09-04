@@ -263,13 +263,9 @@ func WriteChangeSet(root, output string, value ChangeSet) (string, error) {
 	if err := validateChangeSet(value); err != nil {
 		return "", err
 	}
-	output = strings.TrimSpace(output)
-	if output == "" {
-		output = DefaultChangeSetPath
-	}
-	path := output
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(root, filepath.FromSlash(path))
+	path, display, err := resolveGitPrivateStatePath(root, output, DefaultChangeSetPath)
+	if err != nil {
+		return "", err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return "", err
@@ -282,21 +278,13 @@ func WriteChangeSet(root, output string, value ChangeSet) (string, error) {
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return "", err
 	}
-	relative, err := filepath.Rel(root, path)
-	if err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return filepath.ToSlash(relative), nil
-	}
-	return filepath.ToSlash(path), nil
+	return display, nil
 }
 
 func LoadChangeSet(root, input string) (ChangeSet, string, error) {
-	input = strings.TrimSpace(input)
-	if input == "" {
-		input = DefaultChangeSetPath
-	}
-	path := input
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(root, filepath.FromSlash(path))
+	path, display, err := resolveGitPrivateStatePath(root, input, DefaultChangeSetPath)
+	if err != nil {
+		return ChangeSet{}, "", err
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -310,7 +298,7 @@ func LoadChangeSet(root, input string) (ChangeSet, string, error) {
 	if err := validateChangeSet(value); err != nil {
 		return ChangeSet{}, "", err
 	}
-	return value, filepath.ToSlash(path), nil
+	return value, display, nil
 }
 
 func validateChangeSet(value ChangeSet) error {
