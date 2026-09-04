@@ -18,7 +18,7 @@ import (
 
 const (
 	ChangeSetSchemaVersion = 2
-	DefaultChangeSetPath    = ".yunka/change-set.json"
+	DefaultChangeSetPath    = ".git/yunka/change-set.json"
 
 	ChangeSubjectExistingOperation = "existing_operation"
 	ChangeSubjectCreateOperation   = "create_operation"
@@ -33,12 +33,12 @@ type CreateOperationExpectation struct {
 }
 
 type CreateOperationChange struct {
-	Operation       ChangeOperation           `json:"operation"`
-	PlanDigest      string                    `json:"planDigest"`
+	Operation       ChangeOperation            `json:"operation"`
+	PlanDigest      string                     `json:"planDigest"`
 	Expected        CreateOperationExpectation `json:"expected"`
-	EditablePaths   []string                  `json:"editablePaths"`
-	GeneratedPaths  []string                  `json:"generatedPaths"`
-	GeneratedScopes []string                  `json:"generatedScopes"`
+	EditablePaths   []string                   `json:"editablePaths"`
+	GeneratedPaths  []string                   `json:"generatedPaths"`
+	GeneratedScopes []string                   `json:"generatedScopes"`
 }
 
 type ChangeSetSubject struct {
