@@ -316,7 +316,8 @@ func validateRemediationBinding(value RemediationBinding) error {
 		if strings.TrimSpace(id) == "" {
 			return fmt.Errorf("change remediation: finding id is required")
 		}
-	\treturn nil
+	}
+	return nil
 }
 
 func findingIDSet(values []auditcore.Finding) map[string]struct{} {
