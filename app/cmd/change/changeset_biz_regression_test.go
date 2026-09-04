@@ -57,9 +57,9 @@ func TestT4CreateChangeSetStrictManifestBindsOnlyCurrentSourceOutputs(t *testing
 	writePressureFile(t, filepath.Join(fixture.Root, ".yunka", "protobuf-go.json"), `{
   "schemaVersion": 1,
   "files": [
+    "contracts/other/other.pb.go",
     "contracts/tenant/tenant.pb.go",
-    "contracts/tenant/tenant_grpc.pb.go",
-    "contracts/other/other.pb.go"
+    "contracts/tenant/tenant_grpc.pb.go"
   ]
 }
 `)
