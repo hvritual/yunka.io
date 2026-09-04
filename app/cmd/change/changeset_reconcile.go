@@ -202,10 +202,10 @@ func compareCreateOperation(expected CreateOperationChange, left operationplan.P
 	appendMismatch(SemanticAuthentication, "security.authentication", struct {
 		Public         bool     `json:"public"`
 		Authentication []string `json:"authentication"`
-	}{semantics.Access == "public", semantics.Authentication}, struct {
+	}{semantics.Access == "public", normalizeCreateAuthentication(semantics.Authentication)}, struct {
 		Public         bool     `json:"public"`
 		Authentication []string `json:"authentication"`
-	}{right.Security.Public, right.Security.Authentication})
+	}{right.Security.Public, normalizeCreateAuthentication(right.Security.Authentication)})
 	appendMismatch(SemanticTransaction, "execution.transaction", semantics.Transaction, right.Execution.Transaction)
 	appendMismatch(SemanticIdempotency, "execution.idempotency", semantics.Idempotency, right.Execution.Idempotency)
 	boundary := semantics.Composition
@@ -233,6 +233,24 @@ func compareCreateOperation(expected CreateOperationChange, left operationplan.P
 		}
 	}
 	return deltas
+}
+
+func normalizeCreateAuthentication(values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		normalized := strings.ToLower(strings.TrimSpace(value))
+		switch normalized {
+		case "api_key", "api-key":
+			normalized = "api-key"
+		}
+		if normalized != "" {
+			result = append(result, normalized)
+		}
+	}
+	if result == nil {
+		return []string{}
+	}
+	return result
 }
 
 func compareChangeSetApplications(before, after canonicalFacts, allowances map[string]map[string]bool) []SemanticDelta {
