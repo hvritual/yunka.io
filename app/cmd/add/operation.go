@@ -12,6 +12,14 @@ import (
 )
 
 func AddOperation(options OperationOptions) (Report, error) {
+	return changeOperation(options, true)
+}
+
+func PlanOperation(options OperationOptions) (Report, error) {
+	return changeOperation(options, false)
+}
+
+func changeOperation(options OperationOptions, apply bool) (Report, error) {
 	domain, application, err := parseApplicationKey(options.ApplicationKey)
 	if err != nil {
 		return Report{}, requestFailure(err)
@@ -129,21 +137,8 @@ func AddOperation(options OperationOptions) (Report, error) {
 		return Report{}, sourceFailure(implementationRelative, statErr)
 	}
 	implementationContents := []byte(renderImplementationLanding(domain, application, options.OperationID, rpcName))
-	if err := writeNewFile(implementationAbsolute, implementationContents); err != nil {
-		if os.IsExist(err) {
-			return Report{}, conflictFailure(implementationRelative, err)
-		}
-		return Report{}, sourceFailure(implementationRelative, err)
-	}
-	if err := writeAtomic(source.Absolute, []byte(updated)); err != nil {
-		rollbackErr := os.Remove(implementationAbsolute)
-		if rollbackErr != nil && !os.IsNotExist(rollbackErr) {
-			return Report{}, sourceFailure(source.Relative, fmt.Errorf("%w; rollback of %s also failed: %v", err, implementationRelative, rollbackErr))
-		}
-		return Report{}, sourceFailure(source.Relative, err)
-	}
 
-	return Report{
+	report := Report{
 		SchemaVersion: SchemaVersion,
 		Kind:          "operation",
 		Identity: map[string]string{
@@ -168,5 +163,30 @@ func AddOperation(options OperationOptions) (Report, error) {
 			"Access, tenant, transaction, idempotency, composition, permissions, authentication, dependencies, and HTTP facts come only from the caller flags.",
 			"The Go landing file contains only package declaration and TODO guidance; no receiver, function body, persistence, Saga, Outbox, event publication, external effect, or business implementation was generated.",
 		},
-	}, nil
+	}
+	if !apply {
+		report.Kind = "operation-plan"
+		report.ExplicitSemantics = explicitOperationSemantics(options)
+		report.NextActions = []NextAction{}
+		report.Notes = append([]string{"Plan only: no project files were written; rerun the same explicit add operation request without --plan to apply after review."}, report.Notes...)
+		normalizeReport(&report)
+		return report, nil
+	}
+
+	if err := writeNewFile(implementationAbsolute, implementationContents); err != nil {
+		if os.IsExist(err) {
+			return Report{}, conflictFailure(implementationRelative, err)
+		}
+		return Report{}, sourceFailure(implementationRelative, err)
+	}
+	if err := writeAtomic(source.Absolute, []byte(updated)); err != nil {
+		rollbackErr := os.Remove(implementationAbsolute)
+		if rollbackErr != nil && !os.IsNotExist(rollbackErr) {
+			return Report{}, sourceFailure(source.Relative, fmt.Errorf("%w; rollback of %s also failed: %v", err, implementationRelative, rollbackErr))
+		}
+		return Report{}, sourceFailure(source.Relative, err)
+	}
+
+	normalizeReport(&report)
+	return report, nil
 }

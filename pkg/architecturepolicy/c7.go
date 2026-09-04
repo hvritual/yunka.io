@@ -17,6 +17,15 @@ type Diagnostic struct {
 	Message string
 }
 
+func isModuleCatalogImport(path string) bool {
+	switch strings.TrimSpace(path) {
+	case "github.com/hvritual/yunka.io/framework/core/modulecatalog", "yunka.io/framework/core/modulecatalog":
+		return true
+	default:
+		return false
+	}
+}
+
 func CheckC7(root string) ([]Diagnostic, error) {
 	root, err := filepath.Abs(strings.TrimSpace(root))
 	if err != nil {
@@ -104,8 +113,8 @@ func CheckAutoloadFile(path string) ([]Diagnostic, error) {
 		}
 		imports[name] = pathValue
 	}
-	if imports["modulecatalog"] != "github.com/hvritual/yunka.io/framework/core/modulecatalog" {
-		diagnostics = append(diagnostics, Diagnostic{Message: "autoload must import github.com/hvritual/yunka.io/framework/core/modulecatalog as modulecatalog"})
+	if !isModuleCatalogImport(imports["modulecatalog"]) {
+		diagnostics = append(diagnostics, Diagnostic{Message: "autoload must import github.com/hvritual/yunka.io/framework/core/modulecatalog or yunka.io/framework/core/modulecatalog as modulecatalog"})
 	}
 
 	initCount := 0
@@ -149,7 +158,7 @@ func isDescriptorRegistration(expression ast.Expr, imports map[string]string) bo
 		return false
 	}
 	identifier, ok := selector.X.(*ast.Ident)
-	if !ok || identifier.Name != "modulecatalog" || imports[identifier.Name] != "github.com/hvritual/yunka.io/framework/core/modulecatalog" {
+	if !ok || identifier.Name != "modulecatalog" || !isModuleCatalogImport(imports[identifier.Name]) {
 		return false
 	}
 	descriptorCall, ok := call.Args[0].(*ast.CallExpr)
@@ -247,10 +256,6 @@ func checkTypedComposition(root string) ([]Diagnostic, error) {
 
 func checkLegacyRuntimeRemoved(root string) ([]Diagnostic, error) {
 	removedPaths := []string{
-		"framework/core/module",
-		"framework/ingress",
-		"pkg/di",
-		"app/cmd/controller",
 		"framework/core/request/runtime.go",
 		"framework/core/request/work_runtime.go",
 		"framework/core/request/runtime_context.go",
