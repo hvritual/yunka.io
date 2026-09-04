@@ -3,7 +3,7 @@
 > Document class: **EVIDENCE**  
 > Evidence scope: exact T4.1/T4.2 merged candidate plus exact T4.3 qualification candidate and Biz B13 consumer pair  
 > Current status authority: [`docs/STATUS.md`](../STATUS.md)  
-> Integration state at this record: **T4.1/T4.2 merged; T4.3 production-qualified and real-consumer-qualified in PR #146, not yet merged**
+> Integration state at this record: **T4 complete / production-qualified / real-consumer-qualified / merged through PR #146**
 
 ## Scope
 
@@ -180,6 +180,28 @@ overall conformant   = true
 ```
 
 The qualification then restored the Biz worktree and removed Git-private Yunka control state.
+
+## Final delivery and canonical integration
+
+The final PR/EVIDENCE head was:
+
+`8cc3967a1b2baaf5eecbbb22fa21d65eb2c80c2b`
+
+Final pre-merge gates:
+
+- CI #565 / run `33844574960`: **PASS**
+- production #323 / run `33844574953`: **PASS** on MySQL 8.4 with clean-worktree verification
+
+PR #146 merged this exact head as canonical merge commit:
+
+`ba896a8776987e91d2525f6bb15a188653857980`
+
+Post-merge main verification:
+
+- CI run `33844917226`: **PASS**
+- production run `33844917372`: **PASS** on MySQL 8.4 with clean-worktree verification
+
+T4 is therefore complete, production-qualified, real-consumer-qualified, and canonically merged. T5 remains not started.
 
 ## Authority boundary
 
