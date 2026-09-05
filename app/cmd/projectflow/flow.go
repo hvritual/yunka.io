@@ -11,6 +11,7 @@ import (
 	"time"
 
 	modulecmd "yunka.io/app/cmd/module"
+	"yunka.io/app/cmd/moduleidentity"
 	projectcmd "yunka.io/app/cmd/project"
 	contractcore "github.com/hvritual/yunka.io/pkg/contract"
 )
@@ -57,6 +58,9 @@ func Generate(ctx context.Context, options Options) (Report, error) {
 	project, err := resolveProject(options)
 	if err != nil {
 		return Report{}, wrapFailure(FailureProject, failureRoot, "", err)
+	}
+	if err := requireCanonicalModuleIdentity(project.Root); err != nil {
+		return Report{}, err
 	}
 	result, artifacts, applicationFiles, err := compileArtifacts(ctx, project)
 	if err != nil {
@@ -119,6 +123,9 @@ func Check(ctx context.Context, options Options) (Report, error) {
 	project, err := resolveProject(options)
 	if err != nil {
 		return Report{}, wrapFailure(FailureProject, failureRoot, "", err)
+	}
+	if err := requireCanonicalModuleIdentity(project.Root); err != nil {
+		return Report{}, err
 	}
 	result, artifacts, applicationFiles, err := compileArtifacts(ctx, project)
 	if err != nil {
@@ -187,6 +194,25 @@ func Check(ctx context.Context, options Options) (Report, error) {
 	}
 	report.Stages = append(report.Stages, Stage{Name: "assembly", Status: "ok", Detail: fmt.Sprintf("bindings=%d", bindingCount)})
 	return report, nil
+}
+
+func requireCanonicalModuleIdentity(root string) error {
+	report, err := moduleidentity.Inspect(root)
+	if err != nil {
+		return wrapFailure(FailureModuleIdentity, root, "", fmt.Errorf("module identity inspect: %w", err))
+	}
+	if report.Conformant {
+		return nil
+	}
+	first := report.Findings[0]
+	detail := fmt.Sprintf(
+		"legacy Yunka module identity %q at %s:%d; use %q and run `yunka dependency module-identity migrate --root .` before generate/check",
+		first.Legacy,
+		first.Path,
+		first.Line,
+		first.Canonical,
+	)
+	return wrapFailure(FailureModuleIdentity, root, first.Path, errors.New(detail))
 }
 
 func Format(report Report) string {
