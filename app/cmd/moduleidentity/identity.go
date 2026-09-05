@@ -61,6 +61,13 @@ type replacement struct {
 	value string
 }
 
+type moduleToken struct {
+	start  int
+	end    int
+	value  string
+	quoted byte
+}
+
 func Mappings() []Mapping {
 	result := make([]Mapping, len(mappings))
 	copy(result, mappings)
@@ -225,15 +232,10 @@ func inspectModuleFile(path, relative string, kind FindingKind) ([]Finding, erro
 	}
 	result := make([]Finding, 0)
 	for index, line := range strings.Split(string(contents), "\n") {
-		code := line
-		if comment := strings.Index(code, "//"); comment >= 0 {
-			code = code[:comment]
-		}
-		for _, field := range strings.Fields(code) {
-			field = strings.Trim(field, "()")
-			canonical, changed := Canonicalize(field)
+		for _, item := range moduleTokens(line) {
+			canonical, changed := Canonicalize(item.value)
 			if changed {
-				result = append(result, Finding{Kind: kind, Path: relative, Line: index + 1, Legacy: field, Canonical: canonical})
+				result = append(result, Finding{Kind: kind, Path: relative, Line: index + 1, Legacy: item.value, Canonical: canonical})
 			}
 		}
 	}
@@ -274,13 +276,9 @@ func migrateGoFile(path string) (bool, error) {
 	if len(replacements) == 0 {
 		return false, nil
 	}
-	sort.Slice(replacements, func(i, j int) bool { return replacements[i].start > replacements[j].start })
-	updated := append([]byte(nil), contents...)
-	for _, item := range replacements {
-		if item.start < 0 || item.end < item.start || item.end > len(updated) {
-			return false, fmt.Errorf("module identity: invalid import replacement bounds in %s", path)
-		}
-		updated = append(updated[:item.start], append([]byte(item.value), updated[item.end:]...)...)
+	updated, err := applyReplacements(contents, replacements, path)
+	if err != nil {
+		return false, err
 	}
 	return true, writeAtomic(path, updated)
 }
@@ -293,33 +291,117 @@ func migrateModuleFile(path string) (bool, error) {
 	lines := strings.SplitAfter(string(contents), "\n")
 	changed := false
 	for index, line := range lines {
-		newline := ""
-		body := line
-		if strings.HasSuffix(body, "\n") {
-			newline = "\n"
-			body = strings.TrimSuffix(body, "\n")
-		}
-		code := body
-		comment := ""
-		if offset := strings.Index(code, "//"); offset >= 0 {
-			comment = code[offset:]
-			code = code[:offset]
-		}
-		for _, field := range strings.Fields(code) {
-			trimmed := strings.Trim(field, "()")
-			canonical, rewrite := Canonicalize(trimmed)
+		body := strings.TrimSuffix(line, "\n")
+		replacements := make([]replacement, 0)
+		for _, item := range moduleTokens(body) {
+			canonical, rewrite := Canonicalize(item.value)
 			if !rewrite {
 				continue
 			}
-			code = strings.ReplaceAll(code, trimmed, canonical)
-			changed = true
+			value := canonical
+			switch item.quoted {
+			case '"':
+				value = strconv.Quote(canonical)
+			case '`':
+				value = "`" + canonical + "`"
+			}
+			replacements = append(replacements, replacement{start: item.start, end: item.end, value: value})
 		}
-		lines[index] = code + comment + newline
+		if len(replacements) == 0 {
+			continue
+		}
+		updated, replaceErr := applyReplacements([]byte(body), replacements, path)
+		if replaceErr != nil {
+			return false, replaceErr
+		}
+		newline := ""
+		if strings.HasSuffix(line, "\n") {
+			newline = "\n"
+		}
+		lines[index] = string(updated) + newline
+		changed = true
 	}
 	if !changed {
 		return false, nil
 	}
 	return true, writeAtomic(path, []byte(strings.Join(lines, "")))
+}
+
+func moduleTokens(line string) []moduleToken {
+	result := make([]moduleToken, 0)
+	for index := 0; index < len(line); {
+		for index < len(line) && (isModuleSpace(line[index]) || line[index] == '(' || line[index] == ')') {
+			index++
+		}
+		if index >= len(line) || strings.HasPrefix(line[index:], "//") {
+			break
+		}
+		start := index
+		if line[index] == '"' || line[index] == '`' {
+			quote := line[index]
+			index++
+			escaped := false
+			for index < len(line) {
+				current := line[index]
+				if quote == '"' {
+					if current == '\\' && !escaped {
+						escaped = true
+						index++
+						continue
+					}
+					if current == quote && !escaped {
+						index++
+						break
+					}
+					escaped = false
+					index++
+					continue
+				}
+				if current == quote {
+					index++
+					break
+				}
+				index++
+			}
+			raw := line[start:index]
+			value, err := strconv.Unquote(raw)
+			if err == nil {
+				result = append(result, moduleToken{start: start, end: index, value: value, quoted: quote})
+			}
+			continue
+		}
+		for index < len(line) && !isModuleSpace(line[index]) && line[index] != '(' && line[index] != ')' {
+			index++
+		}
+		if index > start {
+			result = append(result, moduleToken{start: start, end: index, value: line[start:index]})
+		}
+	}
+	return result
+}
+
+func isModuleSpace(value byte) bool {
+	switch value {
+	case ' ', '\t', '\r', '\n':
+		return true
+	default:
+		return false
+	}
+}
+
+func applyReplacements(contents []byte, replacements []replacement, path string) ([]byte, error) {
+	if len(replacements) == 0 {
+		return append([]byte(nil), contents...), nil
+	}
+	sort.Slice(replacements, func(i, j int) bool { return replacements[i].start > replacements[j].start })
+	updated := append([]byte(nil), contents...)
+	for _, item := range replacements {
+		if item.start < 0 || item.end < item.start || item.end > len(updated) {
+			return nil, fmt.Errorf("module identity: invalid replacement bounds in %s", path)
+		}
+		updated = append(updated[:item.start], append([]byte(item.value), updated[item.end:]...)...)
+	}
+	return updated, nil
 }
 
 func writeAtomic(path string, contents []byte) error {
