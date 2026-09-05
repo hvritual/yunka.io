@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/urfave/cli"
+	"yunka.io/app/cmd/gitproject"
 	"yunka.io/app/cmd/ownership"
 	"yunka.io/app/cmd/projectflow"
 )
@@ -207,29 +208,127 @@ func gitChanges(root, baseSHA string) ([]FileChange, error) {
 	if baseSHA == "" {
 		return nil, fmt.Errorf("change check: base SHA is required")
 	}
-	tracked, err := runGitBytes(root, "diff", "--name-status", "-z", "--find-renames", baseSHA, "--")
+	paths, err := gitproject.Resolve(root)
+	if err != nil {
+		return nil, fmt.Errorf("change check: resolve Git project paths: %w", err)
+	}
+
+	diffArgs := []string{"diff", "--name-status", "-z", "--find-renames", baseSHA, "--"}
+	if paths.ProjectPrefix != "." {
+		diffArgs = append(diffArgs, paths.ProjectPrefix)
+	}
+	tracked, err := runGitRawBytes(paths.RepositoryRoot, diffArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("change check: Git diff: %w", err)
 	}
-	changes, err := parseNameStatusZ(tracked)
+	repositoryChanges, err := parseNameStatusZ(tracked)
 	if err != nil {
 		return nil, err
 	}
-	untracked, err := runGitBytes(root, "ls-files", "--others", "--exclude-standard", "-z")
+	changes, err := projectFileChanges(paths, repositoryChanges)
+	if err != nil {
+		return nil, err
+	}
+
+	untrackedArgs := []string{"ls-files", "--others", "--exclude-standard", "-z", "--"}
+	if paths.ProjectPrefix != "." {
+		untrackedArgs = append(untrackedArgs, paths.ProjectPrefix)
+	}
+	untracked, err := runGitRawBytes(paths.RepositoryRoot, untrackedArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("change check: Git untracked files: %w", err)
 	}
-	for _, path := range splitNUL(untracked) {
-		path = cleanProjectPath(path)
-		if path == "" {
+	for _, repositoryPath := range splitNUL(untracked) {
+		projectPath, inside, err := paths.ToProject(repositoryPath)
+		if err != nil {
+			return nil, fmt.Errorf("change check: translate untracked path %s: %w", repositoryPath, err)
+		}
+		if !inside {
 			continue
 		}
-		changes = append(changes, FileChange{Status: "A", Path: path})
+		projectPath = cleanProjectPath(projectPath)
+		if projectPath == "" {
+			continue
+		}
+		changes = append(changes, FileChange{Status: "A", Path: projectPath})
 	}
 	return dedupeFileChanges(changes), nil
 }
 
+func projectFileChanges(paths gitproject.Paths, repositoryChanges []FileChange) ([]FileChange, error) {
+	result := make([]FileChange, 0, len(repositoryChanges))
+	for _, change := range repositoryChanges {
+		projectPath, pathInside, err := paths.ToProject(change.Path)
+		if err != nil {
+			return nil, fmt.Errorf("change check: translate Git path %s: %w", change.Path, err)
+		}
+		if change.PreviousPath == "" {
+			if !pathInside {
+				continue
+			}
+			change.Path = projectPath
+			result = append(result, change)
+			continue
+		}
+
+		previousProjectPath, previousInside, err := paths.ToProject(change.PreviousPath)
+		if err != nil {
+			return nil, fmt.Errorf("change check: translate previous Git path %s: %w", change.PreviousPath, err)
+		}
+		switch {
+		case pathInside && previousInside:
+			change.Path = projectPath
+			change.PreviousPath = previousProjectPath
+			result = append(result, change)
+		case pathInside && !previousInside:
+			// A rename/copy entering the project is a new project destination. Keep
+			// the Git status so AX7 exact-placement rules still fail closed.
+			change.Path = projectPath
+			change.PreviousPath = ""
+			result = append(result, change)
+		case !pathInside && previousInside && strings.HasPrefix(strings.ToUpper(strings.TrimSpace(change.Status)), "R"):
+			// A rename leaving the project is a deletion from the project path
+			// domain. Copies leaving the project do not change project contents.
+			result = append(result, FileChange{Status: "D", Path: previousProjectPath})
+		}
+	}
+	return result, nil
+}
+
 func runGitBytes(root string, args ...string) ([]byte, error) {
+	commandRoot := root
+	commandArgs := append([]string(nil), args...)
+	if len(commandArgs) >= 2 && commandArgs[0] == "show" {
+		if ref, path, ok := splitGitObjectPath(commandArgs[1]); ok {
+			paths, err := gitproject.Resolve(root)
+			if err != nil {
+				return nil, err
+			}
+			repositoryPath, err := paths.ToRepository(path)
+			if err != nil {
+				return nil, err
+			}
+			commandRoot = paths.RepositoryRoot
+			commandArgs[1] = ref + ":" + repositoryPath
+		}
+	}
+	return runGitRawBytes(commandRoot, commandArgs...)
+}
+
+func splitGitObjectPath(value string) (string, string, bool) {
+	index := strings.IndexByte(value, ':')
+	if index <= 0 || index == len(value)-1 {
+		return "", "", false
+	}
+	ref := strings.TrimSpace(value[:index])
+	path := cleanProjectPath(value[index+1:])
+	if ref == "" || path == "" {
+		return "", "", false
+	}
+	return ref, path, true
+}
+
+func runGitRawBytes(root string, args ...string) ([]byte, error) {
 	command := exec.Command("git", append([]string{"-C", root}, args...)...)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
