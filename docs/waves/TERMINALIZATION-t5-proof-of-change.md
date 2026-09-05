@@ -2,7 +2,7 @@
 
 > Document class: **ROADMAP**  
 > Current status authority: [`docs/STATUS.md`](../STATUS.md)  
-> Integration state at this record: **T5.1 behavior complete / production-qualified / real-consumer pressure-qualified / integration pending**
+> Integration state at this record: **T5.1 complete / production-qualified / real-consumer pressure-qualified / merged through PR #148**
 
 ## Goal
 
@@ -102,7 +102,7 @@ The T5 patch was then replayed onto canonical `main@ebb8184bd6ab5dea9f0fa8b3ed7d
 a102de3c53f1078c8c6cce70e334c91fbbb94bb2
 ```
 
-Relative to that canonical main it remains exactly four T5 files, 438 additions and 11 deletions.
+Relative to that canonical main it remained exactly four T5 files, 438 additions and 11 deletions before status reconciliation.
 
 ### Framework qualification
 
@@ -174,18 +174,44 @@ Pre-migration inspection/check remained read-only, the canonical qualification b
 
 Framework unit coverage additionally proves the `AUDIT-AUTH-001` new-debt path. The B13 pressure intentionally uses `AUDIT-INFRA-001` so the architecture-debt gate is isolated from Biz's existing authorization-boundary test; `go test ./...` therefore stays PASS while the new-debt gate independently blocks the change.
 
+### Canonical integration
+
+Final pre-integration PR head:
+
+```text
+0a742d0cff0b634b5d80660fee2a77441bfdc1e1
+```
+
+It passed:
+
+```text
+CI #582          run 33955577654   PASS
+production #340  run 33955577637   PASS
+```
+
+Production again included MySQL 8.4 and clean-worktree verification. PR #148 then merged into canonical `main` as:
+
+```text
+2f588ed2e5f40b06c6ce3b7f5803d1c51afceefc
+```
+
+Exact-main post-merge qualification passed:
+
+```text
+CI #586          run 33955864123   PASS
+production #344  run 33955864115   PASS
+```
+
 ### Qualification disposition
 
-T5.1 behavioral implementation is now:
+T5.1 is now:
 
 ```text
 COMPLETE
 PRODUCTION-QUALIFIED
 REAL-CONSUMER PRESSURE-QUALIFIED
-INTEGRATION PENDING
+MERGED
 ```
-
-The final PR head must still pass CI and production after this documentation reconciliation before integration. T5.1 is not recorded as merged until canonical integration and exact-main post-merge qualification complete.
 
 ## Behavior Proof
 
