@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"yunka.io/app/cmd/gitproject"
 )
 
 func ResolveGitCommit(root, ref string) (string, error) {
@@ -34,7 +36,15 @@ func ReadGitFileAtCommit(root, commitSHA, path string) ([]byte, error) {
 	if commitSHA == "" || path == "" || path == "." || outsideSlashRoot(path) {
 		return nil, fmt.Errorf("audit debt: commit SHA and project-relative file path are required")
 	}
-	output, err := runGitBytes(root, "show", commitSHA+":"+path)
+	paths, err := gitproject.Resolve(root)
+	if err != nil {
+		return nil, fmt.Errorf("audit debt: resolve Git project paths: %w", err)
+	}
+	repositoryPath, err := paths.ToRepository(path)
+	if err != nil {
+		return nil, fmt.Errorf("audit debt: translate project path %s: %w", path, err)
+	}
+	output, err := runGitBytes(paths.RepositoryRoot, "show", commitSHA+":"+repositoryPath)
 	if err != nil {
 		return nil, fmt.Errorf("audit debt: read %s at %s: %w", path, commitSHA, err)
 	}
@@ -50,12 +60,17 @@ func CollectGoSourceAtCommit(projectRoot, sourceRoot, commitSHA string) (SourceS
 	if commitSHA == "" {
 		return SourceSnapshot{}, fmt.Errorf("audit debt: base commit SHA is required")
 	}
-
-	args := []string{"ls-tree", "-r", "-z", "--full-tree", commitSHA, "--"}
-	if relativeRoot != "." {
-		args = append(args, relativeRoot)
+	paths, err := gitproject.Resolve(projectRoot)
+	if err != nil {
+		return SourceSnapshot{}, fmt.Errorf("audit debt: resolve Git project paths: %w", err)
 	}
-	output, err := runGitBytes(projectRoot, args...)
+	repositorySourceRoot, err := paths.ToRepository(relativeRoot)
+	if err != nil {
+		return SourceSnapshot{}, fmt.Errorf("audit debt: translate source root %s: %w", relativeRoot, err)
+	}
+
+	args := []string{"ls-tree", "-r", "-z", "--full-tree", commitSHA, "--", repositorySourceRoot}
+	output, err := runGitBytes(paths.RepositoryRoot, args...)
 	if err != nil {
 		return SourceSnapshot{}, fmt.Errorf("audit debt: list source at %s: %w", commitSHA, err)
 	}
@@ -70,11 +85,19 @@ func CollectGoSourceAtCommit(projectRoot, sourceRoot, commitSHA string) (SourceS
 		if tab < 0 {
 			return SourceSnapshot{}, fmt.Errorf("audit debt: malformed git ls-tree entry %q", entry)
 		}
-		meta, filePath := entry[:tab], cleanSlash(entry[tab+1:])
+		meta, repositoryFilePath := entry[:tab], cleanSlash(entry[tab+1:])
 		fields := strings.Fields(meta)
 		if len(fields) < 3 || fields[1] != "blob" || fields[0] == "120000" {
 			continue
 		}
+		filePath, inside, err := paths.ToProject(repositoryFilePath)
+		if err != nil {
+			return SourceSnapshot{}, fmt.Errorf("audit debt: translate source path %s: %w", repositoryFilePath, err)
+		}
+		if !inside {
+			continue
+		}
+		filePath = cleanSlash(filePath)
 		if !strings.EqualFold(filepath.Ext(filePath), ".go") || excludedGitSourcePath(filePath, relativeRoot) {
 			continue
 		}
