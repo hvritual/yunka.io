@@ -2,7 +2,7 @@
 
 > Document class: **ROADMAP**  
 > Current status authority: [`docs/STATUS.md`](../STATUS.md)  
-> Integration state at this record: **T5 started; T5.1 implementation candidate not yet qualified or merged**
+> Integration state at this record: **T5.1 behavior complete / production-qualified / real-consumer pressure-qualified / integration pending**
 
 ## Goal
 
@@ -33,7 +33,7 @@ T5.1 adds the T2 debt comparison on the immutable Change Contract base:
 yunka audit --base ChangeContract.BaseSHA
 ```
 
-The implementation must reuse the existing deterministic Audit implementation and `auditcore.DebtDelta`; it must not shell out to another Yunka CLI process and must not create a second debt model.
+The implementation reuses the existing deterministic Audit implementation and `auditcore.DebtDelta`; it does not shell out to another Yunka CLI process and does not create a second debt model.
 
 The Change Attestation machine contract is extended with:
 
@@ -88,32 +88,104 @@ persistence semantics
 second architecture Source of Truth
 ```
 
-### T5.1 qualification
+## Qualification record
 
-Required framework gates:
+### Stop-condition closure before qualification
+
+The first B13 replay exposed a real compiler/DX compatibility gap rather than a T5 debt-rule failure: historical consumers could contain both `yunka.io/{framework,gateway,pkg}` and canonical `github.com/hvritual/yunka.io/{framework,gateway,pkg}` identities, and the historical vendored Yunka DSL could recreate the legacy identity through protobuf `option go_package`.
+
+T5 was paused under the Terminalization stop condition. The gap was tracked as issue #152 and fixed independently by PR #154. The minimal closure added explicit module-identity inspection/migration for Go imports, Go module/workspace tokens, and protobuf `go_package`, plus fail-closed `generate/check` preflight. It did not expand protobuf business semantics or runtime/compiler ownership. Exact #152 candidate `5ebb03c739829e3ae960b31d00bd5d9040c82f7e` passed CI #578, production #336, and B13 module-identity Run #3. PR #154 merged as `ebb8184bd6ab5dea9f0fa8b3ed7d9c6d5f765d9a`; exact-main CI #579 and production #337 also passed.
+
+The T5 patch was then replayed onto canonical `main@ebb8184bd6ab5dea9f0fa8b3ed7d9c6d5f765d9a` without scope expansion. Rebased behavioral candidate:
 
 ```text
-make verify
-make verify-production
+a102de3c53f1078c8c6cce70e334c91fbbb94bb2
 ```
 
-Required adversarial proof:
+Relative to that canonical main it remains exactly four T5 files, 438 additions and 11 deletions.
+
+### Framework qualification
+
+Exact T5.1 behavioral candidate `a102de3c53f1078c8c6cce70e334c91fbbb94bb2` passed:
 
 ```text
-clean base -> new PROVEN_VIOLATION
-    => FAIL
-
-violating base -> violation fixed, no new debt
-    => PASS architecture-debt gate
-
-existing unrelated historical debt unchanged
-    => reported as existing, not newly blocking
-
-repeated machine rendering
-    => deterministic
+CI #580          run 33954262081   PASS
+production #338  run 33954262031   PASS
 ```
 
-A real-consumer reverse qualification is required before T5.1 is promoted to complete.
+Production qualification includes the existing MySQL 8.4 gate and clean-worktree verification.
+
+### Real B13 reverse qualification
+
+Real-consumer qualification used preserved B13 pressure SHA:
+
+```text
+506e9c117822855db318f8b4b6689d318a62ded1
+```
+
+Successful qualification:
+
+```text
+workflow: terminalization-t5-proof-b13
+run:      #9 / 33954431712
+artifact: 9965889476
+sha256:   8070e9876fc5395cf5be4ca82539feceb31b1fb69482c8ea148d0169260ce520
+```
+
+The qualification uses the canonical #152 migration path. It does not manufacture legacy alias modules, hand-edit generated files, or use `--skip-tests`.
+
+It proved the following machine states on the real consumer:
+
+```text
+canonicalized B13
+    module identity findings = 0
+    yunka check              = PASS
+    go test ./...            = PASS
+
+NEW proven debt
+    rule                     = AUDIT-INFRA-001
+    git-delta                = PASS
+    yunka-check              = PASS
+    semantic-delta           = PASS
+    architecture-debt        = FAIL (existing=0 new=1 fixed=0)
+    go-test                  = PASS
+    attestation conformant   = false
+
+EXISTING proven debt
+    rule                     = AUDIT-INFRA-001
+    architecture-debt        = PASS (existing=1 new=0 fixed=0)
+    go-test                  = PASS
+    attestation conformant   = true
+
+FIXED proven debt
+    rule                     = AUDIT-INFRA-001
+    architecture-debt        = PASS (existing=0 new=0 fixed=1)
+    go-test                  = PASS
+    attestation conformant   = true
+```
+
+The successful fixed-debt attestation was rendered twice from an unchanged state and was byte-identical. Both copies have SHA256:
+
+```text
+f49c5bdb2b90f04d432c51dc8c48f44dfc4497e3439ca7a8ea155529d71c586a
+```
+
+Pre-migration inspection/check remained read-only, the canonical qualification baseline was clean, and the workflow restored the consumer branch to a zero-dirty final status.
+
+Framework unit coverage additionally proves the `AUDIT-AUTH-001` new-debt path. The B13 pressure intentionally uses `AUDIT-INFRA-001` so the architecture-debt gate is isolated from Biz's existing authorization-boundary test; `go test ./...` therefore stays PASS while the new-debt gate independently blocks the change.
+
+### Qualification disposition
+
+T5.1 behavioral implementation is now:
+
+```text
+COMPLETE
+PRODUCTION-QUALIFIED
+REAL-CONSUMER PRESSURE-QUALIFIED
+INTEGRATION PENDING
+```
+
+The final PR head must still pass CI and production after this documentation reconciliation before integration. T5.1 is not recorded as merged until canonical integration and exact-main post-merge qualification complete.
 
 ## Behavior Proof
 
