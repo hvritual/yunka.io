@@ -39,6 +39,32 @@ func TestT4CreateChangeSetBindsLegacyProtobufOutputsAndNormalizesAPIKey(t *testi
 	}
 }
 
+func TestT4CreateChangeSetCanonicalizesServiceAuthenticationEndToEnd(t *testing.T) {
+	fixture := newPressureFixture(t)
+	options := add.OperationOptions{
+		Root: fixture.Root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.rotate-key", UseCase: "rotate_tenant_key",
+		Access: "protected", Permissions: []string{"tenant.manage"}, PermissionMode: "all", Tenant: "required",
+		Authentication: []string{"service", "jwt", "api-key"}, Transaction: "local", Idempotency: "none", Composition: "local",
+	}
+	planPath := writePlanReport(t, fixture.Root, options, "t4-service-auth-plan.json")
+	value, _, err := BuildChangeSet(fixture.Root, "HEAD", nil, []string{planPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := add.AddOperation(options); err != nil {
+		t.Fatal(err)
+	}
+	generatePressureProject(t, fixture)
+	report, err := ReconcileChangeSet(fixture.Root, value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.Conformant || len(report.Reconciliation.Violations) != 0 || len(report.Semantic.Violations) != 0 {
+		t.Fatalf("service-auth create ChangeSet did not reconcile canonical plan to generated manifest: %#v", report)
+	}
+}
+
 func TestT4CreateChangeSetRejectsSpoofedLegacyProtobufOutput(t *testing.T) {
 	fixture := newPressureFixture(t)
 	writePressureFile(t, filepath.Join(fixture.Root, "contracts", "tenant", "tenant.pb.go"), "package tenantv1\n\n// handwritten file using a generated-looking name\n")
