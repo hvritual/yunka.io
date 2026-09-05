@@ -1,6 +1,7 @@
 package moduleidentity
 
 import (
+	"bytes"
 	"fmt"
 	"go/parser"
 	"go/token"
@@ -17,9 +18,10 @@ const SchemaVersion = 1
 type FindingKind string
 
 const (
-	FindingGoImport FindingKind = "go_import"
-	FindingGoMod    FindingKind = "go_mod"
-	FindingGoWork   FindingKind = "go_work"
+	FindingGoImport       FindingKind = "go_import"
+	FindingGoMod          FindingKind = "go_mod"
+	FindingGoWork         FindingKind = "go_work"
+	FindingProtoGoPackage FindingKind = "proto_go_package"
 )
 
 type Mapping struct {
@@ -68,6 +70,14 @@ type moduleToken struct {
 	quoted byte
 }
 
+type protoGoPackageToken struct {
+	start  int
+	end    int
+	line   int
+	value  string
+	quoted byte
+}
+
 func Mappings() []Mapping {
 	result := make([]Mapping, len(mappings))
 	copy(result, mappings)
@@ -85,6 +95,20 @@ func Canonicalize(value string) (string, bool) {
 		}
 	}
 	return value, false
+}
+
+func canonicalizeGoPackage(value string) (string, bool) {
+	importPath := value
+	suffix := ""
+	if separator := strings.Index(value, ";"); separator >= 0 {
+		importPath = value[:separator]
+		suffix = value[separator:]
+	}
+	canonical, changed := Canonicalize(importPath)
+	if !changed {
+		return value, false
+	}
+	return canonical + suffix, true
 }
 
 func Inspect(root string) (Report, error) {
@@ -110,6 +134,12 @@ func Inspect(root string) (Report, error) {
 		switch {
 		case strings.HasSuffix(entry.Name(), ".go"):
 			items, inspectErr := inspectGoFile(path, relative)
+			if inspectErr != nil {
+				return inspectErr
+			}
+			findings = append(findings, items...)
+		case strings.HasSuffix(entry.Name(), ".proto"):
+			items, inspectErr := inspectProtoFile(path, relative)
 			if inspectErr != nil {
 				return inspectErr
 			}
@@ -155,6 +185,8 @@ func Migrate(root string) (MigrationResult, error) {
 		switch {
 		case strings.HasSuffix(entry.Name(), ".go"):
 			didChange, migrateErr = migrateGoFile(path)
+		case strings.HasSuffix(entry.Name(), ".proto"):
+			didChange, migrateErr = migrateProtoFile(path)
 		case entry.Name() == "go.mod" || entry.Name() == "go.work":
 			didChange, migrateErr = migrateModuleFile(path)
 		default:
@@ -225,6 +257,28 @@ func inspectGoFile(path, relative string) ([]Finding, error) {
 	return result, nil
 }
 
+func inspectProtoFile(path, relative string) ([]Finding, error) {
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]Finding, 0)
+	for _, item := range protoGoPackageTokens(contents) {
+		canonical, changed := canonicalizeGoPackage(item.value)
+		if !changed {
+			continue
+		}
+		result = append(result, Finding{
+			Kind:      FindingProtoGoPackage,
+			Path:      relative,
+			Line:      item.line,
+			Legacy:    item.value,
+			Canonical: canonical,
+		})
+	}
+	return result, nil
+}
+
 func inspectModuleFile(path, relative string, kind FindingKind) ([]Finding, error) {
 	contents, err := os.ReadFile(path)
 	if err != nil {
@@ -283,6 +337,33 @@ func migrateGoFile(path string) (bool, error) {
 	return true, writeAtomic(path, updated)
 }
 
+func migrateProtoFile(path string) (bool, error) {
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	replacements := make([]replacement, 0)
+	for _, item := range protoGoPackageTokens(contents) {
+		canonical, changed := canonicalizeGoPackage(item.value)
+		if !changed {
+			continue
+		}
+		literal := strconv.Quote(canonical)
+		if item.quoted == '\'' {
+			literal = "'" + canonical + "'"
+		}
+		replacements = append(replacements, replacement{start: item.start, end: item.end, value: literal})
+	}
+	if len(replacements) == 0 {
+		return false, nil
+	}
+	updated, err := applyReplacements(contents, replacements, path)
+	if err != nil {
+		return false, err
+	}
+	return true, writeAtomic(path, updated)
+}
+
 func migrateModuleFile(path string) (bool, error) {
 	contents, err := os.ReadFile(path)
 	if err != nil {
@@ -325,6 +406,164 @@ func migrateModuleFile(path string) (bool, error) {
 		return false, nil
 	}
 	return true, writeAtomic(path, []byte(strings.Join(lines, "")))
+}
+
+func protoGoPackageTokens(contents []byte) []protoGoPackageToken {
+	result := make([]protoGoPackageToken, 0)
+	for index := 0; index < len(contents); {
+		next := skipProtoTrivia(contents, index)
+		if next >= len(contents) {
+			break
+		}
+		index = next
+		if contents[index] == '"' || contents[index] == '\'' {
+			_, end, _, _, ok := readProtoStringLiteral(contents, index)
+			if ok {
+				index = end
+				continue
+			}
+			index++
+			continue
+		}
+		word, afterWord := readProtoIdentifier(contents, index)
+		if word == "" {
+			index++
+			continue
+		}
+		index = afterWord
+		if word != "option" {
+			continue
+		}
+
+		cursor := skipProtoTrivia(contents, index)
+		name, afterName := readProtoIdentifier(contents, cursor)
+		if name != "go_package" {
+			index = cursor
+			continue
+		}
+		cursor = skipProtoTrivia(contents, afterName)
+		if cursor >= len(contents) || contents[cursor] != '=' {
+			index = afterName
+			continue
+		}
+		cursor = skipProtoTrivia(contents, cursor+1)
+		start, end, value, quote, ok := readProtoStringLiteral(contents, cursor)
+		if !ok {
+			index = cursor + 1
+			continue
+		}
+		terminator := skipProtoTrivia(contents, end)
+		if terminator >= len(contents) || contents[terminator] != ';' {
+			index = end
+			continue
+		}
+		result = append(result, protoGoPackageToken{
+			start:  start,
+			end:    end,
+			line:   bytes.Count(contents[:start], []byte{'\n'}) + 1,
+			value:  value,
+			quoted: quote,
+		})
+		index = terminator + 1
+	}
+	return result
+}
+
+func skipProtoTrivia(contents []byte, index int) int {
+	for index < len(contents) {
+		if isProtoSpace(contents[index]) {
+			index++
+			continue
+		}
+		if index+1 < len(contents) && contents[index] == '/' && contents[index+1] == '/' {
+			index += 2
+			for index < len(contents) && contents[index] != '\n' {
+				index++
+			}
+			continue
+		}
+		if index+1 < len(contents) && contents[index] == '/' && contents[index+1] == '*' {
+			index += 2
+			for index+1 < len(contents) && !(contents[index] == '*' && contents[index+1] == '/') {
+				index++
+			}
+			if index+1 < len(contents) {
+				index += 2
+			}
+			continue
+		}
+		break
+	}
+	return index
+}
+
+func readProtoIdentifier(contents []byte, index int) (string, int) {
+	if index >= len(contents) || !isProtoIdentifierStart(contents[index]) {
+		return "", index
+	}
+	start := index
+	index++
+	for index < len(contents) && isProtoIdentifierPart(contents[index]) {
+		index++
+	}
+	return string(contents[start:index]), index
+}
+
+func readProtoStringLiteral(contents []byte, index int) (int, int, string, byte, bool) {
+	if index >= len(contents) || (contents[index] != '"' && contents[index] != '\'') {
+		return 0, 0, "", 0, false
+	}
+	quote := contents[index]
+	start := index
+	index++
+	for index < len(contents) {
+		if contents[index] == '\\' {
+			index += 2
+			continue
+		}
+		if contents[index] == quote {
+			end := index + 1
+			value, ok := decodeProtoString(contents[start:end], quote)
+			return start, end, value, quote, ok
+		}
+		if contents[index] == '\n' || contents[index] == '\r' {
+			return 0, 0, "", 0, false
+		}
+		index++
+	}
+	return 0, 0, "", 0, false
+}
+
+func decodeProtoString(literal []byte, quote byte) (string, bool) {
+	if quote == '"' {
+		value, err := strconv.Unquote(string(literal))
+		return value, err == nil
+	}
+	if len(literal) < 2 {
+		return "", false
+	}
+	body := string(literal[1 : len(literal)-1])
+	if strings.Contains(body, "\\") {
+		return "", false
+	}
+	return body, true
+}
+
+func isProtoIdentifierStart(value byte) bool {
+	return value == '_' || value >= 'A' && value <= 'Z' || value >= 'a' && value <= 'z'
+}
+
+func isProtoIdentifierPart(value byte) bool {
+	return isProtoIdentifierStart(value) || value >= '0' && value <= '9'
+}
+
+func isProtoSpace(value byte) bool {
+	switch value {
+	case ' ', '\t', '\r', '\n':
+		return true
+	default:
+		return false
+	}
 }
 
 func moduleTokens(line string) []moduleToken {
