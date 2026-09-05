@@ -9,13 +9,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/urfave/cli"
-	"yunka.io/app/cmd/projectflow"
 	"github.com/hvritual/yunka.io/pkg/diagnostic"
+	"github.com/urfave/cli"
+	"yunka.io/app/cmd/auditcore"
+	"yunka.io/app/cmd/projectflow"
 )
 
 const (
-	ChangeAttestationSchemaVersion = 1
+	ChangeAttestationSchemaVersion = 2
 	DefaultChangeAttestationPath   = ".yunka/change-attestation.json"
 )
 
@@ -26,15 +27,16 @@ type GateResult struct {
 }
 
 type ChangeAttestation struct {
-	SchemaVersion int                    `json:"schemaVersion"`
-	BaseSHA       string                 `json:"baseSha"`
-	HeadSHA       string                 `json:"headSha"`
-	OperationID   string                 `json:"operationId"`
-	Reconciliation Reconciliation        `json:"reconciliation"`
-	Semantic      SemanticReport         `json:"semantic"`
-	Gates         []GateResult           `json:"gates"`
-	Diagnostics   []diagnostic.Diagnostic `json:"diagnostics"`
-	Conformant    bool                   `json:"conformant"`
+	SchemaVersion    int                     `json:"schemaVersion"`
+	BaseSHA          string                  `json:"baseSha"`
+	HeadSHA          string                  `json:"headSha"`
+	OperationID      string                  `json:"operationId"`
+	Reconciliation   Reconciliation          `json:"reconciliation"`
+	Semantic         SemanticReport          `json:"semantic"`
+	ArchitectureDebt *auditcore.DebtDelta    `json:"architectureDebt,omitempty"`
+	Gates            []GateResult            `json:"gates"`
+	Diagnostics      []diagnostic.Diagnostic `json:"diagnostics"`
+	Conformant       bool                    `json:"conformant"`
 }
 
 func verifyCommand() cli.Command {
@@ -130,6 +132,7 @@ func VerifyChange(ctx context.Context, options VerifyOptions) (ChangeAttestation
 	if workflowErr != nil {
 		attestation.Gates = append(attestation.Gates, GateResult{Name: "yunka-check", Status: "fail", Detail: strings.TrimSpace(workflowErr.Error())})
 		attestation.Diagnostics = append(attestation.Diagnostics, projectflow.Diagnose(workflowErr))
+		attestation.Gates = append(attestation.Gates, GateResult{Name: "architecture-debt", Status: "skipped", Detail: "yunka-check failed; canonical Audit evidence is not trustworthy"})
 	} else {
 		attestation.Gates = append(attestation.Gates, GateResult{Name: "yunka-check", Status: "pass"})
 		semantic, semanticErr := ReconcileSemanticDelta(descriptor.Root, contractValue)
@@ -146,6 +149,14 @@ func VerifyChange(ctx context.Context, options VerifyOptions) (ChangeAttestation
 					attestation.Diagnostics = append(attestation.Diagnostics, changeDiagnostic("semantic-delta", delta.Subject, fmt.Sprintf("%s %s changed outside the allowed semantic envelope", delta.Category, delta.Field)))
 				}
 			}
+		}
+
+		architectureDebt, architectureDebtErr := collectArchitectureDebt(descriptor.Root, contractValue.BaseSHA)
+		if architectureDebtErr != nil {
+			attestation.Gates = append(attestation.Gates, GateResult{Name: "architecture-debt", Status: "fail", Detail: architectureDebtErr.Error()})
+			attestation.Diagnostics = append(attestation.Diagnostics, changeDiagnostic("architecture-debt", "", architectureDebtErr.Error()))
+		} else {
+			recordArchitectureDebt(&attestation, architectureDebt)
 		}
 	}
 
