@@ -17,7 +17,7 @@ const AppName = "dependency"
 func Command() cli.Command {
 	return cli.Command{
 		Name:  AppName,
-		Usage: "inspect and enforce the repository dependency convergence policy",
+		Usage: "inspect and enforce dependency and module-identity convergence policy",
 		Subcommands: []cli.Command{
 			{
 				Name:  "check",
@@ -29,6 +29,7 @@ func Command() cli.Command {
 				},
 				Action: check,
 			},
+			moduleIdentityCommand(),
 		},
 	}
 }
