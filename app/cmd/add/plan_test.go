@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -40,17 +41,17 @@ func TestPlanOperationIsReadOnlyDeterministicAndMatchesApply(t *testing.T) {
 		t.Fatalf("plan kind first=%q second=%q", first.Kind, second.Kind)
 	}
 	wantSemantics := &OperationSemantics{
-		UseCase:        "suspend_tenant",
-		Access:         "protected",
-		Permissions:    []string{"tenant.manage"},
-		PermissionMode: "all",
-		Tenant:         "required",
-		Authentication: []string{"jwt"},
-		Transaction:    "local",
-		Idempotency:    "required",
-		Composition:    "local",
+		UseCase:            "suspend_tenant",
+		Access:             "protected",
+		Permissions:        []string{"tenant.manage"},
+		PermissionMode:     "all",
+		Tenant:             "required",
+		Authentication:     []string{"jwt"},
+		Transaction:        "local",
+		Idempotency:        "required",
+		Composition:        "local",
 		RequiresOperations: []string{},
-		HTTP: &OperationHTTPSemantics{Method: "POST", Path: "/tenants/{id}:suspend", Body: "*"},
+		HTTP:               &OperationHTTPSemantics{Method: "POST", Path: "/tenants/{id}:suspend", Body: "*"},
 	}
 	if !reflect.DeepEqual(first.ExplicitSemantics, wantSemantics) {
 		t.Fatalf("explicit semantics=%#v want=%#v", first.ExplicitSemantics, wantSemantics)
@@ -98,6 +99,48 @@ func TestPlanOperationIsReadOnlyDeterministicAndMatchesApply(t *testing.T) {
 	}
 	if _, statErr := os.Stat(landing); statErr != nil {
 		t.Fatalf("apply did not create implementation landing: %v", statErr)
+	}
+}
+
+func TestPlanOperationCanonicalizesAuthenticationVocabulary(t *testing.T) {
+	root := scaffoldProject(t, map[string]string{
+		"contracts/proto/tenant.proto": typedApplicationProto("tenant", "tenant.v1", "lifecycle", "TenantLifecycleApplication"),
+	})
+	options := OperationOptions{
+		Root: root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.rotate-key", UseCase: "rotate_tenant_key",
+		Access: "protected", Permissions: []string{"tenant.manage"}, PermissionMode: "all", Tenant: "required",
+		Authentication: []string{"service", "jwt", "api-key"}, Transaction: "local", Idempotency: "none", Composition: "local",
+	}
+
+	plan, err := PlanOperation(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"api-key", "jwt", "service-token"}
+	if plan.ExplicitSemantics == nil || !reflect.DeepEqual(plan.ExplicitSemantics.Authentication, want) {
+		t.Fatalf("plan authentication=%#v want=%#v", plan.ExplicitSemantics, want)
+	}
+	planJSON, err := Render(plan, FormatAgentJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, canonical := range []string{`"api-key"`, `"jwt"`, `"service-token"`} {
+		if !strings.Contains(planJSON, canonical) {
+			t.Fatalf("plan JSON missing canonical authentication %s:\n%s", canonical, planJSON)
+		}
+	}
+	if strings.Contains(planJSON, `"api_key"`) {
+		t.Fatalf("plan JSON leaked parser alias api_key:\n%s", planJSON)
+	}
+
+	if _, err := AddOperation(options); err != nil {
+		t.Fatal(err)
+	}
+	proto := readFile(t, filepath.Join(root, "contracts", "proto", "tenant.proto"))
+	for _, enum := range []string{"AUTHENTICATION_API_KEY", "AUTHENTICATION_JWT", "AUTHENTICATION_SERVICE"} {
+		if !strings.Contains(proto, enum) {
+			t.Fatalf("applied protobuf missing %s:\n%s", enum, proto)
+		}
 	}
 }
 

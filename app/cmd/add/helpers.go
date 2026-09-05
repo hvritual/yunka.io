@@ -93,9 +93,9 @@ func permissionModeEnum(value string) string {
 
 func authenticationEnum(value string) string {
 	switch value {
-	case "api_key":
+	case "api-key":
 		return "AUTHENTICATION_API_KEY"
-	case "service":
+	case "service-token":
 		return "AUTHENTICATION_SERVICE"
 	default:
 		return "AUTHENTICATION_JWT"
