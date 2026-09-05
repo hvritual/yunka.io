@@ -24,7 +24,7 @@ func validateOperationOptions(options *OperationOptions) error {
 	options.Idempotency = normalizeChoice(options.Idempotency)
 	options.Composition = normalizeChoice(options.Composition)
 	options.Permissions = normalizedKeys(options.Permissions)
-	options.Authentication = normalizedChoices(options.Authentication)
+	options.Authentication = canonicalAuthenticationChoices(options.Authentication)
 	options.RequiresOperations = normalizedKeys(options.RequiresOperations)
 	options.HTTPMethod = strings.ToUpper(strings.TrimSpace(options.HTTPMethod))
 	options.HTTPPath = strings.TrimSpace(options.HTTPPath)
@@ -80,8 +80,8 @@ func validateOperationOptions(options *OperationOptions) error {
 		}
 	}
 	for _, value := range options.Authentication {
-		if !oneOf(value, "jwt", "api_key", "service") {
-			return fmt.Errorf("add operation: unsupported authentication %q; use jwt, api-key, or service", value)
+		if !oneOf(value, "jwt", "api-key", "service-token") {
+			return fmt.Errorf("add operation: unsupported authentication %q; use jwt, api-key, or service-token (service is accepted as an alias)", value)
 		}
 	}
 	if options.HTTPBody != "" && options.HTTPMethod == "" {
@@ -97,6 +97,23 @@ func validateOperationOptions(options *OperationOptions) error {
 		return fmt.Errorf("add operation: unsupported HTTP method %s", options.HTTPMethod)
 	}
 	return nil
+}
+
+func canonicalAuthenticationChoices(values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		normalized := strings.ToLower(strings.TrimSpace(value))
+		switch normalized {
+		case "api_key", "api-key":
+			normalized = "api-key"
+		case "service", "service_token", "service-token":
+			normalized = "service-token"
+		}
+		if normalized != "" {
+			result = append(result, normalized)
+		}
+	}
+	return stableStrings(result)
 }
 
 func renderRPCOperation(rpcName, requestType, responseType string, options OperationOptions) string {
