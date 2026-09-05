@@ -44,6 +44,44 @@ func TestFastCheckExactVerifiedHitBypassesCanonicalCheck(t *testing.T) {
 	}
 }
 
+func TestFastCheckExactVerifiedHitCannotBypassLegacyModuleIdentity(t *testing.T) {
+	root, options, engine, cachePath := prepareFastCheckEvidenceFixture(t)
+	writeTestFile(t, filepath.Join(root, "internal", "legacy.go"), "package internal\nimport _ \"yunka.io/framework/core/modulecatalog\"\n")
+	project, err := resolveProject(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := buildFastFeedbackMetadataWithIdentity(project, engine, fastCheckToolchain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fastfeedback.Write(cachePath, metadata); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	_, err = checkWithFastFeedback(
+		context.Background(),
+		options,
+		false,
+		engine,
+		func(context.Context, string) (string, error) { return fastCheckToolchain, nil },
+		func(context.Context, Options) (Report, error) {
+			called = true
+			return Report{}, errors.New("canonical check should not be needed to reject module identity drift")
+		},
+	)
+	if err == nil {
+		t.Fatal("verified fast-feedback cache bypassed legacy module identity drift")
+	}
+	var failure *Failure
+	if !errors.As(err, &failure) || failure.Kind != FailureModuleIdentity {
+		t.Fatalf("expected module identity failure, got %T %v", err, err)
+	}
+	if called {
+		t.Fatal("module identity drift should be rejected before cache reuse or canonical fallback")
+	}
+}
+
 func TestFastCheckUnsafeEvidenceAlwaysFallsBackReadOnly(t *testing.T) {
 	tests := []struct {
 		name      string
