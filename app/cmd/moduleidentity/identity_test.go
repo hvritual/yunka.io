@@ -68,7 +68,7 @@ require (
 	yunka.io/framework v0.1.0
 	yunka.io/pkg v0.1.0
 )
-replace yunka.io/gateway => ../gateway
+replace yunka.io/gateway => ../yunka.io/gateway
 `)
 	writeTestFile(t, goFile, "package demo\n\nimport (\n\t\"yunka.io/framework/core/modulecatalog\"\n\t_ `yunka.io/gateway/authz`\n)\n\nconst rawDescriptor = \"yunka.io/pkg/contractdsl/v1\"\n")
 
@@ -104,11 +104,14 @@ replace yunka.io/gateway => ../gateway
 	for _, expected := range []string{
 		"github.com/hvritual/yunka.io/framework v0.1.0",
 		"github.com/hvritual/yunka.io/pkg v0.1.0",
-		"replace github.com/hvritual/yunka.io/gateway => ../gateway",
+		"replace github.com/hvritual/yunka.io/gateway => ../yunka.io/gateway",
 	} {
 		if !strings.Contains(modText, expected) {
 			t.Fatalf("migrated go.mod missing %q:\n%s", expected, modText)
 		}
+	}
+	if strings.Contains(modText, "../github.com/hvritual/yunka.io/gateway") {
+		t.Fatalf("migration rewrote local replace path as a module token:\n%s", modText)
 	}
 
 	second, err := Migrate(root)
