@@ -11,12 +11,13 @@ import (
 type FailureKind string
 
 const (
-	FailureProject       FailureKind = "project"
-	FailureContract      FailureKind = "contract"
-	FailureContractDrift FailureKind = "contract_drift"
-	FailureModule        FailureKind = "module"
-	FailureAssembly      FailureKind = "assembly"
-	FailureAssemblyDrift FailureKind = "assembly_drift"
+	FailureProject        FailureKind = "project"
+	FailureContract       FailureKind = "contract"
+	FailureContractDrift  FailureKind = "contract_drift"
+	FailureModule         FailureKind = "module"
+	FailureModuleIdentity FailureKind = "module_identity"
+	FailureAssembly       FailureKind = "assembly"
+	FailureAssemblyDrift  FailureKind = "assembly_drift"
 )
 
 type Failure struct {
@@ -79,6 +80,8 @@ func failureDefinitionCode(kind FailureKind) string {
 		return diagnostic.CodeContractDrift
 	case FailureModule:
 		return diagnostic.CodeModuleFailure
+	case FailureModuleIdentity:
+		return diagnostic.CodeModuleIdentity
 	case FailureAssembly:
 		return diagnostic.CodeAssemblyFailure
 	case FailureAssemblyDrift:

@@ -14,6 +14,7 @@ const (
 	CodeContractFailure = "YUNKA-DX-CONTRACT-001"
 	CodeContractDrift   = "YUNKA-DX-CONTRACT-002"
 	CodeModuleFailure   = "YUNKA-DX-MODULE-001"
+	CodeModuleIdentity  = "YUNKA-DX-MODULE-002"
 	CodeAssemblyFailure = "YUNKA-DX-ASSEMBLY-001"
 	CodeAssemblyDrift   = "YUNKA-DX-ASSEMBLY-002"
 
@@ -69,6 +70,13 @@ var definitionCatalog = map[string]Definition{
 	CodeModuleFailure: {
 		Code: CodeModuleFailure, Stage: "module", Meaning: "module validation failed",
 		Actions: []Action{{Kind: ActionCommand, Label: "Inspect modules", Value: "yunka module check"}},
+	},
+	CodeModuleIdentity: {
+		Code: CodeModuleIdentity, Stage: "module-identity", Meaning: "legacy Yunka Go module identity would create incompatible generated or runtime types",
+		Actions: []Action{
+			{Kind: ActionCommand, Label: "Inspect module identity", Value: "yunka dependency module-identity inspect"},
+			{Kind: ActionCommand, Label: "Migrate module identity", Value: "yunka dependency module-identity migrate"},
+		},
 	},
 	CodeAssemblyFailure: {Code: CodeAssemblyFailure, Stage: "assembly", Meaning: "runtime assembly generation or validation failed"},
 	CodeAssemblyDrift: {

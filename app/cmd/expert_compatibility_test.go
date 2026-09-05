@@ -60,7 +60,8 @@ sub=new aliases=- flags=field,global,n|name,o|object,root action=true`,
 			name:    "dependency",
 			command: dependency.Command(),
 			want: `command=dependency aliases=- flags=- action=false
-sub=check aliases=- flags=go,policy,repo-root action=true`,
+sub=check aliases=- flags=go,policy,repo-root action=true
+sub=module-identity aliases=- flags=- action=false`,
 		},
 	}
 

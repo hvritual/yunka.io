@@ -7,8 +7,8 @@ import (
 
 func TestDefinitionCatalogIsDeterministicAndValid(t *testing.T) {
 	definitions := Definitions()
-	if len(definitions) != 29 {
-		t.Fatalf("definitions=%d want 29", len(definitions))
+	if len(definitions) != 30 {
+		t.Fatalf("definitions=%d want 30", len(definitions))
 	}
 	previous := ""
 	seen := map[string]bool{}
@@ -39,6 +39,10 @@ func TestDefinitionCatalogIsDeterministicAndValid(t *testing.T) {
 		if !ok || definition.Stage != "structural-scaffold" {
 			t.Fatalf("scaffold definition %s=%#v ok=%v", code, definition, ok)
 		}
+	}
+	moduleIdentity, ok := LookupDefinition(CodeModuleIdentity)
+	if !ok || moduleIdentity.Stage != "module-identity" || len(moduleIdentity.Actions) != 2 {
+		t.Fatalf("module identity definition=%#v ok=%v", moduleIdentity, ok)
 	}
 	definition, ok := LookupDefinition(CodeRuntimeFailure)
 	if !ok || definition.Stage != "runtime-supervision" {

@@ -13,7 +13,8 @@ type canonicalCheckFunc func(context.Context, Options) (Report, error)
 // CheckWithFastFeedback is the developer happy-path wrapper. The canonical
 // project closure check remains the authoritative full validation path and is
 // always used when fast-feedback evidence is unavailable, invalid,
-// unverifiable, or mismatched.
+// unverifiable, or mismatched. Correctness preflights that are not represented
+// by the reusable cache contract run before a cache hit can be accepted.
 func CheckWithFastFeedback(ctx context.Context, options Options, forceFull bool) (Report, error) {
 	identity := toolchainIdentityFunc(protocIdentity)
 	if project, err := resolveProject(options); err == nil {
@@ -45,6 +46,9 @@ func checkWithFastFeedback(
 	project, err := resolveProject(options)
 	if err != nil {
 		return fullCheck(ctx, options)
+	}
+	if err := requireCanonicalModuleIdentity(project.Root); err != nil {
+		return Report{}, err
 	}
 	if !protobufGoFastFeedbackSafe(project) {
 		return fullCheck(ctx, options)
