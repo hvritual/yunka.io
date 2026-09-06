@@ -45,8 +45,8 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 	if !reflect.DeepEqual(first, second) {
 		t.Fatalf("context snapshot is not deterministic:\nfirst=%#v\nsecond=%#v", first, second)
 	}
-	if SchemaVersion != 4 || first.SchemaVersion != 4 {
-		t.Fatalf("schema version constant/snapshot=%d/%d want=4/4", SchemaVersion, first.SchemaVersion)
+	if SchemaVersion != 5 || first.SchemaVersion != 5 {
+		t.Fatalf("schema version constant/snapshot=%d/%d want=5/5", SchemaVersion, first.SchemaVersion)
 	}
 	if first.Project.Profiled {
 		t.Fatal("conventional project unexpectedly reported as profiled")
@@ -119,7 +119,7 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 		t.Fatal("machine-readable output is not byte-stable")
 	}
 	for _, expected := range []string{
-		"\"schemaVersion\": 4",
+		"\"schemaVersion\": 5",
 		"\"newOperationPlan\"",
 		"\"newOperationApply\"",
 		"\"changeSetBegin\"",
@@ -130,7 +130,7 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 		"\"advisorValidate\"",
 	} {
 		if !strings.Contains(string(jsonOne), expected) {
-			t.Fatalf("context v4 json missing %q:\n%s", expected, jsonOne)
+			t.Fatalf("context v5 json missing %q:\n%s", expected, jsonOne)
 		}
 	}
 }

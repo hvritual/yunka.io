@@ -406,7 +406,17 @@ The independent substrate/inventory task preserves descriptor-derived file impor
 
 Real-protoc regression coverage includes independent roots with identical file names, cross-source shared/nested DTO and enum references, include-order selection, external-name collisions, physical aliases/path escapes, source moves preserving OperationPlan/OpenAPI/TypeScript semantics, deterministic artifact checks, legacy compatibility, and read-only project-relative context projections.
 
-This task does not expose the context projection through `yunka context --json`, change ChangeSet mutation authority, complete issue #160's end-to-end scope gate, or implement #161's Service Boundary semantics. Those remain separate tasks; no Runtime/Executor/Authz/UoW or protobuf business DSL changes are introduced here.
+The substrate itself does not expose a CLI or change mutation authority. The independent CLI increment is described below; ChangeSet scope enforcement and #161 remain separate tasks. No Runtime/Executor/Authz/UoW or protobuf business DSL changes are introduced here.
+
+## Operation-scoped Agent Context CLI — issue #160
+
+**State: IMPLEMENTED / IN REVIEW as an independent increment on the qualified PR #162 substrate; issue #160 remains OPEN.**
+
+Agent Context schema v5 preserves lightweight, non-compiling bootstrap and adds explicit `--operation <id>` / `--all-operations` source queries. They compile current canonical inputs through the existing projectflow resolver, expose deterministic project-relative source files and separate external import names, and label results `read_only` / `canonical_file_import_closure`. They support proto-root and multi-source inventories plus internal Application Operations. Unknown/blank targets, invalid selectors, stale or broken source and ignored inventory include overrides fail rather than returning broad or partial context.
+
+Tests exercise the public CLI with real protoc, same-named inventory roots, shared/nested DTOs, internal Operations, source moves, deterministic JSON/text, no-protoc bootstrap, and read-only success/failure. Exact framework and consumer qualification results belong to this increment's PR and evidence; this statement does not claim a main merge or full issue closure.
+
+ChangeSet rejection of unrelated contract edits is still pending. A service import closure may include co-located unrelated DTOs; this output is not a declaration-level minimal edit scope and grants no mutation authority. #161 Service Boundary semantics are unchanged.
 
 ## Current pressure frontier
 
