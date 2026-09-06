@@ -17,6 +17,7 @@ type fileDescriptor struct {
 	Package    string
 	Syntax     string
 	GoPackage  string
+	Dependencies []string
 	Messages   []messageDescriptor
 	Enums      []enumDescriptor
 	Services   []serviceDescriptor
@@ -94,6 +95,8 @@ func parseFileDescriptor(data []byte) (fileDescriptor, error) {
 			file.Name = string(field.Bytes)
 		case 2:
 			file.Package = string(field.Bytes)
+		case 3:
+			file.Dependencies = append(file.Dependencies, string(field.Bytes))
 		case 4:
 			message, err := parseMessageDescriptor(field.Bytes)
 			if err != nil {
@@ -292,16 +295,17 @@ func parseMethodDescriptor(data []byte) (methodDescriptor, error) {
 }
 
 func parseSourceInfo(data []byte) (sourceInfoDescriptor, error) {
-	info := sourceInfoDescriptor{Comments: make(map[string]string)}
+	info := sourceInfoDescriptor{Comments: map[string]string{}}
 	err := scanWire(data, func(field wireField) error {
 		if field.Number != 1 || field.Type != 2 {
 			return nil
 		}
-		path, comment, err := parseSourceLocation(field.Bytes)
+		path, leading, trailing, err := parseSourceLocation(field.Bytes)
 		if err != nil {
 			return err
 		}
-		if len(path) > 0 && strings.TrimSpace(comment) != "" {
+		comment := strings.TrimSpace(strings.Join([]string{leading, trailing}, "\n"))
+		if len(path) > 0 && comment != "" {
 			info.Comments[pathKey(path)] = comment
 		}
 		return nil
@@ -309,229 +313,48 @@ func parseSourceInfo(data []byte) (sourceInfoDescriptor, error) {
 	return info, err
 }
 
-func parseSourceLocation(data []byte) ([]int32, string, error) {
+func parseSourceLocation(data []byte) ([]int32, string, string, error) {
 	var path []int32
-	var comments []string
+	var leading, trailing string
 	err := scanWire(data, func(field wireField) error {
 		switch field.Number {
 		case 1:
-			if field.Type == 0 {
-				path = append(path, int32(field.Varint))
-			} else if field.Type == 2 {
-				values, err := packedInt32(field.Bytes)
+			if field.Type == 2 {
+				values, err := parsePackedInt32(field.Bytes)
 				if err != nil {
 					return err
 				}
 				path = append(path, values...)
+			} else if field.Type == 0 {
+				path = append(path, int32(field.Varint))
 			}
-		case 3, 4, 6:
-			if field.Type == 2 {
-				comments = append(comments, string(field.Bytes))
-			}
+		case 3:
+			leading = string(field.Bytes)
+		case 4:
+			trailing = string(field.Bytes)
 		}
 		return nil
 	})
-	return path, strings.Join(comments, "\n"), err
+	return path, leading, trailing, err
+}
+
+func parsePackedInt32(data []byte) ([]int32, error) {
+	var values []int32
+	for len(data) > 0 {
+		value, n := readVarint(data)
+		if n <= 0 {
+			return nil, fmt.Errorf("contract: invalid packed int32")
+		}
+		values = append(values, int32(value))
+		data = data[n:]
+	}
+	return values, nil
 }
 
 func pathKey(path []int32) string {
 	parts := make([]string, len(path))
-	for i, value := range path {
-		parts[i] = strconv.FormatInt(int64(value), 10)
+	for i, item := range path {
+		parts[i] = strconv.FormatInt(int64(item), 10)
 	}
-	return strings.Join(parts, ",")
-}
-
-func parseHTTPBindings(options []byte) ([]HTTPBinding, error) {
-	if len(options) == 0 {
-		return nil, nil
-	}
-	var bindings []HTTPBinding
-	err := scanWire(options, func(field wireField) error {
-		if field.Number != googleHTTPOptionField || field.Type != 2 {
-			return nil
-		}
-		rules, err := parseHTTPRule(field.Bytes)
-		if err != nil {
-			return err
-		}
-		bindings = append(bindings, rules...)
-		return nil
-	})
-	return bindings, err
-}
-
-func parseHTTPRule(data []byte) ([]HTTPBinding, error) {
-	var binding HTTPBinding
-	var additional [][]byte
-	err := scanWire(data, func(field wireField) error {
-		switch field.Number {
-		case 2:
-			binding.Method, binding.Path = "GET", string(field.Bytes)
-		case 3:
-			binding.Method, binding.Path = "PUT", string(field.Bytes)
-		case 4:
-			binding.Method, binding.Path = "POST", string(field.Bytes)
-		case 5:
-			binding.Method, binding.Path = "DELETE", string(field.Bytes)
-		case 6:
-			binding.Method, binding.Path = "PATCH", string(field.Bytes)
-		case 7:
-			binding.Body = string(field.Bytes)
-		case 8:
-			method, path, err := parseCustomHTTPPattern(field.Bytes)
-			if err != nil {
-				return err
-			}
-			binding.Method, binding.Path = method, path
-		case 11:
-			additional = append(additional, append([]byte(nil), field.Bytes...))
-		case 12:
-			binding.ResponseBody = string(field.Bytes)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	bindings := make([]HTTPBinding, 0, 1+len(additional))
-	if binding.Method != "" && binding.Path != "" {
-		bindings = append(bindings, binding)
-	}
-	for _, raw := range additional {
-		items, err := parseHTTPRule(raw)
-		if err != nil {
-			return nil, err
-		}
-		bindings = append(bindings, items...)
-	}
-	return bindings, nil
-}
-
-func parseCustomHTTPPattern(data []byte) (string, string, error) {
-	var method, path string
-	err := scanWire(data, func(field wireField) error {
-		switch field.Number {
-		case 1:
-			method = strings.ToUpper(string(field.Bytes))
-		case 2:
-			path = string(field.Bytes)
-		}
-		return nil
-	})
-	return method, path, err
-}
-
-func parseDirectives(comment string) map[string]string {
-	result := make(map[string]string)
-	for _, raw := range strings.Split(comment, "\n") {
-		line := strings.TrimSpace(raw)
-		line = strings.TrimLeft(line, "*/ ")
-		if !strings.HasPrefix(line, "@yunka.") {
-			continue
-		}
-		line = strings.TrimPrefix(line, "@yunka.")
-		parts := strings.Fields(line)
-		if len(parts) == 0 {
-			continue
-		}
-		key := parts[0]
-		value := strings.TrimSpace(strings.TrimPrefix(line, key))
-		result[key] = value
-	}
-	if len(result) == 0 {
-		return nil
-	}
-	return result
-}
-
-func directiveHTTPBinding(directives map[string]string) (HTTPBinding, bool) {
-	value := strings.TrimSpace(directives["http"])
-	if value == "" {
-		return HTTPBinding{}, false
-	}
-	parts := strings.Fields(value)
-	if len(parts) < 2 {
-		return HTTPBinding{}, false
-	}
-	binding := HTTPBinding{Method: strings.ToUpper(parts[0]), Path: parts[1]}
-	for _, option := range parts[2:] {
-		key, val, ok := strings.Cut(option, "=")
-		if !ok {
-			continue
-		}
-		switch key {
-		case "body":
-			binding.Body = val
-		case "response_body":
-			binding.ResponseBody = val
-		}
-	}
-	return binding, true
-}
-
-func lowerCamel(value string) string {
-	if value == "" {
-		return ""
-	}
-	parts := strings.Split(value, "_")
-	if len(parts) == 1 {
-		return strings.ToLower(value[:1]) + value[1:]
-	}
-	var builder strings.Builder
-	builder.WriteString(strings.ToLower(parts[0]))
-	for _, part := range parts[1:] {
-		if part == "" {
-			continue
-		}
-		builder.WriteString(strings.ToUpper(part[:1]))
-		builder.WriteString(part[1:])
-	}
-	return builder.String()
-}
-
-func scalarType(fieldType int32) (string, bool) {
-	switch fieldType {
-	case 1:
-		return "double", true
-	case 2:
-		return "float", true
-	case 3:
-		return "int64", true
-	case 4:
-		return "uint64", true
-	case 5:
-		return "int32", true
-	case 6:
-		return "fixed64", true
-	case 7:
-		return "fixed32", true
-	case 8:
-		return "bool", true
-	case 9:
-		return "string", true
-	case 12:
-		return "bytes", true
-	case 13:
-		return "uint32", true
-	case 15:
-		return "sfixed32", true
-	case 16:
-		return "sfixed64", true
-	case 17:
-		return "sint32", true
-	case 18:
-		return "sint64", true
-	default:
-		return "", false
-	}
-}
-
-func validateHTTPMethod(method string) error {
-	switch strings.ToUpper(method) {
-	case "GET", "PUT", "POST", "DELETE", "PATCH", "HEAD", "OPTIONS":
-		return nil
-	default:
-		return fmt.Errorf("unsupported HTTP method %q", method)
-	}
+	return strings.Join(parts, ".")
 }
