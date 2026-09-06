@@ -79,12 +79,13 @@ jobs:
           echo "$PROTOC_SHA  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
           unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
           echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
-      - name: Build pre-change CLI for exact RED comparison
+      - name: Install locked RPC generators and build pre-change CLI
         working-directory: candidate
         shell: bash
         run: |
           set -euo pipefail
-          make toolchain-check
+          make toolchain-check rpc-tools rpc-toolchain-check
+          echo "$PWD/.yunka/bin" >> "$GITHUB_PATH"
           go build -o "$RUNNER_TEMP/yunka-before" ./app/cmd
           git diff --exit-code
       - name: Reconstruct exact locally authored commit
@@ -119,6 +120,8 @@ jobs:
         run: |
           set -euo pipefail
           command -v protoc
+          command -v protoc-gen-go
+          command -v protoc-gen-go-grpc
           go test -count=1 -json ./pkg/contract ./app/cmd/projectflow ./app/cmd/agentcontext ./app/cmd/change ./app/cmd | tee ../evidence/targeted.jsonl
           python3 - <<'PY'
           import json
