@@ -1,0 +1,186 @@
+diff --git a/app/cmd/agentcontext/main.go b/app/cmd/agentcontext/main.go
+index b7f51df..e3661b7 100644
+--- a/app/cmd/agentcontext/main.go
++++ b/app/cmd/agentcontext/main.go
+@@ -17,15 +17,16 @@ import (
+ 
+ const (
+ 	AppName       = "context"
+-	SchemaVersion = 4
++	SchemaVersion = 5
+ )
+ 
+ type Snapshot struct {
+-	SchemaVersion int                            `json:"schemaVersion"`
+-	Project       projectflow.ProjectDescriptor `json:"project"`
+-	Locations     []Location                    `json:"locations"`
+-	Commands      Commands                      `json:"commands"`
+-	AgentProtocol AgentProtocol                 `json:"agentProtocol"`
++	SchemaVersion   int                           `json:"schemaVersion"`
++	Project         projectflow.ProjectDescriptor `json:"project"`
++	Locations       []Location                    `json:"locations"`
++	Commands        Commands                      `json:"commands"`
++	AgentProtocol   AgentProtocol                 `json:"agentProtocol"`
++	ContractContext *ContractContext              `json:"contractContext,omitempty"`
+ }
+ 
+ type Location struct {
+@@ -46,21 +47,23 @@ type Commands struct {
+ }
+ 
+ type AgentProtocol struct {
+-	NewStructure      string `json:"newStructure"`
+-	NewOperationPlan  string `json:"newOperationPlan"`
+-	NewOperationApply string `json:"newOperationApply"`
+-	ExistingPlan      string `json:"existingPlan"`
+-	ChangeBegin       string `json:"changeBegin"`
+-	ChangeCheck       string `json:"changeCheck"`
+-	ChangeVerify      string `json:"changeVerify"`
+-	ChangeSetBegin    string `json:"changeSetBegin"`
+-	ChangeSetCheck    string `json:"changeSetCheck"`
+-	RemediationBind   string `json:"remediationBind"`
+-	RemediationCheck  string `json:"remediationCheck"`
+-	Audit             string `json:"audit"`
+-	AdvisorRequest    string `json:"advisorRequest"`
+-	AdvisorValidate   string `json:"advisorValidate"`
+-	RuntimeEvent      string `json:"runtimeEvent"`
++	OperationContext     string `json:"operationContext"`
++	AllOperationContexts string `json:"allOperationContexts"`
++	NewStructure         string `json:"newStructure"`
++	NewOperationPlan     string `json:"newOperationPlan"`
++	NewOperationApply    string `json:"newOperationApply"`
++	ExistingPlan         string `json:"existingPlan"`
++	ChangeBegin          string `json:"changeBegin"`
++	ChangeCheck          string `json:"changeCheck"`
++	ChangeVerify         string `json:"changeVerify"`
++	ChangeSetBegin       string `json:"changeSetBegin"`
++	ChangeSetCheck       string `json:"changeSetCheck"`
++	RemediationBind      string `json:"remediationBind"`
++	RemediationCheck     string `json:"remediationCheck"`
++	Audit                string `json:"audit"`
++	AdvisorRequest       string `json:"advisorRequest"`
++	AdvisorValidate      string `json:"advisorValidate"`
++	RuntimeEvent         string `json:"runtimeEvent"`
+ }
+ 
+ func Command() cli.Command {
+@@ -70,23 +73,12 @@ func Command() cli.Command {
+ 		Flags: []cli.Flag{
+ 			cli.StringFlag{Name: "root", Usage: "project root", Value: "."},
+ 			cli.BoolFlag{Name: "json", Usage: "emit the stable machine-readable context contract"},
++			cli.StringFlag{Name: "operation", Usage: "exact canonical Operation ID; compile its read-only source/import context"},
++			cli.BoolFlag{Name: "all-operations", Usage: "compile read-only source/import contexts for all canonical Operations"},
++			cli.StringFlag{Name: "protoc", Usage: "protobuf compiler for an operation context query"},
++			cli.StringSliceFlag{Name: "proto-path", Usage: "additional project-relative protobuf include path; repeatable for proto-root projects"},
+ 		},
+-		Action: func(context *cli.Context) error {
+-			snapshot, err := Build(context.String("root"))
+-			if err != nil {
+-				return err
+-			}
+-			if context.Bool("json") {
+-				contents, err := MarshalJSON(snapshot)
+-				if err != nil {
+-					return err
+-				}
+-				fmt.Print(string(contents))
+-				return nil
+-			}
+-			fmt.Print(FormatText(snapshot))
+-			return nil
+-		},
++		Action: runCommand,
+ 	}
+ }
+ 
+@@ -128,21 +120,23 @@ func Build(root string) (Snapshot, error) {
+ 			GraphImpact: "yunka graph impact --format json --operation <operation>",
+ 		},
+ 		AgentProtocol: AgentProtocol{
+-			NewStructure:      "yunka add <application|event|module> ...",
+-			NewOperationPlan:  "yunka add operation <application> <operation> ... --plan --format agent-json",
+-			NewOperationApply: "yunka add operation <application> <operation> ... --format agent-json",
+-			ExistingPlan:      "yunka change plan --operation <operation> --format agent-json",
+-			ChangeBegin:       "yunka change begin --operation <operation> --format agent-json",
+-			ChangeCheck:       "yunka change check --format agent-json",
+-			ChangeVerify:      "yunka change verify --format agent-json",
+-			ChangeSetBegin:    "yunka change set begin [--contract <contract.json>] [--create-plan <plan.json>] --format agent-json",
+-			ChangeSetCheck:    "yunka change set check --format agent-json",
+-			RemediationBind:   "yunka change set remediation bind --finding <finding-id> --format agent-json",
+-			RemediationCheck:  "yunka change set remediation check --format agent-json",
+-			Audit:             "yunka audit --format agent-json",
+-			AdvisorRequest:    "yunka advisor request --format agent-json",
+-			AdvisorValidate:   "yunka advisor validate --request <request.json> --response <response.json> --format agent-json",
+-			RuntimeEvent:      "yunka dev --event-format jsonl",
++			OperationContext:     "yunka context --operation <operation> --json",
++			AllOperationContexts: "yunka context --all-operations --json",
++			NewStructure:         "yunka add <application|event|module> ...",
++			NewOperationPlan:     "yunka add operation <application> <operation> ... --plan --format agent-json",
++			NewOperationApply:    "yunka add operation <application> <operation> ... --format agent-json",
++			ExistingPlan:         "yunka change plan --operation <operation> --format agent-json",
++			ChangeBegin:          "yunka change begin --operation <operation> --format agent-json",
++			ChangeCheck:          "yunka change check --format agent-json",
++			ChangeVerify:         "yunka change verify --format agent-json",
++			ChangeSetBegin:       "yunka change set begin [--contract <contract.json>] [--create-plan <plan.json>] --format agent-json",
++			ChangeSetCheck:       "yunka change set check --format agent-json",
++			RemediationBind:      "yunka change set remediation bind --finding <finding-id> --format agent-json",
++			RemediationCheck:     "yunka change set remediation check --format agent-json",
++			Audit:                "yunka audit --format agent-json",
++			AdvisorRequest:       "yunka advisor request --format agent-json",
++			AdvisorValidate:      "yunka advisor validate --request <request.json> --response <response.json> --format agent-json",
++			RuntimeEvent:         "yunka dev --event-format jsonl",
+ 		},
+ 	}, nil
+ }
+@@ -169,6 +163,18 @@ func FormatText(snapshot Snapshot) string {
+ 		}
+ 		builder.WriteByte('\n')
+ 	}
++	if snapshot.ContractContext != nil {
++		fmt.Fprintf(&builder, "CONTRACT CONTEXT authority=%s scope=%s\n", snapshot.ContractContext.Authority, snapshot.ContractContext.Scope)
++		for _, operation := range snapshot.ContractContext.Operations {
++			fmt.Fprintf(&builder, "OPERATION %s service=%s\n", operation.OperationID, operation.Service)
++			for _, source := range operation.SourceFiles {
++				fmt.Fprintf(&builder, "  SOURCE %s\n", source)
++			}
++			for _, external := range operation.ExternalImports {
++				fmt.Fprintf(&builder, "  EXTERNAL IMPORT %s\n", external)
++			}
++		}
++	}
+ 	return builder.String()
+ }
+ 
+diff --git a/app/cmd/agentcontext/main_test.go b/app/cmd/agentcontext/main_test.go
+index 6293641..157a68d 100644
+--- a/app/cmd/agentcontext/main_test.go
++++ b/app/cmd/agentcontext/main_test.go
+@@ -45,8 +45,8 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
+ 	if !reflect.DeepEqual(first, second) {
+ 		t.Fatalf("context snapshot is not deterministic:\nfirst=%#v\nsecond=%#v", first, second)
+ 	}
+-	if SchemaVersion != 4 || first.SchemaVersion != 4 {
+-		t.Fatalf("schema version constant/snapshot=%d/%d want=4/4", SchemaVersion, first.SchemaVersion)
++	if SchemaVersion != 5 || first.SchemaVersion != 5 {
++		t.Fatalf("schema version constant/snapshot=%d/%d want=5/5", SchemaVersion, first.SchemaVersion)
+ 	}
+ 	if first.Project.Profiled {
+ 		t.Fatal("conventional project unexpectedly reported as profiled")
+@@ -119,7 +119,7 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
+ 		t.Fatal("machine-readable output is not byte-stable")
+ 	}
+ 	for _, expected := range []string{
+-		"\"schemaVersion\": 4",
++		"\"schemaVersion\": 5",
+ 		"\"newOperationPlan\"",
+ 		"\"newOperationApply\"",
+ 		"\"changeSetBegin\"",
+@@ -130,7 +130,7 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
+ 		"\"advisorValidate\"",
+ 	} {
+ 		if !strings.Contains(string(jsonOne), expected) {
+-			t.Fatalf("context v4 json missing %q:\n%s", expected, jsonOne)
++			t.Fatalf("context v5 json missing %q:\n%s", expected, jsonOne)
+ 		}
+ 	}
+ }
