@@ -1,0 +1,211 @@
+diff --git a/app/cmd/agentcontext/main.go b/app/cmd/agentcontext/main.go
+index 1ec574dc269d3234bd84133cd533ffe3523fc9b5..1b70dca5d921f6f233754928e9de2ba3bfbe99ff 100644
+--- a/app/cmd/agentcontext/main.go
++++ b/app/cmd/agentcontext/main.go
+@@ -18,5 +18,5 @@ import (
+ const (
+ 	AppName       = "context"
+-	SchemaVersion = 5
++	SchemaVersion = 6
+ )
+ 
+@@ -171,4 +171,7 @@ func FormatText(snapshot Snapshot) string {
+ 				fmt.Fprintf(&builder, "  SOURCE %s\n", source)
+ 			}
++			for _, source := range operation.DeclarationFiles {
++				fmt.Fprintf(&builder, "  DECLARATION SOURCE %s\n", source)
++			}
+ 			for _, external := range operation.ExternalImports {
+ 				fmt.Fprintf(&builder, "  EXTERNAL IMPORT %s\n", external)
+diff --git a/app/cmd/agentcontext/main_test.go b/app/cmd/agentcontext/main_test.go
+index 157a68d630163e1ffc463bef515f01993936a657..b555f727fe5da72a3898f68484174ea974325043 100644
+--- a/app/cmd/agentcontext/main_test.go
++++ b/app/cmd/agentcontext/main_test.go
+@@ -46,5 +46,5 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
+ 		t.Fatalf("context snapshot is not deterministic:\nfirst=%#v\nsecond=%#v", first, second)
+ 	}
+-	if SchemaVersion != 5 || first.SchemaVersion != 5 {
++	if SchemaVersion != 6 || first.SchemaVersion != 6 {
+ 		t.Fatalf("schema version constant/snapshot=%d/%d want=5/5", SchemaVersion, first.SchemaVersion)
+ 	}
+@@ -120,5 +120,5 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
+ 	}
+ 	for _, expected := range []string{
+-		"\"schemaVersion\": 5",
++		"\"schemaVersion\": 6",
+ 		"\"newOperationPlan\"",
+ 		"\"newOperationApply\"",
+diff --git a/app/cmd/agentcontext/operation_test.go b/app/cmd/agentcontext/operation_test.go
+index 45051741e895fce1e089ed3d789a8b1a5f3a2675..208112bcecd8107ee5f2ba305cc191bed6f963d2 100644
+--- a/app/cmd/agentcontext/operation_test.go
++++ b/app/cmd/agentcontext/operation_test.go
+@@ -28,5 +28,5 @@ func TestIssue160ContextBootstrapDoesNotCompile(t *testing.T) {
+ 	}
+ 	value := decodeContext(t, output)
+-	if value.SchemaVersion != 5 || value.ContractContext != nil || strings.Contains(output, `"contractContext"`) {
++	if value.SchemaVersion != 6 || value.ContractContext != nil || strings.Contains(output, `"contractContext"`) {
+ 		t.Fatalf("bootstrap invented compiled context: %s", output)
+ 	}
+diff --git a/app/cmd/projectflow/contract_context.go b/app/cmd/projectflow/contract_context.go
+index 0c37e2e44f0f99494601571444a95128111629e9..c33e011b27723194c7e03605d9ea4ef200fc16c6 100644
+--- a/app/cmd/projectflow/contract_context.go
++++ b/app/cmd/projectflow/contract_context.go
+@@ -15,8 +15,11 @@ import (
+ // canonical compiler's source evidence. It does not grant mutation authority.
+ type OperationContractContext struct {
+-	OperationID     string   `json:"operationId"`
+-	Service         string   `json:"service"`
+-	SourceFiles     []string `json:"sourceFiles"`
+-	ExternalImports []string `json:"externalImports,omitempty"`
++	OperationID      string   `json:"operationId"`
++	Service          string   `json:"service"`
++	SourceFiles      []string `json:"sourceFiles"`
++	DeclarationFiles []string `json:"declarationFiles"`
++	MessageTypes     []string `json:"messageTypes"`
++	EnumTypes        []string `json:"enumTypes"`
++	ExternalImports  []string `json:"externalImports,omitempty"`
+ }
+ 
+@@ -71,5 +74,14 @@ func projectContractContext(project resolvedProject, value contractcore.Operatio
+ 	}
+ 	sort.Strings(paths)
+-	return OperationContractContext{OperationID: value.OperationID, Service: value.Service, SourceFiles: paths, ExternalImports: append([]string(nil), value.ExternalImports...)}, nil
++	declarations := make([]string, 0, len(value.DeclarationFiles))
++	for _, source := range value.DeclarationFiles {
++		absolute, err := sourcePathForProject(project, source)
++		if err != nil {
++			return OperationContractContext{}, err
++		}
++		declarations = append(declarations, relative(project.Root, absolute))
++	}
++	sort.Strings(declarations)
++	return OperationContractContext{OperationID: value.OperationID, Service: value.Service, SourceFiles: paths, DeclarationFiles: declarations, MessageTypes: value.MessageTypes, EnumTypes: value.EnumTypes, ExternalImports: append([]string(nil), value.ExternalImports...)}, nil
+ }
+ 
+@@ -106,2 +118,40 @@ func sourcePathForProject(project resolvedProject, source string) (string, error
+ 	return candidate, nil
+ }
++
++// ContractSourceSnapshot is a transient compiler result and its exact project
++// path projection. It is not loaded from generated artifacts and is not a
++// writable ownership manifest. Callers performing change reconciliation must
++// compile the base and current inputs independently.
++type ContractSourceSnapshot struct {
++	Project  ProjectDescriptor
++	Manifest contractcore.Manifest
++	Paths    map[string]string
++}
++
++func DescribeContractSourceSnapshot(ctx context.Context, options Options) (ContractSourceSnapshot, error) {
++	project, err := resolveProject(options)
++	if err != nil {
++		return ContractSourceSnapshot{}, err
++	}
++	if project.InventoryPath != "" && len(options.ProtoPaths) != 0 {
++		return ContractSourceSnapshot{}, fmt.Errorf("contract sources: inventory includes belong in sourceSets[].protoPaths")
++	}
++	for _, path := range options.ProtoPaths {
++		if strings.TrimSpace(path) == "" {
++			return ContractSourceSnapshot{}, fmt.Errorf("contract sources: --proto-path must not be blank")
++		}
++	}
++	result, err := compileContract(ctx, project)
++	if err != nil {
++		return ContractSourceSnapshot{}, fmt.Errorf("contract source snapshot: %w", err)
++	}
++	paths := make(map[string]string, len(result.Manifest.Files))
++	for _, file := range result.Manifest.Files {
++		absolute, err := sourcePathForProject(project, file.Name)
++		if err != nil {
++			return ContractSourceSnapshot{}, err
++		}
++		paths[file.Name] = relative(project.Root, absolute)
++	}
++	return ContractSourceSnapshot{Project: describeResolvedProject(project), Manifest: result.Manifest, Paths: paths}, nil
++}
+diff --git a/pkg/contract/context.go b/pkg/contract/context.go
+index 0df08fd8e25e7073a591bee1c92f37efdb6bf27d..3030b2ee736c3acfe6a2cbe388860adef00878de 100644
+--- a/pkg/contract/context.go
++++ b/pkg/contract/context.go
+@@ -12,8 +12,13 @@ import (
+ // import names and must never be interpreted as local writable paths.
+ type OperationContractContext struct {
+-	OperationID     string   `json:"operationId"`
+-	Service         string   `json:"service"`
+-	SourceFiles     []string `json:"sourceFiles"`
+-	ExternalImports []string `json:"externalImports,omitempty"`
++	OperationID string   `json:"operationId"`
++	Service     string   `json:"service"`
++	SourceFiles []string `json:"sourceFiles"`
++	// DeclarationFiles stops at the Operation and its transitive DTO type graph.
++	// Unlike SourceFiles it does not follow unrelated service-file imports.
++	DeclarationFiles []string `json:"declarationFiles"`
++	MessageTypes     []string `json:"messageTypes"`
++	EnumTypes        []string `json:"enumTypes"`
++	ExternalImports  []string `json:"externalImports,omitempty"`
+ }
+ 
+@@ -103,4 +108,5 @@ func ResolveOperationContractContext(manifest Manifest, operationID string) (Ope
+ 	}
+ 	required := map[string]bool{}
++	messageTypes, enumTypes := []string{}, []string{}
+ 	external := []string{}
+ 	addFile := func(name string) error {
+@@ -123,4 +129,5 @@ func ResolveOperationContractContext(manifest Manifest, operationID string) (Ope
+ 		visited[name] = true
+ 		if message, ok := messages[name]; ok {
++			messageTypes = append(messageTypes, name)
+ 			if err := addFile(message.SourceFile); err != nil {
+ 				return err
+@@ -139,4 +146,5 @@ func ResolveOperationContractContext(manifest Manifest, operationID string) (Ope
+ 			}
+ 		} else if enum, ok := enums[name]; ok {
++			enumTypes = append(enumTypes, name)
+ 			return addFile(enum.SourceFile)
+ 		}
+@@ -151,4 +159,9 @@ func ResolveOperationContractContext(manifest Manifest, operationID string) (Ope
+ 		return OperationContractContext{}, err
+ 	}
++	declarationFiles := make([]string, 0, len(required))
++	for name := range required {
++		declarationFiles = append(declarationFiles, name)
++	}
++	sort.Strings(declarationFiles)
+ 	queue := make([]string, 0, len(required))
+ 	for name := range required {
+@@ -176,5 +189,5 @@ func ResolveOperationContractContext(manifest Manifest, operationID string) (Ope
+ 	}
+ 	sort.Strings(paths)
+-	return OperationContractContext{OperationID: operationID, Service: target.service, SourceFiles: paths, ExternalImports: stableStrings(external)}, nil
++	return OperationContractContext{OperationID: operationID, Service: target.service, SourceFiles: paths, DeclarationFiles: declarationFiles, MessageTypes: stableStrings(messageTypes), EnumTypes: stableStrings(enumTypes), ExternalImports: stableStrings(external)}, nil
+ }
+ 
+diff --git a/pkg/contract/context_test.go b/pkg/contract/context_test.go
+index f5312d6e28c73c933fa49ebdfe51be58dff0bd48..f6b62013a294407b4d03156d32ed2a7376d5c940 100644
+--- a/pkg/contract/context_test.go
++++ b/pkg/contract/context_test.go
+@@ -78,2 +78,24 @@ func TestIssue160InternalOperationContext(t *testing.T) {
+ 	}
+ }
++
++func TestIssue160DeclarationFilesDoNotFollowUnrelatedServiceImports(t *testing.T) {
++	manifest := Manifest{
++		Files:    []File{{Name: "service.proto", Dependencies: []string{"dto.proto", "other.proto"}}, {Name: "dto.proto", Dependencies: []string{"common.proto"}}, {Name: "common.proto"}, {Name: "other.proto"}},
++		Messages: []Message{{FullName: "x.Input", SourceFile: "dto.proto", Fields: []Field{{Kind: "message", Type: "x.Shared"}}}, {FullName: "x.Output", SourceFile: "dto.proto"}, {FullName: "x.Shared", SourceFile: "common.proto", Fields: []Field{{Kind: "enum", Type: "x.State"}}}, {FullName: "x.Other", SourceFile: "other.proto"}},
++		Enums:    []Enum{{FullName: "x.State", SourceFile: "common.proto"}},
++		Services: []Service{{FullName: "x.API", SourceFile: "service.proto", Methods: []Method{{Operation: &OperationDeclaration{ID: "x.one"}, Request: "x.Input", Response: "x.Output"}}}},
++	}
++	value, err := ResolveOperationContractContext(manifest, "x.one")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !reflect.DeepEqual(value.DeclarationFiles, []string{"common.proto", "dto.proto", "service.proto"}) {
++		t.Fatalf("declarations=%v", value.DeclarationFiles)
++	}
++	if !reflect.DeepEqual(value.SourceFiles, []string{"common.proto", "dto.proto", "other.proto", "service.proto"}) {
++		t.Fatalf("imports=%v", value.SourceFiles)
++	}
++	if !reflect.DeepEqual(value.MessageTypes, []string{"x.Input", "x.Output", "x.Shared"}) || !reflect.DeepEqual(value.EnumTypes, []string{"x.State"}) {
++		t.Fatalf("type graph=%#v", value)
++	}
++}
