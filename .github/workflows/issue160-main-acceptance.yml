@@ -1,0 +1,208 @@
+name: issue160-main-acceptance
+
+on:
+  push:
+    branches: [control/160-main-acceptance]
+    paths: [.github/workflows/issue160-main-acceptance.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  accept-integrated-main:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports: [3306:3306]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      MAIN_SHA: 25332db2ead8567237352f116d6244f1102b26f1
+      QUALIFIED_HEAD: 984faede1a2cfbd5aad1017867d097037d0e2a74
+      QUALIFIED_TREE: 87a2fbc60e759e42c46cbd025ccd4447a911d9ee
+      DOC_BRANCH: docs/160-integrated-acceptance
+    steps:
+      - name: Checkout exact integrated main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 25332db2ead8567237352f116d6244f1102b26f1
+          path: candidate
+          fetch-depth: 0
+      - name: Checkout immutable existing consumer qualification
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: e71e2243a10e6bf7c766d688849b5c7ef4a7a66f
+          path: qualification
+          persist-credentials: false
+      - name: Checkout pre-source-scope CLI
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 35511cbe27c94c6f836e4edcaf68606518f4ce34
+          path: before
+          persist-credentials: false
+      - name: Checkout pinned read-only real consumer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: hvritual/iot-delivery-system
+          ref: 69518dec46bdfaf45cb84a0ee25d64c132b26fc9
+          path: consumer
+          persist-credentials: false
+      - name: Verify ordered ancestry and exact tested tree
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          source candidate/tools/toolchain.env
+          echo "go_version=$GO_VERSION" >> "$GITHUB_OUTPUT"
+          echo "protoc_release=$PROTOC_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "protoc_sha=$PROTOC_LINUX_X86_64_SHA256" >> "$GITHUB_OUTPUT"
+          test "$(git -C candidate rev-parse HEAD)" = "$MAIN_SHA"
+          test "$(git -C candidate rev-parse HEAD^{tree})" = "$QUALIFIED_TREE"
+          git -C candidate diff --exit-code "$QUALIFIED_HEAD" HEAD
+          git -C candidate merge-base --is-ancestor 2ccf968aaf05a52d33abc871b327210e05d7f55c 8864f6110241c31cd7a28821c4bf7b291fe3eba8
+          git -C candidate merge-base --is-ancestor 8864f6110241c31cd7a28821c4bf7b291fe3eba8 14bc2a19b0b2eb25b0efdae8304fd23dda8b4aa1
+          git -C candidate merge-base --is-ancestor 35511cbe27c94c6f836e4edcaf68606518f4ce34 14bc2a19b0b2eb25b0efdae8304fd23dda8b4aa1
+          git -C candidate merge-base --is-ancestor 14bc2a19b0b2eb25b0efdae8304fd23dda8b4aa1 "$MAIN_SHA"
+          git -C candidate merge-base --is-ancestor "$QUALIFIED_HEAD" "$MAIN_SHA"
+          printf 'main=%s\nqualified_head=%s\ntree=%s\nordered_ancestry=pass\nwhole_tree_delta=0\n' "$MAIN_SHA" "$QUALIFIED_HEAD" "$QUALIFIED_TREE" > evidence/integration.txt
+          git -C candidate status --short --branch
+          git -C candidate remote -v
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache-dependency-path: |
+            candidate/app/go.sum
+            candidate/framework/go.sum
+            candidate/gateway/go.sum
+            candidate/infras/go.sum
+            candidate/pkg/go.sum
+      - name: Install exact locked protobuf toolchain
+        shell: bash
+        env:
+          PROTOC_RELEASE: ${{ steps.lock.outputs.protoc_release }}
+          PROTOC_SHA: ${{ steps.lock.outputs.protoc_sha }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "$PROTOC_SHA  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          export PATH="$RUNNER_TEMP/protoc/bin:$(go env GOPATH)/bin:$PATH"
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          make -C candidate rpc-tools toolchain-check
+      - name: Execute final main regression suites without focused skips
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -count=1 -json ./pkg/contract ./app/cmd/projectflow ./app/cmd/agentcontext ./app/cmd/change ./app/cmd | tee ../evidence/targeted.jsonl
+          python3 - <<'PY'
+          import json
+          events = [json.loads(x) for x in open('../evidence/targeted.jsonl')]
+          prefixes = ('TestIssue160SourceScope', 'TestIssue160SourceSnapshot', 'TestIssue160DeclarationFiles', 'TestIssue160Context')
+          focused = [e for e in events if e.get('Test', '').startswith(prefixes)]
+          assert focused and not any(e['Action'] in ('skip', 'fail') for e in focused)
+          roots = [e for e in focused if e['Action'] == 'pass' and '/' not in e['Test']]
+          assert len(roots) == 15, roots
+          print('Final main: all 15 focused source/context regression groups passed without skips')
+          PY
+      - name: Execute complete production and deterministic generation gates
+        working-directory: candidate
+        shell: bash
+        env:
+          YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?charset=utf8mb4&parseTime=true&loc=UTC&multiStatements=true
+        run: |
+          set -euo pipefail
+          make verify-production 2>&1 | tee ../evidence/verify-production.log
+          make tidy 2>&1 | tee ../evidence/determinism.log
+          make contract 2>&1 | tee -a ../evidence/determinism.log
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
+      - name: Replay immutable real-consumer RED GREEN on exact main
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd before && go build -o "$RUNNER_TEMP/yunka-before" ./app/cmd)
+          (cd candidate && go build -o "$RUNNER_TEMP/yunka-main" ./app/cmd)
+          python3 qualification/tools/qualification/contract-scope/consumer.py "$RUNNER_TEMP/yunka-main" "$RUNNER_TEMP/yunka-before" "$GITHUB_WORKSPACE/candidate" "$GITHUB_WORKSPACE/consumer" "$GITHUB_WORKSPACE/evidence" | tee evidence/consumer.log
+          git -C candidate diff --exit-code
+          git -C consumer diff --exit-code
+          test -z "$(git -C candidate status --porcelain)"
+      - name: Commit only reviewed status reconciliation after acceptance
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$MAIN_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_SHA"
+          test -z "$(git ls-remote origin refs/heads/$DOC_BRANCH)"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          p = Path('docs/STATUS.md')
+          text = p.read_text()
+          replacements = {
+            '**State: IMPLEMENTED / IN REVIEW on PR #162; issue #160 remains OPEN.**': '**State: COMPLETE / QUALIFIED / MERGED through PR #162.**',
+            "Verification results belong to PR #162's exact-head checks and delivery evidence, not to an inferred merge claim.": 'PR #162 integrated qualified head `2ccf968aaf05a52d33abc871b327210e05d7f55c` as `8864f6110241c31cd7a28821c4bf7b291fe3eba8`; the merge tree equals the qualified candidate tree.',
+            '**State: IMPLEMENTED / IN REVIEW as an independent increment on the qualified PR #162 substrate; issue #160 remains OPEN.**': '**State: COMPLETE / QUALIFIED / MERGED through PR #163 after PR #162.**',
+            "Exact framework and consumer qualification results belong to this increment's PR and evidence; this statement does not claim a main merge or full issue closure.": 'PR #163 integrated qualified head `35511cbe27c94c6f836e4edcaf68606518f4ce34` as `14bc2a19b0b2eb25b0efdae8304fd23dda8b4aa1`; its merge tree equals the qualified CLI candidate tree.',
+            '**State: IMPLEMENTED / IN REVIEW as an independent increment built on PR #163; issue #160 remains OPEN pending integration and final acceptance.**': '**State: COMPLETE / PRODUCTION-QUALIFIED / REAL-CONSUMER SOURCE-QUALIFIED / MERGED through PR #164.**',
+            "Exact execution/qualification and integration results belong to this increment's PR; no main merge or issue closure is implied.": 'PR #164 integrated qualified head `984faede1a2cfbd5aad1017867d097037d0e2a74` as `25332db2ead8567237352f116d6244f1102b26f1`. This final integration has the same complete tree, `87a2fbc60e759e42c46cbd025ccd4447a911d9ee`, as the qualified candidate; no product files changed during the ordered merges.'
+          }
+          for old, new in replacements.items():
+              assert text.count(old) == 1, old
+              text = text.replace(old, new)
+          marker = '## Current pressure frontier\n'
+          assert text.count(marker) == 1
+          run = os.environ['GITHUB_RUN_ID']
+          block = f'''## Issue #160 final integrated acceptance
+
+          The implementation was integrated in dependency order **#162 -> #163 -> #164**. Exact-main acceptance run `{run}` rechecked the integrated SHA `25332db2ead8567237352f116d6244f1102b26f1`, proved ordered ancestry and a zero-difference tree against candidate `984faede1a2cfbd5aad1017867d097037d0e2a74`, passed all 15 focused context/source regression groups without skips, the complete `make verify-production` gate on real MySQL 8.4, deterministic regeneration/dependency checks, and a clean worktree.
+
+          The same run replayed the immutable source-scope qualification against `iot-delivery-system@69518dec46bdfaf45cb84a0ee25d64c132b26fc9`. It verified 25 deterministic Operation contexts, the eight-file read/four-file declaration context for `delivery.dashboard.get`, acceptance of required shared-source changes, rejection of unrelated declarations and a tampered unrelated-file allowlist, and unchanged original consumer hashes/Git state. The old CLI accepted the same widened ChangeSet and unrelated edit that the integrated CLI rejected. Consumer edits and explicit DSL input setup occurred only in a disposable copy.
+
+          Historical candidate evidence from PRs #162/#163/#164 is preserved for its exact SHA/tree and is inherited by the integrated implementation through verified tree equality, not a narrative assumption. Fresh exact-main results are in run `{run}` and artifact `issue160-main-acceptance-evidence`; final documentation-only PR checks and issue disposition are recorded on GitHub. No normal CI/protection configuration or runtime/authz/UoW semantics were changed. Independent automated review was not obtained because the review bot reported its usage limit; tests and this integration inspection are not presented as independent approval.
+
+          Acceptance is bounded to canonical provenance, Operation context and modeled contract-source/declaration conformance. It does not claim lexical/token-minimal context, a filesystem sandbox, signed task authority, arbitrary custom-option semantics or consumer runtime qualification. Unplanned source moves require a separately scoped migration and fresh task. **Issue #161 remains OPEN and separate**; this delivery does not implement Service Boundary decisions.
+
+          '''
+          block = '\n'.join(line[10:] if line.startswith('          ') else line for line in block.split('\n'))
+          text = text.replace(marker, block + marker)
+          p.write_text(text)
+          PY
+          test "$(git diff --name-only)" = docs/STATUS.md
+          git diff --check
+          git diff -- docs/STATUS.md > ../evidence/status-reconciliation.patch
+          git config user.name hvritual
+          git config user.email 11900351+hvritual@users.noreply.github.com
+          git switch -c "$DOC_BRANCH"
+          git add docs/STATUS.md
+          git commit -m 'docs(status): reconcile issue160 integrated acceptance' -m 'Record ordered merges, exact-tree inheritance and completed final-main qualification. Keep Service Boundary issue161 separate; no executable behavior or normal verification configuration changes.'
+          go test -count=1 ./pkg/architecturepolicy | tee ../evidence/status-policy.log
+          test -z "$(git status --porcelain)"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_SHA"
+          git push origin "HEAD:refs/heads/$DOC_BRANCH"
+          sha="$(git rev-parse HEAD)"
+          test "$(git ls-remote origin refs/heads/$DOC_BRANCH | cut -f1)" = "$sha"
+          printf 'docs_head=%s\ndocs_branch=%s\nmain=%s\n' "$sha" "$DOC_BRANCH" "$MAIN_SHA" > ../evidence/delivery.txt
+          git show --stat --format=fuller HEAD > ../evidence/docs-commit.txt
+          git bundle create ../evidence/status.bundle HEAD "^$MAIN_SHA"
+      - name: Preserve evidence for this exact execution
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd evidence && find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: issue160-main-acceptance-evidence
+          path: evidence
+          retention-days: 30
