@@ -438,6 +438,26 @@ Historical candidate evidence from PRs #162/#163/#164 is preserved for its exact
 
 Acceptance is bounded to canonical provenance, Operation context and modeled contract-source/declaration conformance. It does not claim lexical/token-minimal context, a filesystem sandbox, signed task authority, arbitrary custom-option semantics or consumer runtime qualification. Unplanned source moves require a separately scoped migration and fresh task. **Issue #161 remains OPEN and separate**; this delivery does not implement Service Boundary decisions.
 
+## Service Boundary intent and read-only fingerprint — issue #161.1
+
+**State: IMPLEMENTED / IN REVIEW as an independent foundation; issue #161 remains OPEN.**
+
+Canonical protobuf Operation declarations can carry explicit `boundary.context` and either `boundary.aggregate` or an `aggregate_not_applicable_reason`. Missing legacy intent remains unknown. Typed Manifest schema v5 carries the metadata with v1-v5 reader compatibility; the root untyped V1 artifacts and runtime OperationPlan IR retain their existing semantics. Malformed explicit intent is rejected rather than guessed.
+
+`app/cmd/boundarycore` derives a deterministic, per-Operation-linked `canonical-service-boundary/v1` fingerprint from canonical compiler facts. `yunka boundary inspect [options] <domain>/<application>` recompiles current sources, reuses source-set provenance, emits schema-v1 read-only evidence and intent coverage, and writes no project files. It preserves target-Application requirements/capabilities, transitive Operation dependencies, DTO/enum/source models, and method/streaming facts. Unknown/partial/declared describes evidence coverage, not boundary validity. The reusable projection stays in the CLI control-plane module, alongside Audit/Advisor cores, rather than creating an app import of an unpublished new package under the separately versioned `pkg` module. No release pin, local replacement or workspace-disabled tidy gate is changed.
+
+This increment does not yet implement a boundary evaluator, ServiceBoundaryDecision, before/after growth detector, mutation gate, proof revalidation, ChangeSet boundary proof or boundary-debt policy. It does not infer business context from names or RPC counts, depend on an LLM, or require immediate migration of historical Services. Those enforcement stages remain required before issue #161 can be completed. Exact test, production and real-consumer inspection qualification belong to this increment's PR and immutable evidence; no main merge or complete #161 qualification is implied here.
+
+## Deterministic single-addition boundary decisions — issue #161.2
+
+**State: IMPLEMENTED / IN REVIEW as an independent increment on the qualified PR #166 foundation; issue #161 remains OPEN.**
+
+`boundarycore.EvaluateAddition` now derives a contradiction-first decision from canonical before/after Manifests and exact task identity. Its fixed `canonical-peer-addition/v1` policy separates explicit context contradictions, insufficient/mixed legacy intent, and narrow comparable-peer reuse. A common unchanged peer must jointly witness security, execution/composition, dependencies and client-contract shape; independent per-dimension matches cannot manufacture a nonexistent precedent. Existing declaration drift or unrelated additions cannot be approved as a single Operation addition. Supporting and counter-evidence are retained, and unknown lifecycle/availability evidence is not presented as observed.
+
+The read-only decision binds the base SHA, candidate execution plan, both full normalized Manifest digests, before/after fingerprints and policy version. `RevalidateAddition` rebuilds and compares the complete decision, not just an attacker-recomputable hash. Changed identity/facts/policy, forged outcomes and omitted counter-evidence are rejected. The caller remains responsible for resolving the base and compiling snapshots; these hashes are neither source-byte snapshots nor signatures.
+
+This independently testable core is not yet connected to CLI authoring, ChangeSet or canonical growth checks. `boundary inspect` remains read-only. Existing-Operation growth, service moves, batches, new-boundary initialization, richer semantic/runtime evidence and boundary debt remain separate. Parent #161 cannot be closed until the mutation and direct-edit invariants are enforced. Exact test/production/consumer evidence belongs to this increment's PR and artifacts; no main merge or consumer runtime qualification is implied.
+
 ## Current pressure frontier
 
 The active real-consumer frontier is **B13 cross-tenant delegation and delegated device access** in `hvritual/biz` issue #11.

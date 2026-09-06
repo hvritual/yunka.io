@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-const ManifestVersion = 4
+const ManifestVersion = 5
 
 type Manifest struct {
 	SchemaVersion int       `json:"schemaVersion"`
@@ -52,6 +52,16 @@ type ExecutionPolicy struct {
 	Idempotency string `json:"idempotency,omitempty"`
 }
 
+// BoundaryIntent records declared architecture facts. It is intentionally not
+// part of the execution IR: it cannot change authorization, transactions or
+// dispatch. A later boundary decision must evaluate these facts, not trust them
+// as proof of cohesion.
+type BoundaryIntent struct {
+	Context                      string `json:"context"`
+	Aggregate                    string `json:"aggregate,omitempty"`
+	AggregateNotApplicableReason string `json:"aggregateNotApplicableReason,omitempty"`
+}
+
 type OperationDeclaration struct {
 	ID                 string           `json:"id"`
 	UseCase            string           `json:"useCase"`
@@ -66,6 +76,7 @@ type OperationDeclaration struct {
 	RequestType        string           `json:"requestType,omitempty"`
 	ResponseType       string           `json:"responseType,omitempty"`
 	ApplicationMethod  string           `json:"applicationMethod,omitempty"`
+	Boundary           *BoundaryIntent  `json:"boundary,omitempty"`
 }
 
 type Message struct {
@@ -142,7 +153,7 @@ type HTTPBinding struct {
 }
 
 func (manifest *Manifest) Normalize() {
-	if manifest.SchemaVersion == 0 || manifest.SchemaVersion == 1 || manifest.SchemaVersion == 2 || manifest.SchemaVersion == 3 {
+	if manifest.SchemaVersion == 0 || manifest.SchemaVersion == 1 || manifest.SchemaVersion == 2 || manifest.SchemaVersion == 3 || manifest.SchemaVersion == 4 {
 		manifest.SchemaVersion = ManifestVersion
 	}
 	for i := range manifest.Files {
@@ -233,6 +244,13 @@ func normalizeOperationDeclaration(operation *OperationDeclaration) {
 	operation.RequestType = normalizeTypeName(operation.RequestType)
 	operation.ResponseType = normalizeTypeName(operation.ResponseType)
 	operation.ApplicationMethod = strings.TrimSpace(operation.ApplicationMethod)
+	if operation.Boundary != nil {
+		value := *operation.Boundary
+		value.Context = strings.TrimSpace(value.Context)
+		value.Aggregate = strings.TrimSpace(value.Aggregate)
+		value.AggregateNotApplicableReason = strings.TrimSpace(value.AggregateNotApplicableReason)
+		operation.Boundary = &value
+	}
 	if operation.Execution != nil {
 		operation.Execution.Transaction = strings.TrimSpace(operation.Execution.Transaction)
 		operation.Execution.Idempotency = strings.TrimSpace(operation.Execution.Idempotency)
@@ -244,6 +262,10 @@ func cloneOperationDeclaration(operation OperationDeclaration) OperationDeclarat
 	clone.Permissions = append([]string(nil), operation.Permissions...)
 	clone.Authentication = append([]string(nil), operation.Authentication...)
 	clone.RequiresOperations = append([]string(nil), operation.RequiresOperations...)
+	if operation.Boundary != nil {
+		boundary := *operation.Boundary
+		clone.Boundary = &boundary
+	}
 	if operation.Execution != nil {
 		execution := *operation.Execution
 		clone.Execution = &execution

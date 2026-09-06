@@ -350,16 +350,51 @@ This is a deterministic source/declaration guard, not a business-ontology judgme
 
 ### Contract source provenance
 
-The canonical compiler exposes source provenance in memory for every contract inventory. Typed manifests use schema v4: messages, enums, services, and methods retain `sourceFile`; files distinguish canonical `dependencies` from `externalDependencies`. `Compile` uses descriptor-relative paths; `CompileInventory` rebases all declarations and canonical import edges together to repository-relative paths using each source set's actual include order. Same-named files in independent source sets are not interchangeable. Physical ownership aliases and source-path escapes fail closed.
+The canonical compiler exposes source provenance in memory for every contract inventory. Typed manifests use schema v5 (source provenance plus explicit architectural boundary intent): messages, enums, services, and methods retain `sourceFile`; files distinguish canonical `dependencies` from `externalDependencies`. `Compile` uses descriptor-relative paths; `CompileInventory` rebases all declarations and canonical import edges together to repository-relative paths using each source set's actual include order. Same-named files in independent source sets are not interchangeable. Physical ownership aliases and source-path escapes fail closed.
 
 The library `contract.ResolveOperationContractContext` derives the source/import closure for a method-bound or internal Application Operation. `projectflow.DescribeOperationContractContext(s)` recompiles current canonical inputs and returns project-relative file paths. These are read-only context projections, not mutation authorization or a hand-maintained module map. External import names never grant local ownership. Missing declaration provenance requires recompilation rather than an invented source path. A service's import closure can include other co-located DTOs; it is not a declaration-level minimal edit scope.
 
-Existing untyped V1 artifact serialization remains byte-compatible and intentionally omits provenance; the in-memory compiler result retains it. Manifest versions 1–4 remain readable. The independent source-scope enforcement increment is documented above; parent issue #160 remains open pending integration and final acceptance.
+Existing untyped V1 artifact serialization remains byte-compatible and intentionally omits provenance; the in-memory compiler result retains it. Manifest versions 1–5 remain readable. Source-scope enforcement is documented above; current delivery status belongs to `docs/STATUS.md`.
 
+### Read-only Service Boundary evidence
+
+A Yunka Application is the logical Service Boundary; a protobuf Service is its API projection. Architectural intent is optional for existing contracts and is declared only in the canonical `yunka.dsl.v1.OperationDeclaration`, for both RPC-bound and internal Application Operations:
+
+```protobuf
+boundary: { context: "sales.orders" aggregate: "order" }
+```
+
+When an aggregate genuinely does not apply, replace `aggregate` with a nonblank `aggregate_not_applicable_reason`. Explicit intent requires a stable lowercase `context` and exactly one of those aggregate fields. The compiler, lint and Manifest loader reject malformed explicit intent. Absent intent remains **unknown**, not inferred from an Application name, permission prefix, DTO filename or RPC count. Typed Manifest writers use schema v5 and readers accept versions 1-5; existing untyped V1 artifacts remain byte-compatible. Old tools must be upgraded before reading v5 artifacts.
+
+```bash
+# Flags precede the positional Application key. All output is read-only.
+yunka boundary inspect --root ./backend --format json sales/orders
+yunka boundary inspect --root ./backend --proto-path ./support sales/orders
+```
+
+`boundary inspect` recompiles current canonical protobuf through the existing projectflow source resolver, including multi-source inventories. It never trusts a stale generated Manifest. The report has schema v1 and `authority: "read_only"`. It exposes a `canonical-service-boundary/v1` fingerprint, a domain-separated SHA-256 fingerprint digest, the complete canonical execution-OperationPlan-set digest, explicit intent coverage (`empty`, `unknown`, `partial`, `declared`), and properties that were **not evaluated**. `declared` describes coverage only; it does not prove cohesion. Invalid targets, broken source, ambiguous provenance and invalid compiler input fail without a broad/stale fallback or persistent output. Inventory include order remains source-set-owned; CLI overrides are rejected.
+
+The reusable projection lives in `app/cmd/boundarycore`, alongside existing Audit/Advisor control-plane cores. This avoids importing an unpublished package from the separately versioned `pkg` dependency; it does not require a new module release or local replacement.
+
+Fingerprint evidence retains each Operation's execution plan, explicit boundary intent, DTO/type/import provenance, RPC method and streaming facts; target-Application requirements/capabilities; transitive required-Operation evidence; and referenced canonical Message/Enum/file models. Per-Operation relationships are preserved rather than flattened into a union that could hide swapped ownership. Paths inside the fingerprint retain the compiler's canonical namespace; the report's `sources` maps those identities to project-relative paths using the existing source resolver. Absolute checkout locations are not fingerprint input. Digests bind the modeled projection, not every byte of source, arbitrary custom options, external compiler input content, runtime provider state or a signed execution environment.
+
+Boundary intent is architectural metadata, not an execution policy: it does not enter the runtime OperationPlan IR, change generated handlers, grant permissions or alter transactions. This inspection issues **no ServiceBoundaryDecision, growth permission, mutation proof, merge approval or automatic split**. The separate in-memory addition evaluator is described below; inspection alone does not satisfy issue #161's final growth invariant. No LLM, network advisor, second service taxonomy or RPC-count split threshold is used.
+
+#### Single-addition boundary decision core
+
+`app/cmd/boundarycore.EvaluateAddition(request, before, after)` evaluates one prospective new Operation against an existing Application/Service using two canonical compiler Manifests. It does not read Git, source files or saved inspection JSON: callers must supply freshly compiled snapshots and a resolved full `BaseSHA`. `RevalidateAddition` recomputes the entire result against the expected task identity and current facts; a changed base, candidate plan, source/type model, fingerprint, policy, outcome, evidence or counter-evidence returns `STALE_BOUNDARY_PROOF`. Rehashing a forged report does not make it valid.
+
+The fixed `canonical-peer-addition/v1` policy emits `reuse_existing_application`, `create_new_application`, or `architecture_review_required`. A declared candidate context contradicting every known existing context recommends a new Application even if other evidence is unknown. Existing mixed/missing intent, a new aggregate, changed existing declarations, or missing comparable evidence prevents automatic reuse. Count and naming heuristics do not decide the result.
+
+Automatic reuse is deliberately a narrow canonical-compatibility result: all existing Operations must have matching explicit context/aggregate intent, and **one unchanged peer** must jointly match security vocabulary, execution/composition, declared dependencies, request/response type identities and transport shape. A permission match on one peer and a transaction match on another is insufficient. New reachable DTOs may be in scope but do not automatically have a witnessed client contract. Exact permission identities are compared; permission prefixes and route names are not business-ontology evidence. Aggregate-not-applicable reasons must also match under this conservative first policy.
+
+Reports contain ten dimensions, stable supporting/counter-evidence references, common-peer witnesses, both normalized Manifest digests, before/after fingerprints, the candidate execution-plan digest and a versioned decision digest. Lifecycle and availability remain explicitly unknown and noncritical because this policy accepts no observed runtime/release evidence; it does not certify those properties. Changing sufficiency rules requires a new policy version.
+
+The result has `authority: "read_only"`. It is **not** a signature, business-boundary certification, persisted taxonomy, or source mutation capability. A successfully revalidated blocking decision still blocks reuse. This increment provides the reusable decision/revalidation core and tests only: `add operation --plan`, apply, ChangeSet, canonical check and direct-edit growth enforcement are not wired to it yet. Existing-Operation changes/moves, batches, first-Operation initialization, richer client/runtime evidence, waivers and existing/new/fixed boundary-debt policy remain separate tasks. No `boundary evaluate` CLI is claimed.
 
 ### Operation-scoped Agent Context
 
-`yunka context --json` (schema v5) keeps the existing lightweight project bootstrap: it does not run protoc and remains usable before generation. Its `agentProtocol` advertises two opt-in source-context queries:
+`yunka context --json` (schema v6) keeps the existing lightweight project bootstrap: it does not run protoc and remains usable before generation. Its `agentProtocol` advertises two opt-in source-context queries:
 
 ```bash
 yunka context --operation <canonical-operation-id> --json
