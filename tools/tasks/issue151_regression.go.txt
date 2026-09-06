@@ -2,6 +2,7 @@ package change
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/urfave/cli"
+	"yunka.io/app/cmd/projectflow"
 )
 
 // The old pressure fixture ignored all of .yunka/, masking issue #151.
@@ -23,9 +25,14 @@ func TestIssue151DefaultProtocolWithoutIgnore(t *testing.T) {
 	if err := os.Remove(filepath.Join(fixture.Root, ".gitignore")); err != nil {
 		t.Fatal(err)
 	}
+	issue151Workspace(t, fixture)
+	// The legacy pressure helper generates only contract/assembly artifacts.
+	// Use the full public generation path to include standard protobuf Go.
+	if _, err := projectflow.GenerateIncremental(context.Background(), projectflow.Options{Root: fixture.Root, ProtoPaths: []string{fixture.ProtoPath}}, true); err != nil {
+		t.Fatalf("prepare complete canonical baseline: %v", err)
+	}
 	gitPressure(t, fixture.Root, "add", "-A")
 	gitPressure(t, fixture.Root, "commit", "-m", "unignored default-protocol baseline")
-	issue151Workspace(t, fixture)
 
 	run := func(args ...string) error {
 		t.Helper()
