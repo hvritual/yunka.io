@@ -1,6 +1,7 @@
 package change
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -64,6 +65,7 @@ func setCheckCommand() cli.Command {
 		Usage: "reconcile actual Git delta and canonical semantic readback with the active ChangeSet",
 		Flags: []cli.Flag{
 			cli.StringFlag{Name: "root", Value: ".", Usage: "project root"},
+			sourceProtocFlag(), sourceIncludesFlag(),
 			cli.StringFlag{Name: "set", Value: DefaultChangeSetPath, Usage: "ChangeSet path"},
 			cli.StringFlag{Name: "format", Value: FormatText, Usage: "output format: text, json, or agent-json"},
 		},
@@ -76,7 +78,7 @@ func setCheckCommand() cli.Command {
 			if err != nil {
 				return printFailure("yunka change set check", c.String("format"), Diagnose(&Failure{Kind: FailureEvidence, Err: fmt.Errorf("change set check: load: %w", err)}), 1)
 			}
-			report, err := ReconcileChangeSet(descriptor.Root, value)
+			report, err := ReconcileChangeSetWithOptions(context.Background(), sourceCompilerOptions(c), value)
 			if err != nil {
 				return printFailure("yunka change set check", c.String("format"), Diagnose(&Failure{Kind: FailureEvidence, Err: err}), 1)
 			}

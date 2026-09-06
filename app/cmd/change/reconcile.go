@@ -2,6 +2,7 @@ package change
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -14,7 +15,7 @@ import (
 	"yunka.io/app/cmd/projectflow"
 )
 
-const ChangeReconciliationSchemaVersion = 1
+const ChangeReconciliationSchemaVersion = 2
 
 type FileChange struct {
 	Status       string `json:"status"`
@@ -31,11 +32,12 @@ type ChangeViolation struct {
 }
 
 type Reconciliation struct {
-	SchemaVersion int               `json:"schemaVersion"`
-	BaseSHA       string            `json:"baseSha"`
-	OperationID   string            `json:"operationId"`
-	Changes       []FileChange      `json:"changes"`
-	Violations    []ChangeViolation `json:"violations"`
+	SchemaVersion   int                   `json:"schemaVersion"`
+	BaseSHA         string                `json:"baseSha"`
+	OperationID     string                `json:"operationId"`
+	Changes         []FileChange          `json:"changes"`
+	ContractSources *ContractSourceReport `json:"contractSources,omitempty"`
+	Violations      []ChangeViolation     `json:"violations"`
 }
 
 func checkCommand() cli.Command {
@@ -44,6 +46,7 @@ func checkCommand() cli.Command {
 		Usage: "quickly reconcile the actual Git delta with the active change contract",
 		Flags: []cli.Flag{
 			cli.StringFlag{Name: "root", Value: ".", Usage: "project root"},
+			sourceProtocFlag(), sourceIncludesFlag(),
 			cli.StringFlag{Name: "contract", Value: DefaultChangeContractPath, Usage: "change contract path"},
 			cli.StringFlag{Name: "format", Value: FormatText, Usage: "output format: text, json, or agent-json"},
 		},
@@ -56,7 +59,7 @@ func checkCommand() cli.Command {
 			if err != nil {
 				return printFailure("yunka change check", c.String("format"), Diagnose(&Failure{Kind: FailureEvidence, Err: fmt.Errorf("change check: load contract: %w", err)}), 1)
 			}
-			report, err := ReconcileGitDelta(descriptor.Root, contractValue)
+			report, err := ReconcileGitDeltaWithOptions(context.Background(), sourceCompilerOptions(c), contractValue)
 			if err != nil {
 				return printFailure("yunka change check", c.String("format"), Diagnose(&Failure{Kind: FailureEvidence, Err: err}), 1)
 			}
@@ -74,6 +77,30 @@ func checkCommand() cli.Command {
 }
 
 func ReconcileGitDelta(root string, contractValue ChangeContract) (Reconciliation, error) {
+	return ReconcileGitDeltaWithOptions(context.Background(), projectflow.Options{Root: root}, contractValue)
+}
+
+func ReconcileGitDeltaWithOptions(ctx context.Context, options projectflow.Options, contractValue ChangeContract) (Reconciliation, error) {
+	report, err := reconcileGitDeltaFiles(options.Root, contractValue)
+	if err != nil {
+		return Reconciliation{}, err
+	}
+	value := ChangeSet{SchemaVersion: ChangeSetSchemaVersion, BaseSHA: contractValue.BaseSHA,
+		Subjects: []ChangeSetSubject{{Kind: ChangeSubjectExistingOperation, Existing: &contractValue}}}
+	sources, semantic, err := reconcileContractSources(ctx, options, value, report.Changes)
+	if err != nil {
+		return Reconciliation{}, err
+	}
+	if sources != nil {
+		attachSourceSemantic(sources, semantic)
+		report.ContractSources = sources
+		report.Violations = append(report.Violations, sources.Violations...)
+		sortChangeViolations(report.Violations)
+	}
+	return report, nil
+}
+
+func reconcileGitDeltaFiles(root string, contractValue ChangeContract) (Reconciliation, error) {
 	if contractValue.SchemaVersion != ChangeContractSchemaVersion {
 		return Reconciliation{}, fmt.Errorf("change check: unsupported contract schemaVersion %d", contractValue.SchemaVersion)
 	}

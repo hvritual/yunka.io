@@ -406,17 +406,27 @@ The independent substrate/inventory task preserves descriptor-derived file impor
 
 Real-protoc regression coverage includes independent roots with identical file names, cross-source shared/nested DTO and enum references, include-order selection, external-name collisions, physical aliases/path escapes, source moves preserving OperationPlan/OpenAPI/TypeScript semantics, deterministic artifact checks, legacy compatibility, and read-only project-relative context projections.
 
-The substrate itself does not expose a CLI or change mutation authority. The independent CLI increment is described below; ChangeSet scope enforcement and #161 remain separate tasks. No Runtime/Executor/Authz/UoW or protobuf business DSL changes are introduced here.
+The substrate itself does not expose a CLI or change mutation authority. The independent CLI and source-enforcement increments are described below; #161 remains separate. No Runtime/Executor/Authz/UoW or protobuf business DSL changes are introduced here.
 
 ## Operation-scoped Agent Context CLI — issue #160
 
 **State: IMPLEMENTED / IN REVIEW as an independent increment on the qualified PR #162 substrate; issue #160 remains OPEN.**
 
-Agent Context schema v5 preserves lightweight, non-compiling bootstrap and adds explicit `--operation <id>` / `--all-operations` source queries. They compile current canonical inputs through the existing projectflow resolver, expose deterministic project-relative source files and separate external import names, and label results `read_only` / `canonical_file_import_closure`. They support proto-root and multi-source inventories plus internal Application Operations. Unknown/blank targets, invalid selectors, stale or broken source and ignored inventory include overrides fail rather than returning broad or partial context.
+Agent Context schema v6 preserves lightweight, non-compiling bootstrap and adds explicit `--operation <id>` / `--all-operations` source queries. They compile current canonical inputs through the existing projectflow resolver, expose deterministic project-relative source files and separate external import names, and label results `read_only` / `canonical_file_import_closure`. They support proto-root and multi-source inventories plus internal Application Operations. Unknown/blank targets, invalid selectors, stale or broken source and ignored inventory include overrides fail rather than returning broad or partial context.
 
 Tests exercise the public CLI with real protoc, same-named inventory roots, shared/nested DTOs, internal Operations, source moves, deterministic JSON/text, no-protoc bootstrap, and read-only success/failure. Exact framework and consumer qualification results belong to this increment's PR and evidence; this statement does not claim a main merge or full issue closure.
 
-ChangeSet rejection of unrelated contract edits is still pending. A service import closure may include co-located unrelated DTOs; this output is not a declaration-level minimal edit scope and grants no mutation authority. #161 Service Boundary semantics are unchanged.
+The source-enforcement increment adds `declarationFiles`, `messageTypes`, and `enumTypes` to the read-only context while preserving the full `sourceFiles` import closure. A service import closure may include unrelated DTOs and is never itself mutation authority. #161 Service Boundary semantics are unchanged.
+
+## Operation declaration source-scope enforcement — issue #160
+
+**State: IMPLEMENTED / IN REVIEW as an independent increment on PR #163; issue #160 remains OPEN pending integration and final acceptance.**
+
+Plan/begin now derive contract targets from exact Operation/DTO declarations instead of selecting one arbitrary file from the entire proto root. Single-Operation and ChangeSet reconciliation, including create subjects, recompute source bounds from raw immutable Git base input and current canonical compilation whenever protobuf source changes. Explicit path-array changes and broad imports do not widen base authority. The same existing semantic evaluator checks fresh source facts so stale generated JSON cannot hide source-level semantic drift. Message/enum deltas outside the target type graph are blocked even inside allowed files; required shared DTOs and reachable new DTOs inside authorized files are supported.
+
+The source projection is derived, not a second manifest. Git snapshot materialization is private/read-only and uses raw blobs, not archive substitutions or branch checkout. Ordinary/nested projects and canonical source inventories share the same path domain. Unplanned source moves fail closed; all-source lexical slicing, universal custom-option semantics and #161 business boundary review are not claimed. Existing contracts/sets retain their input schemas; check reports are schema v2 and Context is schema v6. Go-only deltas retain quick checks.
+
+Permanent tests cover full-import versus declaration-file separation, shared nested/map/enum DTO changes, unrelated/tampered paths, current-reference widening, co-located unrelated declarations, stale generated semantic evidence, multiple/create subjects, nested inventories, unplanned moves, exact Git blobs, cancellation and path escapes. The pressure fixture now includes the canonical DSL support file in its disposable consumer source tree rather than relying on a generation-only include. Exact execution/qualification and integration results belong to this increment's PR; no main merge or issue closure is implied.
 
 ## Current pressure frontier
 

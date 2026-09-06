@@ -157,6 +157,11 @@ func newPressureFixture(t *testing.T) pressureFixture {
 	}
 	repositoryRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "../../.."))
 	protoPath := filepath.Join(repositoryRoot, "contracts", "proto")
+	support, err := os.ReadFile(filepath.Join(protoPath, "yunka", "dsl", "v1", "options.proto"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writePressureFile(t, filepath.Join(root, "contracts", "proto", "yunka", "dsl", "v1", "options.proto"), string(support))
 	fixture := pressureFixture{Root: root, ProtoPath: protoPath, ContractPath: DefaultChangeContractPath}
 	generatePressureProject(t, fixture)
 	gitPressure(t, root, "init")

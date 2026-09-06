@@ -45,7 +45,7 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 	if !reflect.DeepEqual(first, second) {
 		t.Fatalf("context snapshot is not deterministic:\nfirst=%#v\nsecond=%#v", first, second)
 	}
-	if SchemaVersion != 5 || first.SchemaVersion != 5 {
+	if SchemaVersion != 6 || first.SchemaVersion != 6 {
 		t.Fatalf("schema version constant/snapshot=%d/%d want=5/5", SchemaVersion, first.SchemaVersion)
 	}
 	if first.Project.Profiled {
@@ -119,7 +119,7 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 		t.Fatal("machine-readable output is not byte-stable")
 	}
 	for _, expected := range []string{
-		"\"schemaVersion\": 5",
+		"\"schemaVersion\": 6",
 		"\"newOperationPlan\"",
 		"\"newOperationApply\"",
 		"\"changeSetBegin\"",

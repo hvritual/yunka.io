@@ -11,10 +11,15 @@ import (
 // repository-relative for CompileInventory). ExternalImports are descriptor
 // import names and must never be interpreted as local writable paths.
 type OperationContractContext struct {
-	OperationID     string   `json:"operationId"`
-	Service         string   `json:"service"`
-	SourceFiles     []string `json:"sourceFiles"`
-	ExternalImports []string `json:"externalImports,omitempty"`
+	OperationID string   `json:"operationId"`
+	Service     string   `json:"service"`
+	SourceFiles []string `json:"sourceFiles"`
+	// DeclarationFiles stops at the Operation and its transitive DTO type graph.
+	// Unlike SourceFiles it does not follow unrelated service-file imports.
+	DeclarationFiles []string `json:"declarationFiles"`
+	MessageTypes     []string `json:"messageTypes"`
+	EnumTypes        []string `json:"enumTypes"`
+	ExternalImports  []string `json:"externalImports,omitempty"`
 }
 
 type operationContextTarget struct{ id, service, source, request, response string }
@@ -102,6 +107,7 @@ func ResolveOperationContractContext(manifest Manifest, operationID string) (Ope
 		enums[normalizeTypeName(enum.FullName)] = enum
 	}
 	required := map[string]bool{}
+	messageTypes, enumTypes := []string{}, []string{}
 	external := []string{}
 	addFile := func(name string) error {
 		if _, ok := files[name]; !ok {
@@ -122,6 +128,7 @@ func ResolveOperationContractContext(manifest Manifest, operationID string) (Ope
 		}
 		visited[name] = true
 		if message, ok := messages[name]; ok {
+			messageTypes = append(messageTypes, name)
 			if err := addFile(message.SourceFile); err != nil {
 				return err
 			}
@@ -138,6 +145,7 @@ func ResolveOperationContractContext(manifest Manifest, operationID string) (Ope
 				}
 			}
 		} else if enum, ok := enums[name]; ok {
+			enumTypes = append(enumTypes, name)
 			return addFile(enum.SourceFile)
 		}
 		// Types outside the canonical inventory (e.g. well-known protobuf types)
@@ -150,6 +158,11 @@ func ResolveOperationContractContext(manifest Manifest, operationID string) (Ope
 	if err := visit(target.response); err != nil {
 		return OperationContractContext{}, err
 	}
+	declarationFiles := make([]string, 0, len(required))
+	for name := range required {
+		declarationFiles = append(declarationFiles, name)
+	}
+	sort.Strings(declarationFiles)
 	queue := make([]string, 0, len(required))
 	for name := range required {
 		queue = append(queue, name)
@@ -175,7 +188,7 @@ func ResolveOperationContractContext(manifest Manifest, operationID string) (Ope
 		paths = append(paths, name)
 	}
 	sort.Strings(paths)
-	return OperationContractContext{OperationID: operationID, Service: target.service, SourceFiles: paths, ExternalImports: stableStrings(external)}, nil
+	return OperationContractContext{OperationID: operationID, Service: target.service, SourceFiles: paths, DeclarationFiles: declarationFiles, MessageTypes: stableStrings(messageTypes), EnumTypes: stableStrings(enumTypes), ExternalImports: stableStrings(external)}, nil
 }
 
 func OperationContractContexts(manifest Manifest) ([]OperationContractContext, error) {

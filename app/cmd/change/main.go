@@ -1,6 +1,7 @@
 package change
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,13 +11,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/urfave/cli"
-	"yunka.io/app/cmd/ownership"
-	"yunka.io/app/cmd/projectflow"
 	applicationgraph "github.com/hvritual/yunka.io/pkg/applicationgraph"
 	"github.com/hvritual/yunka.io/pkg/contract"
 	"github.com/hvritual/yunka.io/pkg/diagnostic"
 	"github.com/hvritual/yunka.io/pkg/operationplan"
+	"github.com/urfave/cli"
+	"yunka.io/app/cmd/ownership"
+	"yunka.io/app/cmd/projectflow"
 )
 
 const (
@@ -126,6 +127,7 @@ func planCommand() cli.Command {
 		Usage: "derive impact, mutation targets, generated effects, and verification gates without changing the project",
 		Flags: []cli.Flag{
 			cli.StringFlag{Name: "root", Value: ".", Usage: "project root"},
+			sourceProtocFlag(), sourceIncludesFlag(),
 			cli.StringFlag{Name: "operation", Usage: "exact canonical operation ID or operation:<ID> graph node ID"},
 			cli.StringFlag{Name: "intent", Value: IntentBoth, Usage: "change intent: contract, implementation, or both"},
 			cli.IntFlag{Name: "depth", Value: 3, Usage: "maximum static graph impact depth"},
@@ -142,7 +144,7 @@ func planCommand() cli.Command {
 				return printFailure("yunka change plan", format, item, 2)
 			}
 
-			plan, err := Build(c.String("root"), c.String("operation"), c.String("intent"), c.Int("depth"))
+			plan, err := BuildWithOptions(sourceCompilerOptions(c), c.String("operation"), c.String("intent"), c.Int("depth"))
 			if err != nil {
 				return printFailure("yunka change plan", format, Diagnose(err), 1)
 			}
@@ -157,6 +159,16 @@ func planCommand() cli.Command {
 }
 
 func Build(root, operation, intent string, depth int) (Plan, error) {
+	return BuildWithOptions(projectflow.Options{Root: root}, operation, intent, depth)
+}
+
+func BuildWithOptions(options projectflow.Options, operation, intent string, depth int) (Plan, error) {
+	for _, path := range options.ProtoPaths {
+		if strings.TrimSpace(path) == "" {
+			return Plan{}, &Failure{Kind: FailureEvidence, Err: fmt.Errorf("change plan: --proto-path must not be blank")}
+		}
+	}
+	root := options.Root
 	intent = strings.ToLower(strings.TrimSpace(intent))
 	if intent != IntentContract && intent != IntentImplementation && intent != IntentBoth {
 		return Plan{}, &Failure{Kind: FailureIntent, Err: fmt.Errorf("change plan: intent %q is unsupported; use contract, implementation, or both", intent)}
@@ -173,7 +185,40 @@ func Build(root, operation, intent string, depth int) (Plan, error) {
 	if err != nil {
 		return Plan{}, err
 	}
-	return buildFromFacts(inputs, graph, operation, intent, depth)
+	plan, err := buildFromFacts(inputs, graph, operation, intent, depth)
+	if err != nil {
+		return Plan{}, err
+	}
+	if intent == IntentContract || intent == IntentBoth {
+		source, err := projectflow.DescribeOperationContractContext(context.Background(), options, plan.Operation.Attributes["operationId"])
+		if err != nil {
+			return Plan{}, &Failure{Kind: FailureEvidence, Err: fmt.Errorf("change plan: declaration source context: %w", err)}
+		}
+		plan.EditableTargets = nil
+		unresolved := plan.UnresolvedTargets[:0]
+		for _, item := range plan.UnresolvedTargets {
+			if item.Kind != "contract-source" {
+				unresolved = append(unresolved, item)
+			}
+		}
+		plan.UnresolvedTargets = unresolved
+		decisions, err := ownership.Build(inputs.Project.Root, source.DeclarationFiles)
+		if err != nil {
+			return Plan{}, &Failure{Kind: FailureEvidence, Err: err}
+		}
+		if len(decisions.Decisions) != len(source.DeclarationFiles) {
+			return Plan{}, &Failure{Kind: FailureEvidence, Err: fmt.Errorf("change plan: incomplete declaration ownership")}
+		}
+		for _, decision := range decisions.Decisions {
+			if !decision.SafeAutoEdit {
+				return Plan{}, &Failure{Kind: FailureEvidence, Err: fmt.Errorf("change plan: declaration source %s is not editable: %s", decision.Path, decision.Reason)}
+			}
+			plan.EditableTargets = append(plan.EditableTargets, EditableTarget{Path: decision.Path, Owner: decision.Owner, Reason: "canonical Operation or transitive DTO declaration source; unrelated file imports confer no edit authority"})
+		}
+		plan.Gates = deriveGates(plan, inputs.Project.GoModule)
+		normalizePlan(&plan)
+	}
+	return plan, nil
 }
 
 func buildFromFacts(inputs projectflow.OwnershipInputs, graph applicationgraph.Graph, operation, intent string, depth int) (Plan, error) {
