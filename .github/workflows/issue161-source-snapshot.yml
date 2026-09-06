@@ -1,0 +1,28 @@
+name: issue161-source-snapshot
+on:
+  push:
+    branches: [control/161-boundary-foundation-delivery]
+    paths: [.github/workflows/issue161-source-snapshot.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 7d7fc663f7086df9735ee9089c75f65d2fd100e4
+          fetch-depth: 0
+          persist-credentials: false
+      - run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = 7d7fc663f7086df9735ee9089c75f65d2fd100e4
+          mkdir -p "$RUNNER_TEMP/source"
+          git bundle create "$RUNNER_TEMP/source/main.bundle" HEAD
+          sha256sum "$RUNNER_TEMP/source/main.bundle"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: issue161-pinned-main-source
+          path: ${{ runner.temp }}/source
+          retention-days: 7
