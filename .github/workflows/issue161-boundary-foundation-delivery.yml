@@ -23,6 +23,8 @@ jobs:
       BASE_SHA: 7d7fc663f7086df9735ee9089c75f65d2fd100e4
       AUTHORED_SHA: dc91e82828ada041f92a972f421187d47606b859
       AUTHORED_TREE: 97f9b857e94e83d1cee529d707e6c91c44e673c5
+      FINAL_SHA: 23789633f2e0dbcd20230cacca42e814047d86bc
+      FINAL_TREE: f3bf2d2a8690219e4988de821ff1a6ba525f82ab
       TARGET_BRANCH: feat/161-boundary-evidence
     steps:
       - name: Checkout isolated controller
@@ -117,7 +119,7 @@ jobs:
           git config user.email 11900351+hvritual@users.noreply.github.com
           GIT_AUTHOR_DATE=2026-09-06T14:55:00Z GIT_COMMITTER_DATE=2026-09-06T14:55:00Z git commit -m 'feat(boundary): derive read-only service fingerprints and canonical intent' -m 'Independent issue161 foundation: explicit protobuf boundary intent, Manifest v5, linked canonical evidence and boundary inspect. Missing intent stays unknown. No evaluator, growth permission, ChangeSet proof, runtime IR change or main integration.'
           test "$(git rev-parse HEAD)" = "$AUTHORED_SHA"
-      - name: Reproduce canonical generated descriptor and exact fixture correction
+      - name: Reproduce canonical descriptor and exact corrective commits
         working-directory: candidate
         shell: bash
         run: |
@@ -136,16 +138,30 @@ jobs:
           git apply --index ../evidence/fixture-root.patch
           GIT_AUTHOR_DATE=2026-09-06T15:04:00Z GIT_COMMITTER_DATE=2026-09-06T15:04:00Z git commit -m 'test(boundary): locate canonical DSL from actual package root' -m 'Keep real-protoc CLI fixtures intact; correct their repository-root traversal and requalify all gates.'
           test "$(git rev-parse HEAD)" = 4ba5bf34457d3199bbd06e26de85ff8b1ec39285
-          test "$(git rev-parse HEAD^{tree})" = 58c49f9a3522d656a68aec2f81d8fe5edd09db41
+          cp ../controller/tools/qualification/boundary-foundation/core-placement.patch ../evidence/core-placement.patch
+          echo '0cc3cee78386d9f979d901ee57de458dd6d8519a21eb564678ca3abc9fa3b6d2  ../evidence/core-placement.patch' | sha256sum -c -
+          git apply --check ../evidence/core-placement.patch
+          git apply --index ../evidence/core-placement.patch
+          GIT_AUTHOR_DATE=2026-09-06T15:14:20Z GIT_COMMITTER_DATE=2026-09-06T15:14:20Z git commit -m 'refactor(boundary): keep evidence core in the CLI control-plane module' -m 'Honor standalone module tidy without publishing premature pkg APIs, changing release pins, or adding local replacements. Reuse the existing auditcore/advisorcore organization; evidence schema and tests are unchanged.'
+          test "$(git rev-parse HEAD)" = "$FINAL_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$FINAL_TREE"
           git rev-parse HEAD > ../evidence/candidate-sha.txt
           git rev-parse HEAD^{tree} > ../evidence/candidate-tree.txt
+          test -z "$(git status --porcelain)"
+      - name: Require standalone module tidy without dependency changes
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          make tidy 2>&1 | tee ../evidence/standalone-tidy.log
+          git diff --exit-code
           test -z "$(git status --porcelain)"
       - name: Execute real-protoc foundation and existing regression suites
         working-directory: candidate
         shell: bash
         run: |
           set -euo pipefail
-          go test -count=1 -json ./pkg/contract ./pkg/serviceboundary ./pkg/architecturepolicy ./app/cmd/boundary ./app/cmd/projectflow ./app/cmd/agentcontext ./app/cmd/change ./app/cmd | tee ../evidence/targeted.jsonl
+          go test -count=1 -json ./pkg/contract ./app/cmd/boundarycore ./pkg/architecturepolicy ./app/cmd/boundary ./app/cmd/projectflow ./app/cmd/agentcontext ./app/cmd/change ./app/cmd | tee ../evidence/targeted.jsonl
           python3 - <<'PY'
           import json
           events=[json.loads(s) for s in open('../evidence/targeted.jsonl')]
@@ -159,6 +175,7 @@ jobs:
           assert passed==expected,(passed,expected)
           print('All 10 explicitly identified issue161 foundation groups passed without skips')
           PY
+          go test -count=1 -race ./app/cmd/boundarycore ./app/cmd/boundary | tee ../evidence/boundary-race.log
       - name: Complete canonical production and determinism qualification
         working-directory: candidate
         shell: bash
@@ -185,7 +202,8 @@ jobs:
         run: |
           set -euo pipefail
           sha="$(cat ../evidence/candidate-sha.txt)"
-          test "$(git rev-parse HEAD)" = "$sha"
+          test "$(git rev-parse HEAD)" = "$FINAL_SHA"
+          test "$sha" = "$FINAL_SHA"
           test -z "$(git status --porcelain)"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
           test -z "$(git ls-remote origin refs/heads/$TARGET_BRANCH)"
