@@ -1,0 +1,49 @@
+diff --git a/app/cmd/change/contract_sources.go b/app/cmd/change/contract_sources.go
+index 29995339a9fdb62b19252a5c461c5456f983c904..63108487a80645dc2b5142a32e41090949e6828e 100644
+--- a/app/cmd/change/contract_sources.go
++++ b/app/cmd/change/contract_sources.go
+@@ -204,13 +204,17 @@ func protoSourcePath(path string) bool { return strings.EqualFold(filepath.Ext(p
+ func snapshotIncludePaths(root, baseRoot string, paths []string) []string {
+ 	result := make([]string, 0, len(paths))
+ 	for _, path := range paths {
+-		if !filepath.IsAbs(path) {
+-			result = append(result, path)
+-			continue
++		absolute := path
++		if !filepath.IsAbs(absolute) {
++			absolute = filepath.Join(root, absolute)
+ 		}
+-		rel, err := filepath.Rel(root, path)
++		rel, err := filepath.Rel(root, absolute)
+ 		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+ 			path = filepath.Join(baseRoot, rel)
++		} else {
++			// A relative include outside the project is still an explicitly
++			// supplied external input, not a sibling of the temporary snapshot.
++			path = absolute
+ 		}
+ 		result = append(result, path)
+ 	}
+diff --git a/app/cmd/change/contract_sources_test.go b/app/cmd/change/contract_sources_test.go
+index f370358b83309f0fa34e27e0c01e56affd31b59c..7549e05705c2269641005c5d9f76b9b3cd525b4c 100644
+--- a/app/cmd/change/contract_sources_test.go
++++ b/app/cmd/change/contract_sources_test.go
+@@ -207,6 +207,18 @@ func TestIssue160SourceScopeCoLocatedDeclarationsAndNewReachableTypes(t *testing
+ }
+ 
+ func TestIssue160SourceScopeReadsFreshSemanticAndImmutableBase(t *testing.T) {
++	t.Run("relative-external-include", func(t *testing.T) {
++		fixture := newPressureFixture(t)
++		include, err := filepath.Rel(fixture.Root, fixture.ProtoPath)
++		if err != nil {
++			t.Fatal(err)
++		}
++		writePressureFile(t, fixture.protoFile(), readPressureFile(t, fixture.protoFile())+"\n// bounded source edit\n")
++		report, err := ReconcileGitDeltaWithOptions(context.Background(), projectflow.Options{Root: fixture.Root, ProtoPaths: []string{include}}, fixture.Contract)
++		if err != nil || report.ContractSources == nil || len(report.Violations) != 0 {
++			t.Fatalf("explicit external include changed identity in the snapshot: %#v %v", report, err)
++		}
++	})
+ 	t.Run("stale-generated-security", func(t *testing.T) {
+ 		f := newSourceScopeFixture(t, false, false)
+ 		f.replace(t, "service", `permissions: "scope.write"`, `permissions: "scope.admin"`)
