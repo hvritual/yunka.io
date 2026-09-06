@@ -1,0 +1,174 @@
+name: issue160-inventory-delivery
+on:
+  push:
+    branches: [control/160-inventory-delivery]
+    paths: [.github/workflows/issue160-inventory-delivery.yml]
+permissions:
+  contents: write
+jobs:
+  qualify-and-deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      SOURCE_SHA: 44b086e2b59aac4d7b7c2adc41362636ed5ba6c4
+      TARGET_BRANCH: fix/160-contract-provenance-context
+      PATCH_SHA256: c2a639144a5e1201af0c598c03b10a2b28bb1955b2f843765030c830d0ac5c0e
+      YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?charset=utf8mb4&parseTime=true&loc=UTC&multiStatements=true
+    steps:
+      - name: Checkout isolated controller
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+      - name: Checkout exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 44b086e2b59aac4d7b7c2adc41362636ed5ba6c4
+          path: repo
+          fetch-depth: 0
+      - name: Checkout pinned read-only consumer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: hvritual/iot-delivery-system
+          ref: 69518dec46bdfaf45cb84a0ee25d64c132b26fc9
+          path: consumer
+          persist-credentials: false
+      - name: Read locked toolchain and initialize evidence
+        id: lock
+        run: |
+          set -euo pipefail
+          source repo/tools/toolchain.env
+          echo "go_version=$GO_VERSION" >> "$GITHUB_OUTPUT"
+          echo "EVIDENCE=$RUNNER_TEMP/issue160-evidence" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/issue160-evidence"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache-dependency-path: |
+            repo/app/go.sum
+            repo/pkg/go.sum
+            repo/framework/go.sum
+            repo/gateway/go.sum
+            repo/infras/go.sum
+      - name: Install exact protoc
+        run: |
+          set -euo pipefail
+          source repo/tools/toolchain.env
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "$PROTOC_LINUX_X86_64_SHA256  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/protoc"
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+      - name: Apply exact hashed authored patch in isolated checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C repo rev-parse HEAD)" = "$SOURCE_SHA"
+          test -z "$(git -C repo status --porcelain)"
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64,gzip,hashlib,os
+          parts=sorted(Path('control/tools/tasks').glob('issue160-inventory.patch.gz.b64.*'))
+          assert len(parts)==3
+          encoded=''.join(p.read_text().strip() for p in parts)
+          patch=gzip.decompress(base64.b64decode(encoded,validate=True))
+          assert hashlib.sha256(patch).hexdigest()==os.environ['PATCH_SHA256']
+          Path(os.environ['RUNNER_TEMP'],'issue160.patch').write_bytes(patch)
+          PY
+          git -C repo apply --index "$RUNNER_TEMP/issue160.patch"
+          python3 - <<'PY'
+          import subprocess
+          paths=set(subprocess.check_output(['git','-C','repo','diff','--cached','--name-only'],text=True).splitlines())
+          expected={'README.md','docs/STATUS.md','app/cmd/projectflow/contract_context.go','app/cmd/projectflow/contract_context_test.go','pkg/contract/artifact.go','pkg/contract/compiler.go','pkg/contract/context.go','pkg/contract/context_test.go','pkg/contract/descriptor.go','pkg/contract/model.go','pkg/contract/sources.go','pkg/contract/source_provenance.go','pkg/contract/inventory_provenance_test.go'}
+          assert paths==expected,(paths,expected)
+          PY
+          git -C repo diff --cached --check
+          changed_go=$(git -C repo diff --cached --name-only -- '*.go' | sed 's#^#repo/#')
+          test -z "$(gofmt -l $changed_go)"
+          git -C repo config user.name 'hvritual'
+          git -C repo config user.email '11900351+hvritual@users.noreply.github.com'
+          git -C repo commit -m 'fix(contract): resolve inventory provenance by exact source ownership' -m 'Complete the independent inventory identity task for #160; restore omitted compiler helpers; preserve legacy artifacts; add real-protoc, include-order, alias/escape, source-move and project-context regressions. Context CLI and ChangeSet enforcement remain follow-up work.'
+      - name: Prove inventory RED after repairing only compiler truncation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C repo worktree add --detach "$RUNNER_TEMP/issue160-red" "$SOURCE_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          red=Path(os.environ['RUNNER_TEMP'],'issue160-red')
+          for filename in ['compiler.go','descriptor.go']:
+              content=Path('repo/pkg/contract',filename).read_text()
+              content=content.replace('\tclassifyProvenanceDependencies(&manifest)\n','')
+              (red/'pkg/contract'/filename).write_text(content)
+          source=Path('repo/pkg/contract/inventory_provenance_test.go').read_text()
+          test=source[source.index('func TestIssue160InventoryIdentityRegression'):source.index('func issue160Support')]
+          imports='package contract\nimport ("context";"fmt";"path/filepath";"strings";"testing")\n'
+          (red/'pkg/contract/issue160_red_test.go').write_text(imports+test)
+          PY
+          set +e
+          (cd "$RUNNER_TEMP/issue160-red/pkg" && go test -count=1 -v ./contract -run '^TestIssue160InventoryIdentityRegression$') > "$EVIDENCE/red.log" 2>&1
+          result=$?
+          set -e
+          cat "$EVIDENCE/red.log"
+          test "$result" -ne 0
+          grep -q 'ISSUE160_INVENTORY_IDENTITY' "$EVIDENCE/red.log"
+      - name: Real-protoc GREEN regressions without skips
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd repo/pkg && go test -count=1 -v ./contract -run 'Issue160|ResolveOperationContractContext') | tee "$EVIDENCE/contract-green.log"
+          (cd repo/app && go test -count=1 -v ./cmd/projectflow -run 'Issue160') | tee "$EVIDENCE/project-green.log"
+          ! grep -E -- '--- SKIP:' "$EVIDENCE/contract-green.log" "$EVIDENCE/project-green.log"
+      - name: Complete canonical production qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd repo && make verify-production) > "$EVIDENCE/verify-production.log" 2>&1 || { tail -100 "$EVIDENCE/verify-production.log"; exit 1; }
+          tail -35 "$EVIDENCE/verify-production.log"
+          (cd repo && make contract && make tidy && git diff --exit-code) | tee "$EVIDENCE/determinism.log"
+          test -z "$(git -C repo status --porcelain)"
+      - name: Exact real-consumer provenance and operation semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C consumer rev-parse HEAD)" = 69518dec46bdfaf45cb84a0ee25d64c132b26fc9
+          (cd repo/app && go run "$GITHUB_WORKSPACE/control/tools/tasks/issue160-consumer-probe.go" "$GITHUB_WORKSPACE/consumer/backend-yunka" "$GITHUB_WORKSPACE/repo/contracts/proto") | tee "$EVIDENCE/consumer.json"
+          test -z "$(git -C consumer status --porcelain)"
+          test -z "$(git -C repo status --porcelain)"
+      - name: Push qualified candidate with normal local Git only
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual=$(git -C repo ls-remote origin "refs/heads/$TARGET_BRANCH" | cut -f1)
+          test "$actual" = "$SOURCE_SHA"
+          candidate=$(git -C repo rev-parse HEAD)
+          git -C repo push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          actual=$(git -C repo ls-remote origin "refs/heads/$TARGET_BRANCH" | cut -f1)
+          test "$actual" = "$candidate"
+          printf 'candidate=%s\nbase=%s\npatchSHA256=%s\nRED=PASS\nfocused=PASS\nmake_verify_production=PASS\ndeterminism=PASS\nreal_consumer_provenance=PASS\nremote_readback=PASS\n' "$candidate" "$SOURCE_SHA" "$PATCH_SHA256" | tee "$EVIDENCE/delivery.txt"
+      - name: Preserve exact local Git candidate and evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/issue160-evidence"
+          git -C repo bundle create "$RUNNER_TEMP/issue160-evidence/candidate.bundle" HEAD
+          git -C repo log -1 --format=fuller > "$RUNNER_TEMP/issue160-evidence/commit.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: issue160-inventory-evidence
+          path: ${{ runner.temp }}/issue160-evidence/
+          if-no-files-found: error
+          retention-days: 14
