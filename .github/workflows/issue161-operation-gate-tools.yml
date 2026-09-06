@@ -1,0 +1,45 @@
+name: issue161-operation-gate-tools
+on:
+  push:
+    branches: [control/161-operation-gate-delivery]
+    paths: [.github/workflows/issue161-operation-gate-tools.yml]
+permissions:
+  contents: read
+jobs:
+  tools:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: f8fdce6c3bd7bd63eef05ae23b3fc9ba83c3b0de
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: 1.25.13
+          cache-dependency-path: |
+            app/go.sum
+            framework/go.sum
+            gateway/go.sum
+            infras/go.sum
+            pkg/go.sum
+      - name: Package only public tools and module dependencies; never credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          mkdir -p "$RUNNER_TEMP/export/protoc"
+          curl -fsSL --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "$PROTOC_LINUX_X86_64_SHA256  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/export/protoc"
+          for module in app pkg framework gateway infras; do (cd "$module" && GOWORK=off go mod download); done
+          tar -czf "$RUNNER_TEMP/export/go.tgz" -C "$(go env GOROOT)" .
+          tar -czf "$RUNNER_TEMP/export/modules.tgz" -C "$(go env GOMODCACHE)" .
+          cd "$RUNNER_TEMP/export"
+          find . -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: issue161-isolated-public-toolchain
+          path: ${{ runner.temp }}/export
+          retention-days: 1
+          compression-level: 0
