@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hvritual/yunka.io/pkg/serviceboundary"
 	"github.com/urfave/cli"
+	"yunka.io/app/cmd/boundarycore"
 	"yunka.io/app/cmd/projectflow"
 )
 
@@ -20,7 +20,7 @@ type SourcePath struct {
 }
 
 type Report struct {
-	serviceboundary.Inspection
+	boundarycore.Inspection
 	Project projectflow.ProjectDescriptor `json:"project"`
 	// Fingerprint paths retain the compiler's canonical namespace. This explicit
 	// mapping reuses projectflow's physical source identity, including inventory.
@@ -41,7 +41,7 @@ func Build(ctx context.Context, options projectflow.Options, application string)
 	if err := ctx.Err(); err != nil {
 		return Report{}, err
 	}
-	inspection, err := serviceboundary.Inspect(snapshot.Manifest, application)
+	inspection, err := boundarycore.Inspect(snapshot.Manifest, application)
 	if err != nil {
 		return Report{}, err
 	}

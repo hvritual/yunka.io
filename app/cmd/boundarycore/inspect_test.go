@@ -1,4 +1,4 @@
-package serviceboundary
+package boundarycore
 
 import (
 	"encoding/json"

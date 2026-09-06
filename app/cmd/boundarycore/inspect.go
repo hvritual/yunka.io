@@ -1,7 +1,7 @@
-// Package serviceboundary derives read-only architectural evidence from the
+// Package boundarycore derives read-only architectural evidence from the
 // canonical compiler model. An inspection is not a ServiceBoundaryDecision,
 // mutation proof, service taxonomy, or runtime authorization mechanism.
-package serviceboundary
+package boundarycore
 
 import (
 	"crypto/sha256"
