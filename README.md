@@ -340,4 +340,22 @@ The canonical compiler exposes source provenance in memory for every contract in
 
 The library `contract.ResolveOperationContractContext` derives the source/import closure for a method-bound or internal Application Operation. `projectflow.DescribeOperationContractContext(s)` recompiles current canonical inputs and returns project-relative file paths. These are read-only context projections, not mutation authorization or a hand-maintained module map. External import names never grant local ownership. Missing declaration provenance requires recompilation rather than an invented source path. A service's import closure can include other co-located DTOs; it is not a declaration-level minimal edit scope.
 
-Existing untyped V1 artifact serialization remains byte-compatible and intentionally omits provenance; the in-memory compiler result retains it. Manifest versions 1–4 remain readable. Agent CLI integration and precise ChangeSet source enforcement are tracked separately by issue #160.
+Existing untyped V1 artifact serialization remains byte-compatible and intentionally omits provenance; the in-memory compiler result retains it. Manifest versions 1–4 remain readable. Precise ChangeSet source enforcement remains a separate issue #160 task.
+
+
+### Operation-scoped Agent Context
+
+`yunka context --json` (schema v5) keeps the existing lightweight project bootstrap: it does not run protoc and remains usable before generation. Its `agentProtocol` advertises two opt-in source-context queries:
+
+```bash
+yunka context --operation <canonical-operation-id> --json
+yunka context --all-operations --json
+# A proto-root project with additional includes:
+yunka context --root ./backend --operation <id> --proto-path ./support --json
+```
+
+Scoped queries reuse `projectflow.DescribeOperationContractContext(s)`, compiling current protobuf inputs rather than trusting stale generated manifests. `contractContext` contains `authority: "read_only"`, `scope: "canonical_file_import_closure"`, and a deterministically sorted `operations` list with `operationId`, `service`, project-relative `sourceFiles`, and separate external descriptor import names. Both RPC-bound and internal Application Operations are supported. Text output distinguishes local sources from external imports; JSON contains one document and no source contents.
+
+The selectors are mutually exclusive. Blank or unknown Operation IDs, extra positional arguments, compilation failures and invalid source identity return an error without partial context or fallback to the whole proto root. `--protoc` (or `PROTOC`) selects the compiler. Repeatable `--proto-path` values are relative to the project root and apply only to proto-root projects; inventory projects use their canonical `sourceSets[].protoPaths` instead. Compiler CLI options require a scoped query. An explicit all-operation query on a contract without Operations returns `operations: []`.
+
+This is a read-only **file/import closure**, not a declaration-level minimal context or a mutation allowlist: a shared service proto can import DTOs used by other Operations. Existing ownership, semantic and ChangeSet gates remain required, and external import names never confer local edit authority. No generated output, context manifest or persistent mapping is written.

@@ -1,0 +1,117 @@
+package agentcontext
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/urfave/cli"
+	"yunka.io/app/cmd/projectflow"
+)
+
+const (
+	ContextAuthorityReadOnly = "read_only"
+	ContextScopeFileImports  = "canonical_file_import_closure"
+)
+
+// ContractContext reports source evidence, never an edit allowlist. A service
+// file may import DTOs used by other Operations, so file/import closure must not
+// be represented as declaration-level minimality or mutation authorization.
+type ContractContext struct {
+	Authority  string                                 `json:"authority"`
+	Scope      string                                 `json:"scope"`
+	Operations []projectflow.OperationContractContext `json:"operations"`
+}
+
+// Options opts into canonical compilation. The default Build(root) bootstrap
+// stays available before generation and without a working protobuf toolchain.
+type Options struct {
+	Root          string
+	Operation     string
+	AllOperations bool
+	Protoc        string
+	ProtoPaths    []string
+}
+
+func BuildWithOptions(ctx context.Context, options Options) (Snapshot, error) {
+	operation := strings.TrimSpace(options.Operation)
+	if options.Operation != "" && operation == "" {
+		return Snapshot{}, fmt.Errorf("context: operation ID must not be blank")
+	}
+	if operation != "" && options.AllOperations {
+		return Snapshot{}, fmt.Errorf("context: --operation and --all-operations are mutually exclusive")
+	}
+	selected := operation != "" || options.AllOperations
+	if !selected && (options.Protoc != "" || len(options.ProtoPaths) != 0) {
+		return Snapshot{}, fmt.Errorf("context: compiler options require --operation or --all-operations")
+	}
+	// Inventory include order is canonical source-set configuration. Do not
+	// advertise a CLI override that compileContract would silently ignore.
+	snapshot, err := Build(options.Root)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	if !selected {
+		return snapshot, nil
+	}
+	if snapshot.Project.ContractSourceKind == "inventory" && len(options.ProtoPaths) != 0 {
+		return Snapshot{}, fmt.Errorf("context: inventory include paths belong in sourceSets[].protoPaths, not --proto-path")
+	}
+	for _, path := range options.ProtoPaths {
+		if strings.TrimSpace(path) == "" {
+			return Snapshot{}, fmt.Errorf("context: --proto-path must not be blank")
+		}
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	compiler := projectflow.Options{Root: snapshot.Project.Root, Protoc: options.Protoc, ProtoPaths: options.ProtoPaths}
+	var operations []projectflow.OperationContractContext
+	if options.AllOperations {
+		operations, err = projectflow.DescribeOperationContractContexts(ctx, compiler)
+	} else {
+		var value projectflow.OperationContractContext
+		value, err = projectflow.DescribeOperationContractContext(ctx, compiler, operation)
+		operations = []projectflow.OperationContractContext{value}
+	}
+	if err != nil {
+		// Never turn a failed scoped query into an unscoped/partial success.
+		return Snapshot{}, err
+	}
+	if operations == nil {
+		operations = []projectflow.OperationContractContext{}
+	}
+	snapshot.ContractContext = &ContractContext{
+		Authority: ContextAuthorityReadOnly, Scope: ContextScopeFileImports, Operations: operations,
+	}
+	return snapshot, nil
+}
+
+func runCommand(c *cli.Context) error {
+	if c.NArg() != 0 {
+		return fmt.Errorf("context: unexpected arguments; use --operation <id>")
+	}
+	if c.IsSet("operation") && strings.TrimSpace(c.String("operation")) == "" {
+		return fmt.Errorf("context: --operation requires a non-blank canonical ID")
+	}
+	if (c.IsSet("protoc") || c.IsSet("proto-path")) && !c.IsSet("operation") && !c.Bool("all-operations") {
+		return fmt.Errorf("context: compiler options require --operation or --all-operations")
+	}
+	snapshot, err := BuildWithOptions(context.Background(), Options{
+		Root: c.String("root"), Operation: c.String("operation"), AllOperations: c.Bool("all-operations"),
+		Protoc: c.String("protoc"), ProtoPaths: c.StringSlice("proto-path"),
+	})
+	if err != nil {
+		return err
+	}
+	if c.Bool("json") {
+		contents, err := MarshalJSON(snapshot)
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprint(c.App.Writer, string(contents))
+		return err
+	}
+	_, err = fmt.Fprint(c.App.Writer, FormatText(snapshot))
+	return err
+}

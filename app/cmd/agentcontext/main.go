@@ -17,15 +17,16 @@ import (
 
 const (
 	AppName       = "context"
-	SchemaVersion = 4
+	SchemaVersion = 5
 )
 
 type Snapshot struct {
-	SchemaVersion int                            `json:"schemaVersion"`
-	Project       projectflow.ProjectDescriptor `json:"project"`
-	Locations     []Location                    `json:"locations"`
-	Commands      Commands                      `json:"commands"`
-	AgentProtocol AgentProtocol                 `json:"agentProtocol"`
+	SchemaVersion   int                           `json:"schemaVersion"`
+	Project         projectflow.ProjectDescriptor `json:"project"`
+	Locations       []Location                    `json:"locations"`
+	Commands        Commands                      `json:"commands"`
+	AgentProtocol   AgentProtocol                 `json:"agentProtocol"`
+	ContractContext *ContractContext              `json:"contractContext,omitempty"`
 }
 
 type Location struct {
@@ -46,21 +47,23 @@ type Commands struct {
 }
 
 type AgentProtocol struct {
-	NewStructure      string `json:"newStructure"`
-	NewOperationPlan  string `json:"newOperationPlan"`
-	NewOperationApply string `json:"newOperationApply"`
-	ExistingPlan      string `json:"existingPlan"`
-	ChangeBegin       string `json:"changeBegin"`
-	ChangeCheck       string `json:"changeCheck"`
-	ChangeVerify      string `json:"changeVerify"`
-	ChangeSetBegin    string `json:"changeSetBegin"`
-	ChangeSetCheck    string `json:"changeSetCheck"`
-	RemediationBind   string `json:"remediationBind"`
-	RemediationCheck  string `json:"remediationCheck"`
-	Audit             string `json:"audit"`
-	AdvisorRequest    string `json:"advisorRequest"`
-	AdvisorValidate   string `json:"advisorValidate"`
-	RuntimeEvent      string `json:"runtimeEvent"`
+	OperationContext     string `json:"operationContext"`
+	AllOperationContexts string `json:"allOperationContexts"`
+	NewStructure         string `json:"newStructure"`
+	NewOperationPlan     string `json:"newOperationPlan"`
+	NewOperationApply    string `json:"newOperationApply"`
+	ExistingPlan         string `json:"existingPlan"`
+	ChangeBegin          string `json:"changeBegin"`
+	ChangeCheck          string `json:"changeCheck"`
+	ChangeVerify         string `json:"changeVerify"`
+	ChangeSetBegin       string `json:"changeSetBegin"`
+	ChangeSetCheck       string `json:"changeSetCheck"`
+	RemediationBind      string `json:"remediationBind"`
+	RemediationCheck     string `json:"remediationCheck"`
+	Audit                string `json:"audit"`
+	AdvisorRequest       string `json:"advisorRequest"`
+	AdvisorValidate      string `json:"advisorValidate"`
+	RuntimeEvent         string `json:"runtimeEvent"`
 }
 
 func Command() cli.Command {
@@ -70,23 +73,12 @@ func Command() cli.Command {
 		Flags: []cli.Flag{
 			cli.StringFlag{Name: "root", Usage: "project root", Value: "."},
 			cli.BoolFlag{Name: "json", Usage: "emit the stable machine-readable context contract"},
+			cli.StringFlag{Name: "operation", Usage: "exact canonical Operation ID; compile its read-only source/import context"},
+			cli.BoolFlag{Name: "all-operations", Usage: "compile read-only source/import contexts for all canonical Operations"},
+			cli.StringFlag{Name: "protoc", Usage: "protobuf compiler for an operation context query"},
+			cli.StringSliceFlag{Name: "proto-path", Usage: "additional project-relative protobuf include path; repeatable for proto-root projects"},
 		},
-		Action: func(context *cli.Context) error {
-			snapshot, err := Build(context.String("root"))
-			if err != nil {
-				return err
-			}
-			if context.Bool("json") {
-				contents, err := MarshalJSON(snapshot)
-				if err != nil {
-					return err
-				}
-				fmt.Print(string(contents))
-				return nil
-			}
-			fmt.Print(FormatText(snapshot))
-			return nil
-		},
+		Action: runCommand,
 	}
 }
 
@@ -128,21 +120,23 @@ func Build(root string) (Snapshot, error) {
 			GraphImpact: "yunka graph impact --format json --operation <operation>",
 		},
 		AgentProtocol: AgentProtocol{
-			NewStructure:      "yunka add <application|event|module> ...",
-			NewOperationPlan:  "yunka add operation <application> <operation> ... --plan --format agent-json",
-			NewOperationApply: "yunka add operation <application> <operation> ... --format agent-json",
-			ExistingPlan:      "yunka change plan --operation <operation> --format agent-json",
-			ChangeBegin:       "yunka change begin --operation <operation> --format agent-json",
-			ChangeCheck:       "yunka change check --format agent-json",
-			ChangeVerify:      "yunka change verify --format agent-json",
-			ChangeSetBegin:    "yunka change set begin [--contract <contract.json>] [--create-plan <plan.json>] --format agent-json",
-			ChangeSetCheck:    "yunka change set check --format agent-json",
-			RemediationBind:   "yunka change set remediation bind --finding <finding-id> --format agent-json",
-			RemediationCheck:  "yunka change set remediation check --format agent-json",
-			Audit:             "yunka audit --format agent-json",
-			AdvisorRequest:    "yunka advisor request --format agent-json",
-			AdvisorValidate:   "yunka advisor validate --request <request.json> --response <response.json> --format agent-json",
-			RuntimeEvent:      "yunka dev --event-format jsonl",
+			OperationContext:     "yunka context --operation <operation> --json",
+			AllOperationContexts: "yunka context --all-operations --json",
+			NewStructure:         "yunka add <application|event|module> ...",
+			NewOperationPlan:     "yunka add operation <application> <operation> ... --plan --format agent-json",
+			NewOperationApply:    "yunka add operation <application> <operation> ... --format agent-json",
+			ExistingPlan:         "yunka change plan --operation <operation> --format agent-json",
+			ChangeBegin:          "yunka change begin --operation <operation> --format agent-json",
+			ChangeCheck:          "yunka change check --format agent-json",
+			ChangeVerify:         "yunka change verify --format agent-json",
+			ChangeSetBegin:       "yunka change set begin [--contract <contract.json>] [--create-plan <plan.json>] --format agent-json",
+			ChangeSetCheck:       "yunka change set check --format agent-json",
+			RemediationBind:      "yunka change set remediation bind --finding <finding-id> --format agent-json",
+			RemediationCheck:     "yunka change set remediation check --format agent-json",
+			Audit:                "yunka audit --format agent-json",
+			AdvisorRequest:       "yunka advisor request --format agent-json",
+			AdvisorValidate:      "yunka advisor validate --request <request.json> --response <response.json> --format agent-json",
+			RuntimeEvent:         "yunka dev --event-format jsonl",
 		},
 	}, nil
 }
@@ -168,6 +162,18 @@ func FormatText(snapshot Snapshot) string {
 			fmt.Fprintf(&builder, " action=%s", item.Remediation)
 		}
 		builder.WriteByte('\n')
+	}
+	if snapshot.ContractContext != nil {
+		fmt.Fprintf(&builder, "CONTRACT CONTEXT authority=%s scope=%s\n", snapshot.ContractContext.Authority, snapshot.ContractContext.Scope)
+		for _, operation := range snapshot.ContractContext.Operations {
+			fmt.Fprintf(&builder, "OPERATION %s service=%s\n", operation.OperationID, operation.Service)
+			for _, source := range operation.SourceFiles {
+				fmt.Fprintf(&builder, "  SOURCE %s\n", source)
+			}
+			for _, external := range operation.ExternalImports {
+				fmt.Fprintf(&builder, "  EXTERNAL IMPORT %s\n", external)
+			}
+		}
 	}
 	return builder.String()
 }
