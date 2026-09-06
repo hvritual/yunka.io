@@ -144,6 +144,9 @@ func Lint(manifest Manifest) []Diagnostic {
 			}
 
 			if operation := method.Operation; operation != nil {
+				if err := ValidateBoundaryIntent(operation.Boundary); err != nil {
+					diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path + ".boundary", Message: err.Error()})
+				}
 				if service.Application == nil || service.Domain == "" {
 					diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "typed operation requires typed domain and application declarations"})
 				}
