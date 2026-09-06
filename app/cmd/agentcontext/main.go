@@ -17,7 +17,7 @@ import (
 
 const (
 	AppName       = "context"
-	SchemaVersion = 5
+	SchemaVersion = 6
 )
 
 type Snapshot struct {
@@ -169,6 +169,9 @@ func FormatText(snapshot Snapshot) string {
 			fmt.Fprintf(&builder, "OPERATION %s service=%s\n", operation.OperationID, operation.Service)
 			for _, source := range operation.SourceFiles {
 				fmt.Fprintf(&builder, "  SOURCE %s\n", source)
+			}
+			for _, source := range operation.DeclarationFiles {
+				fmt.Fprintf(&builder, "  DECLARATION SOURCE %s\n", source)
 			}
 			for _, external := range operation.ExternalImports {
 				fmt.Fprintf(&builder, "  EXTERNAL IMPORT %s\n", external)

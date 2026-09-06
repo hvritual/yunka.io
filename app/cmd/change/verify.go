@@ -109,7 +109,7 @@ func VerifyChange(ctx context.Context, options VerifyOptions) (ChangeAttestation
 		Semantic:      SemanticReport{SchemaVersion: SemanticReportSchemaVersion, OperationID: contractValue.Operation.OperationID, Deltas: []SemanticDelta{}, Violations: []SemanticDelta{}},
 	}
 
-	reconciliation, err := ReconcileGitDelta(descriptor.Root, contractValue)
+	reconciliation, err := ReconcileGitDeltaWithOptions(ctx, projectflow.Options{Root: descriptor.Root, Protoc: options.Protoc, ProtoPaths: options.ProtoPaths}, contractValue)
 	if err != nil {
 		return ChangeAttestation{}, "", err
 	}

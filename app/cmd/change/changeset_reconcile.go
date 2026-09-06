@@ -1,16 +1,17 @@
 package change
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 
-	"yunka.io/app/cmd/projectflow"
 	"github.com/hvritual/yunka.io/pkg/operationplan"
+	"yunka.io/app/cmd/projectflow"
 )
 
 const (
-	ChangeSetCheckSchemaVersion     = 1
+	ChangeSetCheckSchemaVersion    = 2
 	ChangeSetSemanticSchemaVersion = 1
 )
 
@@ -21,19 +22,25 @@ type ChangeSetSemanticReport struct {
 }
 
 type ChangeSetCheckReport struct {
-	SchemaVersion  int                     `json:"schemaVersion"`
-	BaseSHA        string                  `json:"baseSha"`
-	Reconciliation Reconciliation          `json:"reconciliation"`
-	Semantic       ChangeSetSemanticReport `json:"semantic"`
-	Conformant     bool                    `json:"conformant"`
+	SchemaVersion   int                     `json:"schemaVersion"`
+	BaseSHA         string                  `json:"baseSha"`
+	Reconciliation  Reconciliation          `json:"reconciliation"`
+	Semantic        ChangeSetSemanticReport `json:"semantic"`
+	ContractSources *ContractSourceReport   `json:"contractSources,omitempty"`
+	Conformant      bool                    `json:"conformant"`
 }
 
 func ReconcileChangeSet(root string, value ChangeSet) (ChangeSetCheckReport, error) {
+	return ReconcileChangeSetWithOptions(context.Background(), projectflow.Options{Root: root}, value)
+}
+
+func ReconcileChangeSetWithOptions(ctx context.Context, options projectflow.Options, value ChangeSet) (ChangeSetCheckReport, error) {
+	root := options.Root
 	if err := validateChangeSet(value); err != nil {
 		return ChangeSetCheckReport{}, err
 	}
 	envelope := changeSetEnvelope(value)
-	gitReport, err := ReconcileGitDelta(root, envelope)
+	gitReport, err := reconcileGitDeltaFiles(root, envelope)
 	if err != nil {
 		return ChangeSetCheckReport{}, err
 	}
@@ -41,12 +48,22 @@ func ReconcileChangeSet(root string, value ChangeSet) (ChangeSetCheckReport, err
 	if err != nil {
 		return ChangeSetCheckReport{}, err
 	}
+	sources, sourceSemantic, err := reconcileContractSources(ctx, options, value, gitReport.Changes)
+	if err != nil {
+		return ChangeSetCheckReport{}, err
+	}
+	if sources != nil {
+		attachSourceSemantic(sources, sourceSemantic)
+		gitReport.Violations = append(gitReport.Violations, sources.Violations...)
+		sortChangeViolations(gitReport.Violations)
+	}
 	return ChangeSetCheckReport{
-		SchemaVersion:  ChangeSetCheckSchemaVersion,
-		BaseSHA:        value.BaseSHA,
-		Reconciliation: gitReport,
-		Semantic:       semantic,
-		Conformant:     len(gitReport.Violations) == 0 && len(semantic.Violations) == 0,
+		ContractSources: sources,
+		SchemaVersion:   ChangeSetCheckSchemaVersion,
+		BaseSHA:         value.BaseSHA,
+		Reconciliation:  gitReport,
+		Semantic:        semantic,
+		Conformant:      len(gitReport.Violations) == 0 && len(semantic.Violations) == 0,
 	}, nil
 }
 
@@ -88,6 +105,10 @@ func ReconcileChangeSetSemantic(root string, value ChangeSet) (ChangeSetSemantic
 		return ChangeSetSemanticReport{}, err
 	}
 
+	return reconcileChangeSetSemanticFacts(value, base, current), nil
+}
+
+func reconcileChangeSetSemanticFacts(value ChangeSet, base, current canonicalFacts) ChangeSetSemanticReport {
 	subjects := make(map[string]ChangeSetSubject, len(value.Subjects))
 	applicationAllowances := map[string]map[string]bool{}
 	for _, subject := range value.Subjects {
@@ -150,7 +171,7 @@ func ReconcileChangeSetSemantic(root string, value ChangeSet) (ChangeSetSemantic
 	if report.Violations == nil {
 		report.Violations = []SemanticDelta{}
 	}
-	return report, nil
+	return report
 }
 
 func compareCreateOperation(expected CreateOperationChange, left operationplan.Plan, leftOK bool, right operationplan.Plan, rightOK bool) []SemanticDelta {

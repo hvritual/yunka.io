@@ -27,7 +27,7 @@ func TestIssue160ContextBootstrapDoesNotCompile(t *testing.T) {
 		t.Fatal(err)
 	}
 	value := decodeContext(t, output)
-	if value.SchemaVersion != 5 || value.ContractContext != nil || strings.Contains(output, `"contractContext"`) {
+	if value.SchemaVersion != 6 || value.ContractContext != nil || strings.Contains(output, `"contractContext"`) {
 		t.Fatalf("bootstrap invented compiled context: %s", output)
 	}
 	if value.AgentProtocol.OperationContext != "yunka context --operation <operation> --json" || value.AgentProtocol.AllOperationContexts != "yunka context --all-operations --json" {

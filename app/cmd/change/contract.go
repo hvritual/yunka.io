@@ -65,6 +65,7 @@ func beginCommand() cli.Command {
 		Usage: "start a bounded change contract for one existing canonical operation",
 		Flags: []cli.Flag{
 			cli.StringFlag{Name: "root", Value: ".", Usage: "project root"},
+			sourceProtocFlag(), sourceIncludesFlag(),
 			cli.StringFlag{Name: "operation", Usage: "exact canonical operation ID or operation:<ID> graph node ID"},
 			cli.StringFlag{Name: "intent", Value: IntentImplementation, Usage: "change intent: contract, implementation, or both"},
 			cli.StringFlag{Name: "base", Value: "HEAD", Usage: "Git commit/ref used as the authoritative change baseline"},
@@ -83,8 +84,8 @@ func beginCommand() cli.Command {
 				return fmt.Errorf("change begin: unsupported format %q", format)
 			}
 
-			contractValue, projectRoot, err := BuildChangeContract(
-				c.String("root"),
+			contractValue, projectRoot, err := BuildChangeContractWithOptions(
+				sourceCompilerOptions(c),
 				c.String("operation"),
 				c.String("intent"),
 				c.String("base"),
@@ -111,10 +112,15 @@ func beginCommand() cli.Command {
 }
 
 func BuildChangeContract(root, operation, intent, base string, explicitPaths, allowedSemantic []string, depth int) (ChangeContract, string, error) {
+	return BuildChangeContractWithOptions(projectflow.Options{Root: root}, operation, intent, base, explicitPaths, allowedSemantic, depth)
+}
+
+func BuildChangeContractWithOptions(options projectflow.Options, operation, intent, base string, explicitPaths, allowedSemantic []string, depth int) (ChangeContract, string, error) {
+	root := options.Root
 	if err := ensureCleanWorktree(root); err != nil {
 		return ChangeContract{}, "", &Failure{Kind: FailureEvidence, Err: err}
 	}
-	plan, err := Build(root, operation, intent, depth)
+	plan, err := BuildWithOptions(options, operation, intent, depth)
 	if err != nil {
 		return ChangeContract{}, "", err
 	}

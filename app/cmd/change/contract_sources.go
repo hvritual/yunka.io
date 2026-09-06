@@ -1,0 +1,294 @@
+package change
+
+import (
+	"context"
+	"fmt"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/hvritual/yunka.io/pkg/contract"
+	"yunka.io/app/cmd/projectflow"
+)
+
+const ContractSourcePolicy = "operation-declaration-sources/v1"
+
+type ContractSourceSubject struct {
+	OperationID  string   `json:"operationId"`
+	SourceFiles  []string `json:"sourceFiles"`
+	MessageTypes []string `json:"messageTypes"`
+	EnumTypes    []string `json:"enumTypes"`
+}
+
+// ContractSourceReport is disposable evidence of an independently reconstructed
+// bound. Editing a ChangeSet's path arrays cannot widen this bound. This gate
+// does not replace the separate Git/ownership, semantic, generation or test gates.
+type ContractSourceReport struct {
+	Policy     string                   `json:"policy"`
+	BaseSHA    string                   `json:"baseSha"`
+	Evidence   string                   `json:"evidence"`
+	Subjects   []ContractSourceSubject  `json:"subjects"`
+	Violations []ChangeViolation        `json:"violations"`
+	Semantic   *ChangeSetSemanticReport `json:"semantic,omitempty"`
+}
+
+// reconcileContractSources is demand-driven: implementation-only Git deltas do
+// not invoke protoc. Every protobuf delta is checked against fresh compilation
+// of the exact Git base and the current inputs, never a stored/generated map.
+func reconcileContractSources(ctx context.Context, options projectflow.Options, value ChangeSet, changes []FileChange) (*ContractSourceReport, *ChangeSetSemanticReport, error) {
+	for _, path := range options.ProtoPaths {
+		if strings.TrimSpace(path) == "" {
+			return nil, nil, fmt.Errorf("contract sources: --proto-path must not be blank")
+		}
+	}
+	changed := false
+	for _, item := range changes {
+		if protoSourcePath(item.Path) || protoSourcePath(item.PreviousPath) {
+			changed = true
+			break
+		}
+	}
+	if !changed {
+		return nil, nil, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	root, err := filepath.Abs(options.Root)
+	if err != nil {
+		return nil, nil, err
+	}
+	options.Root = root
+	baseRoot, cleanup, err := materializeSourceBase(ctx, root, value.BaseSHA)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer cleanup()
+	baseOptions := options
+	baseOptions.Root = baseRoot
+	baseOptions.ProtoPaths = snapshotIncludePaths(root, baseRoot, options.ProtoPaths)
+	before, err := projectflow.DescribeContractSourceSnapshot(ctx, baseOptions)
+	if err != nil {
+		return nil, nil, fmt.Errorf("contract sources: compile immutable base (supply required --proto-path includes): %w", err)
+	}
+	after, err := projectflow.DescribeContractSourceSnapshot(ctx, options)
+	if err != nil {
+		return nil, nil, fmt.Errorf("contract sources: compile current input: %w", err)
+	}
+	report := &ContractSourceReport{Policy: ContractSourcePolicy, BaseSHA: value.BaseSHA, Evidence: "canonical_base_and_current_source_compilation", Subjects: []ContractSourceSubject{}, Violations: []ChangeViolation{}}
+	files, messages, enums := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	baseMessages, baseEnums := messageSourceIndex(before.Manifest), enumSourceIndex(before.Manifest)
+	for _, subject := range value.Subjects {
+		var baseContext contract.OperationContractContext
+		id := ""
+		if subject.Existing != nil {
+			existing := subject.Existing
+			if existing.BaseSHA != value.BaseSHA {
+				return nil, nil, fmt.Errorf("contract sources: subject/base identity mismatch")
+			}
+			if existing.Intent != IntentContract && existing.Intent != IntentBoth {
+				continue
+			}
+			id = existing.Operation.OperationID
+			baseContext, err = contract.ResolveOperationContractContext(before.Manifest, id)
+		} else if subject.Create != nil {
+			id = subject.Create.Operation.OperationID
+			baseContext, err = prospectiveSourceContext(before.Manifest, *subject.Create)
+		} else {
+			return nil, nil, fmt.Errorf("contract sources: missing subject")
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		bound := ContractSourceSubject{OperationID: id, SourceFiles: []string{}, MessageTypes: baseContext.MessageTypes, EnumTypes: baseContext.EnumTypes}
+		for _, source := range baseContext.DeclarationFiles {
+			path, ok := before.Paths[source]
+			if !ok {
+				return nil, nil, fmt.Errorf("contract sources: unresolved base source %q", source)
+			}
+			bound.SourceFiles = append(bound.SourceFiles, path)
+			files[path] = true
+		}
+		for _, name := range baseContext.MessageTypes {
+			messages[name] = true
+		}
+		for _, name := range baseContext.EnumTypes {
+			enums[name] = true
+		}
+		// New DTO declarations may be authored inside already declared files
+		// when actually reachable from this subject. Adding a reference does
+		// NOT make a pre-existing unrelated DTO editable after the fact.
+		current, resolveErr := contract.ResolveOperationContractContext(after.Manifest, id)
+		if resolveErr != nil {
+			return nil, nil, fmt.Errorf("contract sources: current subject %s: %w", id, resolveErr)
+		}
+		for _, name := range current.MessageTypes {
+			if _, exists := baseMessages[name]; !exists {
+				messages[name] = true
+				bound.MessageTypes = append(bound.MessageTypes, name)
+			}
+		}
+		for _, name := range current.EnumTypes {
+			if _, exists := baseEnums[name]; !exists {
+				enums[name] = true
+				bound.EnumTypes = append(bound.EnumTypes, name)
+			}
+		}
+		bound.SourceFiles = uniqueSorted(bound.SourceFiles)
+		bound.MessageTypes = uniqueSorted(bound.MessageTypes)
+		bound.EnumTypes = uniqueSorted(bound.EnumTypes)
+		report.Subjects = append(report.Subjects, bound)
+	}
+	// Do not use current imports to expand the base-bound editable file set.
+	// A rename requires both ends to have been authorized; otherwise replan a
+	// structural change rather than silently assigning a new file to an ID.
+	for _, item := range changes {
+		for _, path := range []string{item.Path, item.PreviousPath} {
+			if protoSourcePath(path) && !files[path] {
+				report.Violations = append(report.Violations, ChangeViolation{Kind: "contract-source", Path: path, Detail: "protobuf file is not a source of the declared base Operation/DTO graph; imports, explicit path-array edits and current new references do not widen this bound"})
+			}
+		}
+	}
+	report.Violations = append(report.Violations, compareMessageSources(before, after, messages)...)
+	report.Violations = append(report.Violations, compareEnumSources(before, after, enums)...)
+	sort.Slice(report.Subjects, func(i, j int) bool { return report.Subjects[i].OperationID < report.Subjects[j].OperationID })
+	sortChangeViolations(report.Violations)
+	// Use the same semantic evaluator with freshly compiled facts as an
+	// additional authority. Leaving operation-plans.json stale cannot hide a
+	// direct protobuf permission/tenant/composition/Operation mutation.
+	beforePlans, err := contract.CompileOperationPlans(before.Manifest)
+	if err != nil {
+		return nil, nil, fmt.Errorf("contract sources: base operation plans: %w", err)
+	}
+	afterPlans, err := contract.CompileOperationPlans(after.Manifest)
+	if err != nil {
+		return nil, nil, fmt.Errorf("contract sources: current operation plans: %w", err)
+	}
+	semantic := reconcileChangeSetSemanticFacts(value, canonicalFacts{Manifest: before.Manifest, Plans: beforePlans}, canonicalFacts{Manifest: after.Manifest, Plans: afterPlans})
+	return report, &semantic, nil
+}
+
+func prospectiveSourceContext(manifest contract.Manifest, create CreateOperationChange) (contract.OperationContractContext, error) {
+	// The public scaffold currently creates/reuses DTOs in the selected Service
+	// file. Prove that exact Service from base canonical identity, not from the
+	// caller-controlled EditablePaths/GeneratedPaths in a saved create plan.
+	services := append([]contract.Service(nil), manifest.Services...)
+	count := 0
+	for i := range services {
+		service := &services[i]
+		if service.Domain != create.Operation.Domain || service.Application == nil || service.Application.Name != create.Operation.Application {
+			continue
+		}
+		if service.Name != create.Expected.Service {
+			return contract.OperationContractContext{}, fmt.Errorf("contract sources: create Service identity does not match base Application")
+		}
+		service.Methods = append(append([]contract.Method(nil), service.Methods...), contract.Method{
+			Name: create.Expected.RPC, FullName: service.FullName + "." + create.Expected.RPC,
+			SourceFile: service.SourceFile, Request: create.Expected.RequestType, Response: create.Expected.ResponseType,
+			Operation: &contract.OperationDeclaration{ID: create.Operation.OperationID},
+		})
+		count++
+	}
+	if count != 1 {
+		return contract.OperationContractContext{}, fmt.Errorf("contract sources: create Operation needs exactly one canonical base Application/Service")
+	}
+	manifest.Services = services
+	return contract.ResolveOperationContractContext(manifest, create.Operation.OperationID)
+}
+
+func protoSourcePath(path string) bool { return strings.EqualFold(filepath.Ext(path), ".proto") }
+
+func snapshotIncludePaths(root, baseRoot string, paths []string) []string {
+	result := make([]string, 0, len(paths))
+	for _, path := range paths {
+		absolute := path
+		if !filepath.IsAbs(absolute) {
+			absolute = filepath.Join(root, absolute)
+		}
+		rel, err := filepath.Rel(root, absolute)
+		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			path = filepath.Join(baseRoot, rel)
+		} else {
+			// A relative include outside the project is still an explicitly
+			// supplied external input, not a sibling of the temporary snapshot.
+			path = absolute
+		}
+		result = append(result, path)
+	}
+	return result
+}
+
+func messageSourceIndex(manifest contract.Manifest) map[string]contract.Message {
+	result := map[string]contract.Message{}
+	for _, item := range manifest.Messages {
+		result[item.FullName] = item
+	}
+	return result
+}
+func enumSourceIndex(manifest contract.Manifest) map[string]contract.Enum {
+	result := map[string]contract.Enum{}
+	for _, item := range manifest.Enums {
+		result[item.FullName] = item
+	}
+	return result
+}
+func compareMessageSources(before, after projectflow.ContractSourceSnapshot, allowed map[string]bool) []ChangeViolation {
+	left, right := messageSourceIndex(before.Manifest), messageSourceIndex(after.Manifest)
+	result := []ChangeViolation{}
+	for _, name := range unionKeys(left, right) {
+		l, lok := left[name]
+		r, rok := right[name]
+		source := after.Paths[r.SourceFile]
+		if !rok {
+			source = before.Paths[l.SourceFile]
+		}
+		l.SourceFile = before.Paths[l.SourceFile]
+		r.SourceFile = after.Paths[r.SourceFile]
+		if !allowed[name] && (lok != rok || jsonValue(l) != jsonValue(r)) {
+			result = append(result, ChangeViolation{Kind: "contract-declaration", Path: source, Detail: "message " + name + " is outside declared Operation DTO references"})
+		}
+	}
+	return result
+}
+func compareEnumSources(before, after projectflow.ContractSourceSnapshot, allowed map[string]bool) []ChangeViolation {
+	left, right := enumSourceIndex(before.Manifest), enumSourceIndex(after.Manifest)
+	result := []ChangeViolation{}
+	for _, name := range unionKeys(left, right) {
+		l, lok := left[name]
+		r, rok := right[name]
+		source := after.Paths[r.SourceFile]
+		if !rok {
+			source = before.Paths[l.SourceFile]
+		}
+		l.SourceFile = before.Paths[l.SourceFile]
+		r.SourceFile = after.Paths[r.SourceFile]
+		if !allowed[name] && (lok != rok || jsonValue(l) != jsonValue(r)) {
+			result = append(result, ChangeViolation{Kind: "contract-declaration", Path: source, Detail: "enum " + name + " is outside declared Operation DTO references"})
+		}
+	}
+	return result
+}
+func sortChangeViolations(values []ChangeViolation) {
+	sort.Slice(values, func(i, j int) bool {
+		if values[i].Path != values[j].Path {
+			return values[i].Path < values[j].Path
+		}
+		if values[i].Kind != values[j].Kind {
+			return values[i].Kind < values[j].Kind
+		}
+		return values[i].Detail < values[j].Detail
+	})
+}
+
+func attachSourceSemantic(report *ContractSourceReport, semantic *ChangeSetSemanticReport) {
+	report.Semantic = semantic
+	if semantic != nil {
+		for _, delta := range semantic.Violations {
+			report.Violations = append(report.Violations, ChangeViolation{Kind: "contract-semantic", Path: delta.Subject, Detail: delta.Category + " " + delta.Field + " violates the declared semantic envelope in current protobuf source"})
+		}
+	}
+	sortChangeViolations(report.Violations)
+}

@@ -1,6 +1,7 @@
 package change
 
 import (
+	"context"
 	"testing"
 
 	"yunka.io/app/cmd/add"
@@ -18,7 +19,7 @@ func TestReconcileChangeSetAcceptsMatchingExistingAndCreateSubjects(t *testing.T
 	}
 	generatePressureProject(t, fixture)
 
-	report, err := ReconcileChangeSet(fixture.Root, value)
+	report, err := ReconcileChangeSetWithOptions(context.Background(), fixture.compilerOptions(), value)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +40,7 @@ func TestReconcileChangeSetRejectsCreateSemanticDriftFromPlannedIntent(t *testin
 	}
 	generatePressureProject(t, fixture)
 
-	report, err := ReconcileChangeSet(fixture.Root, value)
+	report, err := ReconcileChangeSetWithOptions(context.Background(), fixture.compilerOptions(), value)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +65,7 @@ func TestReconcileChangeSetRejectsUndeclaredOperationDrift(t *testing.T) {
 	mutateRPCOption(t, fixture, "Resume", "tenant_required: true", "tenant_required: false")
 	generatePressureProject(t, fixture)
 
-	report, err := ReconcileChangeSet(fixture.Root, value)
+	report, err := ReconcileChangeSetWithOptions(context.Background(), fixture.compilerOptions(), value)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -41,7 +41,7 @@ func TestIssue151DefaultProtocolWithoutIgnore(t *testing.T) {
 		app.ExitErrHandler = func(*cli.Context, error) {}
 		return app.Run(append([]string{"yunka", "change"}, args...))
 	}
-	begin := []string{"begin", "--root", fixture.Root, "--operation", "tenant.suspend", "--intent", "both"}
+	begin := []string{"begin", "--root", fixture.Root, "--proto-path", fixture.ProtoPath, "--operation", "tenant.suspend", "--intent", "both"}
 	check := []string{"check", "--root", fixture.Root, "--format", "agent-json"}
 	verify := []string{"verify", "--root", fixture.Root, "--proto-path", fixture.ProtoPath, "--format", "agent-json"}
 	if err := run(begin...); err != nil {

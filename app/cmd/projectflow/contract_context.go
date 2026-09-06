@@ -14,10 +14,13 @@ import (
 // OperationContractContext is a read-only project-relative projection of the
 // canonical compiler's source evidence. It does not grant mutation authority.
 type OperationContractContext struct {
-	OperationID     string   `json:"operationId"`
-	Service         string   `json:"service"`
-	SourceFiles     []string `json:"sourceFiles"`
-	ExternalImports []string `json:"externalImports,omitempty"`
+	OperationID      string   `json:"operationId"`
+	Service          string   `json:"service"`
+	SourceFiles      []string `json:"sourceFiles"`
+	DeclarationFiles []string `json:"declarationFiles"`
+	MessageTypes     []string `json:"messageTypes"`
+	EnumTypes        []string `json:"enumTypes"`
+	ExternalImports  []string `json:"externalImports,omitempty"`
 }
 
 func DescribeOperationContractContext(ctx context.Context, options Options, operationID string) (OperationContractContext, error) {
@@ -70,7 +73,16 @@ func projectContractContext(project resolvedProject, value contractcore.Operatio
 		paths = append(paths, relative(project.Root, absolute))
 	}
 	sort.Strings(paths)
-	return OperationContractContext{OperationID: value.OperationID, Service: value.Service, SourceFiles: paths, ExternalImports: append([]string(nil), value.ExternalImports...)}, nil
+	declarations := make([]string, 0, len(value.DeclarationFiles))
+	for _, source := range value.DeclarationFiles {
+		absolute, err := sourcePathForProject(project, source)
+		if err != nil {
+			return OperationContractContext{}, err
+		}
+		declarations = append(declarations, relative(project.Root, absolute))
+	}
+	sort.Strings(declarations)
+	return OperationContractContext{OperationID: value.OperationID, Service: value.Service, SourceFiles: paths, DeclarationFiles: declarations, MessageTypes: value.MessageTypes, EnumTypes: value.EnumTypes, ExternalImports: append([]string(nil), value.ExternalImports...)}, nil
 }
 
 func sourcePathForProject(project resolvedProject, source string) (string, error) {
@@ -104,4 +116,42 @@ func sourcePathForProject(project resolvedProject, source string) (string, error
 		return "", fmt.Errorf("contract context: source %s is not a regular file", source)
 	}
 	return candidate, nil
+}
+
+// ContractSourceSnapshot is a transient compiler result and its exact project
+// path projection. It is not loaded from generated artifacts and is not a
+// writable ownership manifest. Callers performing change reconciliation must
+// compile the base and current inputs independently.
+type ContractSourceSnapshot struct {
+	Project  ProjectDescriptor
+	Manifest contractcore.Manifest
+	Paths    map[string]string
+}
+
+func DescribeContractSourceSnapshot(ctx context.Context, options Options) (ContractSourceSnapshot, error) {
+	project, err := resolveProject(options)
+	if err != nil {
+		return ContractSourceSnapshot{}, err
+	}
+	if project.InventoryPath != "" && len(options.ProtoPaths) != 0 {
+		return ContractSourceSnapshot{}, fmt.Errorf("contract sources: inventory includes belong in sourceSets[].protoPaths")
+	}
+	for _, path := range options.ProtoPaths {
+		if strings.TrimSpace(path) == "" {
+			return ContractSourceSnapshot{}, fmt.Errorf("contract sources: --proto-path must not be blank")
+		}
+	}
+	result, err := compileContract(ctx, project)
+	if err != nil {
+		return ContractSourceSnapshot{}, fmt.Errorf("contract source snapshot: %w", err)
+	}
+	paths := make(map[string]string, len(result.Manifest.Files))
+	for _, file := range result.Manifest.Files {
+		absolute, err := sourcePathForProject(project, file.Name)
+		if err != nil {
+			return ContractSourceSnapshot{}, err
+		}
+		paths[file.Name] = relative(project.Root, absolute)
+	}
+	return ContractSourceSnapshot{Project: describeResolvedProject(project), Manifest: result.Manifest, Paths: paths}, nil
 }

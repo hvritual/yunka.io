@@ -77,3 +77,25 @@ func TestIssue160InternalOperationContext(t *testing.T) {
 		t.Fatalf("internal contexts=%#v", values)
 	}
 }
+
+func TestIssue160DeclarationFilesDoNotFollowUnrelatedServiceImports(t *testing.T) {
+	manifest := Manifest{
+		Files:    []File{{Name: "service.proto", Dependencies: []string{"dto.proto", "other.proto"}}, {Name: "dto.proto", Dependencies: []string{"common.proto"}}, {Name: "common.proto"}, {Name: "other.proto"}},
+		Messages: []Message{{FullName: "x.Input", SourceFile: "dto.proto", Fields: []Field{{Kind: "message", Type: "x.Shared"}}}, {FullName: "x.Output", SourceFile: "dto.proto"}, {FullName: "x.Shared", SourceFile: "common.proto", Fields: []Field{{Kind: "enum", Type: "x.State"}}}, {FullName: "x.Other", SourceFile: "other.proto"}},
+		Enums:    []Enum{{FullName: "x.State", SourceFile: "common.proto"}},
+		Services: []Service{{FullName: "x.API", SourceFile: "service.proto", Methods: []Method{{Operation: &OperationDeclaration{ID: "x.one"}, Request: "x.Input", Response: "x.Output"}}}},
+	}
+	value, err := ResolveOperationContractContext(manifest, "x.one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(value.DeclarationFiles, []string{"common.proto", "dto.proto", "service.proto"}) {
+		t.Fatalf("declarations=%v", value.DeclarationFiles)
+	}
+	if !reflect.DeepEqual(value.SourceFiles, []string{"common.proto", "dto.proto", "other.proto", "service.proto"}) {
+		t.Fatalf("imports=%v", value.SourceFiles)
+	}
+	if !reflect.DeepEqual(value.MessageTypes, []string{"x.Input", "x.Output", "x.Shared"}) || !reflect.DeepEqual(value.EnumTypes, []string{"x.State"}) {
+		t.Fatalf("type graph=%#v", value)
+	}
+}

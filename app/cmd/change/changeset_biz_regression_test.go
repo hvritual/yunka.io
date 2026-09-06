@@ -1,6 +1,7 @@
 package change
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -30,7 +31,7 @@ func TestT4CreateChangeSetBindsLegacyProtobufOutputsAndNormalizesAPIKey(t *testi
 		t.Fatal(err)
 	}
 	generatePressureProject(t, fixture)
-	report, err := ReconcileChangeSet(fixture.Root, value)
+	report, err := ReconcileChangeSetWithOptions(context.Background(), fixture.compilerOptions(), value)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +57,7 @@ func TestT4CreateChangeSetCanonicalizesServiceAuthenticationEndToEnd(t *testing.
 		t.Fatal(err)
 	}
 	generatePressureProject(t, fixture)
-	report, err := ReconcileChangeSet(fixture.Root, value)
+	report, err := ReconcileChangeSetWithOptions(context.Background(), fixture.compilerOptions(), value)
 	if err != nil {
 		t.Fatal(err)
 	}
