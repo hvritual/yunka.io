@@ -17,7 +17,7 @@ import (
 
 const (
 	ChangeAttestationSchemaVersion = 2
-	DefaultChangeAttestationPath   = ".yunka/change-attestation.json"
+	DefaultChangeAttestationPath   = ".git/yunka/change-attestation.json"
 )
 
 type GateResult struct {
@@ -208,13 +208,9 @@ func changeDiagnostic(stage, path, detail string) diagnostic.Diagnostic {
 }
 
 func WriteChangeAttestation(root, output string, value ChangeAttestation) (string, error) {
-	output = strings.TrimSpace(output)
-	if output == "" {
-		output = DefaultChangeAttestationPath
-	}
-	path := output
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(root, filepath.FromSlash(path))
+	path, display, err := resolveGitPrivateStatePath(root, output, DefaultChangeAttestationPath)
+	if err != nil {
+		return "", err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return "", err
@@ -227,11 +223,7 @@ func WriteChangeAttestation(root, output string, value ChangeAttestation) (strin
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return "", err
 	}
-	relative, err := filepath.Rel(root, path)
-	if err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return filepath.ToSlash(relative), nil
-	}
-	return filepath.ToSlash(path), nil
+	return display, nil
 }
 
 func RenderChangeAttestation(value ChangeAttestation, path, format string) (string, error) {
