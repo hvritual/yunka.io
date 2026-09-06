@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -96,31 +95,12 @@ func CompileInventory(ctx context.Context, options InventoryCompileOptions) (Com
 	var allFiles []string
 	digest := sha256.New()
 
-	for _, source := range sources {
-		rootRel, sourceRoot, err := repositoryPath(root, source.Root)
-		if err != nil {
-			return CompileResult{}, fmt.Errorf("contract: source set %s root: %w", source.Name, err)
-		}
-		expectedFiles, err := normalizeInventoryFiles(source.Files)
-		if err != nil {
-			return CompileResult{}, fmt.Errorf("contract: source set %s: %w", source.Name, err)
-		}
-		discovered, err := discoverProtoFiles(sourceRoot)
-		if err != nil {
-			return CompileResult{}, fmt.Errorf("contract: source set %s discover: %w", source.Name, err)
-		}
-		if !reflect.DeepEqual(discovered, expectedFiles) {
-			return CompileResult{}, fmt.Errorf("contract: source set %s inventory drift: listed=%v discovered=%v", source.Name, expectedFiles, discovered)
-		}
-
-		protoPaths := make([]string, 0, len(source.ProtoPaths))
-		for _, path := range source.ProtoPaths {
-			_, absolute, err := repositoryPath(root, path)
-			if err != nil {
-				return CompileResult{}, fmt.Errorf("contract: source set %s protoPath %q: %w", source.Name, path, err)
-			}
-			protoPaths = append(protoPaths, absolute)
-		}
+	prepared, owners, err := prepareProvenanceSources(root, sources)
+	if err != nil {
+		return CompileResult{}, err
+	}
+	for _, source := range prepared {
+		rootRel, sourceRoot, expectedFiles, protoPaths := source.rootRel, source.root, source.files, source.protoPaths
 		result, err := Compile(ctx, CompileOptions{
 			Dir:        sourceRoot,
 			ProtoPaths: protoPaths,
@@ -128,18 +108,22 @@ func CompileInventory(ctx context.Context, options InventoryCompileOptions) (Com
 			Protoc:     options.Protoc,
 		})
 		if err != nil {
-			return CompileResult{}, fmt.Errorf("contract: source set %s: %w", source.Name, err)
+			return CompileResult{}, fmt.Errorf("contract: source set %s: %w", source.name, err)
 		}
-		for index := range result.Manifest.Files {
-			result.Manifest.Files[index].Name = filepath.ToSlash(filepath.Join(rootRel, result.Manifest.Files[index].Name))
+		protoc, err := resolveProtoc(options.Protoc)
+		if err != nil {
+			return CompileResult{}, err
 		}
-		if err := mergeSourceManifest(&merged, source.Name, result.Manifest); err != nil {
+		if err := rebaseInventoryProvenance(&result.Manifest, root, source, owners, protoc); err != nil {
+			return CompileResult{}, err
+		}
+		if err := mergeSourceManifest(&merged, source.name, result.Manifest); err != nil {
 			return CompileResult{}, err
 		}
 		for _, file := range expectedFiles {
 			allFiles = append(allFiles, filepath.ToSlash(filepath.Join(rootRel, file)))
 		}
-		_, _ = digest.Write([]byte(source.Name))
+		_, _ = digest.Write([]byte(source.name))
 		_, _ = digest.Write([]byte{0})
 		_, _ = digest.Write([]byte(rootRel))
 		_, _ = digest.Write([]byte{0})

@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-const ManifestVersion = 3
+const ManifestVersion = 4
 
 type Manifest struct {
 	SchemaVersion int       `json:"schemaVersion"`
@@ -16,11 +16,13 @@ type Manifest struct {
 }
 
 type File struct {
-	Name      string             `json:"name"`
-	Package   string             `json:"package,omitempty"`
-	Syntax    string             `json:"syntax,omitempty"`
-	GoPackage string             `json:"goPackage,omitempty"`
-	Domain    *DomainDeclaration `json:"domain,omitempty"`
+	Name                 string             `json:"name"`
+	Package              string             `json:"package,omitempty"`
+	Syntax               string             `json:"syntax,omitempty"`
+	GoPackage            string             `json:"goPackage,omitempty"`
+	Dependencies         []string           `json:"dependencies,omitempty"`
+	ExternalDependencies []string           `json:"externalDependencies,omitempty"`
+	Domain               *DomainDeclaration `json:"domain,omitempty"`
 }
 
 type DomainDeclaration struct {
@@ -67,10 +69,11 @@ type OperationDeclaration struct {
 }
 
 type Message struct {
-	Name     string          `json:"name"`
-	FullName string          `json:"fullName"`
-	Fields   []Field         `json:"fields"`
-	DTO      *DTODeclaration `json:"dto,omitempty"`
+	Name       string          `json:"name"`
+	FullName   string          `json:"fullName"`
+	SourceFile string          `json:"sourceFile,omitempty"`
+	Fields     []Field         `json:"fields"`
+	DTO        *DTODeclaration `json:"dto,omitempty"`
 }
 
 type Field struct {
@@ -89,9 +92,10 @@ type Field struct {
 }
 
 type Enum struct {
-	Name     string      `json:"name"`
-	FullName string      `json:"fullName"`
-	Values   []EnumValue `json:"values"`
+	Name       string      `json:"name"`
+	FullName   string      `json:"fullName"`
+	SourceFile string      `json:"sourceFile,omitempty"`
+	Values     []EnumValue `json:"values"`
 }
 
 type EnumValue struct {
@@ -102,6 +106,7 @@ type EnumValue struct {
 type Service struct {
 	Name        string                  `json:"name"`
 	FullName    string                  `json:"fullName"`
+	SourceFile  string                  `json:"sourceFile,omitempty"`
 	Domain      string                  `json:"domain,omitempty"`
 	Application *ApplicationDeclaration `json:"application,omitempty"`
 	Methods     []Method                `json:"methods"`
@@ -110,6 +115,7 @@ type Service struct {
 type Method struct {
 	Name            string                `json:"name"`
 	FullName        string                `json:"fullName"`
+	SourceFile      string                `json:"sourceFile,omitempty"`
 	Request         string                `json:"request"`
 	Response        string                `json:"response"`
 	ClientStreaming bool                  `json:"clientStreaming,omitempty"`
@@ -136,10 +142,12 @@ type HTTPBinding struct {
 }
 
 func (manifest *Manifest) Normalize() {
-	if manifest.SchemaVersion == 0 || manifest.SchemaVersion == 1 || manifest.SchemaVersion == 2 {
+	if manifest.SchemaVersion == 0 || manifest.SchemaVersion == 1 || manifest.SchemaVersion == 2 || manifest.SchemaVersion == 3 {
 		manifest.SchemaVersion = ManifestVersion
 	}
 	for i := range manifest.Files {
+		manifest.Files[i].Dependencies = stableStrings(manifest.Files[i].Dependencies)
+		manifest.Files[i].ExternalDependencies = stableStrings(manifest.Files[i].ExternalDependencies)
 		if manifest.Files[i].Domain != nil {
 			manifest.Files[i].Domain.Name = strings.TrimSpace(manifest.Files[i].Domain.Name)
 			manifest.Files[i].Domain.Version = strings.TrimSpace(manifest.Files[i].Domain.Version)
@@ -147,6 +155,7 @@ func (manifest *Manifest) Normalize() {
 	}
 	sort.Slice(manifest.Files, func(i, j int) bool { return manifest.Files[i].Name < manifest.Files[j].Name })
 	for i := range manifest.Messages {
+		manifest.Messages[i].SourceFile = strings.TrimSpace(manifest.Messages[i].SourceFile)
 		sort.Slice(manifest.Messages[i].Fields, func(a, b int) bool {
 			if manifest.Messages[i].Fields[a].Number == manifest.Messages[i].Fields[b].Number {
 				return manifest.Messages[i].Fields[a].Name < manifest.Messages[i].Fields[b].Name
@@ -156,6 +165,7 @@ func (manifest *Manifest) Normalize() {
 	}
 	sort.Slice(manifest.Messages, func(i, j int) bool { return manifest.Messages[i].FullName < manifest.Messages[j].FullName })
 	for i := range manifest.Enums {
+		manifest.Enums[i].SourceFile = strings.TrimSpace(manifest.Enums[i].SourceFile)
 		sort.Slice(manifest.Enums[i].Values, func(a, b int) bool {
 			if manifest.Enums[i].Values[a].Number == manifest.Enums[i].Values[b].Number {
 				return manifest.Enums[i].Values[a].Name < manifest.Enums[i].Values[b].Name
@@ -165,6 +175,7 @@ func (manifest *Manifest) Normalize() {
 	}
 	sort.Slice(manifest.Enums, func(i, j int) bool { return manifest.Enums[i].FullName < manifest.Enums[j].FullName })
 	for i := range manifest.Services {
+		manifest.Services[i].SourceFile = strings.TrimSpace(manifest.Services[i].SourceFile)
 		manifest.Services[i].Domain = strings.TrimSpace(manifest.Services[i].Domain)
 		if manifest.Services[i].Application != nil {
 			manifest.Services[i].Application.Name = strings.TrimSpace(manifest.Services[i].Application.Name)
@@ -184,6 +195,7 @@ func (manifest *Manifest) Normalize() {
 		}
 		for j := range manifest.Services[i].Methods {
 			method := &manifest.Services[i].Methods[j]
+			method.SourceFile = strings.TrimSpace(method.SourceFile)
 			sort.Slice(method.HTTP, func(a, b int) bool {
 				left := method.HTTP[a]
 				right := method.HTTP[b]

@@ -107,8 +107,13 @@ func TestC84PBDSLIsCanonicalTypedDeclarationSurface(t *testing.T) {
 		}
 	}
 	contractModel := read("pkg/contract/model.go")
-	if !strings.Contains(contractModel, "const ManifestVersion = 3") {
-		t.Error("Contract Manifest canonical schema must be V3")
+	if !strings.Contains(contractModel, "const ManifestVersion = 4") {
+		t.Error("Contract Manifest canonical schema must be V4 with source provenance")
+	}
+	for _, required := range []string{`json:"sourceFile,omitempty"`, `json:"dependencies,omitempty"`, `json:"externalDependencies,omitempty"`} {
+		if !strings.Contains(contractModel, required) {
+			t.Errorf("Contract Manifest V4 source identity missing %q", required)
+		}
 	}
 	codegen := read("pkg/contract/application_codegen.go")
 	for _, required := range []string{

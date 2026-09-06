@@ -13,14 +13,15 @@ type fileDescriptorSet struct {
 }
 
 type fileDescriptor struct {
-	Name       string
-	Package    string
-	Syntax     string
-	GoPackage  string
-	Messages   []messageDescriptor
-	Enums      []enumDescriptor
-	Services   []serviceDescriptor
-	SourceInfo sourceInfoDescriptor
+	Name         string
+	Package      string
+	Syntax       string
+	GoPackage    string
+	Dependencies []string
+	Messages     []messageDescriptor
+	Enums        []enumDescriptor
+	Services     []serviceDescriptor
+	SourceInfo   sourceInfoDescriptor
 }
 
 type messageDescriptor struct {
@@ -94,6 +95,8 @@ func parseFileDescriptor(data []byte) (fileDescriptor, error) {
 			file.Name = string(field.Bytes)
 		case 2:
 			file.Package = string(field.Bytes)
+		case 3:
+			file.Dependencies = append(file.Dependencies, string(field.Bytes))
 		case 4:
 			message, err := parseMessageDescriptor(field.Bytes)
 			if err != nil {

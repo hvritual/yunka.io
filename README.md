@@ -332,3 +332,12 @@ RPC contracts now come only from `contracts/proto` and are generated only with p
 ### Change control-state paths
 
 `yunka change begin`, `change check`, and `change verify` share the Git-private default contract `.git/yunka/change-contract.json`; verification writes `.git/yunka/change-attestation.json`. These are logical paths resolved through Git, including linked worktrees, submodules, and nested projects. Defaults do not require an ignore rule. Explicit `--output` and `--contract` paths remain literal; existing `.yunka/...` files are not migrated or deleted automatically. Source-tree exports still participate in normal scope reconciliation. For concurrent projects in one worktree, use distinct explicit Git-private paths. No `.yunka/**` scope exemption is introduced.
+
+
+### Contract source provenance
+
+The canonical compiler exposes source provenance in memory for every contract inventory. Typed manifests use schema v4: messages, enums, services, and methods retain `sourceFile`; files distinguish canonical `dependencies` from `externalDependencies`. `Compile` uses descriptor-relative paths; `CompileInventory` rebases all declarations and canonical import edges together to repository-relative paths using each source set's actual include order. Same-named files in independent source sets are not interchangeable. Physical ownership aliases and source-path escapes fail closed.
+
+The library `contract.ResolveOperationContractContext` derives the source/import closure for a method-bound or internal Application Operation. `projectflow.DescribeOperationContractContext(s)` recompiles current canonical inputs and returns project-relative file paths. These are read-only context projections, not mutation authorization or a hand-maintained module map. External import names never grant local ownership. Missing declaration provenance requires recompilation rather than an invented source path. A service's import closure can include other co-located DTOs; it is not a declaration-level minimal edit scope.
+
+Existing untyped V1 artifact serialization remains byte-compatible and intentionally omits provenance; the in-memory compiler result retains it. Manifest versions 1–4 remain readable. Agent CLI integration and precise ChangeSet source enforcement are tracked separately by issue #160.
