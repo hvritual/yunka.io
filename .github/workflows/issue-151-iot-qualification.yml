@@ -1,0 +1,81 @@
+name: issue-151-real-iot-qualification
+on:
+  push:
+    branches: [qualification/151-iot-default-protocol]
+permissions:
+  contents: read
+jobs:
+  real-iot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CANDIDATE_SHA: 84b39cd0248bf6b5fdfedc54c3f13ec5c691617e
+    steps:
+      - name: Checkout qualification controller
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Checkout exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 84b39cd0248bf6b5fdfedc54c3f13ec5c691617e
+          path: framework
+          persist-credentials: false
+      - name: Checkout unchanged old implementation
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 44e93eaa9a256859f5b182f800a4a786016e9878
+          path: baseline
+          persist-credentials: false
+      - name: Checkout pinned real consumer without mutating tracked submodule
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: hvritual/iot-delivery-system
+          ref: 20520f69d7eaf3c27c0fb3e9d79f03b4ecb059bd
+          path: consumer
+          persist-credentials: false
+      - name: Load candidate toolchain
+        id: toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C framework rev-parse HEAD)" = "$CANDIDATE_SHA"
+          source framework/tools/toolchain.env
+          echo "go_version=$GO_VERSION" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.toolchain.outputs.go_version }}
+          cache-dependency-path: |
+            framework/app/go.sum
+            framework/framework/go.sum
+            framework/gateway/go.sum
+            framework/infras/go.sum
+            framework/pkg/go.sum
+            consumer/backend-yunka/go.sum
+      - name: Build pinned tools and both exact CLIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          source framework/tools/toolchain.env
+          archive="$RUNNER_TEMP/issue151-protoc.zip"
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" --output "$archive"
+          echo "$PROTOC_LINUX_X86_64_SHA256  $archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/issue151-protoc" "$GITHUB_WORKSPACE/bin"
+          unzip -q "$archive" -d "$RUNNER_TEMP/issue151-protoc"
+          echo "$RUNNER_TEMP/issue151-protoc/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/bin" >> "$GITHUB_PATH"
+          GOBIN="$GITHUB_WORKSPACE/bin" go install "google.golang.org/protobuf/cmd/protoc-gen-go@$PROTOC_GEN_GO_VERSION"
+          GOBIN="$GITHUB_WORKSPACE/bin" go install "google.golang.org/grpc/cmd/protoc-gen-go-grpc@$PROTOC_GEN_GO_GRPC_VERSION"
+          (cd framework/app && GOWORK="$GITHUB_WORKSPACE/framework/go.work" go build -buildvcs=true -o "$GITHUB_WORKSPACE/bin/yunka-fixed" .)
+          (cd baseline/app && GOWORK="$GITHUB_WORKSPACE/baseline/go.work" go build -buildvcs=true -o "$GITHUB_WORKSPACE/bin/yunka-baseline" .)
+      - name: Execute real-consumer RED GREEN and bounded mutation
+        shell: bash
+        run: python3 tools/tasks/issue151_iot_qualification.py
+      - name: Preserve exact qualification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: issue151-real-iot-evidence
+          path: evidence/
+          if-no-files-found: warn
