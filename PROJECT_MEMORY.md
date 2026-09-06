@@ -199,6 +199,12 @@ Every repository task must:
 - Local child Operations join the root ExecutionScope/UoW and cannot silently create nested transactions or escalate transaction semantics.
 - Remote composition uses explicit Saga/Outbox semantics rather than distributed local transaction assumptions.
 
+## Service Boundary evidence baseline
+
+- A Yunka Application is the logical Service Boundary; its protobuf Service is the API projection. Do not introduce arbitrary one-Application/many-Service semantics without separately demonstrated need.
+- Architectural boundary intent belongs to the canonical protobuf Operation declaration and Contract Manifest; it is not a runtime permission, transaction policy or a second hand-maintained service taxonomy.
+- Missing intent is unknown. Names, file layout and Operation counts are not proof of business cohesion. Read-only fingerprints and declared-intent coverage confer no mutation, growth or merge authority; inspection must not be represented as a boundary decision.
+
 ## Operation execution baseline
 
 - `pkg/operationplan` is the leaf-safe immutable execution IR, `pkg/contract` is the compiler, and `framework/operation.Executor` is the sole canonical transport-neutral Operation runtime.

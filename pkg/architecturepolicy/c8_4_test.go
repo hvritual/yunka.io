@@ -101,18 +101,20 @@ func TestC84PBDSLIsCanonicalTypedDeclarationSurface(t *testing.T) {
 		"repeated string permissions = 3",
 		"bool tenant_required = 5",
 		"bool public = 7",
+		"BoundaryIntent boundary = 14",
+		"string aggregate_not_applicable_reason = 3",
 	} {
 		if !strings.Contains(options, required) {
 			t.Errorf("typed DSL contract drifted; missing %q", required)
 		}
 	}
 	contractModel := read("pkg/contract/model.go")
-	if !strings.Contains(contractModel, "const ManifestVersion = 4") {
-		t.Error("Contract Manifest canonical schema must be V4 with source provenance")
+	if !strings.Contains(contractModel, "const ManifestVersion = 5") {
+		t.Error("Contract Manifest canonical schema must be V5 with source provenance and boundary intent")
 	}
-	for _, required := range []string{`json:"sourceFile,omitempty"`, `json:"dependencies,omitempty"`, `json:"externalDependencies,omitempty"`} {
+	for _, required := range []string{`json:"sourceFile,omitempty"`, `json:"dependencies,omitempty"`, `json:"externalDependencies,omitempty"`, `json:"boundary,omitempty"`} {
 		if !strings.Contains(contractModel, required) {
-			t.Errorf("Contract Manifest V4 source identity missing %q", required)
+			t.Errorf("Contract Manifest V5 source identity missing %q", required)
 		}
 	}
 	codegen := read("pkg/contract/application_codegen.go")

@@ -438,6 +438,16 @@ Historical candidate evidence from PRs #162/#163/#164 is preserved for its exact
 
 Acceptance is bounded to canonical provenance, Operation context and modeled contract-source/declaration conformance. It does not claim lexical/token-minimal context, a filesystem sandbox, signed task authority, arbitrary custom-option semantics or consumer runtime qualification. Unplanned source moves require a separately scoped migration and fresh task. **Issue #161 remains OPEN and separate**; this delivery does not implement Service Boundary decisions.
 
+## Service Boundary intent and read-only fingerprint — issue #161.1
+
+**State: IMPLEMENTED / IN REVIEW as an independent foundation; issue #161 remains OPEN.**
+
+Canonical protobuf Operation declarations can carry explicit `boundary.context` and either `boundary.aggregate` or an `aggregate_not_applicable_reason`. Missing legacy intent remains unknown. Typed Manifest schema v5 carries the metadata with v1-v5 reader compatibility; the root untyped V1 artifacts and runtime OperationPlan IR retain their existing semantics. Malformed explicit intent is rejected rather than guessed.
+
+`pkg/serviceboundary` derives a deterministic, per-Operation-linked `canonical-service-boundary/v1` fingerprint from canonical compiler facts. `yunka boundary inspect [options] <domain>/<application>` recompiles current sources, reuses source-set provenance, emits schema-v1 read-only evidence and intent coverage, and writes no project files. It preserves target-Application requirements/capabilities, transitive Operation dependencies, DTO/enum/source models, and method/streaming facts. Unknown/partial/declared describes evidence coverage, not boundary validity.
+
+This increment does not yet implement a boundary evaluator, ServiceBoundaryDecision, before/after growth detector, mutation gate, proof revalidation, ChangeSet boundary proof or boundary-debt policy. It does not infer business context from names or RPC counts, depend on an LLM, or require immediate migration of historical Services. Those enforcement stages remain required before issue #161 can be completed. Exact test, production and real-consumer inspection qualification belong to this increment's PR and immutable evidence; no main merge or complete #161 qualification is implied here.
+
 ## Current pressure frontier
 
 The active real-consumer frontier is **B13 cross-tenant delegation and delegated device access** in `hvritual/biz` issue #11.

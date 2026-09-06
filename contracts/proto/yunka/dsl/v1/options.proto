@@ -86,6 +86,16 @@ message ExecutionPolicy {
   IdempotencyPolicy idempotency = 2;
 }
 
+// BoundaryIntent is explicit architectural intent, not an execution policy or
+// permission grant. Missing intent in legacy contracts remains unknown.
+message BoundaryIntent {
+  string context = 1;
+  string aggregate = 2;
+  // Use instead of aggregate only when an aggregate genuinely does not apply.
+  // The explanation is evidence, not an automatic architecture waiver.
+  string aggregate_not_applicable_reason = 3;
+}
+
 message OperationDeclaration {
   string id = 1;
   string use_case = 2;
@@ -105,6 +115,7 @@ message OperationDeclaration {
   string request_type = 11;
   string response_type = 12;
   string application_method = 13;
+  BoundaryIntent boundary = 14;
 }
 
 extend google.protobuf.FileOptions {

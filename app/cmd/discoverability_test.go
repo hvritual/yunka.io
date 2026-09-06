@@ -16,6 +16,7 @@ func TestC116ARootCommandTaxonomyIsCompleteAndStable(t *testing.T) {
 		"api":        categorySupplementary,
 		"assembly":   categoryExpert,
 		"audit":      categoryDiagnostics,
+		"boundary":   categoryDiagnostics,
 		"change":     categoryDiagnostics,
 		"check":      categoryDeveloperWorkflow,
 		"context":    categoryDiagnostics,
@@ -100,7 +101,7 @@ func TestC116AApplyDiscoverabilityPreservesCommandsAndRendersHappyPath(t *testin
 	if !strings.Contains(app.Description, "explicit structural authoring") {
 		t.Fatalf("root description does not explain structural authoring: %q", app.Description)
 	}
-	for _, expected := range []string{"context --operation <id> --json", "context --all-operations --json", "file lists do not authorize edits", "change plan", "change begin", "change check", "change verify", "Use audit for read-only deterministic", "Use advisor to export that deterministic evidence", "does not invoke an LLM or authorize mutations"} {
+	for _, expected := range []string{"context --operation <id> --json", "context --all-operations --json", "file lists do not authorize edits", "boundary inspect", "inspection is not a boundary decision or mutation proof", "change plan", "change begin", "change check", "change verify", "Use audit for read-only deterministic", "Use advisor to export that deterministic evidence", "does not invoke an LLM or authorize mutations"} {
 		if !strings.Contains(app.Description, expected) {
 			t.Fatalf("root description does not expose control-plane capability %q: %q", expected, app.Description)
 		}

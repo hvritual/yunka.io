@@ -265,6 +265,8 @@ func parseOperationDeclaration(data []byte) (*OperationDeclaration, error) {
 		return nil, nil
 	}
 	result := &OperationDeclaration{PermissionMode: "all"}
+	var boundaryData []byte
+	var boundaryPresent bool
 	if err := scanWire(data, func(field wireField) error {
 		switch field.Number {
 		case 1:
@@ -322,10 +324,25 @@ func parseOperationDeclaration(data []byte) (*OperationDeclaration, error) {
 			result.ResponseType = string(field.Bytes)
 		case 13:
 			result.ApplicationMethod = string(field.Bytes)
+		case 14:
+			if field.Type != 2 {
+				return fmt.Errorf("boundary intent: expected a message")
+			}
+			boundaryPresent = true
+			// Singular protobuf messages merge across wire occurrences. Do not
+			// lose context when context and aggregate arrive in separate chunks.
+			boundaryData = append(boundaryData, field.Bytes...)
 		}
 		return nil
 	}); err != nil {
 		return nil, err
+	}
+	if boundaryPresent {
+		value, err := parseBoundaryIntent(boundaryData)
+		if err != nil {
+			return nil, err
+		}
+		result.Boundary = value
 	}
 	result.Permissions = stableStrings(result.Permissions)
 	result.Authentication = stableStrings(result.Authentication)
