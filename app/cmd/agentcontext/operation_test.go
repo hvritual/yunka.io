@@ -168,6 +168,8 @@ func TestIssue160ContextCLIFailsClosed(t *testing.T) {
 		{"--operation", "alpha.*"},
 		{"--operation", "alpha.echo", "unexpected"},
 		{"--operation", "alpha.echo", "--proto-path", ""},
+		{"--operation", "alpha.echo", "--proto-path="},
+		{"--operation", "alpha.echo", "--proto-path", "   "},
 	} {
 		t.Run(strings.Join(extra, "/"), func(t *testing.T) {
 			before, _ := treeDigest(root)
@@ -211,6 +213,15 @@ func TestIssue160ContextCLIEmptyOperationSet(t *testing.T) {
 }
 
 func TestIssue160ContextBuildOptionsCancellationAndValidation(t *testing.T) {
+	var paths protoPathValues
+	for _, path := range []string{"support,extra", ""} {
+		if err := paths.Set(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !reflect.DeepEqual([]string(paths), []string{"support,extra", ""}) {
+		t.Fatalf("include flag silently transformed explicit input: %#v", paths)
+	}
 	for _, options := range []Options{
 		{Operation: "   "}, {Operation: "alpha.echo", AllOperations: true}, {Protoc: "unused"},
 	} {

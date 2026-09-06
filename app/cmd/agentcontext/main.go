@@ -76,7 +76,7 @@ func Command() cli.Command {
 			cli.StringFlag{Name: "operation", Usage: "exact canonical Operation ID; compile its read-only source/import context"},
 			cli.BoolFlag{Name: "all-operations", Usage: "compile read-only source/import contexts for all canonical Operations"},
 			cli.StringFlag{Name: "protoc", Usage: "protobuf compiler for an operation context query"},
-			cli.StringSliceFlag{Name: "proto-path", Usage: "additional project-relative protobuf include path; repeatable for proto-root projects"},
+			cli.GenericFlag{Name: "proto-path", Value: &protoPathValues{}, Usage: "additional project-relative protobuf include path; repeatable for proto-root projects"},
 		},
 		Action: runCommand,
 	}

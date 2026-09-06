@@ -87,6 +87,21 @@ func BuildWithOptions(ctx context.Context, options Options) (Snapshot, error) {
 	return snapshot, nil
 }
 
+// protoPathValues preserves each occurrence, including empty strings, until
+// semantic validation. cli.StringSlice drops empty values; using it here would
+// allow an explicitly invalid include path to disappear before validation.
+// Commas are literal path characters rather than an implicit separator.
+type protoPathValues []string
+
+func (paths *protoPathValues) Set(value string) error {
+	*paths = append(*paths, value)
+	return nil
+}
+
+func (paths *protoPathValues) String() string {
+	return strings.Join(*paths, ", ")
+}
+
 func runCommand(c *cli.Context) error {
 	if c.NArg() != 0 {
 		return fmt.Errorf("context: unexpected arguments; use --operation <id>")
@@ -97,9 +112,13 @@ func runCommand(c *cli.Context) error {
 	if (c.IsSet("protoc") || c.IsSet("proto-path")) && !c.IsSet("operation") && !c.Bool("all-operations") {
 		return fmt.Errorf("context: compiler options require --operation or --all-operations")
 	}
+	paths, ok := c.Generic("proto-path").(*protoPathValues)
+	if !ok || paths == nil {
+		return fmt.Errorf("context: protobuf include flag is unavailable")
+	}
 	snapshot, err := BuildWithOptions(context.Background(), Options{
 		Root: c.String("root"), Operation: c.String("operation"), AllOperations: c.Bool("all-operations"),
-		Protoc: c.String("protoc"), ProtoPaths: c.StringSlice("proto-path"),
+		Protoc: c.String("protoc"), ProtoPaths: append([]string(nil), (*paths)...),
 	})
 	if err != nil {
 		return err
