@@ -3,17 +3,25 @@ package add
 import (
 	"fmt"
 	"strings"
+
+	"yunka.io/app/cmd/boundarycore"
 )
 
 func RevalidateOperationPlan(root string, candidate Report) (Report, error) {
-	if candidate.SchemaVersion != SchemaVersion {
-		return Report{}, fmt.Errorf("add operation plan: unsupported schemaVersion %d", candidate.SchemaVersion)
+	if candidate.SchemaVersion != OperationReportVersion {
+		return Report{}, fmt.Errorf("%w: add operation plan: unsupported schemaVersion %d", boundarycore.ErrStaleBoundaryProof, candidate.SchemaVersion)
 	}
 	if strings.TrimSpace(candidate.Kind) != "operation-plan" {
 		return Report{}, fmt.Errorf("add operation plan: kind must be operation-plan")
 	}
 	if candidate.ExplicitSemantics == nil {
 		return Report{}, fmt.Errorf("add operation plan: explicitSemantics are required")
+	}
+	if candidate.BoundaryDecision == nil || candidate.BaseSHA == "" || candidate.InputsDigest == "" {
+		return Report{}, fmt.Errorf("%w: boundary-bound operation plan is required", boundarycore.ErrStaleBoundaryProof)
+	}
+	if !boundaryAllows(candidate) {
+		return Report{}, fmt.Errorf("%w: %s", ErrBoundaryBlocked, candidate.BoundaryDecision.Outcome)
 	}
 	identity := candidate.Identity
 	for _, key := range []string{"domain", "application", "operationId", "useCase", "rpc", "requestType", "responseType"} {
@@ -40,6 +48,8 @@ func RevalidateOperationPlan(root string, candidate Report) (Report, error) {
 	semantics := candidate.ExplicitSemantics
 	options := OperationOptions{
 		Root:               root,
+		Boundary:           semantics.Boundary,
+		ProtoPaths:         append([]string(nil), candidate.ProtoPaths...),
 		ApplicationKey:     strings.TrimSpace(identity["domain"]) + "/" + strings.TrimSpace(identity["application"]),
 		OperationID:        strings.TrimSpace(identity["operationId"]),
 		Source:             source,
@@ -64,7 +74,7 @@ func RevalidateOperationPlan(root string, candidate Report) (Report, error) {
 	}
 	rebuilt, err := PlanOperation(options)
 	if err != nil {
-		return Report{}, fmt.Errorf("add operation plan: replan against current project: %w", err)
+		return Report{}, fmt.Errorf("%w: add operation plan: replan against current project: %v", boundarycore.ErrStaleBoundaryProof, err)
 	}
 	candidateJSON, err := Render(candidate, FormatAgentJSON)
 	if err != nil {
@@ -75,7 +85,10 @@ func RevalidateOperationPlan(root string, candidate Report) (Report, error) {
 		return Report{}, err
 	}
 	if candidateJSON != rebuiltJSON {
-		return Report{}, fmt.Errorf("add operation plan: supplied plan does not match canonical replan for the current project")
+		return Report{}, fmt.Errorf("%w: supplied plan does not match canonical replan for the current project", boundarycore.ErrStaleBoundaryProof)
+	}
+	if !boundaryAllows(rebuilt) {
+		return Report{}, fmt.Errorf("%w: %s", ErrBoundaryBlocked, rebuilt.BoundaryDecision.Outcome)
 	}
 	return rebuilt, nil
 }

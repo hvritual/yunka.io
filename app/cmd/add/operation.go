@@ -5,13 +5,23 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"unicode"
 
+	"yunka.io/app/cmd/boundarycore"
 	"yunka.io/app/cmd/projectflow"
 )
 
 func AddOperation(options OperationOptions) (Report, error) {
+	if strings.TrimSpace(options.Root) == "" {
+		options.Root = "."
+	}
+	release, err := lockOperationWriter(operationContext(options), options.Root)
+	if err != nil {
+		return Report{}, err
+	}
+	defer release()
 	return changeOperation(options, true)
 }
 
@@ -20,10 +30,22 @@ func PlanOperation(options OperationOptions) (Report, error) {
 }
 
 func changeOperation(options OperationOptions, apply bool) (Report, error) {
+	if options.Root == "" {
+		options.Root = "."
+	}
+	if err := operationContext(options).Err(); err != nil {
+		return Report{}, err
+	}
+	if options.Boundary != nil {
+		v := *options.Boundary
+		options.Boundary = &v
+	}
+	options.ProtoPaths = append([]string(nil), options.ProtoPaths...)
 	domain, application, err := parseApplicationKey(options.ApplicationKey)
 	if err != nil {
 		return Report{}, requestFailure(err)
 	}
+	options.ApplicationKey = domain + "/" + application
 	if err := validateOperationOptions(&options); err != nil {
 		return Report{}, requestFailure(err)
 	}
@@ -159,10 +181,23 @@ func changeOperation(options OperationOptions, apply bool) (Report, error) {
 			{Command: "yunka dev", Purpose: "verify runtime readiness and behavior"},
 		},
 		Notes: []string{
-			"Request/response messages are empty structural DTOs; add business fields explicitly.",
-			"Access, tenant, transaction, idempotency, composition, permissions, authentication, dependencies, and HTTP facts come only from the caller flags.",
+			"Request/response identities must have a common canonical peer under the current boundary policy; DTO changes need a separately scoped task.",
+			"Access, tenant, transaction, idempotency, composition, permissions, authentication, dependencies, boundary intent, and HTTP facts come only from the caller flags.",
 			"The Go landing file contains only package declaration and TODO guidance; no receiver, function body, persistence, Saga, Outbox, event publication, external effect, or business implementation was generated.",
 		},
+	}
+	if err := bindOperationBoundary(options, source.Relative, contents, []byte(updated), &report); err != nil {
+		return Report{}, sourceFailure(source.Relative, err)
+	}
+	if !boundaryAllows(report) {
+		report.Kind = "operation-plan"
+		report.ExplicitSemantics = explicitOperationSemantics(options)
+		blockedOperationReport(&report)
+		normalizeReport(&report)
+		if apply {
+			return report, fmt.Errorf("%w: %s", ErrBoundaryBlocked, report.BoundaryDecision.Outcome)
+		}
+		return report, nil
 	}
 	if !apply {
 		report.Kind = "operation-plan"
@@ -173,6 +208,19 @@ func changeOperation(options OperationOptions, apply bool) (Report, error) {
 		return report, nil
 	}
 
+	// Rebuild the entire decision from fresh canonical inputs under the writer
+	// lock. No disk mutation is reachable through a missing or stale proof.
+	normalizeReport(&report)
+	fresh, err := PlanOperation(options)
+	if err != nil {
+		return Report{}, fmt.Errorf("%w: replan: %v", boundarycore.ErrStaleBoundaryProof, err)
+	}
+	if !reflect.DeepEqual(report.Mutations, fresh.Mutations) || !reflect.DeepEqual(report.Effects, fresh.Effects) || !boundaryAllows(fresh) || fresh.BaseSHA != report.BaseSHA || fresh.InputsDigest != report.InputsDigest || fresh.BoundaryDecision.DecisionDigest != report.BoundaryDecision.DecisionDigest {
+		return Report{}, fmt.Errorf("%w: decision changed before apply", boundarycore.ErrStaleBoundaryProof)
+	}
+	if err := verifyOperationInputs(options, report); err != nil {
+		return Report{}, err
+	}
 	if err := writeNewFile(implementationAbsolute, implementationContents); err != nil {
 		if os.IsExist(err) {
 			return Report{}, conflictFailure(implementationRelative, err)

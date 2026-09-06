@@ -16,11 +16,13 @@ func TestAX5ScaffoldCompilesThroughCanonicalContractChain(t *testing.T) {
 	if _, err := AddApplication(ApplicationOptions{Root: root, Key: "tenant/lifecycle"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := AddOperation(OperationOptions{
+	options := OperationOptions{
 		Root: root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.suspend", UseCase: "suspend_tenant",
 		Access: "protected", Permissions: []string{"tenant.suspend"}, PermissionMode: "all", Tenant: "required",
 		Authentication: []string{"jwt"}, Transaction: "local", Idempotency: "required", Composition: "local",
-	}); err != nil {
+	}
+	seedOperationPeer(t, root, &options)
+	if _, err := AddOperation(options); err != nil {
 		t.Fatal(err)
 	}
 

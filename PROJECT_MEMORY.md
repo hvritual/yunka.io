@@ -206,6 +206,9 @@ Every repository task must:
 - Missing intent is unknown. Names, file layout and Operation counts are not proof of business cohesion. Read-only fingerprints and declared-intent coverage confer no mutation, growth or merge authority; inspection must not be represented as a boundary decision.
 - Boundary decisions must be recomputed from canonical facts against the expected task identity and versioned policy. A self-consistent unkeyed digest is not authority; supporting and counter-evidence must both remain bound. Independently matching dimensions across different peers must not manufacture a precedent that no single peer satisfies. Policy compatibility is distinct from mutation authority and business-ontology certification.
 
+- Operation authoring must evaluate a disposable, canonically compiled before/after input set and require a reusable boundary decision before persistent source/landing writes. A plan binds actual HEAD plus current working-tree inputs; these are distinct identities, and neither constitutes retrospective approval of other direct edits.
+- Apply and saved-plan revalidation must recompute evidence and preserve blocking outcomes; absent, stale or legacy proof must not become a compatibility bypass. Shared worktree-private locks coordinate Yunka writers only, never arbitrary external editors. New-boundary initialization and broader sufficiency require explicit policies, not weakening an existing policy to pass fixtures.
+
 ## Operation execution baseline
 
 - `pkg/operationplan` is the leaf-safe immutable execution IR, `pkg/contract` is the compiler, and `framework/operation.Executor` is the sole canonical transport-neutral Operation runtime.

@@ -2,6 +2,8 @@ package change
 
 import (
 	"context"
+	"fmt"
+	"github.com/hvritual/yunka.io/pkg/contract"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -133,20 +135,9 @@ func newPressureFixture(t *testing.T) pressureFixture {
 	if _, err := add.AddApplication(add.ApplicationOptions{Root: root, Key: "tenant/lifecycle"}); err != nil {
 		t.Fatalf("add application: %v", err)
 	}
-	for _, operation := range []struct {
-		id, useCase string
-	}{
-		{id: "tenant.suspend", useCase: "suspend_tenant"},
-		{id: "tenant.resume", useCase: "resume_tenant"},
-	} {
-		if _, err := add.AddOperation(add.OperationOptions{
-			Root: root, ApplicationKey: "tenant/lifecycle", OperationID: operation.id, UseCase: operation.useCase,
-			Access: "protected", Permissions: []string{operation.id}, PermissionMode: "all", Tenant: "required",
-			Authentication: []string{"jwt"}, Transaction: "local", Idempotency: "none", Composition: "local",
-		}); err != nil {
-			t.Fatalf("add operation %s: %v", operation.id, err)
-		}
-	}
+	// Seed reviewed historical Operations directly as canonical fixture data.
+	// The guarded authoring API intentionally cannot initialize an unproven boundary.
+	seedPressureOperations(t, root)
 	if _, err := add.AddModule(add.ModuleOptions{Root: root, Name: "baseline", Version: "v0.1.0"}); err != nil {
 		t.Fatalf("add baseline module: %v", err)
 	}
@@ -305,4 +296,48 @@ func readPressureFile(t *testing.T, path string) string {
 // as generation rather than copying the DSL into the consumer's proto roots.
 func (fixture pressureFixture) compilerOptions() projectflow.Options {
 	return projectflow.Options{Root: fixture.Root, ProtoPaths: []string{fixture.ProtoPath}}
+}
+
+func pressureProtoPath() string {
+	_, file, _, _ := runtime.Caller(0)
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "../../../contracts/proto"))
+}
+func pressureBoundary() *contract.BoundaryIntent {
+	return &contract.BoundaryIntent{Context: "tenant.lifecycle", Aggregate: "tenant"}
+}
+func seedPressureOperations(t *testing.T, root string) {
+	t.Helper()
+	type operation struct{ id, useCase, rpc, request, response, permission, authentication string }
+	entries := []operation{
+		{"tenant.suspend", "suspend_tenant", "Suspend", "SuspendRequest", "SuspendResponse", "tenant.suspend", "AUTHENTICATION_JWT"},
+		{"tenant.resume", "resume_tenant", "Resume", "ResumeRequest", "ResumeResponse", "tenant.resume", "AUTHENTICATION_JWT"},
+		{"qualification.archive-jwt", "archive_peer", "ArchivePeerJWT", "ArchiveRequest", "ArchiveResponse", "tenant.archive", "AUTHENTICATION_JWT"},
+		{"qualification.archive-api-key", "archive_api_peer", "ArchivePeerAPIKey", "ArchiveRequest", "ArchiveResponse", "tenant.archive", "AUTHENTICATION_API_KEY"},
+		{"qualification.rotate-key", "rotate_peer", "RotatePeer", "KeyRequest", "KeyResponse", "tenant.manage", "AUTHENTICATION_SERVICE authentication: AUTHENTICATION_JWT authentication: AUTHENTICATION_API_KEY"},
+	}
+	var methods, dtos strings.Builder
+	seen := map[string]bool{}
+	for _, op := range entries {
+		fmt.Fprintf(&methods, `  rpc %s(%s) returns (%s) {
+ option (yunka.dsl.v1.operation) = { id: %q use_case: %q permissions: %q permission_mode: PERMISSION_ALL tenant_required: true authentication: %s composition: COMPOSITION_LOCAL execution: { transaction: TRANSACTION_LOCAL idempotency: IDEMPOTENCY_NONE } boundary: { context: "tenant.lifecycle" aggregate: "tenant" } };
+  }
+`, op.rpc, op.request, op.response, op.id, op.useCase, op.permission, op.authentication)
+		for _, dto := range []struct{ name, kind string }{{op.request, "DTO_INPUT"}, {op.response, "DTO_OUTPUT"}} {
+			if !seen[dto.name] {
+				fmt.Fprintf(&dtos, "message %s { option (yunka.dsl.v1.dto) = { kind: %s }; }\n", dto.name, dto.kind)
+				seen[dto.name] = true
+			}
+		}
+		if strings.HasPrefix(op.id, "tenant.") {
+			stem := strings.ReplaceAll(op.id, ".", "_")
+			writePressureFile(t, filepath.Join(root, "internal/tenant/application", stem+".go"), fmt.Sprintf("// Scaffolded fixture. Developer-owned.\n// Operation: %s\n// Application: tenant/lifecycle\npackage application\n", op.id))
+		}
+	}
+	path := filepath.Join(root, "contracts/proto/tenant.proto")
+	text := readPressureFile(t, path)
+	at := strings.LastIndex(text, "\n}")
+	if at < 0 {
+		t.Fatal("missing fixture service")
+	}
+	writePressureFile(t, path, text[:at]+"\n"+methods.String()+text[at:]+"\n"+dtos.String())
 }

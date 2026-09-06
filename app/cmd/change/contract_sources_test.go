@@ -269,7 +269,25 @@ func TestIssue160SourceScopeMultiSubjectAndCreate(t *testing.T) {
 	})
 	t.Run("create-with-unrelated-edit", func(t *testing.T) {
 		f := newSourceScopeFixture(t, false, false)
-		options := add.OperationOptions{Root: f.root, ApplicationKey: "scope/lifecycle", OperationID: "scope.create", UseCase: "create", Access: "protected", Permissions: []string{"scope.write"}, PermissionMode: "all", Tenant: "required", Authentication: []string{"jwt"}, Transaction: "local", Idempotency: "none", Composition: "local"}
+		servicePath := filepath.Join(f.root, f.paths["service"])
+		text := readPressureFile(t, servicePath)
+		text = strings.ReplaceAll(text, "option (yunka.dsl.v1.operation) = {", `option (yunka.dsl.v1.operation) = { boundary: { context: "scope.lifecycle" aggregate: "state" }`)
+		at := strings.LastIndex(text, "\n}")
+		text = text[:at] + `
+ rpc CreatePeer(CreateRequest) returns(CreateResponse) {
+ option (yunka.dsl.v1.operation) = { id: "scope.create-peer" use_case: "create_peer" permissions: "scope.write" permission_mode: PERMISSION_ALL tenant_required: true authentication: AUTHENTICATION_JWT composition: COMPOSITION_LOCAL execution: {transaction: TRANSACTION_LOCAL idempotency: IDEMPOTENCY_NONE} boundary: {context: "scope.lifecycle" aggregate: "state"} };
+ }
+` + text[at:] + `
+message CreateRequest {option (yunka.dsl.v1.dto) = {kind: DTO_INPUT};}
+message CreateResponse {option (yunka.dsl.v1.dto) = {kind: DTO_OUTPUT};}
+`
+		writePressureFile(t, servicePath, text)
+		if _, err := projectflow.Generate(context.Background(), projectflow.Options{Root: f.root}); err != nil {
+			t.Fatal(err)
+		}
+		gitPressure(t, f.repo, "add", "-A")
+		gitPressure(t, f.repo, "commit", "-m", "reviewed boundary fixture for source-scope create")
+		options := add.OperationOptions{Boundary: &contract.BoundaryIntent{Context: "scope.lifecycle", Aggregate: "state"}, Root: f.root, ApplicationKey: "scope/lifecycle", OperationID: "scope.create", UseCase: "create", Access: "protected", Permissions: []string{"scope.write"}, PermissionMode: "all", Tenant: "required", Authentication: []string{"jwt"}, Transaction: "local", Idempotency: "none", Composition: "local"}
 		plan, err := add.PlanOperation(options)
 		if err != nil {
 			t.Fatal(err)

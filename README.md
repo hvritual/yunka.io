@@ -390,7 +390,37 @@ Automatic reuse is deliberately a narrow canonical-compatibility result: all exi
 
 Reports contain ten dimensions, stable supporting/counter-evidence references, common-peer witnesses, both normalized Manifest digests, before/after fingerprints, the candidate execution-plan digest and a versioned decision digest. Lifecycle and availability remain explicitly unknown and noncritical because this policy accepts no observed runtime/release evidence; it does not certify those properties. Changing sufficiency rules requires a new policy version.
 
-The result has `authority: "read_only"`. It is **not** a signature, business-boundary certification, persisted taxonomy, or source mutation capability. A successfully revalidated blocking decision still blocks reuse. This increment provides the reusable decision/revalidation core and tests only: `add operation --plan`, apply, ChangeSet, canonical check and direct-edit growth enforcement are not wired to it yet. Existing-Operation changes/moves, batches, first-Operation initialization, richer client/runtime evidence, waivers and existing/new/fixed boundary-debt policy remain separate tasks. No `boundary evaluate` CLI is claimed.
+The result has `authority: "read_only"`. It is **not** a signature, business-boundary certification, persisted taxonomy, or source mutation capability. A successfully revalidated blocking decision still blocks reuse. The Operation authoring gate below now consumes this core. Full ChangeSet boundary-proof storage/revalidation and canonical direct-edit growth enforcement are not connected yet. Existing-Operation changes/moves, batches, first-Operation initialization, richer client/runtime evidence, waivers and existing/new/fixed boundary-debt policy remain separate tasks. No `boundary evaluate` CLI is claimed.
+
+#### Boundary-gated Operation authoring
+
+`yunka add operation` now requires an existing Git HEAD, a usable real protobuf compiler, and a reusable decision before writing either the canonical `.proto` or the developer-owned Go landing file. `--plan` uses the same preparation and canonical evaluation without persistent project writes. All flags precede the two positional arguments. For a proto-root project, pass external DSL/include roots explicitly with repeatable `--proto-path`; inventory projects keep include order in `sourceSets[].protoPaths` and reject CLI overrides.
+
+```bash
+# This example requires an existing, explicitly declared sales.orders/order
+# boundary with a common peer sharing these DTOs and security/execution facts.
+yunka add operation --root ./backend --proto-path ../yunka/contracts/proto \
+  --context sales.orders --aggregate order \
+  --use-case read_again --rpc-name ReadAgain \
+  --request-type ReadRequest --response-type ReadResponse \
+  --access protected --permission sales.read --permission-mode all \
+  --tenant required --authentication jwt --transaction read-only \
+  --idempotency none --composition none --plan --format agent-json \
+  sales/orders sales.read-again
+# Rerun the same request without --plan to recompute and apply the gate.
+```
+
+Use `--aggregate-not-applicable-reason` instead of `--aggregate` only when it is genuinely inapplicable. Malformed explicit intent fails canonical compilation; missing intent is UNKNOWN, not a default assignment to the requested Application.
+
+Operation plan/apply reports use **schema v2** (other structural add reports remain v1). They bind `baseSha`, `inputsDigest`, ordered explicit `protoPaths`, the full `boundaryDecision`, Operation identity, mutations and generated effects. A non-reuse decision returns a reviewable plan with **`mutations: []`**, no generated effects and a nonzero CLI exit; it does not create a landing file. The Go `PlanOperation` API returns a blocking report without an error so callers can inspect it; callers must inspect the outcome. `AddOperation` returns `OPERATION_BOUNDARY_BLOCKED` for that report. There is no `--force` bypass. Bad output formats and surplus positional arguments are rejected before apply.
+
+Preparation captures the actual current canonical source roots, explicit include `.proto` contents/order, project profile, inventory and go.mod into a disposable private tree. Before/after snapshots are compiled with the existing canonical compiler; only the prospective target source differs. The input digest includes comments and unmodeled source bytes as well as resolution metadata. Symlinked/escaping compiler inputs fail rather than silently widening the snapshot. **`baseSha` names the actual current Git HEAD; the captured before-model is the current working-tree input, not a claim that uncommitted files equal the Git commit.** Existing direct edits are not retrospectively approved by this authoring gate.
+
+Apply takes a worktree-specific Git-private exclusive lock, recompiles/re-evaluates from fresh inputs, checks the same decision and effects, and rechecks HEAD/input bytes immediately before its existing guarded writes. `RevalidateOperationPlan` rebuilds the complete schema-v2 plan; missing, legacy, consumed, stale or altered proof cannot be reused. `change set begin --create-plan` uses this same revalidation and additionally requires its immutable baseline to match the plan's HEAD. This is entry-point protection only: serialized ChangeSets do not yet carry a complete boundary proof, and `change set check`/`yunka check` do not yet detect every direct-edit Operation Growth.
+
+The private lock coordinates Yunka Operation writers, including nested projects and linked worktrees; it does not lock arbitrary external editors or provide a filesystem sandbox, signed authorization or crash-atomic transaction across both files. Source snapshots bind explicit project/include inputs, not the compiler executable, implicit standard includes, runtime evidence or business ontology. Existing source/landing ownership, exclusive-create and rollback rules remain in place; interruption leaves a lock that must be investigated rather than silently broken.
+
+**Compatibility boundary:** this gate deliberately does not weaken `canonical-peer-addition/v1` to make legacy authoring succeed. Empty/new Applications, missing legacy boundary intent, distinct client DTO identities, a new aggregate or no common matching peer remain review-required. New-boundary initialization, structured waivers and broader sufficiency policies require separate design and qualification. Unchanged legacy projects are not globally failed by this increment; it guards the new-Operation authoring path, not all framework upgrade or runtime behavior.
 
 ### Operation-scoped Agent Context
 

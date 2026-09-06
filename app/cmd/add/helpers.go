@@ -269,6 +269,9 @@ func Render(report Report, format string) (string, error) {
 		for _, key := range keys {
 			fmt.Fprintf(&builder, "  %-16s %s\n", key, report.Identity[key])
 		}
+		if report.BoundaryDecision != nil {
+			fmt.Fprintf(&builder, "boundary: %s\npolicy: %s\nbase: %s\ndecision: %s\n", report.BoundaryDecision.Outcome, report.BoundaryDecision.PolicyVersion, report.BaseSHA, report.BoundaryDecision.DecisionDigest)
+		}
 		builder.WriteString("mutations:\n")
 		for _, mutation := range report.Mutations {
 			fmt.Fprintf(&builder, "  %-8s %-20s %s\n", mutation.Action, mutation.Owner, mutation.Path)
