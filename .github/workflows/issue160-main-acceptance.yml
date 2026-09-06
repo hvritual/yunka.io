@@ -109,9 +109,34 @@ jobs:
           prefixes = ('TestIssue160SourceScope', 'TestIssue160SourceSnapshot', 'TestIssue160DeclarationFiles', 'TestIssue160Context')
           focused = [e for e in events if e.get('Test', '').startswith(prefixes)]
           assert focused and not any(e['Action'] in ('skip', 'fail') for e in focused)
-          roots = [e for e in focused if e['Action'] == 'pass' and '/' not in e['Test']]
-          assert len(roots) == 15, roots
-          print('Final main: all 15 focused source/context regression groups passed without skips')
+          expected = {
+              'github.com/hvritual/yunka.io/pkg/contract': {
+                  'TestIssue160ContextRejectsMissingOrInvalidProvenance',
+                  'TestIssue160DeclarationFilesDoNotFollowUnrelatedServiceImports',
+              },
+              'yunka.io/app/cmd/agentcontext': {
+                  'TestIssue160ContextBootstrapDoesNotCompile',
+                  'TestIssue160ContextCLIRealProtocNamespaces',
+                  'TestIssue160ContextCLIRecompilesAfterSourceMove',
+                  'TestIssue160ContextCLIFailsClosed',
+                  'TestIssue160ContextCLIEmptyOperationSet',
+                  'TestIssue160ContextBuildOptionsCancellationAndValidation',
+              },
+              'yunka.io/app/cmd/change': {
+                  'TestIssue160SourceScopePlanAndSharedDTO',
+                  'TestIssue160SourceScopeRejectsUnrelatedAndTamperedPaths',
+                  'TestIssue160SourceScopeCoLocatedDeclarationsAndNewReachableTypes',
+                  'TestIssue160SourceScopeReadsFreshSemanticAndImmutableBase',
+                  'TestIssue160SourceScopeMultiSubjectAndCreate',
+                  'TestIssue160SourceScopePublicCLIAndUnplannedMove',
+                  'TestIssue160SourceSnapshotUsesExactGitBlobs',
+                  'TestIssue160SourceSnapshotRejectsEscapeAndHonorsCancellation',
+              },
+          }
+          expected_ids = {(pkg, name) for pkg, names in expected.items() for name in names}
+          roots = [(e['Package'], e['Test']) for e in focused if e['Action'] == 'pass' and '/' not in e['Test']]
+          assert len(roots) == len(set(roots)) and set(roots) == expected_ids, (roots, expected_ids)
+          print('Final main: all 16 explicitly identified source/context regression groups passed without skips')
           PY
       - name: Execute complete production and deterministic generation gates
         working-directory: candidate
@@ -164,7 +189,7 @@ jobs:
           run = os.environ['GITHUB_RUN_ID']
           block = f'''## Issue #160 final integrated acceptance
 
-          The implementation was integrated in dependency order **#162 -> #163 -> #164**. Exact-main acceptance run `{run}` rechecked the integrated SHA `25332db2ead8567237352f116d6244f1102b26f1`, proved ordered ancestry and a zero-difference tree against candidate `984faede1a2cfbd5aad1017867d097037d0e2a74`, passed all 15 focused context/source regression groups without skips, the complete `make verify-production` gate on real MySQL 8.4, deterministic regeneration/dependency checks, and a clean worktree.
+          The implementation was integrated in dependency order **#162 -> #163 -> #164**. Exact-main acceptance run `{run}` rechecked the integrated SHA `25332db2ead8567237352f116d6244f1102b26f1`, proved ordered ancestry and a zero-difference tree against candidate `984faede1a2cfbd5aad1017867d097037d0e2a74`, passed all 16 explicitly identified context/source regression groups without skips, the complete `make verify-production` gate on real MySQL 8.4, deterministic regeneration/dependency checks, and a clean worktree.
 
           The same run replayed the immutable source-scope qualification against `iot-delivery-system@69518dec46bdfaf45cb84a0ee25d64c132b26fc9`. It verified 25 deterministic Operation contexts, the eight-file read/four-file declaration context for `delivery.dashboard.get`, acceptance of required shared-source changes, rejection of unrelated declarations and a tampered unrelated-file allowlist, and unchanged original consumer hashes/Git state. The old CLI accepted the same widened ChangeSet and unrelated edit that the integrated CLI rejected. Consumer edits and explicit DSL input setup occurred only in a disposable copy.
 
