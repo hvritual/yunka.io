@@ -115,10 +115,11 @@ func ManifestFromDescriptorSet(data []byte, roots []string) (Manifest, error) {
 			continue
 		}
 		manifest.Files = append(manifest.Files, File{
-			Name:      file.Name,
-			Package:   file.Package,
-			Syntax:    file.Syntax,
-			GoPackage: file.GoPackage,
+			Name:         file.Name,
+			Package:      file.Package,
+			Syntax:       file.Syntax,
+			GoPackage:    file.GoPackage,
+			Dependencies: append([]string(nil), file.Dependencies...),
 		})
 		collectMessageDescriptors(file.Package, "", file.Messages, messageDescriptors, mapEntries)
 	}
@@ -127,12 +128,12 @@ func ManifestFromDescriptorSet(data []byte, roots []string) (Manifest, error) {
 		if !isRootFile(file.Name, rootSet, len(roots) == 0) || isDSLSupportFile(file.Name) {
 			continue
 		}
-		appendMessages(&manifest, file.Package, "", file.Messages, messageDescriptors, mapEntries)
-		appendEnums(&manifest, file.Package, "", file.Enums)
-		appendNestedEnums(&manifest, file.Package, "", file.Messages)
+		appendMessages(&manifest, file.Name, file.Package, "", file.Messages, messageDescriptors, mapEntries)
+		appendEnums(&manifest, file.Name, file.Package, "", file.Enums)
+		appendNestedEnums(&manifest, file.Name, file.Package, "", file.Messages)
 		for serviceIndex, service := range file.Services {
 			serviceFullName := fullName(file.Package, "", service.Name)
-			contractService := Service{Name: service.Name, FullName: serviceFullName}
+			contractService := Service{Name: service.Name, FullName: serviceFullName, SourceFile: file.Name}
 			for methodIndex, method := range service.Methods {
 				methodFullName := serviceFullName + "." + method.Name
 				comment := file.SourceInfo.Comments[pathKey([]int32{6, int32(serviceIndex), 2, int32(methodIndex)})]
@@ -149,6 +150,7 @@ func ManifestFromDescriptorSet(data []byte, roots []string) (Manifest, error) {
 				contractService.Methods = append(contractService.Methods, Method{
 					Name:            method.Name,
 					FullName:        methodFullName,
+					SourceFile:      file.Name,
 					Request:         method.InputType,
 					Response:        method.OutputType,
 					ClientStreaming: method.ClientStreaming,
@@ -194,7 +196,7 @@ func collectMessageDescriptors(pkg, parent string, messages []messageDescriptor,
 	}
 }
 
-func appendMessages(manifest *Manifest, pkg, parent string, messages []messageDescriptor, all, mapEntries map[string]messageDescriptor) {
+func appendMessages(manifest *Manifest, sourceFile, pkg, parent string, messages []messageDescriptor, all, mapEntries map[string]messageDescriptor) {
 	for _, message := range messages {
 		name := fullName(pkg, parent, message.Name)
 		nextParent := message.Name
@@ -202,19 +204,19 @@ func appendMessages(manifest *Manifest, pkg, parent string, messages []messageDe
 			nextParent = parent + "." + message.Name
 		}
 		if !message.MapEntry {
-			contractMessage := Message{Name: message.Name, FullName: name}
+			contractMessage := Message{Name: message.Name, FullName: name, SourceFile: sourceFile}
 			for _, field := range message.Fields {
 				contractMessage.Fields = append(contractMessage.Fields, buildField(field, all, mapEntries))
 			}
 			manifest.Messages = append(manifest.Messages, contractMessage)
 		}
-		appendMessages(manifest, pkg, nextParent, message.Nested, all, mapEntries)
+		appendMessages(manifest, sourceFile, pkg, nextParent, message.Nested, all, mapEntries)
 	}
 }
 
-func appendEnums(manifest *Manifest, pkg, parent string, enums []enumDescriptor) {
+func appendEnums(manifest *Manifest, sourceFile, pkg, parent string, enums []enumDescriptor) {
 	for _, item := range enums {
-		contractEnum := Enum{Name: item.Name, FullName: fullName(pkg, parent, item.Name)}
+		contractEnum := Enum{Name: item.Name, FullName: fullName(pkg, parent, item.Name), SourceFile: sourceFile}
 		for _, value := range item.Values {
 			contractEnum.Values = append(contractEnum.Values, EnumValue{Name: value.Name, Number: value.Number})
 		}
@@ -222,14 +224,14 @@ func appendEnums(manifest *Manifest, pkg, parent string, enums []enumDescriptor)
 	}
 }
 
-func appendNestedEnums(manifest *Manifest, pkg, parent string, messages []messageDescriptor) {
+func appendNestedEnums(manifest *Manifest, sourceFile, pkg, parent string, messages []messageDescriptor) {
 	for _, message := range messages {
 		nextParent := message.Name
 		if parent != "" {
 			nextParent = parent + "." + message.Name
 		}
-		appendEnums(manifest, pkg, nextParent, message.Enums)
-		appendNestedEnums(manifest, pkg, nextParent, message.Nested)
+		appendEnums(manifest, sourceFile, pkg, nextParent, message.Enums)
+		appendNestedEnums(manifest, sourceFile, pkg, nextParent, message.Nested)
 	}
 }
 
@@ -262,7 +264,6 @@ func buildField(field fieldDescriptor, all, mapEntries map[string]messageDescrip
 			result.MapKeyType = key.Type
 			result.MapValueKind = value.Kind
 			result.MapValueType = value.Type
-			result.Type = "map"
 			return result
 		}
 		result.Kind = "message"
@@ -270,72 +271,6 @@ func buildField(field fieldDescriptor, all, mapEntries map[string]messageDescrip
 		return result
 	}
 	result.Kind = "unknown"
-	result.Type = field.TypeName
+	result.Type = fmt.Sprintf("type_%d", field.Type)
 	return result
-}
-
-func discoverProtoFiles(dir string) ([]string, error) {
-	var files []string
-	err := filepath.WalkDir(dir, func(path string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			if path != dir && strings.HasPrefix(entry.Name(), ".") {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if strings.EqualFold(filepath.Ext(entry.Name()), ".proto") {
-			rel, err := filepath.Rel(dir, path)
-			if err != nil {
-				return err
-			}
-			files = append(files, filepath.ToSlash(rel))
-		}
-		return nil
-	})
-	sort.Strings(files)
-	return files, err
-}
-
-func resolveProtoc(explicit string) (string, error) {
-	candidates := []string{explicit, os.Getenv("PROTOC")}
-	for _, candidate := range candidates {
-		candidate = strings.TrimSpace(candidate)
-		if candidate == "" {
-			continue
-		}
-		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
-			return candidate, nil
-		}
-		if path, err := exec.LookPath(candidate); err == nil {
-			return path, nil
-		}
-	}
-	if path, err := exec.LookPath("protoc"); err == nil {
-		return path, nil
-	}
-	return "", fmt.Errorf("contract: protoc not found; install protoc or set PROTOC")
-}
-
-func standardProtoInclude(protoc string) string {
-	resolved := protoc
-	if path, err := exec.LookPath(protoc); err == nil {
-		resolved = path
-	}
-	if path, err := filepath.EvalSymlinks(resolved); err == nil {
-		resolved = path
-	}
-	candidates := []string{
-		filepath.Join(filepath.Dir(filepath.Dir(resolved)), "include"),
-		"/usr/local/include",
-		"/usr/include",
-	}
-	for _, candidate := range candidates {
-		if info, err := os.Stat(filepath.Join(candidate, "google", "protobuf", "descriptor.proto")); err == nil && !info.IsDir() {
-			return candidate
-		}
-	}
-	return ""
 }
