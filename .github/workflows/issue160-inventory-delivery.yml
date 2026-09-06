@@ -23,6 +23,7 @@ jobs:
       SOURCE_SHA: 44b086e2b59aac4d7b7c2adc41362636ed5ba6c4
       TARGET_BRANCH: fix/160-contract-provenance-context
       PATCH_SHA256: c2a639144a5e1201af0c598c03b10a2b28bb1955b2f843765030c830d0ac5c0e
+      GUARD_SHA256: d9ce0d1049fed8ded7e14ea20fd4a1450ed8462f9cd7a8c0341e87499e9abc36
       YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?charset=utf8mb4&parseTime=true&loc=UTC&multiStatements=true
     steps:
       - name: Checkout isolated controller
@@ -85,12 +86,15 @@ jobs:
           patch=gzip.decompress(base64.b64decode(encoded,validate=True))
           assert hashlib.sha256(patch).hexdigest()==os.environ['PATCH_SHA256']
           Path(os.environ['RUNNER_TEMP'],'issue160.patch').write_bytes(patch)
+          guard=Path('control/tools/tasks/issue160-schema-guard.patch').read_bytes()
+          assert hashlib.sha256(guard).hexdigest()==os.environ['GUARD_SHA256']
           PY
           git -C repo apply --index "$RUNNER_TEMP/issue160.patch"
+          git -C repo apply --index "$GITHUB_WORKSPACE/control/tools/tasks/issue160-schema-guard.patch"
           python3 - <<'PY'
           import subprocess
           paths=set(subprocess.check_output(['git','-C','repo','diff','--cached','--name-only'],text=True).splitlines())
-          expected={'README.md','docs/STATUS.md','app/cmd/projectflow/contract_context.go','app/cmd/projectflow/contract_context_test.go','pkg/contract/artifact.go','pkg/contract/compiler.go','pkg/contract/context.go','pkg/contract/context_test.go','pkg/contract/descriptor.go','pkg/contract/model.go','pkg/contract/sources.go','pkg/contract/source_provenance.go','pkg/contract/inventory_provenance_test.go'}
+          expected={'README.md','docs/STATUS.md','app/cmd/projectflow/contract_context.go','app/cmd/projectflow/contract_context_test.go','pkg/contract/artifact.go','pkg/contract/compiler.go','pkg/contract/context.go','pkg/contract/context_test.go','pkg/contract/descriptor.go','pkg/contract/model.go','pkg/contract/sources.go','pkg/contract/source_provenance.go','pkg/contract/inventory_provenance_test.go','pkg/architecturepolicy/c8_4_test.go'}
           assert paths==expected,(paths,expected)
           PY
           git -C repo diff --cached --check
@@ -98,7 +102,7 @@ jobs:
           test -z "$(gofmt -l $changed_go)"
           git -C repo config user.name 'hvritual'
           git -C repo config user.email '11900351+hvritual@users.noreply.github.com'
-          git -C repo commit -m 'fix(contract): resolve inventory provenance by exact source ownership' -m 'Complete the independent inventory identity task for #160; restore omitted compiler helpers; preserve legacy artifacts; add real-protoc, include-order, alias/escape, source-move and project-context regressions. Context CLI and ChangeSet enforcement remain follow-up work.'
+          git -C repo commit -m 'fix(contract): resolve inventory provenance by exact source ownership' -m 'Complete the independent inventory identity task for #160; restore omitted compiler helpers; preserve legacy artifacts; reconcile the explicit schema-v4 architecture guard; add real-protoc, include-order, alias/escape, source-move and project-context regressions. Context CLI and ChangeSet enforcement remain follow-up work.'
       - name: Prove inventory RED after repairing only compiler truncation
         shell: bash
         run: |
@@ -157,7 +161,7 @@ jobs:
           git -C repo push origin "HEAD:refs/heads/$TARGET_BRANCH"
           actual=$(git -C repo ls-remote origin "refs/heads/$TARGET_BRANCH" | cut -f1)
           test "$actual" = "$candidate"
-          printf 'candidate=%s\nbase=%s\npatchSHA256=%s\nRED=PASS\nfocused=PASS\nmake_verify_production=PASS\ndeterminism=PASS\nreal_consumer_provenance=PASS\nremote_readback=PASS\n' "$candidate" "$SOURCE_SHA" "$PATCH_SHA256" | tee "$EVIDENCE/delivery.txt"
+          printf 'candidate=%s\nbase=%s\npatchSHA256=%s\nguardSHA256=%s\nRED=PASS\nfocused=PASS\nmake_verify_production=PASS\ndeterminism=PASS\nreal_consumer_provenance=PASS\nremote_readback=PASS\n' "$candidate" "$SOURCE_SHA" "$PATCH_SHA256" "$GUARD_SHA256" | tee "$EVIDENCE/delivery.txt"
       - name: Preserve exact local Git candidate and evidence
         if: always()
         run: |
