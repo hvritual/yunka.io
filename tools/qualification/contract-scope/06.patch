@@ -1,0 +1,242 @@
+diff --git a/README.md b/README.md
+index 21ed08d37a9e4e22083b5a2751016ca20f3b396b..25faa33baec163f7b6e3b8fd5c39e99bf47b14bb 100644
+--- a/README.md
++++ b/README.md
+@@ -354,7 +354,7 @@ The canonical compiler exposes source provenance in memory for every contract in
+ 
+ The library `contract.ResolveOperationContractContext` derives the source/import closure for a method-bound or internal Application Operation. `projectflow.DescribeOperationContractContext(s)` recompiles current canonical inputs and returns project-relative file paths. These are read-only context projections, not mutation authorization or a hand-maintained module map. External import names never grant local ownership. Missing declaration provenance requires recompilation rather than an invented source path. A service's import closure can include other co-located DTOs; it is not a declaration-level minimal edit scope.
+ 
+-Existing untyped V1 artifact serialization remains byte-compatible and intentionally omits provenance; the in-memory compiler result retains it. Manifest versions 1–4 remain readable. Precise ChangeSet source enforcement remains a separate issue #160 task.
++Existing untyped V1 artifact serialization remains byte-compatible and intentionally omits provenance; the in-memory compiler result retains it. Manifest versions 1–4 remain readable. The independent source-scope enforcement increment is documented above; parent issue #160 remains open pending integration and final acceptance.
+ 
+ 
+ ### Operation-scoped Agent Context
+diff --git a/app/cmd/agentcontext/main_test.go b/app/cmd/agentcontext/main_test.go
+index b555f727fe5da72a3898f68484174ea974325043..dfa0196448d95407fa5d5bcc211eb650e92a13ef 100644
+--- a/app/cmd/agentcontext/main_test.go
++++ b/app/cmd/agentcontext/main_test.go
+@@ -46,7 +46,7 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
+ 		t.Fatalf("context snapshot is not deterministic:\nfirst=%#v\nsecond=%#v", first, second)
+ 	}
+ 	if SchemaVersion != 6 || first.SchemaVersion != 6 {
+-		t.Fatalf("schema version constant/snapshot=%d/%d want=5/5", SchemaVersion, first.SchemaVersion)
++		t.Fatalf("schema version constant/snapshot=%d/%d want=6/6", SchemaVersion, first.SchemaVersion)
+ 	}
+ 	if first.Project.Profiled {
+ 		t.Fatal("conventional project unexpectedly reported as profiled")
+diff --git a/app/cmd/change/changeset_biz_regression_test.go b/app/cmd/change/changeset_biz_regression_test.go
+index 58a8f27315131aff0d717a57a0c49c161b4b1bec..8175f6fe46d55d1c644ce0a680c938d474a2731a 100644
+--- a/app/cmd/change/changeset_biz_regression_test.go
++++ b/app/cmd/change/changeset_biz_regression_test.go
+@@ -1,6 +1,7 @@
+ package change
+ 
+ import (
++	"context"
+ 	"path/filepath"
+ 	"strings"
+ 	"testing"
+@@ -30,7 +31,7 @@ func TestT4CreateChangeSetBindsLegacyProtobufOutputsAndNormalizesAPIKey(t *testi
+ 		t.Fatal(err)
+ 	}
+ 	generatePressureProject(t, fixture)
+-	report, err := ReconcileChangeSet(fixture.Root, value)
++	report, err := ReconcileChangeSetWithOptions(context.Background(), fixture.compilerOptions(), value)
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+@@ -56,7 +57,7 @@ func TestT4CreateChangeSetCanonicalizesServiceAuthenticationEndToEnd(t *testing.
+ 		t.Fatal(err)
+ 	}
+ 	generatePressureProject(t, fixture)
+-	report, err := ReconcileChangeSet(fixture.Root, value)
++	report, err := ReconcileChangeSetWithOptions(context.Background(), fixture.compilerOptions(), value)
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+diff --git a/app/cmd/change/changeset_reconcile_test.go b/app/cmd/change/changeset_reconcile_test.go
+index 7a961113dd929edde3f5557aa83592e5927360e1..476afee357e23d7654559373be91d18385368015 100644
+--- a/app/cmd/change/changeset_reconcile_test.go
++++ b/app/cmd/change/changeset_reconcile_test.go
+@@ -1,6 +1,7 @@
+ package change
+ 
+ import (
++	"context"
+ 	"testing"
+ 
+ 	"yunka.io/app/cmd/add"
+@@ -18,7 +19,7 @@ func TestReconcileChangeSetAcceptsMatchingExistingAndCreateSubjects(t *testing.T
+ 	}
+ 	generatePressureProject(t, fixture)
+ 
+-	report, err := ReconcileChangeSet(fixture.Root, value)
++	report, err := ReconcileChangeSetWithOptions(context.Background(), fixture.compilerOptions(), value)
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+@@ -39,7 +40,7 @@ func TestReconcileChangeSetRejectsCreateSemanticDriftFromPlannedIntent(t *testin
+ 	}
+ 	generatePressureProject(t, fixture)
+ 
+-	report, err := ReconcileChangeSet(fixture.Root, value)
++	report, err := ReconcileChangeSetWithOptions(context.Background(), fixture.compilerOptions(), value)
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+@@ -64,7 +65,7 @@ func TestReconcileChangeSetRejectsUndeclaredOperationDrift(t *testing.T) {
+ 	generatePressureProject(t, fixture)
+ 
+-	report, err := ReconcileChangeSet(fixture.Root, value)
++	report, err := ReconcileChangeSetWithOptions(context.Background(), fixture.compilerOptions(), value)
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+diff --git a/app/cmd/change/default_control_state_test.go b/app/cmd/change/default_control_state_test.go
+index cbb3bc8b73e38807d5d3a061146e4b93f0ac1087..be7ebba6f9cf6b83163e4871f68345182ec4f91c 100644
+--- a/app/cmd/change/default_control_state_test.go
++++ b/app/cmd/change/default_control_state_test.go
+@@ -41,7 +41,7 @@ func TestIssue151DefaultProtocolWithoutIgnore(t *testing.T) {
+ 		app.ExitErrHandler = func(*cli.Context, error) {}
+ 		return app.Run(append([]string{"yunka", "change"}, args...))
+ 	}
+-	begin := []string{"begin", "--root", fixture.Root, "--operation", "tenant.suspend", "--intent", "both"}
++	begin := []string{"begin", "--root", fixture.Root, "--proto-path", fixture.ProtoPath, "--operation", "tenant.suspend", "--intent", "both"}
+ 	check := []string{"check", "--root", fixture.Root, "--format", "agent-json"}
+ 	verify := []string{"verify", "--root", fixture.Root, "--proto-path", fixture.ProtoPath, "--format", "agent-json"}
+ 	if err := run(begin...); err != nil {
+diff --git a/app/cmd/change/pressure_qualification_test.go b/app/cmd/change/pressure_qualification_test.go
+index fa327c454a419c65e698a7e531ebefe652cb0f5d..24d8d786e913f185ca2bfdeb16f059989fc3b6c6 100644
+--- a/app/cmd/change/pressure_qualification_test.go
++++ b/app/cmd/change/pressure_qualification_test.go
+@@ -157,11 +157,6 @@ func newPressureFixture(t *testing.T) pressureFixture {
+ 	}
+ 	repositoryRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "../../.."))
+ 	protoPath := filepath.Join(repositoryRoot, "contracts", "proto")
+-	support, err := os.ReadFile(filepath.Join(protoPath, "yunka", "dsl", "v1", "options.proto"))
+-	if err != nil {
+-		t.Fatal(err)
+-	}
+-	writePressureFile(t, filepath.Join(root, "contracts", "proto", "yunka", "dsl", "v1", "options.proto"), string(support))
+ 	fixture := pressureFixture{Root: root, ProtoPath: protoPath, ContractPath: DefaultChangeContractPath}
+ 	generatePressureProject(t, fixture)
+ 	gitPressure(t, root, "init")
+@@ -170,7 +165,7 @@ func newPressureFixture(t *testing.T) pressureFixture {
+ 	gitPressure(t, root, "add", "-A")
+ 	gitPressure(t, root, "commit", "-m", "AX7 pressure baseline")
+ 
+-	contractValue, projectRoot, err := BuildChangeContract(root, "tenant.suspend", IntentBoth, "HEAD", nil, nil, 3)
++	contractValue, projectRoot, err := BuildChangeContractWithOptions(fixture.compilerOptions(), "tenant.suspend", IntentBoth, "HEAD", nil, nil, 3)
+ 	if err != nil {
+ 		t.Fatalf("build change contract: %v", err)
+ 	}
+@@ -304,3 +299,10 @@ func readPressureFile(t *testing.T, path string) string {
+ 	}
+ 	return string(contents)
+ }
++
++// The DSL is an external compiler include, not a consumer-owned Go generation
++// target. Source reconciliation must receive the same explicit compiler inputs
++// as generation rather than copying the DSL into the consumer's proto roots.
++func (fixture pressureFixture) compilerOptions() projectflow.Options {
++	return projectflow.Options{Root: fixture.Root, ProtoPaths: []string{fixture.ProtoPath}}
++}
+diff --git a/app/cmd/change/source_snapshot.go b/app/cmd/change/source_snapshot.go
+index 19ce448556256345448a233f4bdfa4559123108a..3637dcebf47c64ca5581599a3893c4b477a5921d 100644
+--- a/app/cmd/change/source_snapshot.go
++++ b/app/cmd/change/source_snapshot.go
+@@ -157,6 +157,23 @@ func materializeSourceBase(ctx context.Context, root, base string) (string, func
+ 			return "", nil, err
+ 		}
+ 	}
++	// Lexical containment is insufficient when a target traverses another
++	// symlink before "..". Resolve the complete chain after creating all links;
++	// dangling/cyclic chains cannot establish a contained immutable input.
++	resolvedDirectory, err := filepath.EvalSymlinks(directory)
++	if err != nil {
++		return "", nil, err
++	}
++	for _, link := range links {
++		resolved, err := filepath.EvalSymlinks(link.path)
++		if err != nil {
++			return "", nil, fmt.Errorf("contract sources: cannot resolve base symlink %s: %w", link.path, err)
++		}
++		relative, err := filepath.Rel(resolvedDirectory, resolved)
++		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
++			return "", nil, fmt.Errorf("contract sources: resolved base symlink %s escapes snapshot", link.path)
++		}
++	}
+ 	project := filepath.Join(directory, filepath.FromSlash(paths.ProjectPrefix))
+ 	if err := os.MkdirAll(project, 0o700); err != nil {
+ 		return "", nil, err
+diff --git a/app/cmd/change/source_snapshot_test.go b/app/cmd/change/source_snapshot_test.go
+index d0e6c66a52201c31daa8615eeba49efe40428e13..43a076fc5b9b5ff3f46ae0f354aedc6c339d7cec 100644
+--- a/app/cmd/change/source_snapshot_test.go
++++ b/app/cmd/change/source_snapshot_test.go
+@@ -76,4 +76,46 @@ func TestIssue160SourceSnapshotRejectsEscapeAndHonorsCancellation(t *testing.T)
+ 	if readPressureFile(t, sentinel) != "unchanged" {
+ 		t.Fatal("outside file changed")
+ 	}
++	t.Run("composed-relative-link-escape", func(t *testing.T) {
++		repository := t.TempDir()
++		writePressureFile(t, filepath.Join(repository, "a/keep"), "a")
++		writePressureFile(t, filepath.Join(repository, "b/data"), "contained")
++		if err := os.Symlink("../b", filepath.Join(repository, "a/d")); err != nil {
++			t.Fatal(err)
++		}
++		if err := os.Symlink("../b/data", filepath.Join(repository, "a/safe")); err != nil {
++			t.Fatal(err)
++		}
++		base := commitNestedGitTest(t, repository)
++		snapshot, cleanup, err := materializeSourceBase(context.Background(), repository, base)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if readPressureFile(t, filepath.Join(snapshot, "a/safe")) != "contained" {
++			t.Fatal("safe internal link changed")
++		}
++		cleanup()
++		// Each target is lexically contained. Resolving d first moves the
++		// subsequent ../.. traversal outside the snapshot, into its parent.
++		parent := t.TempDir()
++		sentinel := filepath.Join(parent, "chain-sentinel")
++		writePressureFile(t, sentinel, "unchanged")
++		t.Setenv("TMPDIR", parent)
++		if err := os.Symlink("d/../../chain-sentinel", filepath.Join(repository, "a/link")); err != nil {
++			t.Fatal(err)
++		}
++		gitPressure(t, repository, "add", "a/link")
++		gitPressure(t, repository, "commit", "-m", "composed link escape")
++		base = gitPressure(t, repository, "rev-parse", "HEAD")
++		if _, cleanup, err := materializeSourceBase(context.Background(), repository, base); err == nil {
++			cleanup()
++			t.Fatal("composed symlink escape accepted")
++		} else if !strings.Contains(err.Error(), "escapes snapshot") {
++			t.Fatal(err)
++		}
++		if readPressureFile(t, sentinel) != "unchanged" {
++			t.Fatal("sentinel changed")
++		}
++	})
++
+ }
+diff --git a/docs/STATUS.md b/docs/STATUS.md
+index ba759b4e7f08c5b7394a3f7ac3f58fb11d3ddbaa..d14cb11477cd14a4e4a5f35bb8100d32dd0bb1c2 100644
+--- a/docs/STATUS.md
++++ b/docs/STATUS.md
+@@ -420,13 +420,13 @@ The source-enforcement increment adds `declarationFiles`, `messageTypes`, and `e
+ 
+ ## Operation declaration source-scope enforcement — issue #160
+ 
+-**State: IMPLEMENTED / IN REVIEW as an independent increment on PR #163; issue #160 remains OPEN pending integration and final acceptance.**
++**State: IMPLEMENTED / IN REVIEW as an independent increment built on PR #163; issue #160 remains OPEN pending integration and final acceptance.**
+ 
+ Plan/begin now derive contract targets from exact Operation/DTO declarations instead of selecting one arbitrary file from the entire proto root. Single-Operation and ChangeSet reconciliation, including create subjects, recompute source bounds from raw immutable Git base input and current canonical compilation whenever protobuf source changes. Explicit path-array changes and broad imports do not widen base authority. The same existing semantic evaluator checks fresh source facts so stale generated JSON cannot hide source-level semantic drift. Message/enum deltas outside the target type graph are blocked even inside allowed files; required shared DTOs and reachable new DTOs inside authorized files are supported.
+ 
+ The source projection is derived, not a second manifest. Git snapshot materialization is private/read-only and uses raw blobs, not archive substitutions or branch checkout. Ordinary/nested projects and canonical source inventories share the same path domain. Unplanned source moves fail closed; all-source lexical slicing, universal custom-option semantics and #161 business boundary review are not claimed. Existing contracts/sets retain their input schemas; check reports are schema v2 and Context is schema v6. Go-only deltas retain quick checks.
+ 
+-Permanent tests cover full-import versus declaration-file separation, shared nested/map/enum DTO changes, unrelated/tampered paths, current-reference widening, co-located unrelated declarations, stale generated semantic evidence, multiple/create subjects, nested inventories, unplanned moves, exact Git blobs, cancellation and path escapes. The pressure fixture now includes the canonical DSL support file in its disposable consumer source tree rather than relying on a generation-only include. Exact execution/qualification and integration results belong to this increment's PR; no main merge or issue closure is implied.
++Permanent tests cover full-import versus declaration-file separation, shared nested/map/enum DTO changes, unrelated/tampered paths, current-reference widening, co-located unrelated declarations, stale generated semantic evidence, multiple/create subjects, nested inventories, unplanned moves, exact Git blobs, cancellation and path escapes. The full pressure fixture supplies its canonical external DSL include consistently to planning, generation and source checks, without treating framework-owned DSL as a consumer Go generation target. Snapshot regressions also reject composed relative-symlink escapes while admitting contained links. Exact execution/qualification and integration results belong to this increment's PR; no main merge or issue closure is implied.
+ 
+ ## Current pressure frontier
+ 
