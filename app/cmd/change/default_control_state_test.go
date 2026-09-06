@@ -118,6 +118,10 @@ func TestIssue151DefaultProtocolWithoutIgnore(t *testing.T) {
 func issue151Workspace(t *testing.T, fixture pressureFixture) {
 	t.Helper()
 	repository := filepath.Dir(filepath.Dir(fixture.ProtoPath))
+	// make rpc-tools installs the locked plugins at the repository root, not
+	// inside this disposable consumer. Expose those same binaries to the test;
+	// explicit PROTOC_GEN_GO/PROTOC_GEN_GO_GRPC overrides remain authoritative.
+	t.Setenv("PATH", filepath.Join(repository, ".yunka", "bin")+string(os.PathListSeparator)+os.Getenv("PATH"))
 	command := exec.Command("go", "work", "edit", "-json")
 	command.Dir = repository
 	output, err := command.CombinedOutput()
