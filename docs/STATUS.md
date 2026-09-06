@@ -4,7 +4,7 @@
 > Authority: current framework/wave/release/pressure status  
 > Live Git HEAD authority: resolve the `main` ref from Git/GitHub; it is not duplicated as a permanent fact here  
 > Behavioral reconciliation baseline: `19bed965852d9dc2ef39e91dcadd7fb6bea4c871` (qualified candidate merged unchanged by PR #119)  
-> Reconciled date: 2026-09-05  
+> Reconciled date: 2026-09-06
 > Governance: [`DOCUMENTATION_GOVERNANCE.md`](DOCUMENTATION_GOVERNANCE.md)
 
 ## Current framework state
@@ -105,7 +105,7 @@ Evidence: PR #133; exact candidate `7538b8279ef16adf19cd258a837fa0a13f98042f`; C
 
 PR #138 adds a transient, Git-baselined Change Contract around existing canonical Operations. `yunka change begin` records only target identity, allowed semantic categories, and derived editable/generated boundaries; it does not copy Manifest/OperationPlan/Application Graph facts into another Source of Truth. `yunka change check` reconciles tracked and untracked Git delta against those bounds plus AX2 ownership. Broad generated-impact scopes do not authorize handwritten mutations unless AX2 independently classifies the concrete path as `generated-only`.
 
-`yunka change verify` composes Git scope/ownership reconciliation, canonical full `yunka check`, normalized base/current OperationPlan + target Application semantic reconciliation, and Go tests when applicable. It emits `.yunka/change-attestation.json`. Target permission, tenant binding, authentication/public access, transaction, idempotency, composition, dependency, capability, transport, and contract changes must be explicitly allowed; semantic changes to unrelated Operations/Applications are always rejected as out of scope.
+`yunka change verify` composes Git scope/ownership reconciliation, canonical full `yunka check`, normalized base/current OperationPlan + target Application semantic reconciliation, and Go tests when applicable. It emits `.git/yunka/change-attestation.json`. Target permission, tenant binding, authentication/public access, transaction, idempotency, composition, dependency, capability, transport, and contract changes must be explicitly allowed; semantic changes to unrelated Operations/Applications are always rejected as out of scope.
 
 AX7.1-AX7.4 exact candidate `1adb35bfc3840beb3480a11e71d0e2bfc0ec24af` passed CI #482 / run `33747031578` including full Verify and determinism, and production #240 / run `33747031547` on MySQL 8.4 including clean-worktree verification.
 
@@ -389,6 +389,14 @@ The first B13 qualification attempt exposed a separate real compiler/DX module-i
 Rebased T5.1 behavioral candidate `a102de3c53f1078c8c6cce70e334c91fbbb94bb2` passed CI #580 / run `33954262081` and production #338 / run `33954262031`. Real B13 qualification Run #9 / `33954431712` passed with artifact `9965889476` (`sha256:8070e9876fc5395cf5be4ca82539feceb31b1fb69482c8ea148d0169260ce520`). It independently proved NEW `AUDIT-INFRA-001` blocks at architecture-debt while `go-test=pass`, unchanged historical debt reports as existing without blocking, removal reports as fixed without blocking, repeated fixed attestation is byte-identical, and the qualification restores a clean consumer worktree.
 
 Final pre-integration head `0a742d0cff0b634b5d80660fee2a77441bfdc1e1` passed CI #582 / run `33955577654` and production #340 / run `33955577637`, then PR #148 merged as `2f588ed2e5f40b06c6ce3b7f5803d1c51afceefc`. Exact-main CI #586 / run `33955864123` and production #344 / run `33955864115` both passed. Exact evidence is recorded in `docs/waves/TERMINALIZATION-t5-proof-of-change.md`.
+
+## AX7 default control-state storage — issue #151
+
+Default single-Operation Change Contract and Change Attestation now use the same Git-private path resolver as ChangeSet/remediation. Their logical defaults are `.git/yunka/change-contract.json` and `.git/yunka/change-attestation.json`; Git resolves physical storage for ordinary checkouts, nested project roots, linked worktrees, and submodules. The default `begin -> check -> verify -> check` loop does not require `.gitignore` changes and does not add control artifacts to the source delta.
+
+The implementation changes storage only. Git delta, ownership, placement, semantic, Audit/new-debt, and Go-test gates are not weakened; no filename or directory is exempted from source reconciliation. Explicit `--output` / `--contract` paths remain literal, including historical `.yunka/...` paths. Existing files are not moved or deleted automatically. An old active contract can be selected explicitly; source-tree exports remain subject to normal scope checks. Concurrent projects in one worktree should use distinct explicit Git-private contract/output paths rather than sharing one active default slot.
+
+The permanent issue-151 regression removes the old pressure fixture's blanket `.yunka/` ignore rule and exercises the public default commands, full Go tests, repeatable attestation, clean source delta, native Git layouts, explicit-path compatibility, and rejection of unrelated files. Exact RED/GREEN, framework, production, and consumer qualification records belong to the issue/PR delivery evidence, not a claim of universal defect freedom.
 
 ## Current pressure frontier
 

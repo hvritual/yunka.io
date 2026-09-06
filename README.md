@@ -329,3 +329,6 @@ C6 preserves existing Service business method signatures while replacing the his
 ### C6 single RPC runtime
 
 RPC contracts now come only from `contracts/proto` and are generated only with pinned standard protobuf/gRPC plugins. Existing Service business method signatures and the `gateway/rpc/meta` import path remain stable, while standard grpc-go typed registration and clients replace the XR generator, custom memory dispatcher, string registries, message pools, and legacy invoke transport. `make rpc-legacy-check` blocks architectural regression and `make rpc-consumer-check` proves the real Gateway Service business methods remain unchanged.
+### Change control-state paths
+
+`yunka change begin`, `change check`, and `change verify` share the Git-private default contract `.git/yunka/change-contract.json`; verification writes `.git/yunka/change-attestation.json`. These are logical paths resolved through Git, including linked worktrees, submodules, and nested projects. Defaults do not require an ignore rule. Explicit `--output` and `--contract` paths remain literal; existing `.yunka/...` files are not migrated or deleted automatically. Source-tree exports still participate in normal scope reconciliation. For concurrent projects in one worktree, use distinct explicit Git-private paths. No `.yunka/**` scope exemption is introduced.

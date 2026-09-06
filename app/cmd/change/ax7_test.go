@@ -25,11 +25,12 @@ func TestChangeCommandExposesAX7Protocol(t *testing.T) {
 
 func TestChangeContractWriteLoadIsDeterministicAndTransient(t *testing.T) {
 	root := t.TempDir()
+	gitPressure(t, root, "init")
 	value := ChangeContract{
-		SchemaVersion: ChangeContractSchemaVersion,
-		BaseSHA:       "abc123",
-		Intent:        IntentImplementation,
-		Operation:     ChangeOperation{NodeID: "operation:tenant.suspend", OperationID: "tenant.suspend", Domain: "tenant", Application: "tenant_management"},
+		SchemaVersion:   ChangeContractSchemaVersion,
+		BaseSHA:         "abc123",
+		Intent:          IntentImplementation,
+		Operation:       ChangeOperation{NodeID: "operation:tenant.suspend", OperationID: "tenant.suspend", Domain: "tenant", Application: "tenant_management"},
 		AllowedSemantic: []string{SemanticTenant, SemanticPermission, SemanticTenant},
 		EditablePaths:   []string{"internal/tenant/application/suspend.go", "internal/tenant/application/suspend.go"},
 		EditableScopes:  []string{"internal/tenant/application"},
@@ -76,9 +77,9 @@ func TestParseNameStatusZHandlesRename(t *testing.T) {
 
 func TestReconcileFileRejectsOutOfEnvelopeAndAcceptsExpectedGenerated(t *testing.T) {
 	contractValue := ChangeContract{
-		SchemaVersion:   ChangeContractSchemaVersion,
-		EditableScopes:  []string{"internal/tenant/application"},
-		GeneratedPaths:  []string{"contracts/generated/manifest.json"},
+		SchemaVersion:  ChangeContractSchemaVersion,
+		EditableScopes: []string{"internal/tenant/application"},
+		GeneratedPaths: []string{"contracts/generated/manifest.json"},
 	}
 	generated, violation, err := reconcileFile(t.TempDir(), contractValue, FileChange{Status: "M", Path: "contracts/generated/manifest.json"})
 	if err != nil || violation != nil || generated.Class != "generated" {
@@ -132,27 +133,27 @@ func TestApplicationCapabilityDeltaRequiresExplicitAllowance(t *testing.T) {
 
 func testOperationPlan(tenantRequired bool) operationplan.Plan {
 	return operationplan.Plan{
-		OperationID: "tenant.suspend",
-		Domain:      "tenant",
-		Application: "tenant_management",
-		UseCase:     "suspend",
-		RequestType: "tenant.v1.SuspendRequest",
+		OperationID:  "tenant.suspend",
+		Domain:       "tenant",
+		Application:  "tenant_management",
+		UseCase:      "suspend",
+		RequestType:  "tenant.v1.SuspendRequest",
 		ResponseType: "tenant.v1.SuspendResponse",
-		Security: operationplan.Security{TenantRequired: tenantRequired, PermissionMode: "all"},
-		Execution: operationplan.Execution{Transaction: "local", Idempotency: "none"},
+		Security:     operationplan.Security{TenantRequired: tenantRequired, PermissionMode: "all"},
+		Execution:    operationplan.Execution{Transaction: "local", Idempotency: "none"},
 	}
 }
 
 func otherOperationPlan(transaction string) operationplan.Plan {
 	return operationplan.Plan{
-		OperationID: "tenant.resume",
-		Domain:      "tenant",
-		Application: "tenant_management",
-		UseCase:     "resume",
-		RequestType: "tenant.v1.ResumeRequest",
+		OperationID:  "tenant.resume",
+		Domain:       "tenant",
+		Application:  "tenant_management",
+		UseCase:      "resume",
+		RequestType:  "tenant.v1.ResumeRequest",
 		ResponseType: "tenant.v1.ResumeResponse",
-		Security:    operationplan.Security{PermissionMode: "all"},
-		Execution:   operationplan.Execution{Transaction: transaction, Idempotency: "none"},
+		Security:     operationplan.Security{PermissionMode: "all"},
+		Execution:    operationplan.Execution{Transaction: transaction, Idempotency: "none"},
 	}
 }
 

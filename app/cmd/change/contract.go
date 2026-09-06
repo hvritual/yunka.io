@@ -15,7 +15,7 @@ import (
 
 const (
 	ChangeContractSchemaVersion = 1
-	DefaultChangeContractPath    = ".yunka/change-contract.json"
+	DefaultChangeContractPath   = ".git/yunka/change-contract.json"
 
 	SemanticPermission     = "permission"
 	SemanticTenant         = "tenant"
@@ -48,15 +48,15 @@ type ChangeOperation struct {
 }
 
 type ChangeContract struct {
-	SchemaVersion    int             `json:"schemaVersion"`
-	BaseSHA          string          `json:"baseSha"`
-	Intent           string          `json:"intent"`
-	Operation        ChangeOperation `json:"operation"`
-	AllowedSemantic  []string        `json:"allowedSemantic"`
-	EditablePaths    []string        `json:"editablePaths"`
-	EditableScopes   []string        `json:"editableScopes"`
-	GeneratedPaths   []string        `json:"generatedPaths"`
-	GeneratedScopes  []string        `json:"generatedScopes"`
+	SchemaVersion   int             `json:"schemaVersion"`
+	BaseSHA         string          `json:"baseSha"`
+	Intent          string          `json:"intent"`
+	Operation       ChangeOperation `json:"operation"`
+	AllowedSemantic []string        `json:"allowedSemantic"`
+	EditablePaths   []string        `json:"editablePaths"`
+	EditableScopes  []string        `json:"editableScopes"`
+	GeneratedPaths  []string        `json:"generatedPaths"`
+	GeneratedScopes []string        `json:"generatedScopes"`
 }
 
 func beginCommand() cli.Command {
@@ -132,9 +132,9 @@ func BuildChangeContract(root, operation, intent, base string, explicitPaths, al
 	}
 
 	contractValue := ChangeContract{
-		SchemaVersion:   ChangeContractSchemaVersion,
-		BaseSHA:         baseSHA,
-		Intent:          plan.Intent,
+		SchemaVersion: ChangeContractSchemaVersion,
+		BaseSHA:       baseSHA,
+		Intent:        plan.Intent,
 		Operation: ChangeOperation{
 			NodeID:      plan.Operation.ID,
 			OperationID: strings.TrimSpace(plan.Operation.Attributes["operationId"]),
@@ -281,15 +281,10 @@ func normalizeChangeContract(value *ChangeContract) {
 }
 
 func WriteChangeContract(root, output string, value ChangeContract) (string, error) {
-	output = strings.TrimSpace(output)
-	if output == "" {
-		output = DefaultChangeContractPath
+	path, display, err := resolveGitPrivateStatePath(root, output, DefaultChangeContractPath)
+	if err != nil {
+		return "", err
 	}
-	path := output
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(root, filepath.FromSlash(path))
-	}
-	path = filepath.Clean(path)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return "", err
 	}
@@ -318,21 +313,13 @@ func WriteChangeContract(root, output string, value ChangeContract) (string, err
 	if err := os.Rename(tmp, path); err != nil {
 		return "", err
 	}
-	relative, err := filepath.Rel(root, path)
-	if err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return filepath.ToSlash(relative), nil
-	}
-	return filepath.ToSlash(path), nil
+	return display, nil
 }
 
 func LoadChangeContract(root, input string) (ChangeContract, string, error) {
-	input = strings.TrimSpace(input)
-	if input == "" {
-		input = DefaultChangeContractPath
-	}
-	path := input
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(root, filepath.FromSlash(path))
+	path, _, err := resolveGitPrivateStatePath(root, input, DefaultChangeContractPath)
+	if err != nil {
+		return ChangeContract{}, "", err
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
