@@ -1,0 +1,88 @@
+diff --git a/README.md b/README.md
+index a7021ff30bb1156866187cfa81ef8168719ee115..bd019722089568038c4ec77c4285ff22ee33111c 100644
+--- a/README.md
++++ b/README.md
+@@ -374,6 +374,8 @@ yunka boundary inspect --root ./backend --proto-path ./support sales/orders
+ 
+ `boundary inspect` recompiles current canonical protobuf through the existing projectflow source resolver, including multi-source inventories. It never trusts a stale generated Manifest. The report has schema v1 and `authority: "read_only"`. It exposes a `canonical-service-boundary/v1` fingerprint, a domain-separated SHA-256 fingerprint digest, the complete canonical execution-OperationPlan-set digest, explicit intent coverage (`empty`, `unknown`, `partial`, `declared`), and properties that were **not evaluated**. `declared` describes coverage only; it does not prove cohesion. Invalid targets, broken source, ambiguous provenance and invalid compiler input fail without a broad/stale fallback or persistent output. Inventory include order remains source-set-owned; CLI overrides are rejected.
+ 
++The reusable projection lives in `app/cmd/boundarycore`, alongside existing Audit/Advisor control-plane cores. This avoids importing an unpublished package from the separately versioned `pkg` dependency; it does not require a new module release or local replacement.
++
+ Fingerprint evidence retains each Operation's execution plan, explicit boundary intent, DTO/type/import provenance, RPC method and streaming facts; target-Application requirements/capabilities; transitive required-Operation evidence; and referenced canonical Message/Enum/file models. Per-Operation relationships are preserved rather than flattened into a union that could hide swapped ownership. Paths inside the fingerprint retain the compiler's canonical namespace; the report's `sources` maps those identities to project-relative paths using the existing source resolver. Absolute checkout locations are not fingerprint input. Digests bind the modeled projection, not every byte of source, arbitrary custom options, external compiler input content, runtime provider state or a signed execution environment.
+ 
+ Boundary intent is architectural metadata, not an execution policy: it does not enter the runtime OperationPlan IR, change generated handlers, grant permissions or alter transactions. This inspection issues **no ServiceBoundaryDecision, growth permission, mutation proof, merge approval or automatic split**. Existing/new/fixed boundary debt, contradiction-first evaluation, proof binding and direct-edit growth enforcement are separate work; inspection alone does not satisfy issue #161's final growth invariant. No LLM, network advisor, second service taxonomy or RPC-count split threshold is used.
+diff --git a/app/cmd/boundary/main.go b/app/cmd/boundary/main.go
+index c84df3064c534111c89d4f1f5122b20f59baf1b0..f91f4ce32a762dcfbbf3533a85a1583833244bdc 100644
+--- a/app/cmd/boundary/main.go
++++ b/app/cmd/boundary/main.go
+@@ -7,8 +7,8 @@ import (
+ 	"fmt"
+ 	"strings"
+ 
+-	"github.com/hvritual/yunka.io/pkg/serviceboundary"
+ 	"github.com/urfave/cli"
++	"yunka.io/app/cmd/boundarycore"
+ 	"yunka.io/app/cmd/projectflow"
+ )
+ 
+@@ -20,7 +20,7 @@ type SourcePath struct {
+ }
+ 
+ type Report struct {
+-	serviceboundary.Inspection
++	boundarycore.Inspection
+ 	Project projectflow.ProjectDescriptor `json:"project"`
+ 	// Fingerprint paths retain the compiler's canonical namespace. This explicit
+ 	// mapping reuses projectflow's physical source identity, including inventory.
+@@ -41,7 +41,7 @@ func Build(ctx context.Context, options projectflow.Options, application string)
+ 	if err := ctx.Err(); err != nil {
+ 		return Report{}, err
+ 	}
+-	inspection, err := serviceboundary.Inspect(snapshot.Manifest, application)
++	inspection, err := boundarycore.Inspect(snapshot.Manifest, application)
+ 	if err != nil {
+ 		return Report{}, err
+ 	}
+diff --git a/pkg/serviceboundary/inspect.go b/app/cmd/boundarycore/inspect.go
+similarity index 99%
+rename from pkg/serviceboundary/inspect.go
+rename to app/cmd/boundarycore/inspect.go
+index 75198af0d3909ea0e3b74d37e88a62afa5e8fa88..051a00096e584dbc061fcc496148d718ade9a1b3 100644
+--- a/pkg/serviceboundary/inspect.go
++++ b/app/cmd/boundarycore/inspect.go
+@@ -1,7 +1,7 @@
+-// Package serviceboundary derives read-only architectural evidence from the
++// Package boundarycore derives read-only architectural evidence from the
+ // canonical compiler model. An inspection is not a ServiceBoundaryDecision,
+ // mutation proof, service taxonomy, or runtime authorization mechanism.
+-package serviceboundary
++package boundarycore
+ 
+ import (
+ 	"crypto/sha256"
+diff --git a/pkg/serviceboundary/inspect_test.go b/app/cmd/boundarycore/inspect_test.go
+similarity index 99%
+rename from pkg/serviceboundary/inspect_test.go
+rename to app/cmd/boundarycore/inspect_test.go
+index b55a9b4f220c250408275d0cf1a40b995d0ed1fd..033faa924183a2ea19653406a5f616011c15b61e 100644
+--- a/pkg/serviceboundary/inspect_test.go
++++ b/app/cmd/boundarycore/inspect_test.go
+@@ -1,4 +1,4 @@
+-package serviceboundary
++package boundarycore
+ 
+ import (
+ 	"encoding/json"
+diff --git a/docs/STATUS.md b/docs/STATUS.md
+index aa64d10321124c496fcd4313dd54baa4304afe14..7f7c5ed82728117ddf7e18d5448af921a86477fc 100644
+--- a/docs/STATUS.md
++++ b/docs/STATUS.md
+@@ -444,7 +444,7 @@ Acceptance is bounded to canonical provenance, Operation context and modeled con
+ 
+ Canonical protobuf Operation declarations can carry explicit `boundary.context` and either `boundary.aggregate` or an `aggregate_not_applicable_reason`. Missing legacy intent remains unknown. Typed Manifest schema v5 carries the metadata with v1-v5 reader compatibility; the root untyped V1 artifacts and runtime OperationPlan IR retain their existing semantics. Malformed explicit intent is rejected rather than guessed.
+ 
+-`pkg/serviceboundary` derives a deterministic, per-Operation-linked `canonical-service-boundary/v1` fingerprint from canonical compiler facts. `yunka boundary inspect [options] <domain>/<application>` recompiles current sources, reuses source-set provenance, emits schema-v1 read-only evidence and intent coverage, and writes no project files. It preserves target-Application requirements/capabilities, transitive Operation dependencies, DTO/enum/source models, and method/streaming facts. Unknown/partial/declared describes evidence coverage, not boundary validity.
++`app/cmd/boundarycore` derives a deterministic, per-Operation-linked `canonical-service-boundary/v1` fingerprint from canonical compiler facts. `yunka boundary inspect [options] <domain>/<application>` recompiles current sources, reuses source-set provenance, emits schema-v1 read-only evidence and intent coverage, and writes no project files. It preserves target-Application requirements/capabilities, transitive Operation dependencies, DTO/enum/source models, and method/streaming facts. Unknown/partial/declared describes evidence coverage, not boundary validity. The reusable projection stays in the CLI control-plane module, alongside Audit/Advisor cores, rather than creating an app import of an unpublished new package under the separately versioned `pkg` module. No release pin, local replacement or workspace-disabled tidy gate is changed.
+ 
+ This increment does not yet implement a boundary evaluator, ServiceBoundaryDecision, before/after growth detector, mutation gate, proof revalidation, ChangeSet boundary proof or boundary-debt policy. It does not infer business context from names or RPC counts, depend on an LLM, or require immediate migration of historical Services. Those enforcement stages remain required before issue #161 can be completed. Exact test, production and real-consumer inspection qualification belong to this increment's PR and immutable evidence; no main merge or complete #161 qualification is implied here.
+ 
