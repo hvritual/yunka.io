@@ -1,0 +1,24 @@
+diff --git a/app/cmd/boundarycore/decision_test.go b/app/cmd/boundarycore/decision_test.go
+index cc5f18d..9d864b1 100644
+--- a/app/cmd/boundarycore/decision_test.go
++++ b/app/cmd/boundarycore/decision_test.go
+@@ -176,7 +176,18 @@ func TestIssue161DecisionAdditionScopeAndNewDTO(t *testing.T) {
+ 		edit func(*contract.Manifest)
+ 		dim  string
+ 	}{
+-		{"existing_dto", func(a *contract.Manifest) { a.Messages[0].Fields[0].Type = "int64" }, "change_scope"},
++		{"existing_dto", func(a *contract.Manifest) {
++			// Normalization sorts Reply before Request. Locate the existing scalar
++			// declaration by identity, not position; an enum named int64 is invalid
++			// canonical input and would never exercise the addition-scope guard.
++			for i := range a.Messages {
++				if a.Messages[i].FullName == "sales.v1.Request" {
++					a.Messages[i].Fields[0].Type = "int64"
++					return
++				}
++			}
++			panic("fixture is missing sales.v1.Request")
++		}, "change_scope"},
+ 		{"existing_operation", func(a *contract.Manifest) {
+ 			a.Services[0].Methods[0].Operation.Execution = &contract.ExecutionPolicy{Transaction: "read_only"}
+ 		}, "change_scope"},
