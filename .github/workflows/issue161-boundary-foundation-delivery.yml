@@ -1,0 +1,201 @@
+name: issue161-boundary-foundation-delivery
+on:
+  push:
+    branches: [control/161-boundary-foundation-delivery]
+    paths: [.github/workflows/issue161-boundary-foundation-delivery.yml]
+permissions:
+  contents: write
+jobs:
+  qualify-and-deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports: [3306:3306]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      BASE_SHA: 7d7fc663f7086df9735ee9089c75f65d2fd100e4
+      AUTHORED_SHA: dc91e82828ada041f92a972f421187d47606b859
+      AUTHORED_TREE: 97f9b857e94e83d1cee529d707e6c91c44e673c5
+      TARGET_BRANCH: feat/161-boundary-evidence
+    steps:
+      - name: Checkout isolated controller
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: controller
+          persist-credentials: false
+      - name: Checkout exact main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 7d7fc663f7086df9735ee9089c75f65d2fd100e4
+          path: candidate
+          fetch-depth: 0
+      - name: Checkout pinned read-only consumer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: hvritual/iot-delivery-system
+          ref: 69518dec46bdfaf45cb84a0ee25d64c132b26fc9
+          path: consumer
+          persist-credentials: false
+      - name: Load locked toolchain
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          source candidate/tools/toolchain.env
+          echo "go_version=$GO_VERSION" >> "$GITHUB_OUTPUT"
+          echo "protoc_release=$PROTOC_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "protoc_sha=$PROTOC_LINUX_X86_64_SHA256" >> "$GITHUB_OUTPUT"
+          test "$(git -C candidate rev-parse HEAD)" = "$BASE_SHA"
+          git -C candidate status --short --branch
+          git -C candidate remote -v
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache-dependency-path: |
+            candidate/app/go.sum
+            candidate/framework/go.sum
+            candidate/gateway/go.sum
+            candidate/infras/go.sum
+            candidate/pkg/go.sum
+      - name: Install exact protoc and build pre-feature CLI
+        shell: bash
+        env:
+          PROTOC_RELEASE: ${{ steps.lock.outputs.protoc_release }}
+          PROTOC_SHA: ${{ steps.lock.outputs.protoc_sha }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "$PROTOC_SHA  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/protoc/bin:$PATH"
+          (cd candidate && make toolchain-check && go build -o "$RUNNER_TEMP/yunka-before" ./app/cmd)
+      - name: Reconstruct exact locally authored sources
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64,gzip,hashlib
+          from pathlib import Path
+          directory=Path('../controller/tools/qualification/boundary-foundation')
+          expected={
+            '00':'1520dbcf4bc6a87a87ea8dda3899cb024f7450131ab0298609423b062972405b',
+            '01':'440e968b2b656061935855c973386a39614f7536a704213cd45c67c515eeb3e5',
+            '02a':'9d1326607b9cb49e536e244e43e5b2cd8d214799e4c03079cda3a1b2ab1015ca',
+            '02b':'822e61e9e01a8fd0abf29cbd02b34111078d82a880a674da5d3ef42aba6b26dd',
+            '02c':'146ec7f17d588c69f3c62304a09ac42c4c7f42ab641682c15cd088185564fab4',
+            '02d':'b4dfc3ee49b2d13c458dbb04612d89f4bc63f843f4c51c9bbaaf1ce7b2aa11d8',
+            '03a':'b407b7d60ac26e8eeb47ab0323635db064792cf3a96e6247a2ead0d643f6d29c',
+            '03b':'0dd80b49505d45981fb998bb0af4a9aee5958574cfa197511ea73a974dfd07bf',
+            '03c':'4cda6326dc79adeeac278a94106a91b9a20d6a0ca1d91b0fd328aa27464e484d'}
+          parts=[]
+          for key,digest in expected.items():
+              data=b''.join((directory/f'patch.{key}.b64').read_bytes().split())
+              assert hashlib.sha256(data).hexdigest()==digest,key
+              parts.append(data)
+          patch=gzip.decompress(base64.b64decode(b''.join(parts),validate=True))
+          assert len(patch)==71890
+          assert hashlib.sha256(patch).hexdigest()=='57a1134ac0e343d68b5f591dab9fed641d8ce7fd8ccd2a95145b770209092f31'
+          Path('../evidence/authored.patch').write_bytes(patch)
+          assert hashlib.sha256((directory/'consumer.py').read_bytes()).hexdigest()=='1763993a36e9301cb3c717c48f98e2312e498eca67b77cf6fa26273b2aae8219'
+          PY
+          git apply --check ../evidence/authored.patch
+          git apply --index ../evidence/authored.patch
+          test "$(git write-tree)" = "$AUTHORED_TREE"
+          git diff --cached --check
+          test -z "$(git diff --cached --name-only -- '*.go' | xargs gofmt -l)"
+          git config user.name hvritual
+          git config user.email 11900351+hvritual@users.noreply.github.com
+          GIT_AUTHOR_DATE=2026-09-06T14:55:00Z GIT_COMMITTER_DATE=2026-09-06T14:55:00Z git commit -m 'feat(boundary): derive read-only service fingerprints and canonical intent' -m 'Independent issue161 foundation: explicit protobuf boundary intent, Manifest v5, linked canonical evidence and boundary inspect. Missing intent stays unknown. No evaluator, growth permission, ChangeSet proof, runtime IR change or main integration.'
+          test "$(git rev-parse HEAD)" = "$AUTHORED_SHA"
+      - name: Author canonical generated protobuf output before verification
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          make rpc-generate 2>&1 | tee ../evidence/canonical-authoring.log
+          test "$(git diff --name-only)" = pkg/contractdsl/v1/options.pb.go
+          git diff --check
+          git add pkg/contractdsl/v1/options.pb.go
+          git commit -m 'chore(contract): regenerate canonical BoundaryIntent protobuf descriptor' -m 'Generated only by the repository-locked rpc-generate entrypoint before qualification. No hand-written protobuf output or ordinary CI auto-repair.'
+          git show --stat --format=fuller HEAD > ../evidence/generated-commit.txt
+          git diff "$AUTHORED_SHA" HEAD > ../evidence/generated.patch
+          git rev-parse HEAD > ../evidence/candidate-sha.txt
+          git rev-parse HEAD^{tree} > ../evidence/candidate-tree.txt
+          test -z "$(git status --porcelain)"
+      - name: Execute real-protoc foundation and existing regression suites
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -count=1 -json ./pkg/contract ./pkg/serviceboundary ./pkg/architecturepolicy ./app/cmd/boundary ./app/cmd/projectflow ./app/cmd/agentcontext ./app/cmd/change ./app/cmd | tee ../evidence/targeted.jsonl
+          python3 - <<'PY'
+          import json
+          events=[json.loads(s) for s in open('../evidence/targeted.jsonl')]
+          expected={
+            'TestIssue161BoundaryIntentRealProtocRoundTrip','TestIssue161BoundaryIntentGeneratedWireAndValidation','TestIssue161BoundaryIntentLegacyAndInvalidManifest',
+            'TestIssue161FingerprintDeterministicAndDetached','TestIssue161FingerprintBindsRelationsAndCanonicalFacts','TestIssue161FingerprintDependencyEvidence','TestIssue161FingerprintUnknownAndFailClosed',
+            'TestIssue161BoundaryCLIRealProtocNamespaces','TestIssue161BoundaryCLIRecompilesAndSurvivesMoves','TestIssue161BoundaryCLIRejectsInvalidInputsAndCancellation'}
+          focused=[e for e in events if e.get('Test','').startswith('TestIssue161')]
+          assert focused and not any(e['Action'] in ('fail','skip') for e in focused)
+          passed={e['Test'] for e in focused if e['Action']=='pass' and '/' not in e['Test']}
+          assert passed==expected,(passed,expected)
+          print('All 10 explicitly identified issue161 foundation groups passed without skips')
+          PY
+      - name: Complete canonical production and determinism qualification
+        working-directory: candidate
+        shell: bash
+        env:
+          YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?charset=utf8mb4&parseTime=true&loc=UTC&multiStatements=true
+        run: |
+          set -euo pipefail
+          make verify-production 2>&1 | tee ../evidence/verify-production.log
+          make tidy 2>&1 | tee ../evidence/determinism.log
+          make contract 2>&1 | tee -a ../evidence/determinism.log
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
+      - name: Qualify actual consumer inspection and synthetic intent round-trip
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd candidate && go build -o "$RUNNER_TEMP/yunka-after" ./app/cmd)
+          python3 controller/tools/qualification/boundary-foundation/consumer.py "$RUNNER_TEMP/yunka-after" "$RUNNER_TEMP/yunka-before" "$GITHUB_WORKSPACE/candidate" "$GITHUB_WORKSPACE/consumer" "$GITHUB_WORKSPACE/evidence" | tee evidence/consumer.log
+          test -z "$(git -C consumer status --porcelain)"
+          test -z "$(git -C candidate status --porcelain)"
+      - name: Submit only fully qualified product commits with normal Git
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(cat ../evidence/candidate-sha.txt)"
+          test "$(git rev-parse HEAD)" = "$sha"
+          test -z "$(git status --porcelain)"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
+          test -z "$(git ls-remote origin refs/heads/$TARGET_BRANCH)"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          test "$(git ls-remote origin refs/heads/$TARGET_BRANCH | cut -f1)" = "$sha"
+          printf 'submitted=%s\nbranch=%s\nbase=%s\n' "$sha" "$TARGET_BRANCH" "$BASE_SHA" > ../evidence/delivery.txt
+      - name: Preserve exact candidate and execution evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git -C candidate cat-file -e "$AUTHORED_SHA^{commit}" 2>/dev/null; then
+            git -C candidate bundle create "$GITHUB_WORKSPACE/evidence/candidate.bundle" HEAD "^$BASE_SHA"
+          fi
+          (cd evidence && find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: issue161-boundary-foundation-evidence
+          path: evidence
+          retention-days: 30
