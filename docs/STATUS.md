@@ -398,6 +398,16 @@ The implementation changes storage only. Git delta, ownership, placement, semant
 
 The permanent issue-151 regression removes the old pressure fixture's blanket `.yunka/` ignore rule and exercises the public default commands, full Go tests, repeatable attestation, clean source delta, native Git layouts, explicit-path compatibility, and rejection of unrelated files. Exact RED/GREEN, framework, production, and consumer qualification records belong to the issue/PR delivery evidence, not a claim of universal defect freedom.
 
+## Contract provenance and inventory path identity — issue #160
+
+**State: IMPLEMENTED / IN REVIEW on PR #162; issue #160 remains OPEN.**
+
+The independent substrate/inventory task preserves descriptor-derived file imports and declaration provenance, rebases all inventory source references to project-relative paths, and distinguishes external import names from canonical owned files. It also restores compiler/descriptor helpers accidentally omitted by the initial PR candidate. The root untyped V1 artifact remains byte-compatible; typed manifests use schema v4. Verification results belong to PR #162's exact-head checks and delivery evidence, not to an inferred merge claim.
+
+Real-protoc regression coverage includes independent roots with identical file names, cross-source shared/nested DTO and enum references, include-order selection, external-name collisions, physical aliases/path escapes, source moves preserving OperationPlan/OpenAPI/TypeScript semantics, deterministic artifact checks, legacy compatibility, and read-only project-relative context projections.
+
+This task does not expose the context projection through `yunka context --json`, change ChangeSet mutation authority, complete issue #160's end-to-end scope gate, or implement #161's Service Boundary semantics. Those remain separate tasks; no Runtime/Executor/Authz/UoW or protobuf business DSL changes are introduced here.
+
 ## Current pressure frontier
 
 The active real-consumer frontier is **B13 cross-tenant delegation and delegated device access** in `hvritual/biz` issue #11.

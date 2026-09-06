@@ -42,6 +42,7 @@ func RenderArtifacts(manifest Manifest, options ArtifactOptions) (Artifacts, err
 	// their byte-stable V1 artifact until a typed Domain/Application declaration
 	// enters that inventory. Typed business inventories always write the current manifest schema.
 	if !hasTypedDSL(manifest) {
+		manifest = legacyManifestProjection(manifest)
 		manifest.SchemaVersion = 1
 	}
 	manifestBytes, err := marshalJSON(manifest)

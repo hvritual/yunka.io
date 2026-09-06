@@ -44,9 +44,9 @@ func TestResolveOperationContractContextClosesOverDTOsAndImports(t *testing.T) {
 func TestResolveOperationContractContextSurvivesFileMoveByProvenance(t *testing.T) {
 	manifest := Manifest{
 		SchemaVersion: ManifestVersion,
-		Files: []File{{Name: "delivery/v1/service.proto"}, {Name: "delivery/v1/model/work_item.proto"}},
-		Messages: []Message{{Name: "Request", FullName: "delivery.v1.Request", SourceFile: "delivery/v1/model/work_item.proto"}, {Name: "Response", FullName: "delivery.v1.Response", SourceFile: "delivery/v1/model/work_item.proto"}},
-		Services: []Service{{Name: "DeliveryService", FullName: "delivery.v1.DeliveryService", SourceFile: "delivery/v1/service.proto", Methods: []Method{{Name: "Update", SourceFile: "delivery/v1/service.proto", Request: "delivery.v1.Request", Response: "delivery.v1.Response", Operation: &OperationDeclaration{ID: "delivery.items.update"}}}}},
+		Files:         []File{{Name: "delivery/v1/service.proto"}, {Name: "delivery/v1/model/work_item.proto"}},
+		Messages:      []Message{{Name: "Request", FullName: "delivery.v1.Request", SourceFile: "delivery/v1/model/work_item.proto"}, {Name: "Response", FullName: "delivery.v1.Response", SourceFile: "delivery/v1/model/work_item.proto"}},
+		Services:      []Service{{Name: "DeliveryService", FullName: "delivery.v1.DeliveryService", SourceFile: "delivery/v1/service.proto", Methods: []Method{{Name: "Update", SourceFile: "delivery/v1/service.proto", Request: "delivery.v1.Request", Response: "delivery.v1.Response", Operation: &OperationDeclaration{ID: "delivery.items.update"}}}}},
 	}
 	context, err := ResolveOperationContractContext(manifest, "delivery.items.update")
 	if err != nil {
@@ -55,5 +55,25 @@ func TestResolveOperationContractContextSurvivesFileMoveByProvenance(t *testing.
 	want := []string{"delivery/v1/model/work_item.proto", "delivery/v1/service.proto"}
 	if !reflect.DeepEqual(context.SourceFiles, want) {
 		t.Fatalf("source files = %#v, want %#v", context.SourceFiles, want)
+	}
+}
+
+func TestIssue160ContextRejectsMissingOrInvalidProvenance(t *testing.T) {
+	for _, source := range []string{"", "missing.proto", "../outside.proto"} {
+		manifest := Manifest{Files: []File{{Name: "service.proto"}}, Services: []Service{{FullName: "example.API", SourceFile: source, Methods: []Method{{Name: "Echo", Operation: &OperationDeclaration{ID: "example.echo"}}}}}}
+		if _, err := ResolveOperationContractContext(manifest, "example.echo"); err == nil {
+			t.Fatalf("accepted source=%q", source)
+		}
+	}
+}
+
+func TestIssue160InternalOperationContext(t *testing.T) {
+	manifest := Manifest{Files: []File{{Name: "service.proto"}, {Name: "dto.proto"}}, Messages: []Message{{FullName: "example.Request", SourceFile: "dto.proto"}, {FullName: "example.Response", SourceFile: "dto.proto"}}, Services: []Service{{FullName: "example.API", SourceFile: "service.proto", Application: &ApplicationDeclaration{Name: "local", Operations: []OperationDeclaration{{ID: "example.internal", RequestType: "example.Request", ResponseType: "example.Response"}}}}}}
+	values, err := OperationContractContexts(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(values) != 1 || !reflect.DeepEqual(values[0].SourceFiles, []string{"dto.proto", "service.proto"}) {
+		t.Fatalf("internal contexts=%#v", values)
 	}
 }

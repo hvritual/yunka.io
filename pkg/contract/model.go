@@ -16,12 +16,13 @@ type Manifest struct {
 }
 
 type File struct {
-	Name         string             `json:"name"`
-	Package      string             `json:"package,omitempty"`
-	Syntax       string             `json:"syntax,omitempty"`
-	GoPackage    string             `json:"goPackage,omitempty"`
-	Dependencies []string           `json:"dependencies,omitempty"`
-	Domain       *DomainDeclaration `json:"domain,omitempty"`
+	Name                 string             `json:"name"`
+	Package              string             `json:"package,omitempty"`
+	Syntax               string             `json:"syntax,omitempty"`
+	GoPackage            string             `json:"goPackage,omitempty"`
+	Dependencies         []string           `json:"dependencies,omitempty"`
+	ExternalDependencies []string           `json:"externalDependencies,omitempty"`
+	Domain               *DomainDeclaration `json:"domain,omitempty"`
 }
 
 type DomainDeclaration struct {
@@ -146,6 +147,7 @@ func (manifest *Manifest) Normalize() {
 	}
 	for i := range manifest.Files {
 		manifest.Files[i].Dependencies = stableStrings(manifest.Files[i].Dependencies)
+		manifest.Files[i].ExternalDependencies = stableStrings(manifest.Files[i].ExternalDependencies)
 		if manifest.Files[i].Domain != nil {
 			manifest.Files[i].Domain.Name = strings.TrimSpace(manifest.Files[i].Domain.Name)
 			manifest.Files[i].Domain.Version = strings.TrimSpace(manifest.Files[i].Domain.Version)

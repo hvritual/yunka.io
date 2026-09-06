@@ -6,163 +6,190 @@ import (
 	"strings"
 )
 
-// OperationContractContext is a deterministic projection of the minimum
-// canonical protobuf source set required to understand or edit one Operation.
-// It is derived from Manifest provenance and never persisted as another source
-// of truth.
+// OperationContractContext is read-only source context, not edit authority.
+// SourceFiles use Manifest.Files' namespace (descriptor-relative for Compile,
+// repository-relative for CompileInventory). ExternalImports are descriptor
+// import names and must never be interpreted as local writable paths.
 type OperationContractContext struct {
-	OperationID string   `json:"operationId"`
-	Service     string   `json:"service"`
-	SourceFiles []string `json:"sourceFiles"`
+	OperationID     string   `json:"operationId"`
+	Service         string   `json:"service"`
+	SourceFiles     []string `json:"sourceFiles"`
+	ExternalImports []string `json:"externalImports,omitempty"`
 }
 
-// ResolveOperationContractContext finds one canonical Operation and closes over
-// its declaring service file, request/response message provenance, all nested
-// message/enum type references, and protobuf file imports among manifest files.
+type operationContextTarget struct{ id, service, source, request, response string }
+
+func operationContextTargets(manifest Manifest) ([]operationContextTarget, error) {
+	targets := []operationContextTarget{}
+	seen := map[string]bool{}
+	add := func(value operationContextTarget) error {
+		value.id = strings.TrimSpace(value.id)
+		if value.id == "" {
+			return fmt.Errorf("contract context: declared operationId is empty")
+		}
+		if seen[value.id] {
+			return fmt.Errorf("contract context: operation %q is declared more than once", value.id)
+		}
+		seen[value.id] = true
+		targets = append(targets, value)
+		return nil
+	}
+	for _, service := range manifest.Services {
+		for _, method := range service.Methods {
+			if method.Operation == nil {
+				continue
+			}
+			if method.SourceFile != "" && method.SourceFile != service.SourceFile {
+				return nil, fmt.Errorf("contract context: method %s and service %s have inconsistent provenance", method.Name, service.FullName)
+			}
+			if err := add(operationContextTarget{method.Operation.ID, service.FullName, service.SourceFile, method.Request, method.Response}); err != nil {
+				return nil, err
+			}
+		}
+		if service.Application != nil {
+			for _, op := range service.Application.Operations {
+				if err := add(operationContextTarget{op.ID, service.FullName, service.SourceFile, op.RequestType, op.ResponseType}); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	sort.Slice(targets, func(i, j int) bool { return targets[i].id < targets[j].id })
+	return targets, nil
+}
+
+// ResolveOperationContractContext follows typed DTO references and canonical
+// file imports. Import closure may include other DTOs co-located in a service;
+// it does not authorize changes to every declaration in those files.
 func ResolveOperationContractContext(manifest Manifest, operationID string) (OperationContractContext, error) {
 	manifest.Normalize()
 	operationID = strings.TrimSpace(operationID)
 	if operationID == "" {
 		return OperationContractContext{}, fmt.Errorf("contract context: operationId is required")
 	}
-
-	messages := make(map[string]Message, len(manifest.Messages))
-	enums := make(map[string]Enum, len(manifest.Enums))
-	files := make(map[string]File, len(manifest.Files))
+	targets, err := operationContextTargets(manifest)
+	if err != nil {
+		return OperationContractContext{}, err
+	}
+	var target operationContextTarget
+	found := false
+	for _, item := range targets {
+		if item.id == operationID {
+			target = item
+			found = true
+			break
+		}
+	}
+	if !found {
+		return OperationContractContext{}, fmt.Errorf("contract context: operation %q was not found", operationID)
+	}
+	messages := map[string]Message{}
+	enums := map[string]Enum{}
+	files := map[string]File{}
+	for _, file := range manifest.Files {
+		if !validProvenancePath(file.Name) {
+			return OperationContractContext{}, fmt.Errorf("contract context: invalid canonical source %q", file.Name)
+		}
+		if _, exists := files[file.Name]; exists {
+			return OperationContractContext{}, fmt.Errorf("contract context: duplicate source %s", file.Name)
+		}
+		files[file.Name] = file
+	}
 	for _, message := range manifest.Messages {
 		messages[normalizeTypeName(message.FullName)] = message
 	}
 	for _, enum := range manifest.Enums {
 		enums[normalizeTypeName(enum.FullName)] = enum
 	}
-	for _, file := range manifest.Files {
-		files[file.Name] = file
-	}
-
-	var targetService Service
-	var targetMethod Method
-	found := false
-	for _, service := range manifest.Services {
-		for _, method := range service.Methods {
-			if method.Operation == nil || strings.TrimSpace(method.Operation.ID) != operationID {
-				continue
-			}
-			if found {
-				return OperationContractContext{}, fmt.Errorf("contract context: operation %q is declared more than once", operationID)
-			}
-			targetService, targetMethod, found = service, method, true
+	required := map[string]bool{}
+	external := []string{}
+	addFile := func(name string) error {
+		if _, ok := files[name]; !ok {
+			return fmt.Errorf("contract context: missing canonical source provenance %q; recompile the contract", name)
 		}
+		required[name] = true
+		return nil
 	}
-	if !found {
-		return OperationContractContext{}, fmt.Errorf("contract context: operation %q was not found", operationID)
+	if err := addFile(target.source); err != nil {
+		return OperationContractContext{}, err
 	}
-
-	requiredFiles := map[string]struct{}{}
-	visitedTypes := map[string]struct{}{}
-	var visitType func(string)
-	visitType = func(typeName string) {
-		typeName = normalizeTypeName(typeName)
-		if typeName == "" {
-			return
+	visited := map[string]bool{}
+	var visit func(string) error
+	visit = func(name string) error {
+		name = normalizeTypeName(name)
+		if name == "" || visited[name] {
+			return nil
 		}
-		if _, seen := visitedTypes[typeName]; seen {
-			return
-		}
-		visitedTypes[typeName] = struct{}{}
-		if message, ok := messages[typeName]; ok {
-			if message.SourceFile != "" {
-				requiredFiles[message.SourceFile] = struct{}{}
+		visited[name] = true
+		if message, ok := messages[name]; ok {
+			if err := addFile(message.SourceFile); err != nil {
+				return err
 			}
 			for _, field := range message.Fields {
 				if field.Kind == "message" || field.Kind == "enum" {
-					visitType(field.Type)
+					if err := visit(field.Type); err != nil {
+						return err
+					}
 				}
 				if field.Map && (field.MapValueKind == "message" || field.MapValueKind == "enum") {
-					visitType(field.MapValueType)
+					if err := visit(field.MapValueType); err != nil {
+						return err
+					}
 				}
 			}
-			return
+		} else if enum, ok := enums[name]; ok {
+			return addFile(enum.SourceFile)
 		}
-		if enum, ok := enums[typeName]; ok && enum.SourceFile != "" {
-			requiredFiles[enum.SourceFile] = struct{}{}
-		}
+		// Types outside the canonical inventory (e.g. well-known protobuf types)
+		// are not assigned invented local ownership. Their imports remain external.
+		return nil
 	}
-
-	if targetService.SourceFile != "" {
-		requiredFiles[targetService.SourceFile] = struct{}{}
+	if err := visit(target.request); err != nil {
+		return OperationContractContext{}, err
 	}
-	if targetMethod.SourceFile != "" {
-		requiredFiles[targetMethod.SourceFile] = struct{}{}
+	if err := visit(target.response); err != nil {
+		return OperationContractContext{}, err
 	}
-	visitType(targetMethod.Request)
-	visitType(targetMethod.Response)
-
-	// Preserve source-level import dependencies for every required file. This
-	// admits shared option/common files that do not appear as a field type but
-	// are still part of the operation's compilable protobuf context.
-	queue := make([]string, 0, len(requiredFiles))
-	for name := range requiredFiles {
+	queue := make([]string, 0, len(required))
+	for name := range required {
 		queue = append(queue, name)
 	}
+	sort.Strings(queue)
 	for len(queue) > 0 {
 		name := queue[0]
 		queue = queue[1:]
-		file, ok := files[name]
-		if !ok {
-			continue
-		}
+		file := files[name]
+		external = append(external, file.ExternalDependencies...)
 		for _, dependency := range file.Dependencies {
-			if _, canonical := files[dependency]; !canonical {
+			if required[dependency] {
 				continue
 			}
-			if _, exists := requiredFiles[dependency]; exists {
-				continue
+			if err := addFile(dependency); err != nil {
+				return OperationContractContext{}, err
 			}
-			requiredFiles[dependency] = struct{}{}
 			queue = append(queue, dependency)
 		}
 	}
-
-	paths := make([]string, 0, len(requiredFiles))
-	for name := range requiredFiles {
+	paths := make([]string, 0, len(required))
+	for name := range required {
 		paths = append(paths, name)
 	}
 	sort.Strings(paths)
-	return OperationContractContext{
-		OperationID: operationID,
-		Service:     targetService.FullName,
-		SourceFiles: paths,
-	}, nil
+	return OperationContractContext{OperationID: operationID, Service: target.service, SourceFiles: paths, ExternalImports: stableStrings(external)}, nil
 }
 
-// OperationContractContexts derives all Operation contexts in stable order.
 func OperationContractContexts(manifest Manifest) ([]OperationContractContext, error) {
-	ids := make([]string, 0)
-	seen := map[string]struct{}{}
-	for _, service := range manifest.Services {
-		for _, method := range service.Methods {
-			if method.Operation == nil {
-				continue
-			}
-			id := strings.TrimSpace(method.Operation.ID)
-			if id == "" {
-				continue
-			}
-			if _, duplicate := seen[id]; duplicate {
-				return nil, fmt.Errorf("contract context: operation %q is declared more than once", id)
-			}
-			seen[id] = struct{}{}
-			ids = append(ids, id)
-		}
+	targets, err := operationContextTargets(manifest)
+	if err != nil {
+		return nil, err
 	}
-	sort.Strings(ids)
-	contexts := make([]OperationContractContext, 0, len(ids))
-	for _, id := range ids {
-		context, err := ResolveOperationContractContext(manifest, id)
+	result := make([]OperationContractContext, 0, len(targets))
+	for _, target := range targets {
+		value, err := ResolveOperationContractContext(manifest, target.id)
 		if err != nil {
 			return nil, err
 		}
-		contexts = append(contexts, context)
+		result = append(result, value)
 	}
-	return contexts, nil
+	return result, nil
 }

@@ -169,6 +169,7 @@ func ManifestFromDescriptorSet(data []byte, roots []string) (Manifest, error) {
 	if err := applyDSLCapabilityDeclarations(&manifest, data); err != nil {
 		return Manifest{}, err
 	}
+	classifyProvenanceDependencies(&manifest)
 	manifest.Normalize()
 	return manifest, nil
 }
@@ -264,6 +265,7 @@ func buildField(field fieldDescriptor, all, mapEntries map[string]messageDescrip
 			result.MapKeyType = key.Type
 			result.MapValueKind = value.Kind
 			result.MapValueType = value.Type
+			result.Type = "map"
 			return result
 		}
 		result.Kind = "message"
@@ -271,6 +273,72 @@ func buildField(field fieldDescriptor, all, mapEntries map[string]messageDescrip
 		return result
 	}
 	result.Kind = "unknown"
-	result.Type = fmt.Sprintf("type_%d", field.Type)
+	result.Type = field.TypeName
 	return result
+}
+
+func discoverProtoFiles(dir string) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(dir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			if path != dir && strings.HasPrefix(entry.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.EqualFold(filepath.Ext(entry.Name()), ".proto") {
+			rel, err := filepath.Rel(dir, path)
+			if err != nil {
+				return err
+			}
+			files = append(files, filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	sort.Strings(files)
+	return files, err
+}
+
+func resolveProtoc(explicit string) (string, error) {
+	candidates := []string{explicit, os.Getenv("PROTOC")}
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate, nil
+		}
+		if path, err := exec.LookPath(candidate); err == nil {
+			return path, nil
+		}
+	}
+	if path, err := exec.LookPath("protoc"); err == nil {
+		return path, nil
+	}
+	return "", fmt.Errorf("contract: protoc not found; install protoc or set PROTOC")
+}
+
+func standardProtoInclude(protoc string) string {
+	resolved := protoc
+	if path, err := exec.LookPath(protoc); err == nil {
+		resolved = path
+	}
+	if path, err := filepath.EvalSymlinks(resolved); err == nil {
+		resolved = path
+	}
+	candidates := []string{
+		filepath.Join(filepath.Dir(filepath.Dir(resolved)), "include"),
+		"/usr/local/include",
+		"/usr/include",
+	}
+	for _, candidate := range candidates {
+		if info, err := os.Stat(filepath.Join(candidate, "google", "protobuf", "descriptor.proto")); err == nil && !info.IsDir() {
+			return candidate
+		}
+	}
+	return ""
 }
