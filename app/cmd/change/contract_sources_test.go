@@ -207,6 +207,18 @@ func TestIssue160SourceScopeCoLocatedDeclarationsAndNewReachableTypes(t *testing
 }
 
 func TestIssue160SourceScopeReadsFreshSemanticAndImmutableBase(t *testing.T) {
+	t.Run("relative-external-include", func(t *testing.T) {
+		fixture := newPressureFixture(t)
+		include, err := filepath.Rel(fixture.Root, fixture.ProtoPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		writePressureFile(t, fixture.protoFile(), readPressureFile(t, fixture.protoFile())+"\n// bounded source edit\n")
+		report, err := ReconcileGitDeltaWithOptions(context.Background(), projectflow.Options{Root: fixture.Root, ProtoPaths: []string{include}}, fixture.Contract)
+		if err != nil || report.ContractSources == nil || len(report.Violations) != 0 {
+			t.Fatalf("explicit external include changed identity in the snapshot: %#v %v", report, err)
+		}
+	})
 	t.Run("stale-generated-security", func(t *testing.T) {
 		f := newSourceScopeFixture(t, false, false)
 		f.replace(t, "service", `permissions: "scope.write"`, `permissions: "scope.admin"`)

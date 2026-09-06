@@ -204,13 +204,17 @@ func protoSourcePath(path string) bool { return strings.EqualFold(filepath.Ext(p
 func snapshotIncludePaths(root, baseRoot string, paths []string) []string {
 	result := make([]string, 0, len(paths))
 	for _, path := range paths {
-		if !filepath.IsAbs(path) {
-			result = append(result, path)
-			continue
+		absolute := path
+		if !filepath.IsAbs(absolute) {
+			absolute = filepath.Join(root, absolute)
 		}
-		rel, err := filepath.Rel(root, path)
+		rel, err := filepath.Rel(root, absolute)
 		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			path = filepath.Join(baseRoot, rel)
+		} else {
+			// A relative include outside the project is still an explicitly
+			// supplied external input, not a sibling of the temporary snapshot.
+			path = absolute
 		}
 		result = append(result, path)
 	}
