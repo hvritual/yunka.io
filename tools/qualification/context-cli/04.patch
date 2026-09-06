@@ -1,0 +1,26 @@
+diff --git a/app/cmd/discoverability.go b/app/cmd/discoverability.go
+index a82ff0d..d3fafb0 100644
+--- a/app/cmd/discoverability.go
++++ b/app/cmd/discoverability.go
+@@ -47,7 +47,7 @@ func applyDiscoverability(app *cli.App) {
+ 
+   yunka init -> yunka generate -> yunka check -> yunka dev
+ 
+-Use add for explicit structural authoring without inferred business semantics. Applications, event DTOs, and declarative modules may be scaffolded directly. New Operations are plan-first: add operation --plan -> change set begin -> add operation -> generate -> change set check. The prospective plan and ChangeSet bound the mutation before the Operation is written. Existing single canonical Operations retain the AX7 protocol: change plan -> change begin -> change check -> change verify; multi-subject work may compose those contracts in a ChangeSet. For AI/automation, start with context for the read-only project and protocol contract.
++Use add for explicit structural authoring without inferred business semantics. Applications, event DTOs, and declarative modules may be scaffolded directly. New Operations are plan-first: add operation --plan -> change set begin -> add operation -> generate -> change set check. The prospective plan and ChangeSet bound the mutation before the Operation is written. Existing single canonical Operations retain the AX7 protocol: change plan -> change begin -> change check -> change verify; multi-subject work may compose those contracts in a ChangeSet. For AI/automation, start with context for the read-only project and protocol contract. Use context --operation <id> --json for one canonical source/import context, or context --all-operations --json for the inventory. These opt-in queries compile current protobuf inputs; their file lists do not authorize edits.
+ 
+ Use audit for read-only deterministic framework-conformance evidence; findings report existing debt but do not block by default. When a ChangeSet is intended to remediate a proven finding, bind the exact finding before mutation with change set remediation bind and prove closure afterward with change set remediation check. Declaring a remediation target never proves it fixed: the check requires the target to appear in Audit fixed, rejects remaining targets, and rejects new proven debt. Use advisor to export that deterministic evidence for external AI reasoning and to validate evidence-bound advisory responses; Yunka does not invoke an LLM or authorize mutations through advisor. Ownership is the lower-level mutation guard used by the change protocol. Use doctor/explain/inspect/graph for evidence and troubleshooting. Contract, assembly, module, domain, and dependency commands remain available as explicit expert architecture interfaces.`)
+ 	for index := range app.Commands {
+diff --git a/app/cmd/discoverability_test.go b/app/cmd/discoverability_test.go
+index 268aabb..31ce007 100644
+--- a/app/cmd/discoverability_test.go
++++ b/app/cmd/discoverability_test.go
+@@ -100,7 +100,7 @@ func TestC116AApplyDiscoverabilityPreservesCommandsAndRendersHappyPath(t *testin
+ 	if !strings.Contains(app.Description, "explicit structural authoring") {
+ 		t.Fatalf("root description does not explain structural authoring: %q", app.Description)
+ 	}
+-	for _, expected := range []string{"change plan", "change begin", "change check", "change verify", "Use audit for read-only deterministic", "Use advisor to export that deterministic evidence", "does not invoke an LLM or authorize mutations"} {
++	for _, expected := range []string{"context --operation <id> --json", "context --all-operations --json", "file lists do not authorize edits", "change plan", "change begin", "change check", "change verify", "Use audit for read-only deterministic", "Use advisor to export that deterministic evidence", "does not invoke an LLM or authorize mutations"} {
+ 		if !strings.Contains(app.Description, expected) {
+ 			t.Fatalf("root description does not expose control-plane capability %q: %q", expected, app.Description)
+ 		}
