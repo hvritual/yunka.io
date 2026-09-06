@@ -420,13 +420,13 @@ The source-enforcement increment adds `declarationFiles`, `messageTypes`, and `e
 
 ## Operation declaration source-scope enforcement — issue #160
 
-**State: IMPLEMENTED / IN REVIEW as an independent increment on PR #163; issue #160 remains OPEN pending integration and final acceptance.**
+**State: IMPLEMENTED / IN REVIEW as an independent increment built on PR #163; issue #160 remains OPEN pending integration and final acceptance.**
 
 Plan/begin now derive contract targets from exact Operation/DTO declarations instead of selecting one arbitrary file from the entire proto root. Single-Operation and ChangeSet reconciliation, including create subjects, recompute source bounds from raw immutable Git base input and current canonical compilation whenever protobuf source changes. Explicit path-array changes and broad imports do not widen base authority. The same existing semantic evaluator checks fresh source facts so stale generated JSON cannot hide source-level semantic drift. Message/enum deltas outside the target type graph are blocked even inside allowed files; required shared DTOs and reachable new DTOs inside authorized files are supported.
 
 The source projection is derived, not a second manifest. Git snapshot materialization is private/read-only and uses raw blobs, not archive substitutions or branch checkout. Ordinary/nested projects and canonical source inventories share the same path domain. Unplanned source moves fail closed; all-source lexical slicing, universal custom-option semantics and #161 business boundary review are not claimed. Existing contracts/sets retain their input schemas; check reports are schema v2 and Context is schema v6. Go-only deltas retain quick checks.
 
-Permanent tests cover full-import versus declaration-file separation, shared nested/map/enum DTO changes, unrelated/tampered paths, current-reference widening, co-located unrelated declarations, stale generated semantic evidence, multiple/create subjects, nested inventories, unplanned moves, exact Git blobs, cancellation and path escapes. The pressure fixture now includes the canonical DSL support file in its disposable consumer source tree rather than relying on a generation-only include. Exact execution/qualification and integration results belong to this increment's PR; no main merge or issue closure is implied.
+Permanent tests cover full-import versus declaration-file separation, shared nested/map/enum DTO changes, unrelated/tampered paths, current-reference widening, co-located unrelated declarations, stale generated semantic evidence, multiple/create subjects, nested inventories, unplanned moves, exact Git blobs, cancellation and path escapes. The full pressure fixture supplies its canonical external DSL include consistently to planning, generation and source checks, without treating framework-owned DSL as a consumer Go generation target. Snapshot regressions also reject composed relative-symlink escapes while admitting contained links. Exact execution/qualification and integration results belong to this increment's PR; no main merge or issue closure is implied.
 
 ## Current pressure frontier
 

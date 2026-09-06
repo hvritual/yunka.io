@@ -76,4 +76,46 @@ func TestIssue160SourceSnapshotRejectsEscapeAndHonorsCancellation(t *testing.T) 
 	if readPressureFile(t, sentinel) != "unchanged" {
 		t.Fatal("outside file changed")
 	}
+	t.Run("composed-relative-link-escape", func(t *testing.T) {
+		repository := t.TempDir()
+		writePressureFile(t, filepath.Join(repository, "a/keep"), "a")
+		writePressureFile(t, filepath.Join(repository, "b/data"), "contained")
+		if err := os.Symlink("../b", filepath.Join(repository, "a/d")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink("../b/data", filepath.Join(repository, "a/safe")); err != nil {
+			t.Fatal(err)
+		}
+		base := commitNestedGitTest(t, repository)
+		snapshot, cleanup, err := materializeSourceBase(context.Background(), repository, base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if readPressureFile(t, filepath.Join(snapshot, "a/safe")) != "contained" {
+			t.Fatal("safe internal link changed")
+		}
+		cleanup()
+		// Each target is lexically contained. Resolving d first moves the
+		// subsequent ../.. traversal outside the snapshot, into its parent.
+		parent := t.TempDir()
+		sentinel := filepath.Join(parent, "chain-sentinel")
+		writePressureFile(t, sentinel, "unchanged")
+		t.Setenv("TMPDIR", parent)
+		if err := os.Symlink("d/../../chain-sentinel", filepath.Join(repository, "a/link")); err != nil {
+			t.Fatal(err)
+		}
+		gitPressure(t, repository, "add", "a/link")
+		gitPressure(t, repository, "commit", "-m", "composed link escape")
+		base = gitPressure(t, repository, "rev-parse", "HEAD")
+		if _, cleanup, err := materializeSourceBase(context.Background(), repository, base); err == nil {
+			cleanup()
+			t.Fatal("composed symlink escape accepted")
+		} else if !strings.Contains(err.Error(), "escapes snapshot") {
+			t.Fatal(err)
+		}
+		if readPressureFile(t, sentinel) != "unchanged" {
+			t.Fatal("sentinel changed")
+		}
+	})
+
 }

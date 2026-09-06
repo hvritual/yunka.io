@@ -46,7 +46,7 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 		t.Fatalf("context snapshot is not deterministic:\nfirst=%#v\nsecond=%#v", first, second)
 	}
 	if SchemaVersion != 6 || first.SchemaVersion != 6 {
-		t.Fatalf("schema version constant/snapshot=%d/%d want=5/5", SchemaVersion, first.SchemaVersion)
+		t.Fatalf("schema version constant/snapshot=%d/%d want=6/6", SchemaVersion, first.SchemaVersion)
 	}
 	if first.Project.Profiled {
 		t.Fatal("conventional project unexpectedly reported as profiled")

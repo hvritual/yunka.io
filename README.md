@@ -354,7 +354,7 @@ The canonical compiler exposes source provenance in memory for every contract in
 
 The library `contract.ResolveOperationContractContext` derives the source/import closure for a method-bound or internal Application Operation. `projectflow.DescribeOperationContractContext(s)` recompiles current canonical inputs and returns project-relative file paths. These are read-only context projections, not mutation authorization or a hand-maintained module map. External import names never grant local ownership. Missing declaration provenance requires recompilation rather than an invented source path. A service's import closure can include other co-located DTOs; it is not a declaration-level minimal edit scope.
 
-Existing untyped V1 artifact serialization remains byte-compatible and intentionally omits provenance; the in-memory compiler result retains it. Manifest versions 1–4 remain readable. Precise ChangeSet source enforcement remains a separate issue #160 task.
+Existing untyped V1 artifact serialization remains byte-compatible and intentionally omits provenance; the in-memory compiler result retains it. Manifest versions 1–4 remain readable. The independent source-scope enforcement increment is documented above; parent issue #160 remains open pending integration and final acceptance.
 
 
 ### Operation-scoped Agent Context

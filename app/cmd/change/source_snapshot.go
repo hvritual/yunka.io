@@ -157,6 +157,23 @@ func materializeSourceBase(ctx context.Context, root, base string) (string, func
 			return "", nil, err
 		}
 	}
+	// Lexical containment is insufficient when a target traverses another
+	// symlink before "..". Resolve the complete chain after creating all links;
+	// dangling/cyclic chains cannot establish a contained immutable input.
+	resolvedDirectory, err := filepath.EvalSymlinks(directory)
+	if err != nil {
+		return "", nil, err
+	}
+	for _, link := range links {
+		resolved, err := filepath.EvalSymlinks(link.path)
+		if err != nil {
+			return "", nil, fmt.Errorf("contract sources: cannot resolve base symlink %s: %w", link.path, err)
+		}
+		relative, err := filepath.Rel(resolvedDirectory, resolved)
+		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
+			return "", nil, fmt.Errorf("contract sources: resolved base symlink %s escapes snapshot", link.path)
+		}
+	}
 	project := filepath.Join(directory, filepath.FromSlash(paths.ProjectPrefix))
 	if err := os.MkdirAll(project, 0o700); err != nil {
 		return "", nil, err

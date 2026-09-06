@@ -157,11 +157,6 @@ func newPressureFixture(t *testing.T) pressureFixture {
 	}
 	repositoryRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "../../.."))
 	protoPath := filepath.Join(repositoryRoot, "contracts", "proto")
-	support, err := os.ReadFile(filepath.Join(protoPath, "yunka", "dsl", "v1", "options.proto"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	writePressureFile(t, filepath.Join(root, "contracts", "proto", "yunka", "dsl", "v1", "options.proto"), string(support))
 	fixture := pressureFixture{Root: root, ProtoPath: protoPath, ContractPath: DefaultChangeContractPath}
 	generatePressureProject(t, fixture)
 	gitPressure(t, root, "init")
@@ -170,7 +165,7 @@ func newPressureFixture(t *testing.T) pressureFixture {
 	gitPressure(t, root, "add", "-A")
 	gitPressure(t, root, "commit", "-m", "AX7 pressure baseline")
 
-	contractValue, projectRoot, err := BuildChangeContract(root, "tenant.suspend", IntentBoth, "HEAD", nil, nil, 3)
+	contractValue, projectRoot, err := BuildChangeContractWithOptions(fixture.compilerOptions(), "tenant.suspend", IntentBoth, "HEAD", nil, nil, 3)
 	if err != nil {
 		t.Fatalf("build change contract: %v", err)
 	}
@@ -303,4 +298,11 @@ func readPressureFile(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return string(contents)
+}
+
+// The DSL is an external compiler include, not a consumer-owned Go generation
+// target. Source reconciliation must receive the same explicit compiler inputs
+// as generation rather than copying the DSL into the consumer's proto roots.
+func (fixture pressureFixture) compilerOptions() projectflow.Options {
+	return projectflow.Options{Root: fixture.Root, ProtoPaths: []string{fixture.ProtoPath}}
 }
