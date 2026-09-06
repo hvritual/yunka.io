@@ -1,6 +1,5 @@
 """One-shot, user-authorized delivery script; not part of normal CI or final PR."""
 from pathlib import Path
-import re
 import subprocess
 
 expected = {
@@ -77,7 +76,7 @@ for name in ['README.md', 'docs/STATUS.md']:
     s = s.replace('.yunka/change-contract.json', '.git/yunka/change-contract.json')
     s = s.replace('.yunka/change-attestation.json', '.git/yunka/change-attestation.json')
     if name == 'docs/STATUS.md':
-        s = once(s, '> Reconciled date: 2026-09-05', '> Reconciled date: 2026-09-06')
+        s = once(s, '> Reconciled date: 2026-09-05  \n', '> Reconciled date: 2026-09-06\n')
         s = once(s, '## Current pressure frontier', '''## AX7 default control-state storage — issue #151
 
 Default single-Operation Change Contract and Change Attestation now use the same Git-private path resolver as ChangeSet/remediation. Their logical defaults are `.git/yunka/change-contract.json` and `.git/yunka/change-attestation.json`; Git resolves physical storage for ordinary checkouts, nested project roots, linked worktrees, and submodules. The default `begin -> check -> verify -> check` loop does not require `.gitignore` changes and does not add control artifacts to the source delta.
