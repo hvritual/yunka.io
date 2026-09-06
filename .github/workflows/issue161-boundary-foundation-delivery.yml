@@ -117,7 +117,7 @@ jobs:
           git config user.email 11900351+hvritual@users.noreply.github.com
           GIT_AUTHOR_DATE=2026-09-06T14:55:00Z GIT_COMMITTER_DATE=2026-09-06T14:55:00Z git commit -m 'feat(boundary): derive read-only service fingerprints and canonical intent' -m 'Independent issue161 foundation: explicit protobuf boundary intent, Manifest v5, linked canonical evidence and boundary inspect. Missing intent stays unknown. No evaluator, growth permission, ChangeSet proof, runtime IR change or main integration.'
           test "$(git rev-parse HEAD)" = "$AUTHORED_SHA"
-      - name: Author canonical generated protobuf output before verification
+      - name: Reproduce canonical generated descriptor and exact fixture correction
         working-directory: candidate
         shell: bash
         run: |
@@ -126,9 +126,17 @@ jobs:
           test "$(git diff --name-only)" = pkg/contractdsl/v1/options.pb.go
           git diff --check
           git add pkg/contractdsl/v1/options.pb.go
-          git commit -m 'chore(contract): regenerate canonical BoundaryIntent protobuf descriptor' -m 'Generated only by the repository-locked rpc-generate entrypoint before qualification. No hand-written protobuf output or ordinary CI auto-repair.'
+          GIT_AUTHOR_DATE=2026-09-06T15:02:34Z GIT_COMMITTER_DATE=2026-09-06T15:02:34Z git commit -m 'chore(contract): regenerate canonical BoundaryIntent protobuf descriptor' -m 'Generated only by the repository-locked rpc-generate entrypoint before qualification. No hand-written protobuf output or ordinary CI auto-repair.'
+          test "$(git rev-parse HEAD)" = 531e4e8e29a00748c94c06337fe3386ad34d1cbf
           git show --stat --format=fuller HEAD > ../evidence/generated-commit.txt
           git diff "$AUTHORED_SHA" HEAD > ../evidence/generated.patch
+          cp ../controller/tools/qualification/boundary-foundation/fixture-root.patch ../evidence/fixture-root.patch
+          echo '503a9b7d0d7e409f5ab1b5cf91a0729e7fca749ebb1fcfc0c5af0f930df9bf8a  ../evidence/fixture-root.patch' | sha256sum -c -
+          git apply --check ../evidence/fixture-root.patch
+          git apply --index ../evidence/fixture-root.patch
+          GIT_AUTHOR_DATE=2026-09-06T15:04:00Z GIT_COMMITTER_DATE=2026-09-06T15:04:00Z git commit -m 'test(boundary): locate canonical DSL from actual package root' -m 'Keep real-protoc CLI fixtures intact; correct their repository-root traversal and requalify all gates.'
+          test "$(git rev-parse HEAD)" = 4ba5bf34457d3199bbd06e26de85ff8b1ec39285
+          test "$(git rev-parse HEAD^{tree})" = 58c49f9a3522d656a68aec2f81d8fe5edd09db41
           git rev-parse HEAD > ../evidence/candidate-sha.txt
           git rev-parse HEAD^{tree} > ../evidence/candidate-tree.txt
           test -z "$(git status --porcelain)"
