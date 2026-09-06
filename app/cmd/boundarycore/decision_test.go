@@ -148,6 +148,7 @@ func TestIssue161DecisionRejectsMixedPeerWitnesses(t *testing.T) {
 	q.Operation.Public = false
 	q.Operation.Authentication = []string{"authenticated"}
 	q.Operation.Permissions = []string{"sales.read"}
+	q.Authorization = &contract.AuthorizationPolicy{OperationID: q.Operation.ID, Permissions: []string{"sales.read"}, PermissionMode: "all", Authentication: []string{"authenticated"}}
 	q.Operation.Execution = nil
 	b.Services[0].Methods = append(b.Services[0].Methods, q)
 	a = detachedManifest(b)
