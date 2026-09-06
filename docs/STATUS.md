@@ -400,9 +400,9 @@ The permanent issue-151 regression removes the old pressure fixture's blanket `.
 
 ## Contract provenance and inventory path identity — issue #160
 
-**State: IMPLEMENTED / IN REVIEW on PR #162; issue #160 remains OPEN.**
+**State: COMPLETE / QUALIFIED / MERGED through PR #162.**
 
-The independent substrate/inventory task preserves descriptor-derived file imports and declaration provenance, rebases all inventory source references to project-relative paths, and distinguishes external import names from canonical owned files. It also restores compiler/descriptor helpers accidentally omitted by the initial PR candidate. The root untyped V1 artifact remains byte-compatible; typed manifests use schema v4. Verification results belong to PR #162's exact-head checks and delivery evidence, not to an inferred merge claim.
+The independent substrate/inventory task preserves descriptor-derived file imports and declaration provenance, rebases all inventory source references to project-relative paths, and distinguishes external import names from canonical owned files. It also restores compiler/descriptor helpers accidentally omitted by the initial PR candidate. The root untyped V1 artifact remains byte-compatible; typed manifests use schema v4. PR #162 integrated qualified head `2ccf968aaf05a52d33abc871b327210e05d7f55c` as `8864f6110241c31cd7a28821c4bf7b291fe3eba8`; the merge tree equals the qualified candidate tree.
 
 Real-protoc regression coverage includes independent roots with identical file names, cross-source shared/nested DTO and enum references, include-order selection, external-name collisions, physical aliases/path escapes, source moves preserving OperationPlan/OpenAPI/TypeScript semantics, deterministic artifact checks, legacy compatibility, and read-only project-relative context projections.
 
@@ -410,23 +410,33 @@ The substrate itself does not expose a CLI or change mutation authority. The ind
 
 ## Operation-scoped Agent Context CLI — issue #160
 
-**State: IMPLEMENTED / IN REVIEW as an independent increment on the qualified PR #162 substrate; issue #160 remains OPEN.**
+**State: COMPLETE / QUALIFIED / MERGED through PR #163 after PR #162.**
 
 Agent Context schema v6 preserves lightweight, non-compiling bootstrap and adds explicit `--operation <id>` / `--all-operations` source queries. They compile current canonical inputs through the existing projectflow resolver, expose deterministic project-relative source files and separate external import names, and label results `read_only` / `canonical_file_import_closure`. They support proto-root and multi-source inventories plus internal Application Operations. Unknown/blank targets, invalid selectors, stale or broken source and ignored inventory include overrides fail rather than returning broad or partial context.
 
-Tests exercise the public CLI with real protoc, same-named inventory roots, shared/nested DTOs, internal Operations, source moves, deterministic JSON/text, no-protoc bootstrap, and read-only success/failure. Exact framework and consumer qualification results belong to this increment's PR and evidence; this statement does not claim a main merge or full issue closure.
+Tests exercise the public CLI with real protoc, same-named inventory roots, shared/nested DTOs, internal Operations, source moves, deterministic JSON/text, no-protoc bootstrap, and read-only success/failure. PR #163 integrated qualified head `35511cbe27c94c6f836e4edcaf68606518f4ce34` as `14bc2a19b0b2eb25b0efdae8304fd23dda8b4aa1`; its merge tree equals the qualified CLI candidate tree.
 
 The source-enforcement increment adds `declarationFiles`, `messageTypes`, and `enumTypes` to the read-only context while preserving the full `sourceFiles` import closure. A service import closure may include unrelated DTOs and is never itself mutation authority. #161 Service Boundary semantics are unchanged.
 
 ## Operation declaration source-scope enforcement — issue #160
 
-**State: IMPLEMENTED / IN REVIEW as an independent increment built on PR #163; issue #160 remains OPEN pending integration and final acceptance.**
+**State: COMPLETE / PRODUCTION-QUALIFIED / REAL-CONSUMER SOURCE-QUALIFIED / MERGED through PR #164.**
 
 Plan/begin now derive contract targets from exact Operation/DTO declarations instead of selecting one arbitrary file from the entire proto root. Single-Operation and ChangeSet reconciliation, including create subjects, recompute source bounds from raw immutable Git base input and current canonical compilation whenever protobuf source changes. Explicit path-array changes and broad imports do not widen base authority. The same existing semantic evaluator checks fresh source facts so stale generated JSON cannot hide source-level semantic drift. Message/enum deltas outside the target type graph are blocked even inside allowed files; required shared DTOs and reachable new DTOs inside authorized files are supported.
 
 The source projection is derived, not a second manifest. Git snapshot materialization is private/read-only and uses raw blobs, not archive substitutions or branch checkout. Ordinary/nested projects and canonical source inventories share the same path domain. Unplanned source moves fail closed; all-source lexical slicing, universal custom-option semantics and #161 business boundary review are not claimed. Existing contracts/sets retain their input schemas; check reports are schema v2 and Context is schema v6. Go-only deltas retain quick checks.
 
-Permanent tests cover full-import versus declaration-file separation, shared nested/map/enum DTO changes, unrelated/tampered paths, current-reference widening, co-located unrelated declarations, stale generated semantic evidence, multiple/create subjects, nested inventories, unplanned moves, exact Git blobs, cancellation and path escapes. The full pressure fixture supplies its canonical external DSL include consistently to planning, generation and source checks, without treating framework-owned DSL as a consumer Go generation target. Snapshot regressions also reject composed relative-symlink escapes while admitting contained links. Exact execution/qualification and integration results belong to this increment's PR; no main merge or issue closure is implied.
+Permanent tests cover full-import versus declaration-file separation, shared nested/map/enum DTO changes, unrelated/tampered paths, current-reference widening, co-located unrelated declarations, stale generated semantic evidence, multiple/create subjects, nested inventories, unplanned moves, exact Git blobs, cancellation and path escapes. The full pressure fixture supplies its canonical external DSL include consistently to planning, generation and source checks, without treating framework-owned DSL as a consumer Go generation target. Snapshot regressions also reject composed relative-symlink escapes while admitting contained links. PR #164 integrated qualified head `984faede1a2cfbd5aad1017867d097037d0e2a74` as `25332db2ead8567237352f116d6244f1102b26f1`. This final integration has the same complete tree, `87a2fbc60e759e42c46cbd025ccd4447a911d9ee`, as the qualified candidate; no product files changed during the ordered merges.
+
+## Issue #160 final integrated acceptance
+
+The implementation was integrated in dependency order **#162 -> #163 -> #164**. Exact-main acceptance run `34037811821` rechecked the integrated SHA `25332db2ead8567237352f116d6244f1102b26f1`, proved ordered ancestry and a zero-difference tree against candidate `984faede1a2cfbd5aad1017867d097037d0e2a74`, passed all 16 explicitly identified context/source regression groups without skips, the complete `make verify-production` gate on real MySQL 8.4, deterministic regeneration/dependency checks, and a clean worktree.
+
+The same run replayed the immutable source-scope qualification against `iot-delivery-system@69518dec46bdfaf45cb84a0ee25d64c132b26fc9`. It verified 25 deterministic Operation contexts, the eight-file read/four-file declaration context for `delivery.dashboard.get`, acceptance of required shared-source changes, rejection of unrelated declarations and a tampered unrelated-file allowlist, and unchanged original consumer hashes/Git state. The old CLI accepted the same widened ChangeSet and unrelated edit that the integrated CLI rejected. Consumer edits and explicit DSL input setup occurred only in a disposable copy.
+
+Historical candidate evidence from PRs #162/#163/#164 is preserved for its exact SHA/tree and is inherited by the integrated implementation through verified tree equality, not a narrative assumption. Fresh exact-main results are in run `34037811821` and artifact `issue160-main-acceptance-evidence`; final documentation-only PR checks and issue disposition are recorded on GitHub. No normal CI/protection configuration or runtime/authz/UoW semantics were changed. Independent automated review was not obtained because the review bot reported its usage limit; tests and this integration inspection are not presented as independent approval.
+
+Acceptance is bounded to canonical provenance, Operation context and modeled contract-source/declaration conformance. It does not claim lexical/token-minimal context, a filesystem sandbox, signed task authority, arbitrary custom-option semantics or consumer runtime qualification. Unplanned source moves require a separately scoped migration and fresh task. **Issue #161 remains OPEN and separate**; this delivery does not implement Service Boundary decisions.
 
 ## Current pressure frontier
 
