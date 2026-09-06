@@ -1,0 +1,177 @@
+name: issue160-context-cli-delivery
+
+on:
+  push:
+    branches: [control/160-context-cli-delivery]
+    paths: [.github/workflows/issue160-context-cli-delivery.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  qualify-and-deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports: [3306:3306]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      BASE_SHA: 2ccf968aaf05a52d33abc871b327210e05d7f55c
+      CANDIDATE_SHA: 6a515e2b14cbbef6738f3d3e38ae9cd5396a3637
+      CANDIDATE_TREE: 0cf829a1b3687dcd42f3fda04a508c662684b1ec
+      TARGET_BRANCH: feat/160-agent-operation-context
+    steps:
+      - name: Checkout isolated controller
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: controller
+          persist-credentials: false
+      - name: Checkout exact qualified substrate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 2ccf968aaf05a52d33abc871b327210e05d7f55c
+          path: candidate
+          fetch-depth: 0
+      - name: Checkout pinned read-only consumer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: hvritual/iot-delivery-system
+          ref: 69518dec46bdfaf45cb84a0ee25d64c132b26fc9
+          path: consumer
+          persist-credentials: false
+      - name: Read lock and prepare evidence
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          source candidate/tools/toolchain.env
+          echo "go_version=$GO_VERSION" >> "$GITHUB_OUTPUT"
+          echo "protoc_release=$PROTOC_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "protoc_sha=$PROTOC_LINUX_X86_64_SHA256" >> "$GITHUB_OUTPUT"
+          git -C candidate status --short --branch
+          git -C candidate remote -v
+          test "$(git -C candidate rev-parse HEAD)" = "$BASE_SHA"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache-dependency-path: |
+            candidate/app/go.sum
+            candidate/framework/go.sum
+            candidate/gateway/go.sum
+            candidate/infras/go.sum
+            candidate/pkg/go.sum
+      - name: Install exact protoc
+        shell: bash
+        env:
+          PROTOC_RELEASE: ${{ steps.lock.outputs.protoc_release }}
+          PROTOC_SHA: ${{ steps.lock.outputs.protoc_sha }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "$PROTOC_SHA  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+      - name: Build exact pre-change CLI for RED
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          make toolchain-check
+          go build -o "$RUNNER_TEMP/yunka-before" ./app/cmd
+          git diff --exit-code
+      - name: Reconstruct exact locally authored Git commit
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          patchdir="$GITHUB_WORKSPACE/controller/tools/qualification/context-cli"
+          (cd "$patchdir" && sha256sum -c -) <<'HASHES'
+          73ee46c0e99b3fda3b72c9c347d13835ed8122232a8ca972bb8319c7e286e34d  00.patch
+          a6307dcfc96b2af20bccd0a2be8c6496624a963e4e0ff3152a7971fdcba129d6  01.patch
+          f4f2a3374548219b03c8f0c633daa76bf0bba6ce4b1a8195459c41a9061ab9ae  02.patch
+          893a5cc99d7d75e89385309c0259aa5bc99965014a3887b53612cc7f69c1a682  03.patch
+          b4fc2c6b6f3bc99be10b29d2b7938cbea007533a3a301450e84fd70522216431  04.patch
+          HASHES
+          cat "$patchdir"/*.patch > ../evidence/increment.patch
+          git apply --check ../evidence/increment.patch
+          git apply --index ../evidence/increment.patch
+          test "$(git write-tree)" = "$CANDIDATE_TREE"
+          test -z "$(gofmt -l app/cmd/agentcontext/*.go app/cmd/discoverability.go app/cmd/discoverability_test.go)"
+          git config user.name hvritual
+          git config user.email 11900351+hvritual@users.noreply.github.com
+          GIT_AUTHOR_DATE=2026-09-06T11:54:27Z GIT_COMMITTER_DATE=2026-09-06T11:54:27Z git commit -m 'feat(context): expose read-only operation source contexts' -m 'Advance #160 with explicit single/all Operation CLI queries, schema-v5 discovery, real-protoc CLI regressions and documentation. Preserve non-compiling bootstrap; fail closed on invalid queries; do not change ChangeSet authority or #161 service-boundary semantics.'
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git show --stat --format=fuller HEAD > ../evidence/commit.txt
+          git diff --exit-code
+      - name: Public CLI and discoverability regressions
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v protoc
+          go test -count=1 -json ./app/cmd/agentcontext ./app/cmd | tee ../evidence/targeted.jsonl
+          python3 - <<'PY'
+          import json
+          events = [json.loads(x) for x in open('../evidence/targeted.jsonl')]
+          focused = [e for e in events if e.get('Test','').startswith('TestIssue160Context')]
+          assert focused and not any(e['Action'] in ('skip','fail') for e in focused)
+          roots = [e for e in focused if e['Action']=='pass' and '/' not in e['Test']]
+          assert len(roots) == 6, roots
+          print('All six issue160 CLI regression groups passed without skips')
+          PY
+      - name: Complete canonical production qualification
+        working-directory: candidate
+        shell: bash
+        env:
+          YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?charset=utf8mb4&parseTime=true&loc=UTC&multiStatements=true
+        run: |
+          set -euo pipefail
+          make verify-production 2>&1 | tee ../evidence/verify-production.log
+          make tidy 2>&1 | tee ../evidence/determinism.log
+          make contract 2>&1 | tee -a ../evidence/determinism.log
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
+      - name: Real consumer public CLI RED and GREEN
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd candidate && go build -o "$RUNNER_TEMP/yunka-after" ./app/cmd)
+          python3 controller/tools/qualification/context-cli/consumer.py "$RUNNER_TEMP/yunka-after" "$RUNNER_TEMP/yunka-before" "$GITHUB_WORKSPACE/candidate" "$GITHUB_WORKSPACE/consumer" "$GITHUB_WORKSPACE/evidence" | tee evidence/consumer.log
+          git -C candidate diff --exit-code
+          git -C consumer diff --exit-code
+      - name: Submit exact passing commit with normal Git
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test -z "$(git status --porcelain)"
+          test "$(git ls-remote origin refs/heads/fix/160-contract-provenance-context | cut -f1)" = "$BASE_SHA"
+          test -z "$(git ls-remote origin refs/heads/$TARGET_BRANCH)"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          remote="$(git ls-remote origin refs/heads/$TARGET_BRANCH | cut -f1)"
+          test "$remote" = "$CANDIDATE_SHA"
+          printf 'submitted=%s\nbranch=%s\nmain_unchanged=true\n' "$remote" "$TARGET_BRANCH" > ../evidence/delivery.txt
+      - name: Preserve commit and evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git -C candidate cat-file -e "$CANDIDATE_SHA^{commit}" 2>/dev/null; then
+            git -C candidate bundle create "$GITHUB_WORKSPACE/evidence/candidate.bundle" HEAD "^$BASE_SHA"
+          fi
+          (cd evidence && find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: issue160-context-cli-evidence
+          path: evidence
+          retention-days: 14
