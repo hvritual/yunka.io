@@ -1,0 +1,203 @@
+diff --git a/app/cmd/change/changeset_command.go b/app/cmd/change/changeset_command.go
+index 9c730eee73c084ecf1552897cd7ef08875f0367e..6c3c7753e1c509b6487905d01b19e2575ebd6299 100644
+--- a/app/cmd/change/changeset_command.go
++++ b/app/cmd/change/changeset_command.go
+@@ -2,4 +2,5 @@ package change
+ 
+ import (
++	"context"
+ 	"fmt"
+ 	"strings"
+@@ -65,4 +66,5 @@ func setCheckCommand() cli.Command {
+ 		Flags: []cli.Flag{
+ 			cli.StringFlag{Name: "root", Value: ".", Usage: "project root"},
++			sourceProtocFlag(), sourceIncludesFlag(),
+ 			cli.StringFlag{Name: "set", Value: DefaultChangeSetPath, Usage: "ChangeSet path"},
+ 			cli.StringFlag{Name: "format", Value: FormatText, Usage: "output format: text, json, or agent-json"},
+@@ -77,5 +79,5 @@ func setCheckCommand() cli.Command {
+ 				return printFailure("yunka change set check", c.String("format"), Diagnose(&Failure{Kind: FailureEvidence, Err: fmt.Errorf("change set check: load: %w", err)}), 1)
+ 			}
+-			report, err := ReconcileChangeSet(descriptor.Root, value)
++			report, err := ReconcileChangeSetWithOptions(context.Background(), sourceCompilerOptions(c), value)
+ 			if err != nil {
+ 				return printFailure("yunka change set check", c.String("format"), Diagnose(&Failure{Kind: FailureEvidence, Err: err}), 1)
+diff --git a/app/cmd/change/changeset_reconcile.go b/app/cmd/change/changeset_reconcile.go
+index 513e8e25bae37a6daaefe7714cae5d2e94521561..97af24739e07c7ac7a55acbb8cdfbc0da0bc0a03 100644
+--- a/app/cmd/change/changeset_reconcile.go
++++ b/app/cmd/change/changeset_reconcile.go
+@@ -2,14 +2,15 @@ package change
+ 
+ import (
++	"context"
+ 	"encoding/json"
+ 	"fmt"
+ 	"strings"
+ 
+-	"yunka.io/app/cmd/projectflow"
+ 	"github.com/hvritual/yunka.io/pkg/operationplan"
++	"yunka.io/app/cmd/projectflow"
+ )
+ 
+ const (
+-	ChangeSetCheckSchemaVersion     = 1
++	ChangeSetCheckSchemaVersion    = 2
+ 	ChangeSetSemanticSchemaVersion = 1
+ )
+@@ -22,17 +23,23 @@ type ChangeSetSemanticReport struct {
+ 
+ type ChangeSetCheckReport struct {
+-	SchemaVersion  int                     `json:"schemaVersion"`
+-	BaseSHA        string                  `json:"baseSha"`
+-	Reconciliation Reconciliation          `json:"reconciliation"`
+-	Semantic       ChangeSetSemanticReport `json:"semantic"`
+-	Conformant     bool                    `json:"conformant"`
++	SchemaVersion   int                     `json:"schemaVersion"`
++	BaseSHA         string                  `json:"baseSha"`
++	Reconciliation  Reconciliation          `json:"reconciliation"`
++	Semantic        ChangeSetSemanticReport `json:"semantic"`
++	ContractSources *ContractSourceReport   `json:"contractSources,omitempty"`
++	Conformant      bool                    `json:"conformant"`
+ }
+ 
+ func ReconcileChangeSet(root string, value ChangeSet) (ChangeSetCheckReport, error) {
++	return ReconcileChangeSetWithOptions(context.Background(), projectflow.Options{Root: root}, value)
++}
++
++func ReconcileChangeSetWithOptions(ctx context.Context, options projectflow.Options, value ChangeSet) (ChangeSetCheckReport, error) {
++	root := options.Root
+ 	if err := validateChangeSet(value); err != nil {
+ 		return ChangeSetCheckReport{}, err
+ 	}
+ 	envelope := changeSetEnvelope(value)
+-	gitReport, err := ReconcileGitDelta(root, envelope)
++	gitReport, err := reconcileGitDeltaFiles(root, envelope)
+ 	if err != nil {
+ 		return ChangeSetCheckReport{}, err
+@@ -42,10 +49,20 @@ func ReconcileChangeSet(root string, value ChangeSet) (ChangeSetCheckReport, err
+ 		return ChangeSetCheckReport{}, err
+ 	}
++	sources, sourceSemantic, err := reconcileContractSources(ctx, options, value, gitReport.Changes)
++	if err != nil {
++		return ChangeSetCheckReport{}, err
++	}
++	if sources != nil {
++		attachSourceSemantic(sources, sourceSemantic)
++		gitReport.Violations = append(gitReport.Violations, sources.Violations...)
++		sortChangeViolations(gitReport.Violations)
++	}
+ 	return ChangeSetCheckReport{
+-		SchemaVersion:  ChangeSetCheckSchemaVersion,
+-		BaseSHA:        value.BaseSHA,
+-		Reconciliation: gitReport,
+-		Semantic:       semantic,
+-		Conformant:     len(gitReport.Violations) == 0 && len(semantic.Violations) == 0,
++		ContractSources: sources,
++		SchemaVersion:   ChangeSetCheckSchemaVersion,
++		BaseSHA:         value.BaseSHA,
++		Reconciliation:  gitReport,
++		Semantic:        semantic,
++		Conformant:      len(gitReport.Violations) == 0 && len(semantic.Violations) == 0,
+ 	}, nil
+ }
+@@ -89,4 +106,8 @@ func ReconcileChangeSetSemantic(root string, value ChangeSet) (ChangeSetSemantic
+ 	}
+ 
++	return reconcileChangeSetSemanticFacts(value, base, current), nil
++}
++
++func reconcileChangeSetSemanticFacts(value ChangeSet, base, current canonicalFacts) ChangeSetSemanticReport {
+ 	subjects := make(map[string]ChangeSetSubject, len(value.Subjects))
+ 	applicationAllowances := map[string]map[string]bool{}
+@@ -151,5 +172,5 @@ func ReconcileChangeSetSemantic(root string, value ChangeSet) (ChangeSetSemantic
+ 		report.Violations = []SemanticDelta{}
+ 	}
+-	return report, nil
++	return report
+ }
+ 
+diff --git a/app/cmd/change/reconcile.go b/app/cmd/change/reconcile.go
+index 15e74be38571a248f663917410c3fd66b5e4bde6..0bab45175673d49aa3f1d158533fa2f8d2cca68e 100644
+--- a/app/cmd/change/reconcile.go
++++ b/app/cmd/change/reconcile.go
+@@ -3,4 +3,5 @@ package change
+ import (
+ 	"bytes"
++	"context"
+ 	"encoding/json"
+ 	"fmt"
+@@ -15,5 +16,5 @@ import (
+ )
+ 
+-const ChangeReconciliationSchemaVersion = 1
++const ChangeReconciliationSchemaVersion = 2
+ 
+ type FileChange struct {
+@@ -32,9 +33,10 @@ type ChangeViolation struct {
+ 
+ type Reconciliation struct {
+-	SchemaVersion int               `json:"schemaVersion"`
+-	BaseSHA       string            `json:"baseSha"`
+-	OperationID   string            `json:"operationId"`
+-	Changes       []FileChange      `json:"changes"`
+-	Violations    []ChangeViolation `json:"violations"`
++	SchemaVersion   int                   `json:"schemaVersion"`
++	BaseSHA         string                `json:"baseSha"`
++	OperationID     string                `json:"operationId"`
++	Changes         []FileChange          `json:"changes"`
++	ContractSources *ContractSourceReport `json:"contractSources,omitempty"`
++	Violations      []ChangeViolation     `json:"violations"`
+ }
+ 
+@@ -45,4 +47,5 @@ func checkCommand() cli.Command {
+ 		Flags: []cli.Flag{
+ 			cli.StringFlag{Name: "root", Value: ".", Usage: "project root"},
++			sourceProtocFlag(), sourceIncludesFlag(),
+ 			cli.StringFlag{Name: "contract", Value: DefaultChangeContractPath, Usage: "change contract path"},
+ 			cli.StringFlag{Name: "format", Value: FormatText, Usage: "output format: text, json, or agent-json"},
+@@ -57,5 +60,5 @@ func checkCommand() cli.Command {
+ 				return printFailure("yunka change check", c.String("format"), Diagnose(&Failure{Kind: FailureEvidence, Err: fmt.Errorf("change check: load contract: %w", err)}), 1)
+ 			}
+-			report, err := ReconcileGitDelta(descriptor.Root, contractValue)
++			report, err := ReconcileGitDeltaWithOptions(context.Background(), sourceCompilerOptions(c), contractValue)
+ 			if err != nil {
+ 				return printFailure("yunka change check", c.String("format"), Diagnose(&Failure{Kind: FailureEvidence, Err: err}), 1)
+@@ -75,4 +78,28 @@ func checkCommand() cli.Command {
+ 
+ func ReconcileGitDelta(root string, contractValue ChangeContract) (Reconciliation, error) {
++	return ReconcileGitDeltaWithOptions(context.Background(), projectflow.Options{Root: root}, contractValue)
++}
++
++func ReconcileGitDeltaWithOptions(ctx context.Context, options projectflow.Options, contractValue ChangeContract) (Reconciliation, error) {
++	report, err := reconcileGitDeltaFiles(options.Root, contractValue)
++	if err != nil {
++		return Reconciliation{}, err
++	}
++	value := ChangeSet{SchemaVersion: ChangeSetSchemaVersion, BaseSHA: contractValue.BaseSHA,
++		Subjects: []ChangeSetSubject{{Kind: ChangeSubjectExistingOperation, Existing: &contractValue}}}
++	sources, semantic, err := reconcileContractSources(ctx, options, value, report.Changes)
++	if err != nil {
++		return Reconciliation{}, err
++	}
++	if sources != nil {
++		attachSourceSemantic(sources, semantic)
++		report.ContractSources = sources
++		report.Violations = append(report.Violations, sources.Violations...)
++		sortChangeViolations(report.Violations)
++	}
++	return report, nil
++}
++
++func reconcileGitDeltaFiles(root string, contractValue ChangeContract) (Reconciliation, error) {
+ 	if contractValue.SchemaVersion != ChangeContractSchemaVersion {
+ 		return Reconciliation{}, fmt.Errorf("change check: unsupported contract schemaVersion %d", contractValue.SchemaVersion)
+diff --git a/app/cmd/change/verify.go b/app/cmd/change/verify.go
+index 79a4b47202ec22e476ac746430edda8ee5ef0ac2..a215675186711f99dbe6d2f7b19570928b894e4a 100644
+--- a/app/cmd/change/verify.go
++++ b/app/cmd/change/verify.go
+@@ -110,5 +110,5 @@ func VerifyChange(ctx context.Context, options VerifyOptions) (ChangeAttestation
+ 	}
+ 
+-	reconciliation, err := ReconcileGitDelta(descriptor.Root, contractValue)
++	reconciliation, err := ReconcileGitDeltaWithOptions(ctx, projectflow.Options{Root: descriptor.Root, Protoc: options.Protoc, ProtoPaths: options.ProtoPaths}, contractValue)
+ 	if err != nil {
+ 		return ChangeAttestation{}, "", err
