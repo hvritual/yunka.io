@@ -1,0 +1,12 @@
+diff --git a/app/cmd/boundarycore/decision_test.go b/app/cmd/boundarycore/decision_test.go
+index 18754b1..cc5f18d 100644
+--- a/app/cmd/boundarycore/decision_test.go
++++ b/app/cmd/boundarycore/decision_test.go
+@@ -148,6 +148,7 @@ func TestIssue161DecisionRejectsMixedPeerWitnesses(t *testing.T) {
+ 	q.Operation.Public = false
+ 	q.Operation.Authentication = []string{"authenticated"}
+ 	q.Operation.Permissions = []string{"sales.read"}
++	q.Authorization = &contract.AuthorizationPolicy{OperationID: q.Operation.ID, Permissions: []string{"sales.read"}, PermissionMode: "all", Authentication: []string{"authenticated"}}
+ 	q.Operation.Execution = nil
+ 	b.Services[0].Methods = append(b.Services[0].Methods, q)
+ 	a = detachedManifest(b)
