@@ -1,0 +1,180 @@
+name: issue161-boundary-decision-requalification
+on:
+  push:
+    branches: [control/161-boundary-decision-delivery]
+    paths: [.github/workflows/issue161-boundary-decision-requalification.yml]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  qualify-and-deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports: [3306:3306]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      BASE_SHA: 23789633f2e0dbcd20230cacca42e814047d86bc
+      EXPECTED_MAIN: 7d7fc663f7086df9735ee9089c75f65d2fd100e4
+      CANDIDATE_SHA: f8fdce6c3bd7bd63eef05ae23b3fc9ba83c3b0de
+      CANDIDATE_TREE: 741e8e425316c838afdb5bfd8ac428165798e9ea
+      TARGET_BRANCH: feat/161-boundary-decision
+    steps:
+      - name: Checkout isolated controller
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: controller
+          persist-credentials: false
+      - name: Checkout exact prerequisite
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 23789633f2e0dbcd20230cacca42e814047d86bc
+          path: candidate
+          fetch-depth: 0
+      - name: Checkout pinned read-only consumer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: hvritual/iot-delivery-system
+          ref: 69518dec46bdfaf45cb84a0ee25d64c132b26fc9
+          path: consumer
+          persist-credentials: false
+      - name: Recover exact prior authored Git objects and apply local correction
+        id: lock
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git -C candidate rev-parse HEAD)" = "$BASE_SHA"
+          curl --fail --silent --show-error --location --retry 3 -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/hvritual/yunka.io/actions/artifacts/9992450976/zip -o "$RUNNER_TEMP/prior.zip"
+          echo "050f247c7179f9c5673763bba2f87375a771a09a468e8eb6fe62e836867256d2  $RUNNER_TEMP/prior.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/prior.zip" -d "$RUNNER_TEMP/prior"
+          (cd "$RUNNER_TEMP/prior" && sha256sum -c SHA256SUMS)
+          git -C candidate bundle verify "$RUNNER_TEMP/prior/candidate.bundle"
+          git -C candidate fetch "$RUNNER_TEMP/prior/candidate.bundle" HEAD
+          test "$(git -C candidate rev-parse FETCH_HEAD)" = b0493504cea1cf9d6aefcceb5d050f2db032cc7e
+          git -C candidate checkout --detach FETCH_HEAD
+          cp controller/tools/qualification/boundary-decision/dto-identity.patch evidence/dto-identity.patch
+          echo 'd4a2916b60dfa46606e489f03bd8a7b8520e3716e46d57316b939a56c87a1411  evidence/dto-identity.patch' | sha256sum -c -
+          cd candidate
+          git config user.name hvritual
+          git config user.email 11900351+hvritual@users.noreply.github.com
+          git apply --check ../evidence/dto-identity.patch
+          git apply --index ../evidence/dto-identity.patch
+          GIT_AUTHOR_DATE=2026-09-06T16:00:00Z GIT_COMMITTER_DATE=2026-09-06T16:00:00Z git commit -m 'test(boundary): select existing DTO by canonical identity' -m 'Exercise a valid scalar type change after manifest normalization, not an invalid enum reference. Keep the single-addition scope guard and all real-protoc tests unchanged.'
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          git diff --check "$BASE_SHA" HEAD
+          git show --stat --format=fuller HEAD > ../evidence/commit.txt
+          git diff "$BASE_SHA" HEAD > ../evidence/complete-increment.patch
+          source tools/toolchain.env
+          echo "go_version=$GO_VERSION" >> "$GITHUB_OUTPUT"
+          echo "protoc_release=$PROTOC_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "protoc_sha=$PROTOC_LINUX_X86_64_SHA256" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache-dependency-path: |
+            candidate/app/go.sum
+            candidate/framework/go.sum
+            candidate/gateway/go.sum
+            candidate/infras/go.sum
+            candidate/pkg/go.sum
+      - name: Install locked protobuf tools
+        shell: bash
+        env:
+          PROTOC_RELEASE: ${{ steps.lock.outputs.protoc_release }}
+          PROTOC_SHA: ${{ steps.lock.outputs.protoc_sha }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "$PROTOC_SHA  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          export PATH="$RUNNER_TEMP/protoc/bin:$GITHUB_WORKSPACE/candidate/.yunka/bin:$PATH"
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/candidate/.yunka/bin" >> "$GITHUB_PATH"
+          make -C candidate rpc-tools toolchain-check
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('controller/tools/qualification/boundary-decision/consumer.go')
+          s=p.read_text();assert s.count('m.Authorization=nil;')==1
+          p.write_text(s.replace('m.Authorization=nil;','if m.Authorization != nil { m.Authorization.OperationID = m.Operation.ID };'))
+          PY
+          gofmt -w controller/tools/qualification/boundary-decision/consumer.go
+          echo '5334ff7bf3a3509a50a3401ff16bd76500ba11324967de94aef97e95033f97e7  controller/tools/qualification/boundary-decision/consumer.go' | sha256sum -c -
+      - name: Decision tests and all prerequisite regressions
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git diff --name-only "$BASE_SHA" HEAD -- '*.go' | xargs gofmt -l)"
+          go test -count=1 -json ./app/cmd/boundarycore ./app/cmd/boundary ./pkg/contract ./pkg/architecturepolicy ./app/cmd/projectflow ./app/cmd/agentcontext ./app/cmd/change ./app/cmd | tee ../evidence/targeted.jsonl
+          python3 - <<'PY'
+          import json
+          es=[json.loads(s) for s in open('../evidence/targeted.jsonl')]
+          focused=[e for e in es if e.get('Test','').startswith('TestIssue161Decision')]
+          assert focused and not any(e['Action'] in ('skip','fail') for e in focused)
+          names={e['Test'] for e in focused if e['Action']=='pass' and '/' not in e['Test']}
+          expected={'TestIssue161DecisionReuseAndEvidence','TestIssue161DecisionContradictionFirstAndUnknown','TestIssue161DecisionRejectsMixedPeerWitnesses','TestIssue161DecisionAdditionScopeAndNewDTO','TestIssue161DecisionProofRecomputedNotSelfAttested','TestIssue161DecisionFreshnessAndInputIsolation','TestIssue161DecisionMalformedAndUnsupportedInputs','TestIssue161DecisionNoCountThreshold','TestIssue161DecisionRealProtocAddition'}
+          assert names==expected,(names,expected)
+          print('All nine exact decision test groups passed without skips')
+          PY
+          go test -race -count=1 ./app/cmd/boundarycore ./app/cmd/boundary | tee ../evidence/race.log
+      - name: Full canonical production qualification
+        working-directory: candidate
+        shell: bash
+        env:
+          YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?charset=utf8mb4&parseTime=true&loc=UTC&multiStatements=true
+        run: |
+          set -euo pipefail
+          make verify-production 2>&1 | tee ../evidence/verify-production.log
+          make tidy 2>&1 | tee ../evidence/determinism.log
+          make contract 2>&1 | tee -a ../evidence/determinism.log
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
+      - name: Real consumer and explicitly synthetic prospective decisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C consumer rev-parse HEAD)" = 69518dec46bdfaf45cb84a0ee25d64c132b26fc9
+          (cd consumer && find . -type f ! -path './.git/*' -print0 | sort -z | xargs -0 sha256sum) > evidence/consumer-before.sha256
+          (cd candidate && go run ../controller/tools/qualification/boundary-decision/consumer.go "$GITHUB_WORKSPACE/consumer" "$GITHUB_WORKSPACE/candidate" "$GITHUB_WORKSPACE/evidence") | tee evidence/consumer.log
+          (cd consumer && sha256sum -c ../evidence/consumer-before.sha256) > evidence/consumer-readonly.log
+          test -z "$(git -C consumer status --porcelain)"
+          test -z "$(git -C candidate status --porcelain)"
+      - name: Submit exact passing local Git candidate
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test -z "$(git status --porcelain)"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$EXPECTED_MAIN"
+          test "$(git ls-remote origin refs/heads/feat/161-boundary-evidence | cut -f1)" = "$BASE_SHA"
+          test -z "$(git ls-remote origin refs/heads/$TARGET_BRANCH)"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          test "$(git ls-remote origin refs/heads/$TARGET_BRANCH | cut -f1)" = "$CANDIDATE_SHA"
+          printf 'submitted=%s\ntree=%s\nbranch=%s\nbase=%s\n' "$CANDIDATE_SHA" "$CANDIDATE_TREE" "$TARGET_BRANCH" "$BASE_SHA" > ../evidence/delivery.txt
+      - name: Preserve exact evidence and candidate objects
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git -C candidate cat-file -e "$CANDIDATE_SHA^{commit}" 2>/dev/null; then
+            git -C candidate bundle create "$GITHUB_WORKSPACE/evidence/candidate.bundle" HEAD "^$BASE_SHA"
+          fi
+          (cd evidence && find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: issue161-boundary-decision-evidence
+          path: evidence
+          retention-days: 30
