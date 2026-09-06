@@ -1,0 +1,160 @@
+diff --git a/app/cmd/change/contract.go b/app/cmd/change/contract.go
+index dd34ae54abc11e8a3cb095ef205bedeb282c3179..6894810ccab889ea17f7a4e241bdf0b8de9e10fa 100644
+--- a/app/cmd/change/contract.go
++++ b/app/cmd/change/contract.go
+@@ -66,4 +66,5 @@ func beginCommand() cli.Command {
+ 		Flags: []cli.Flag{
+ 			cli.StringFlag{Name: "root", Value: ".", Usage: "project root"},
++			sourceProtocFlag(), sourceIncludesFlag(),
+ 			cli.StringFlag{Name: "operation", Usage: "exact canonical operation ID or operation:<ID> graph node ID"},
+ 			cli.StringFlag{Name: "intent", Value: IntentImplementation, Usage: "change intent: contract, implementation, or both"},
+@@ -84,6 +85,6 @@ func beginCommand() cli.Command {
+ 			}
+ 
+-			contractValue, projectRoot, err := BuildChangeContract(
+-				c.String("root"),
++			contractValue, projectRoot, err := BuildChangeContractWithOptions(
++				sourceCompilerOptions(c),
+ 				c.String("operation"),
+ 				c.String("intent"),
+@@ -112,8 +113,13 @@ func beginCommand() cli.Command {
+ 
+ func BuildChangeContract(root, operation, intent, base string, explicitPaths, allowedSemantic []string, depth int) (ChangeContract, string, error) {
++	return BuildChangeContractWithOptions(projectflow.Options{Root: root}, operation, intent, base, explicitPaths, allowedSemantic, depth)
++}
++
++func BuildChangeContractWithOptions(options projectflow.Options, operation, intent, base string, explicitPaths, allowedSemantic []string, depth int) (ChangeContract, string, error) {
++	root := options.Root
+ 	if err := ensureCleanWorktree(root); err != nil {
+ 		return ChangeContract{}, "", &Failure{Kind: FailureEvidence, Err: err}
+ 	}
+-	plan, err := Build(root, operation, intent, depth)
++	plan, err := BuildWithOptions(options, operation, intent, depth)
+ 	if err != nil {
+ 		return ChangeContract{}, "", err
+diff --git a/app/cmd/change/main.go b/app/cmd/change/main.go
+index a89859b0722a605de687a5bd7de2a7c07e281767..c171b779a036f9663640108c793ce0c1dc3f9790 100644
+--- a/app/cmd/change/main.go
++++ b/app/cmd/change/main.go
+@@ -2,4 +2,5 @@ package change
+ 
+ import (
++	"context"
+ 	"encoding/json"
+ 	"errors"
+@@ -11,11 +12,11 @@ import (
+ 	"strings"
+ 
+-	"github.com/urfave/cli"
+-	"yunka.io/app/cmd/ownership"
+-	"yunka.io/app/cmd/projectflow"
+ 	applicationgraph "github.com/hvritual/yunka.io/pkg/applicationgraph"
+ 	"github.com/hvritual/yunka.io/pkg/contract"
+ 	"github.com/hvritual/yunka.io/pkg/diagnostic"
+ 	"github.com/hvritual/yunka.io/pkg/operationplan"
++	"github.com/urfave/cli"
++	"yunka.io/app/cmd/ownership"
++	"yunka.io/app/cmd/projectflow"
+ )
+ 
+@@ -127,4 +128,5 @@ func planCommand() cli.Command {
+ 		Flags: []cli.Flag{
+ 			cli.StringFlag{Name: "root", Value: ".", Usage: "project root"},
++			sourceProtocFlag(), sourceIncludesFlag(),
+ 			cli.StringFlag{Name: "operation", Usage: "exact canonical operation ID or operation:<ID> graph node ID"},
+ 			cli.StringFlag{Name: "intent", Value: IntentBoth, Usage: "change intent: contract, implementation, or both"},
+@@ -143,5 +145,5 @@ func planCommand() cli.Command {
+ 			}
+ 
+-			plan, err := Build(c.String("root"), c.String("operation"), c.String("intent"), c.Int("depth"))
++			plan, err := BuildWithOptions(sourceCompilerOptions(c), c.String("operation"), c.String("intent"), c.Int("depth"))
+ 			if err != nil {
+ 				return printFailure("yunka change plan", format, Diagnose(err), 1)
+@@ -158,4 +160,14 @@ func planCommand() cli.Command {
+ 
+ func Build(root, operation, intent string, depth int) (Plan, error) {
++	return BuildWithOptions(projectflow.Options{Root: root}, operation, intent, depth)
++}
++
++func BuildWithOptions(options projectflow.Options, operation, intent string, depth int) (Plan, error) {
++	for _, path := range options.ProtoPaths {
++		if strings.TrimSpace(path) == "" {
++			return Plan{}, &Failure{Kind: FailureEvidence, Err: fmt.Errorf("change plan: --proto-path must not be blank")}
++		}
++	}
++	root := options.Root
+ 	intent = strings.ToLower(strings.TrimSpace(intent))
+ 	if intent != IntentContract && intent != IntentImplementation && intent != IntentBoth {
+@@ -174,5 +186,38 @@ func Build(root, operation, intent string, depth int) (Plan, error) {
+ 		return Plan{}, err
+ 	}
+-	return buildFromFacts(inputs, graph, operation, intent, depth)
++	plan, err := buildFromFacts(inputs, graph, operation, intent, depth)
++	if err != nil {
++		return Plan{}, err
++	}
++	if intent == IntentContract || intent == IntentBoth {
++		source, err := projectflow.DescribeOperationContractContext(context.Background(), options, plan.Operation.Attributes["operationId"])
++		if err != nil {
++			return Plan{}, &Failure{Kind: FailureEvidence, Err: fmt.Errorf("change plan: declaration source context: %w", err)}
++		}
++		plan.EditableTargets = nil
++		unresolved := plan.UnresolvedTargets[:0]
++		for _, item := range plan.UnresolvedTargets {
++			if item.Kind != "contract-source" {
++				unresolved = append(unresolved, item)
++			}
++		}
++		plan.UnresolvedTargets = unresolved
++		decisions, err := ownership.Build(inputs.Project.Root, source.DeclarationFiles)
++		if err != nil {
++			return Plan{}, &Failure{Kind: FailureEvidence, Err: err}
++		}
++		if len(decisions.Decisions) != len(source.DeclarationFiles) {
++			return Plan{}, &Failure{Kind: FailureEvidence, Err: fmt.Errorf("change plan: incomplete declaration ownership")}
++		}
++		for _, decision := range decisions.Decisions {
++			if !decision.SafeAutoEdit {
++				return Plan{}, &Failure{Kind: FailureEvidence, Err: fmt.Errorf("change plan: declaration source %s is not editable: %s", decision.Path, decision.Reason)}
++			}
++			plan.EditableTargets = append(plan.EditableTargets, EditableTarget{Path: decision.Path, Owner: decision.Owner, Reason: "canonical Operation or transitive DTO declaration source; unrelated file imports confer no edit authority"})
++		}
++		plan.Gates = deriveGates(plan, inputs.Project.GoModule)
++		normalizePlan(&plan)
++	}
++	return plan, nil
+ }
+ 
+diff --git a/app/cmd/change/source_flags.go b/app/cmd/change/source_flags.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..befbb82ba5f49853af3275e5ee03c331f5d022af
+--- /dev/null
++++ b/app/cmd/change/source_flags.go
+@@ -0,0 +1,27 @@
++package change
++
++import (
++	"strings"
++
++	"github.com/urfave/cli"
++	"yunka.io/app/cmd/projectflow"
++)
++
++// Preserve blank occurrences for validation and literal commas in paths.
++type sourceIncludeValues []string
++
++func (v *sourceIncludeValues) Set(value string) error { *v = append(*v, value); return nil }
++func (v *sourceIncludeValues) String() string         { return strings.Join(*v, ", ") }
++func sourceProtocFlag() cli.Flag {
++	return cli.StringFlag{Name: "protoc", EnvVar: "PROTOC", Usage: "protoc binary for canonical source scope; defaults to PATH"}
++}
++func sourceIncludesFlag() cli.Flag {
++	return cli.GenericFlag{Name: "proto-path", Value: &sourceIncludeValues{}, Usage: "additional project-relative protobuf include path; repeatable for proto-root projects"}
++}
++func sourceCompilerOptions(c *cli.Context) projectflow.Options {
++	options := projectflow.Options{Root: c.String("root"), Protoc: c.String("protoc")}
++	if paths, ok := c.Generic("proto-path").(*sourceIncludeValues); ok && paths != nil {
++		options.ProtoPaths = append([]string(nil), (*paths)...)
++	}
++	return options
++}
