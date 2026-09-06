@@ -39,7 +39,7 @@ func fixture(t *testing.T, inventory bool) (string, []string) {
 		}
 	}
 	root := t.TempDir()
-	support, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "contracts", "proto", "yunka", "dsl", "v1", "options.proto"))
+	support, err := os.ReadFile(filepath.Join("..", "..", "..", "contracts", "proto", "yunka", "dsl", "v1", "options.proto"))
 	if err != nil {
 		t.Fatal(err)
 	}
