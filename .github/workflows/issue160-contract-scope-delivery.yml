@@ -24,8 +24,8 @@ jobs:
           --health-interval=5s --health-timeout=5s --health-retries=30
     env:
       BASE_SHA: 35511cbe27c94c6f836e4edcaf68606518f4ce34
-      CANDIDATE_SHA: 29b1b17e232fe8dffb57c7830c503a1e3e8c5460
-      CANDIDATE_TREE: 805fb172972862761be3b80bc56164091ffdebfb
+      CANDIDATE_SHA: 09d570c866226d1629e89ca78f19e274ea0de143
+      CANDIDATE_TREE: 34cee2f2b932a562577c2cf04d79bb234d0bebda
       TARGET_BRANCH: feat/160-changeset-contract-scope
     steps:
       - name: Checkout isolated controller
@@ -88,7 +88,7 @@ jobs:
           echo "$PWD/.yunka/bin" >> "$GITHUB_PATH"
           go build -o "$RUNNER_TEMP/yunka-before" ./app/cmd
           git diff --exit-code
-      - name: Reconstruct exact locally authored commit
+      - name: Reconstruct exact locally authored commits
         working-directory: candidate
         shell: bash
         run: |
@@ -102,17 +102,24 @@ jobs:
           fdd279ff35b50ca67f0d027203a93575233677413485cda7b462756733fc7d84  03b.patch
           6980cc7186641668c552fe702dfde9d4b2aadcad3af79733a9112f703a1a26db  04.patch
           d91dbf799c3a9344fcfe78899c270bb9222e69d46b4dab12eb621e673e73bc5a  05.patch
+          df3484021c3bd9a684b033d5b20d8ae6662b9585b66f2b56cf79b584c69d36a2  06.patch
           HASHES
-          cat "$patchdir"/*.patch > ../evidence/increment.patch
-          git apply --check --unidiff-zero ../evidence/increment.patch
-          git apply --index --unidiff-zero ../evidence/increment.patch
-          test "$(git write-tree)" = "$CANDIDATE_TREE"
-          test -z "$(git diff --cached --name-only -- '*.go' | xargs gofmt -l)"
+          cat "$patchdir"/0[0-5]*.patch > ../evidence/initial.patch
+          git apply --check --unidiff-zero ../evidence/initial.patch
+          git apply --index --unidiff-zero ../evidence/initial.patch
+          test "$(git write-tree)" = 805fb172972862761be3b80bc56164091ffdebfb
           git config user.name hvritual
           git config user.email 11900351+hvritual@users.noreply.github.com
           GIT_AUTHOR_DATE=2026-09-06T12:51:28Z GIT_COMMITTER_DATE=2026-09-06T12:51:28Z git commit -m 'feat(change): enforce declaration-derived protobuf source bounds' -m 'Continue #160 with separate read and declaration contexts, fresh immutable-base/current source reconciliation for single and multi-subject changes, and fail-closed unrelated DTO checks. Preserve all existing ownership, semantic and generation gates; leave service-boundary governance and main integration separate.'
+          test "$(git rev-parse HEAD)" = 29b1b17e232fe8dffb57c7830c503a1e3e8c5460
+          git apply --check "$patchdir/06.patch"
+          git apply --index "$patchdir/06.patch"
+          test "$(git write-tree)" = "$CANDIDATE_TREE"
+          test -z "$(git diff --cached --name-only -- '*.go' | xargs gofmt -l)"
+          GIT_AUTHOR_DATE=2026-09-06T13:14:18Z GIT_COMMITTER_DATE=2026-09-06T13:14:18Z git commit -m 'fix(change): qualify external DSL inputs and contain snapshot symlink chains' -m 'Preserve full issue151 generation and test gates with explicit canonical includes; reject composed relative symlink escapes in immutable snapshots; reconcile task-scope documentation.'
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
-          git show --stat --format=fuller HEAD > ../evidence/commit.txt
+          git diff --binary "$BASE_SHA" HEAD > ../evidence/increment.patch
+          git log -2 --stat --format=fuller > ../evidence/commit.txt
           git diff --exit-code
       - name: Real-protoc source and CLI regressions
         working-directory: candidate
