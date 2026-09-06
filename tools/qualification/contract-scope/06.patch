@@ -85,6 +85,7 @@ index 7a961113dd929edde3f5557aa83592e5927360e1..476afee357e23d7654559373be91d183
  		t.Fatal(err)
  	}
 @@ -64,7 +65,7 @@ func TestReconcileChangeSetRejectsUndeclaredOperationDrift(t *testing.T) {
+ 	mutateRPCOption(t, fixture, "Resume", "tenant_required: true", "tenant_required: false")
  	generatePressureProject(t, fixture)
  
 -	report, err := ReconcileChangeSet(fixture.Root, value)
