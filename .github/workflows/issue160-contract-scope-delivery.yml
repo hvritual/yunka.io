@@ -1,0 +1,179 @@
+name: issue160-contract-scope-delivery
+
+on:
+  push:
+    branches: [control/160-contract-scope-delivery]
+    paths: [.github/workflows/issue160-contract-scope-delivery.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  qualify-and-deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports: [3306:3306]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      BASE_SHA: 35511cbe27c94c6f836e4edcaf68606518f4ce34
+      CANDIDATE_SHA: 29b1b17e232fe8dffb57c7830c503a1e3e8c5460
+      CANDIDATE_TREE: 805fb172972862761be3b80bc56164091ffdebfb
+      TARGET_BRANCH: feat/160-changeset-contract-scope
+    steps:
+      - name: Checkout isolated controller
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: controller
+          persist-credentials: false
+      - name: Checkout exact qualified prerequisite
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 35511cbe27c94c6f836e4edcaf68606518f4ce34
+          path: candidate
+          fetch-depth: 0
+      - name: Checkout pinned read-only consumer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: hvritual/iot-delivery-system
+          ref: 69518dec46bdfaf45cb84a0ee25d64c132b26fc9
+          path: consumer
+          persist-credentials: false
+      - name: Read lock and prepare evidence
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          source candidate/tools/toolchain.env
+          echo "go_version=$GO_VERSION" >> "$GITHUB_OUTPUT"
+          echo "protoc_release=$PROTOC_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "protoc_sha=$PROTOC_LINUX_X86_64_SHA256" >> "$GITHUB_OUTPUT"
+          git -C candidate status --short --branch
+          git -C candidate remote -v
+          test "$(git -C candidate rev-parse HEAD)" = "$BASE_SHA"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache-dependency-path: |
+            candidate/app/go.sum
+            candidate/framework/go.sum
+            candidate/gateway/go.sum
+            candidate/infras/go.sum
+            candidate/pkg/go.sum
+      - name: Install exact protoc
+        shell: bash
+        env:
+          PROTOC_RELEASE: ${{ steps.lock.outputs.protoc_release }}
+          PROTOC_SHA: ${{ steps.lock.outputs.protoc_sha }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "$PROTOC_SHA  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+      - name: Build pre-change CLI for exact RED comparison
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          make toolchain-check
+          go build -o "$RUNNER_TEMP/yunka-before" ./app/cmd
+          git diff --exit-code
+      - name: Reconstruct exact locally authored commit
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          patchdir="$GITHUB_WORKSPACE/controller/tools/qualification/contract-scope"
+          (cd "$patchdir" && sha256sum -c -) <<'HASHES'
+          26ce9ce00dc36dd333aa30c8ece618cf216ce7b204015d6820b880f07eb2b12f  00.patch
+          6a0a126553ed95c4e884fb7bf4a66ab086846e4ae308481c9f0d977944c50592  01.patch
+          71f20df1a6f480b85058832c905b5a3a85131128013444dbe35ef3e38aa835db  02.patch
+          7fab81791bc3c93463d3c06b03449a6d2376869b3a4e3251477b9b937dd73fd4  03a.patch
+          fdd279ff35b50ca67f0d027203a93575233677413485cda7b462756733fc7d84  03b.patch
+          6980cc7186641668c552fe702dfde9d4b2aadcad3af79733a9112f703a1a26db  04.patch
+          d91dbf799c3a9344fcfe78899c270bb9222e69d46b4dab12eb621e673e73bc5a  05.patch
+          HASHES
+          cat "$patchdir"/*.patch > ../evidence/increment.patch
+          git apply --check --unidiff-zero ../evidence/increment.patch
+          git apply --index --unidiff-zero ../evidence/increment.patch
+          test "$(git write-tree)" = "$CANDIDATE_TREE"
+          test -z "$(git diff --cached --name-only -- '*.go' | xargs gofmt -l)"
+          git config user.name hvritual
+          git config user.email 11900351+hvritual@users.noreply.github.com
+          GIT_AUTHOR_DATE=2026-09-06T12:51:28Z GIT_COMMITTER_DATE=2026-09-06T12:51:28Z git commit -m 'feat(change): enforce declaration-derived protobuf source bounds' -m 'Continue #160 with separate read and declaration contexts, fresh immutable-base/current source reconciliation for single and multi-subject changes, and fail-closed unrelated DTO checks. Preserve all existing ownership, semantic and generation gates; leave service-boundary governance and main integration separate.'
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git show --stat --format=fuller HEAD > ../evidence/commit.txt
+          git diff --exit-code
+      - name: Real-protoc source and CLI regressions
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v protoc
+          go test -count=1 -json ./pkg/contract ./app/cmd/projectflow ./app/cmd/agentcontext ./app/cmd/change ./app/cmd | tee ../evidence/targeted.jsonl
+          python3 - <<'PY'
+          import json
+          events = [json.loads(x) for x in open('../evidence/targeted.jsonl')]
+          focused = [e for e in events if e.get('Test','').startswith(('TestIssue160SourceScope', 'TestIssue160SourceSnapshot', 'TestIssue160DeclarationFiles'))]
+          assert focused and not any(e['Action'] in ('skip','fail') for e in focused)
+          roots = [e for e in focused if e['Action']=='pass' and '/' not in e['Test']]
+          assert len(roots) == 9, roots
+          print('All nine source-boundary regression groups passed without skips')
+          PY
+      - name: Complete canonical production qualification
+        working-directory: candidate
+        shell: bash
+        env:
+          YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?charset=utf8mb4&parseTime=true&loc=UTC&multiStatements=true
+        run: |
+          set -euo pipefail
+          make verify-production 2>&1 | tee ../evidence/verify-production.log
+          make tidy 2>&1 | tee ../evidence/determinism.log
+          make contract 2>&1 | tee -a ../evidence/determinism.log
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
+      - name: Real consumer source-scope RED and GREEN
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd candidate && go build -o "$RUNNER_TEMP/yunka-after" ./app/cmd)
+          python3 controller/tools/qualification/contract-scope/consumer.py "$RUNNER_TEMP/yunka-after" "$RUNNER_TEMP/yunka-before" "$GITHUB_WORKSPACE/candidate" "$GITHUB_WORKSPACE/consumer" "$GITHUB_WORKSPACE/evidence" | tee evidence/consumer.log
+          git -C candidate diff --exit-code
+          git -C consumer diff --exit-code
+      - name: Submit exact passing commit with normal Git
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test -z "$(git status --porcelain)"
+          test "$(git ls-remote origin refs/heads/feat/160-agent-operation-context | cut -f1)" = "$BASE_SHA"
+          test -z "$(git ls-remote origin refs/heads/$TARGET_BRANCH)"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          remote="$(git ls-remote origin refs/heads/$TARGET_BRANCH | cut -f1)"
+          test "$remote" = "$CANDIDATE_SHA"
+          printf 'submitted=%s\nbranch=%s\n' "$remote" "$TARGET_BRANCH" > ../evidence/delivery.txt
+      - name: Preserve commit and evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git -C candidate cat-file -e "$CANDIDATE_SHA^{commit}" 2>/dev/null; then
+            git -C candidate bundle create "$GITHUB_WORKSPACE/evidence/candidate.bundle" HEAD "^$BASE_SHA"
+          fi
+          (cd evidence && find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: issue160-contract-scope-evidence
+          path: evidence
+          retention-days: 14
