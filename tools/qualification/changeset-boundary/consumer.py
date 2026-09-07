@@ -1,8 +1,4 @@
-"""Exercise real CLI ChangeSet checks without changing the original consumer.
-
-The legacy create envelope is deliberately constructed from the pre-gate CLI's
-actual plan to reproduce direct-edit/legacy-file bypass, never business approval.
-"""
+"""Actual CLI legacy-envelope bypass checks on disposable consumer copies."""
 from __future__ import annotations
 import hashlib
 import json
@@ -61,8 +57,7 @@ with tempfile.TemporaryDirectory(prefix='yunka-set-proof-consumer-') as temp:
     assert plan['schemaVersion'] == 1 and 'boundaryDecision' not in plan
     run(author,[*args,*ids],'legacy-authoring')
     module = re.search(r'^module\s+(\S+)',(root/'go.mod').read_text(),re.M).group(1)
-    # Contract generation is the existing public compiler. It does not hand-edit
-    # generated JSON, bootstrap the consumer runtime, or introduce local replaces.
+    # Generate via the public compiler; do not hand-edit derived artifacts.
     generate = ['contract','generate','--proto-dir',root/'contracts/proto',
                 '--proto-path',include,'--out',root/'contracts/generated',
                 '--application-out',temporary/'application-generated',
@@ -73,14 +68,16 @@ with tempfile.TemporaryDirectory(prefix='yunka-set-proof-consumer-') as temp:
     identity = plan['identity']
     semantics = plan['explicitSemantics']
     effects = plan.get('generatedEffects',[])
-    change = {'schemaVersion':2,'baseSha':PIN,'subjects':[{'kind':'create_operation','create':{
+    create = {
         'operation':{'operationId':identity['operationId'],'domain':identity['domain'],'application':identity['application']},
         'planDigest':hashlib.sha256(plan_text.encode()).hexdigest(),
         'expected':{'service':identity['service'],'rpc':identity['rpc'],'requestType':identity['requestType'],
                     'responseType':identity['responseType'],'semantics':semantics},
         'editablePaths':sorted(m['path'] for m in plan['mutations']),
         'generatedPaths':sorted({e['path'] for e in effects if e.get('path')}),
-        'generatedScopes':sorted({e['scope'] for e in effects if e.get('scope')})}]}
+        'generatedScopes':sorted({e['scope'] for e in effects if e.get('scope')})}
+    # Deliberately reproduce a proofless v2 create envelope, not approved intent.
+    change = {'schemaVersion':2,'baseSha':PIN,'subjects':[{'kind':'create_operation','create':create}]}
     path = temporary/'legacy-set.json'
     path.write_text(json.dumps(change,indent=2)+'\n')
     check = ['change','set','check','--root',root,'--set',path,'--proto-path',include,'--format','agent-json']
@@ -91,7 +88,6 @@ with tempfile.TemporaryDirectory(prefix='yunka-set-proof-consumer-') as temp:
     _,new_text = run(new,check,'new-legacy-set-GREEN',False)
     assert 'STALE_BOUNDARY_PROOF' in new_text or 'STALE_BOUNDARY_PROOF' in (evidence/'new-legacy-set-GREEN.stderr').read_text()
     assert before_check == hashes(copied) and status == git(copied,'status','--porcelain')
-    # Merely relabeling an old file with the new schema is not evidence.
     change['schemaVersion'] = 3
     path.write_text(json.dumps(change,indent=2)+'\n')
     _,upgraded_text = run(new,check,'new-schema-without-proof-GREEN',False)
