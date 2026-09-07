@@ -313,8 +313,11 @@ message CreateResponse {option (yunka.dsl.v1.dto) = {kind: DTO_OUTPUT};}
 			t.Fatalf("matching new operation rejected: %#v", report)
 		}
 		f.replace(t, "other", "string unrelated = 1;", "string unrelated = 1; string extra = 2;")
-		f.set.Subjects[0].Create.EditablePaths = append(f.set.Subjects[0].Create.EditablePaths, f.paths["other"])
 		sourceViolation(t, f.check(t), "contract-source", f.paths["other"])
+		f.set.Subjects[0].Create.EditablePaths = append(f.set.Subjects[0].Create.EditablePaths, f.paths["other"])
+		if _, err := ReconcileChangeSetWithOptions(context.Background(), projectflow.Options{Root: f.root}, f.set); err == nil || !strings.Contains(err.Error(), "STALE_BOUNDARY_PROOF") {
+			t.Fatalf("tampered create scope must fail proof binding before source checks: %v", err)
+		}
 	})
 }
 

@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"yunka.io/app/cmd/add"
 )
 
 func TestT4GitPrivateStateSupportsLinkedWorktree(t *testing.T) {
@@ -36,30 +34,17 @@ func TestT4GitPrivateStateSupportsLinkedWorktree(t *testing.T) {
 	}
 	baseSHA := strings.TrimSpace(runGitPrivateStateTest(t, linked, "rev-parse", "HEAD"))
 
-	create := &CreateOperationChange{
-		Operation: ChangeOperation{OperationID: "test.create", Domain: "test", Application: "app"},
-		PlanDigest: "plan-digest",
-		Expected: CreateOperationExpectation{
-			Service: "TestApplication",
-			RPC:     "Create",
-			Semantics: add.OperationSemantics{
-				UseCase:            "create_test",
-				Permissions:        []string{},
-				Authentication:     []string{},
-				RequiresOperations: []string{},
-			},
-		},
-		EditablePaths:   []string{"contracts/proto/test.proto"},
-		GeneratedPaths:  []string{},
-		GeneratedScopes: []string{},
+	existing := &ChangeContract{
+		SchemaVersion: ChangeContractSchemaVersion,
+		BaseSHA:       baseSHA,
+		Intent:        IntentImplementation,
+		Operation:     ChangeOperation{OperationID: "test.existing", Domain: "test", Application: "app"},
+		EditablePaths: []string{"internal/test/application/existing.go"},
 	}
 	changeSet := ChangeSet{
 		SchemaVersion: ChangeSetSchemaVersion,
 		BaseSHA:       baseSHA,
-		Subjects: []ChangeSetSubject{{
-			Kind:   ChangeSubjectCreateOperation,
-			Create: create,
-		}},
+		Subjects:      []ChangeSetSubject{{Kind: ChangeSubjectExistingOperation, Existing: existing}},
 	}
 
 	path, err := WriteChangeSet(linked, "", changeSet)

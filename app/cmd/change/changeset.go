@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	ChangeSetSchemaVersion = 2
+	ChangeSetSchemaVersion = 3
 	DefaultChangeSetPath   = ".git/yunka/change-set.json"
 
 	ChangeSubjectExistingOperation = "existing_operation"
@@ -33,6 +33,7 @@ type CreateOperationExpectation struct {
 }
 
 type CreateOperationChange struct {
+	BoundaryProof   *CreateBoundaryProof       `json:"boundaryProof,omitempty"`
 	Operation       ChangeOperation            `json:"operation"`
 	PlanDigest      string                     `json:"planDigest"`
 	Expected        CreateOperationExpectation `json:"expected"`
@@ -122,6 +123,9 @@ func BuildChangeSet(root, base string, existingContracts, createPlans []string) 
 		if err != nil {
 			return ChangeSet{}, "", &Failure{Kind: FailureEvidence, Err: err}
 		}
+		if err := bindCreateBoundaryBase(descriptor.Root, baseSHA, &create); err != nil {
+			return ChangeSet{}, "", &Failure{Kind: FailureEvidence, Err: err}
+		}
 		protobufPaths, err := bindCreateProtobufGoGeneratedPaths(descriptor.Root, plan)
 		if err != nil {
 			return ChangeSet{}, "", &Failure{Kind: FailureEvidence, Err: err}
@@ -131,6 +135,12 @@ func BuildChangeSet(root, base string, existingContracts, createPlans []string) 
 		value.Subjects = append(value.Subjects, ChangeSetSubject{Kind: ChangeSubjectCreateOperation, Create: &create})
 	}
 	normalizeChangeSet(&value)
+	if err := validateCreateProfiles(descriptor.Root, value); err != nil {
+		return ChangeSet{}, "", &Failure{Kind: FailureEvidence, Err: err}
+	}
+	if err := validateChangeSet(value); err != nil {
+		return ChangeSet{}, "", &Failure{Kind: FailureEvidence, Err: err}
+	}
 	return value, descriptor.Root, nil
 }
 
@@ -138,12 +148,23 @@ func createOperationChange(plan add.Report) (CreateOperationChange, error) {
 	if plan.ExplicitSemantics == nil {
 		return CreateOperationChange{}, fmt.Errorf("change set begin: create plan has no explicit semantics")
 	}
+	// Retain detached evidence, not aliases to mutable caller-owned slices.
+	encoded, err := json.Marshal(plan)
+	if err != nil {
+		return CreateOperationChange{}, err
+	}
+	var detached add.Report
+	if err := json.Unmarshal(encoded, &detached); err != nil {
+		return CreateOperationChange{}, err
+	}
+	plan = detached
 	data, err := add.Render(plan, add.FormatAgentJSON)
 	if err != nil {
 		return CreateOperationChange{}, err
 	}
 	digest := sha256.Sum256([]byte(data))
 	value := CreateOperationChange{
+		BoundaryProof: &CreateBoundaryProof{SchemaVersion: 1, Plan: plan},
 		Operation: ChangeOperation{
 			OperationID: strings.TrimSpace(plan.Identity["operationId"]),
 			Domain:      strings.TrimSpace(plan.Identity["domain"]),
@@ -305,7 +326,7 @@ func LoadChangeSet(root, input string) (ChangeSet, string, error) {
 }
 
 func validateChangeSet(value ChangeSet) error {
-	if value.SchemaVersion != ChangeSetSchemaVersion {
+	if value.SchemaVersion != ChangeSetSchemaVersion && value.SchemaVersion != 2 {
 		return fmt.Errorf("unsupported change set schemaVersion %d", value.SchemaVersion)
 	}
 	if strings.TrimSpace(value.BaseSHA) == "" {
@@ -328,6 +349,12 @@ func validateChangeSet(value ChangeSet) error {
 		case ChangeSubjectCreateOperation:
 			if subject.Create == nil || subject.Existing != nil || subject.Kind != ChangeSubjectCreateOperation {
 				return fmt.Errorf("change set: create_operation subject has invalid shape")
+			}
+			if value.SchemaVersion != ChangeSetSchemaVersion {
+				return staleBoundary("legacy ChangeSet create subject %s must be replanned with a current boundary proof", operationID)
+			}
+			if err := validateCreateBoundaryProof(value.BaseSHA, *subject.Create); err != nil {
+				return err
 			}
 			if subject.Create.PlanDigest == "" || subject.Create.Expected.Semantics.UseCase == "" || len(subject.Create.EditablePaths) == 0 {
 				return fmt.Errorf("change set: create operation %s is missing plan evidence", operationID)

@@ -209,6 +209,8 @@ Every repository task must:
 - Operation authoring must evaluate a disposable, canonically compiled before/after input set and require a reusable boundary decision before persistent source/landing writes. A plan binds actual HEAD plus current working-tree inputs; these are distinct identities, and neither constitutes retrospective approval of other direct edits.
 - Apply and saved-plan revalidation must recompute evidence and preserve blocking outcomes; absent, stale or legacy proof must not become a compatibility bypass. Shared worktree-private locks coordinate Yunka writers only, never arbitrary external editors. New-boundary initialization and broader sufficiency require explicit policies, not weakening an existing policy to pass fixtures.
 
+- Persisted create-Operation ChangeSet evidence must bind the complete plan and be independently recomputed against immutable base and current canonical input. An unkeyed digest, a copied HEAD or a legacy schema cannot authorize growth. Independent additions may share a baseline only when every candidate retains its own unchanged base witness; other declared additions must never hide existing-model drift.
+
 ## Operation execution baseline
 
 - `pkg/operationplan` is the leaf-safe immutable execution IR, `pkg/contract` is the compiler, and `framework/operation.Executor` is the sole canonical transport-neutral Operation runtime.

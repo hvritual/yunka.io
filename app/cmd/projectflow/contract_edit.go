@@ -46,45 +46,16 @@ func PreviewContractEdit(ctx context.Context, options Options, source string, or
 		return ContractEdit{}, fmt.Errorf("contract edit: source is not owned or changed during preparation: %s", source)
 	}
 	digest := input.digest()
-	directory, err := os.MkdirTemp("", "yunka-contract-edit-*")
+	p, cleanup, err := materializeContractInputs(ctx, input)
 	if err != nil {
 		return ContractEdit{}, err
 	}
-	defer os.RemoveAll(directory)
-	for dir := range input.dirs {
-		if err := os.MkdirAll(filepath.Join(directory, filepath.FromSlash(dir)), 0700); err != nil {
-			return ContractEdit{}, err
-		}
-	}
-	for name, data := range input.files {
-		if err := ctx.Err(); err != nil {
-			return ContractEdit{}, err
-		}
-		destination := filepath.Join(directory, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(destination), 0700); err != nil {
-			return ContractEdit{}, err
-		}
-		if err := os.WriteFile(destination, data, 0600); err != nil {
-			return ContractEdit{}, err
-		}
-	}
-	p := input.project
-	p.Root = filepath.Join(directory, "project")
-	if p.InventoryPath != "" {
-		p.InventoryPath = filepath.Join(p.Root, relative(input.project.Root, p.InventoryPath))
-	}
-	if p.ProtoDir != "" {
-		p.ProtoDir = filepath.Join(p.Root, relative(input.project.Root, p.ProtoDir))
-	}
-	p.AdditionalProtoPaths = nil
-	for _, name := range input.includeKeys {
-		p.AdditionalProtoPaths = append(p.AdditionalProtoPaths, filepath.Join(directory, filepath.FromSlash(name)))
-	}
+	defer cleanup()
 	before, err := compileContract(ctx, p)
 	if err != nil {
 		return ContractEdit{}, fmt.Errorf("contract edit before: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(directory, filepath.FromSlash(key)), replacement, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(p.Root, filepath.FromSlash(source)), replacement, 0600); err != nil {
 		return ContractEdit{}, err
 	}
 	after, err := compileContract(ctx, p)
@@ -279,6 +250,10 @@ func (input *contractInputs) captureRoot(ctx context.Context, root, key string) 
 	})
 }
 func (input contractInputs) digest() string {
+	return input.digestForRoot(input.project.Root)
+}
+
+func (input contractInputs) digestForRoot(root string) string {
 	type fileDigest struct {
 		Name   string
 		SHA256 string
@@ -293,11 +268,13 @@ func (input contractInputs) digest() string {
 		sum := sha256.Sum256(input.files[name])
 		files = append(files, fileDigest{name, hex.EncodeToString(sum[:])})
 	}
+	project := describeResolvedProject(input.project)
+	project.Root = root
 	data, _ := json.Marshal(struct {
 		Project  ProjectDescriptor
 		Includes []string
 		Files    []fileDigest
-	}{describeResolvedProject(input.project), input.includeKeys, files})
+	}{project, input.includeKeys, files})
 	sum := sha256.Sum256(append([]byte("operation-authoring-inputs/v1\n"), data...))
 	return hex.EncodeToString(sum[:])
 }
