@@ -27,6 +27,9 @@ func serviceApplicationOperations(service Service) ([]applicationOperationBindin
 		binding.RequestType = normalizeTypeName(binding.RequestType)
 		binding.ResponseType = normalizeTypeName(binding.ResponseType)
 		normalizeOperationDeclaration(&binding.Operation)
+		if err := ValidateBoundaryIntent(binding.Operation.Boundary); err != nil {
+			return fmt.Errorf("contract application operation: %s: %w", binding.SourcePath, err)
+		}
 		if binding.MethodName == "" {
 			return fmt.Errorf("contract application operation: %s requires application_method", binding.SourcePath)
 		}

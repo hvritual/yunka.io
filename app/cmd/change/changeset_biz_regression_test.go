@@ -43,6 +43,7 @@ func TestT4CreateChangeSetBindsLegacyProtobufOutputsAndNormalizesAPIKey(t *testi
 func TestT4CreateChangeSetCanonicalizesServiceAuthenticationEndToEnd(t *testing.T) {
 	fixture := newPressureFixture(t)
 	options := add.OperationOptions{
+		Boundary: pressureBoundary(), ProtoPaths: []string{pressureProtoPath()},
 		Root: fixture.Root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.rotate-key", UseCase: "rotate_tenant_key",
 		Access: "protected", Permissions: []string{"tenant.manage"}, PermissionMode: "all", Tenant: "required",
 		Authentication: []string{"service", "jwt", "api-key"}, Transaction: "local", Idempotency: "none", Composition: "local",
@@ -109,6 +110,7 @@ func TestT4CreateChangeSetStrictManifestBindsOnlyCurrentSourceOutputs(t *testing
 
 func apiKeyArchiveOptions(root string) add.OperationOptions {
 	return add.OperationOptions{
+		Boundary: pressureBoundary(), ProtoPaths: []string{pressureProtoPath()},
 		Root: root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.archive", UseCase: "archive_tenant",
 		Access: "protected", Permissions: []string{"tenant.archive"}, PermissionMode: "all", Tenant: "required",
 		Authentication: []string{"api-key"}, Transaction: "local", Idempotency: "none", Composition: "local",

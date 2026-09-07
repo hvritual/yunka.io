@@ -18,7 +18,7 @@ import (
 
 const (
 	ChangeSetSchemaVersion = 2
-	DefaultChangeSetPath    = ".git/yunka/change-set.json"
+	DefaultChangeSetPath   = ".git/yunka/change-set.json"
 
 	ChangeSubjectExistingOperation = "existing_operation"
 	ChangeSubjectCreateOperation   = "create_operation"
@@ -107,6 +107,9 @@ func BuildChangeSet(root, base string, existingContracts, createPlans []string) 
 		plan, err = add.RevalidateOperationPlan(descriptor.Root, plan)
 		if err != nil {
 			return ChangeSet{}, "", &Failure{Kind: FailureEvidence, Err: fmt.Errorf("change set begin: revalidate create plan %s: %w", input, err)}
+		}
+		if plan.BaseSHA != baseSHA {
+			return ChangeSet{}, "", &Failure{Kind: FailureEvidence, Err: fmt.Errorf("STALE_BOUNDARY_PROOF: create plan base %s differs from ChangeSet base %s", plan.BaseSHA, baseSHA)}
 		}
 		operationID := strings.TrimSpace(plan.Identity["operationId"])
 		if _, ok := baseOperations[operationID]; ok {

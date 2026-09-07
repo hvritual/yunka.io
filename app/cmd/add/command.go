@@ -1,16 +1,20 @@
 package add
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
+	"github.com/hvritual/yunka.io/pkg/contract"
 	"github.com/hvritual/yunka.io/pkg/diagnostic"
 	"github.com/urfave/cli"
+	"yunka.io/app/cmd/boundarycore"
 )
 
 const (
-	AppName       = "add"
-	SchemaVersion = 1
+	AppName                = "add"
+	SchemaVersion          = 1
+	OperationReportVersion = 2
 
 	FormatText      = "text"
 	FormatJSON      = "json"
@@ -43,28 +47,33 @@ type OperationHTTPSemantics struct {
 }
 
 type OperationSemantics struct {
-	UseCase             string                  `json:"useCase"`
-	Access              string                  `json:"access"`
-	Permissions         []string                `json:"permissions"`
-	PermissionMode      string                  `json:"permissionMode,omitempty"`
-	Tenant              string                  `json:"tenant"`
-	Authentication      []string                `json:"authentication"`
-	Transaction         string                  `json:"transaction"`
-	Idempotency         string                  `json:"idempotency"`
-	Composition         string                  `json:"composition"`
-	RequiresOperations  []string                `json:"requiresOperations"`
-	HTTP                *OperationHTTPSemantics `json:"http,omitempty"`
+	Boundary           *contract.BoundaryIntent `json:"boundary,omitempty"`
+	UseCase            string                   `json:"useCase"`
+	Access             string                   `json:"access"`
+	Permissions        []string                 `json:"permissions"`
+	PermissionMode     string                   `json:"permissionMode,omitempty"`
+	Tenant             string                   `json:"tenant"`
+	Authentication     []string                 `json:"authentication"`
+	Transaction        string                   `json:"transaction"`
+	Idempotency        string                   `json:"idempotency"`
+	Composition        string                   `json:"composition"`
+	RequiresOperations []string                 `json:"requiresOperations"`
+	HTTP               *OperationHTTPSemantics  `json:"http,omitempty"`
 }
 
 type Report struct {
-	SchemaVersion     int                 `json:"schemaVersion"`
-	Kind              string              `json:"kind"`
-	Identity          map[string]string   `json:"identity"`
-	Mutations         []Mutation          `json:"mutations"`
-	Effects           []Effect            `json:"generatedEffects,omitempty"`
-	ExplicitSemantics *OperationSemantics `json:"explicitSemantics,omitempty"`
-	NextActions       []NextAction        `json:"nextActions,omitempty"`
-	Notes             []string            `json:"notes,omitempty"`
+	BaseSHA           string                                `json:"baseSha,omitempty"`
+	InputsDigest      string                                `json:"inputsDigest,omitempty"`
+	ProtoPaths        []string                              `json:"protoPaths,omitempty"`
+	BoundaryDecision  *boundarycore.ServiceBoundaryDecision `json:"boundaryDecision,omitempty"`
+	SchemaVersion     int                                   `json:"schemaVersion"`
+	Kind              string                                `json:"kind"`
+	Identity          map[string]string                     `json:"identity"`
+	Mutations         []Mutation                            `json:"mutations"`
+	Effects           []Effect                              `json:"generatedEffects,omitempty"`
+	ExplicitSemantics *OperationSemantics                   `json:"explicitSemantics,omitempty"`
+	NextActions       []NextAction                          `json:"nextActions,omitempty"`
+	Notes             []string                              `json:"notes,omitempty"`
 }
 
 type ApplicationOptions struct {
@@ -74,6 +83,9 @@ type ApplicationOptions struct {
 }
 
 type OperationOptions struct {
+	Context            context.Context
+	Boundary           *contract.BoundaryIntent
+	ProtoPaths         []string
 	Root               string
 	ApplicationKey     string
 	OperationID        string
@@ -172,6 +184,10 @@ func applicationCommand() cli.Command {
 
 func operationCommand() cli.Command {
 	flags := append(commonFlags(),
+		cli.StringFlag{Name: "context", Usage: "explicit architectural context key"},
+		cli.StringFlag{Name: "aggregate", Usage: "explicit authoritative aggregate key"},
+		cli.StringFlag{Name: "aggregate-not-applicable-reason", Usage: "explicit reason when no aggregate applies; excludes --aggregate"},
+		cli.GenericFlag{Name: "proto-path", Value: new(operationProtoPaths), Usage: "ordered protobuf include directory; repeatable, proto-root projects only"},
 		cli.BoolFlag{Name: "plan", Usage: "validate and print prospective structural mutations/effects without writing files"},
 		cli.StringFlag{Name: "use-case", Usage: "explicit stable use_case business key"},
 		cli.StringFlag{Name: "rpc-name", Usage: "optional protobuf RPC method name; defaults structurally from operation ID"},
@@ -195,7 +211,23 @@ func operationCommand() cli.Command {
 		Usage: "add a typed RPC Operation using only explicit semantic facts supplied by the caller",
 		Flags: flags,
 		Action: func(c *cli.Context) error {
+			if c.NArg() != 2 {
+				return fmt.Errorf("add operation: exactly application and operation ID are required; flags precede positional arguments")
+			}
+			format := strings.ToLower(strings.TrimSpace(c.String("format")))
+			if format != "text" && format != "json" && format != "agent-json" {
+				return fmt.Errorf("add operation: unsupported format %q", format)
+			}
+			paths, ok := c.Generic("proto-path").(*operationProtoPaths)
+			if !ok || paths == nil {
+				return fmt.Errorf("add operation: invalid include paths")
+			}
+			var intent *contract.BoundaryIntent
+			if c.IsSet("context") || c.IsSet("aggregate") || c.IsSet("aggregate-not-applicable-reason") {
+				intent = &contract.BoundaryIntent{Context: c.String("context"), Aggregate: c.String("aggregate"), AggregateNotApplicableReason: c.String("aggregate-not-applicable-reason")}
+			}
 			options := OperationOptions{
+				Boundary: intent, ProtoPaths: append([]string(nil), (*paths)...),
 				Root:               c.String("root"),
 				ApplicationKey:     c.Args().Get(0),
 				OperationID:        c.Args().Get(1),
@@ -219,10 +251,10 @@ func operationCommand() cli.Command {
 			}
 			if c.Bool("plan") {
 				report, err := PlanOperation(options)
-				return finish(c, "yunka add operation --plan", report, err)
+				return finishOperation(c, "yunka add operation --plan", report, err)
 			}
 			report, err := AddOperation(options)
-			return finish(c, "yunka add operation", report, err)
+			return finishOperation(c, "yunka add operation", report, err)
 		},
 	}
 }
@@ -300,3 +332,8 @@ func finish(c *cli.Context, command string, report Report, err error) error {
 	fmt.Print(output)
 	return nil
 }
+
+type operationProtoPaths []string
+
+func (p *operationProtoPaths) Set(v string) error { *p = append(*p, v); return nil }
+func (p *operationProtoPaths) String() string     { return strings.Join(*p, ", ") }

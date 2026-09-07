@@ -29,6 +29,8 @@ func TestPlanOperationIsReadOnlyDeterministicAndMatchesApply(t *testing.T) {
 		HTTPBody:       "*",
 	}
 
+	seedOperationPeer(t, root, &options)
+	original = readFile(t, filepath.Join(root, "contracts/proto/tenant.proto"))
 	first, err := PlanOperation(options)
 	if err != nil {
 		t.Fatal(err)
@@ -41,6 +43,7 @@ func TestPlanOperationIsReadOnlyDeterministicAndMatchesApply(t *testing.T) {
 		t.Fatalf("plan kind first=%q second=%q", first.Kind, second.Kind)
 	}
 	wantSemantics := &OperationSemantics{
+		Boundary:           options.Boundary,
 		UseCase:            "suspend_tenant",
 		Access:             "protected",
 		Permissions:        []string{"tenant.manage"},
@@ -112,6 +115,7 @@ func TestPlanOperationCanonicalizesAuthenticationVocabulary(t *testing.T) {
 		Authentication: []string{"service", "jwt", "api-key"}, Transaction: "local", Idempotency: "none", Composition: "local",
 	}
 
+	seedOperationPeer(t, root, &options)
 	plan, err := PlanOperation(options)
 	if err != nil {
 		t.Fatal(err)

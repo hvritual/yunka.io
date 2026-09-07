@@ -53,7 +53,7 @@ func TestAddOperationRequiresExplicitSemanticsAndCreatesLandingFile(t *testing.T
 		t.Fatalf("diagnostic=%#v", item)
 	}
 
-	report, err := AddOperation(OperationOptions{
+	options := OperationOptions{
 		Root:           root,
 		ApplicationKey: "tenant/lifecycle",
 		OperationID:    "tenant.suspend",
@@ -63,7 +63,9 @@ func TestAddOperationRequiresExplicitSemanticsAndCreatesLandingFile(t *testing.T
 		Transaction:    "none",
 		Idempotency:    "none",
 		Composition:    "none",
-	})
+	}
+	seedOperationPeer(t, root, &options)
+	report, err := AddOperation(options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,6 +214,7 @@ func scaffoldProject(t *testing.T, files map[string]string) string {
 	for relative, contents := range files {
 		mustWriteFile(t, filepath.Join(root, filepath.FromSlash(relative)), contents)
 	}
+	initOperationGit(t, root)
 	return root
 }
 

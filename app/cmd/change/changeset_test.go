@@ -85,6 +85,7 @@ func TestBuildChangeSetRejectsTamperedCreatePlanShape(t *testing.T) {
 func writeCreatePlan(t *testing.T, fixture pressureFixture, operationID, useCase string) string {
 	t.Helper()
 	plan, err := add.PlanOperation(add.OperationOptions{
+		Boundary: pressureBoundary(), ProtoPaths: []string{pressureProtoPath()},
 		Root: fixture.Root, ApplicationKey: "tenant/lifecycle", OperationID: operationID, UseCase: useCase,
 		Access: "protected", Permissions: []string{operationID}, PermissionMode: "all", Tenant: "required",
 		Authentication: []string{"jwt"}, Transaction: "local", Idempotency: "none", Composition: "local",
