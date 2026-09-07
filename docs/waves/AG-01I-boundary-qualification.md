@@ -17,3 +17,11 @@ Failed control runs remain historical evidence: `34129121261` stopped before com
 The targeted run requires six named parent tests, all 11 mechanism scenarios, all 13 inventory mutations and both Linux cleanup cases, with zero skips. The inherited package gates retain ordinary, repeated and race testing. Mere command failure is never accepted as an expected architecture diagnostic.
 
 Publication of the candidate does not itself mean main integration. PR #170 and the separate integration receipt record exact reviewer disposition, non-force fast-forward, matching tree and main readback. No runtime, authz, UoW, dependency lock, normal CI or consumer API/data semantics change. Control workflows/payloads stay outside the product tree.
+
+## Exact fixture-definition binding follow-up
+
+Review of `ac0dd06f83786d2348b20035fe5495f2a96e189c` found a fourth P1: preserving a case name/category while replacing its files could remove coverage without rejection. The fixed inventory binds the literal fingerprint of each reviewed fixture's name, sorted source paths/content, output and diagnostic contract. Expected fingerprints are committed policy inputs, not computed from current fixtures during verification. Intentional fixture changes require an explicit reviewed golden update.
+
+The same replacement (owner-factory files substituted for the sibling-import case) is applied only in disposable copies: the old executable suite accepts it; the new inventory must reject exactly `fixture definition drift`. Nine replacement/expectation mutations and two order-independent positive cases are checked. This is regression-integrity evidence, not another architecture fact source, signature or sandbox.
+
+Fresh exact-candidate verification, source/bundle identity and remote readback are recorded in [fixture-binding qualification run 34134191914](https://github.com/hvritual/yunka.io/actions/runs/34134191914). No earlier success is promoted to this changed candidate; publication occurs only after the complete locked-toolchain production gate and zero-drift checks. Final review and main integration remain independently recorded on PR #170.

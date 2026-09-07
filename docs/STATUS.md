@@ -445,7 +445,7 @@ The user-selected application-organization plan is [APPLICATION-GOVERNANCE-PLAN.
 | Task | Source state | Verification and scope |
 | --- | --- | --- |
 | AG-00 | Plan archived | Defines AG-01 through AG-09, allowed scope, dependencies, acceptance and rollback; not a claim that all tasks exist |
-| AG-01 / AG-01I | Mechanism regression foundation implemented | 11 named Go mechanism scenarios, 13 inventory-mutation cases, anti-false-pass tests and two Linux process-tree cleanup regressions, through existing architecture-check. See [AG-01I evidence](waves/AG-01I-boundary-qualification.md). Candidate qualification and integration identities are recorded on PR #170 and its exact-head delivery run; no consumer refactor or general architecture scanner is claimed |
+| AG-01 / AG-01I | Mechanism regression foundation implemented | 11 named Go mechanism scenarios, 13 inventory-mutation cases, exact reviewed fixture fingerprints, 11 definition-binding regressions, anti-false-pass tests and two Linux process-tree cleanup regressions, through existing architecture-check. See [AG-01I evidence](waves/AG-01I-boundary-qualification.md). Candidate qualification and integration identities are recorded on PR #170 and its exact-head delivery run; no consumer refactor or general architecture scanner is claimed |
 | AG-02 | Next dependent consumer task | Biz TenantLifecycle encapsulation, after the AG-01 main integration receipt is verified |
 | AG-03 through AG-09 | Defined, not delivered | Narrow-use-case trial, precise type rules, coverage, template integration, migration/debt-growth and continuous evolution |
 
