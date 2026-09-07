@@ -35,9 +35,10 @@ func TestReconcileChangeSetRejectsCreateSemanticDriftFromPlannedIntent(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := add.AddOperation(changeSetCreateOptions(fixture.Root, false)); err != nil {
-		t.Fatalf("apply drifted create operation: %v", err)
+	if _, err := add.AddOperation(changeSetCreateOptions(fixture.Root, true)); err != nil {
+		t.Fatalf("apply baseline create operation: %v", err)
 	}
+	mutateRPCOption(t, fixture, "Archive", "tenant_required: true", "tenant_required: false")
 	generatePressureProject(t, fixture)
 
 	report, err := ReconcileChangeSetWithOptions(context.Background(), fixture.compilerOptions(), value)
@@ -80,12 +81,14 @@ func TestReconcileChangeSetRejectsUndeclaredOperationDrift(t *testing.T) {
 func changeSetCreateOptions(root string, matching bool) add.OperationOptions {
 	if matching {
 		return add.OperationOptions{
+			Boundary: pressureBoundary(), ProtoPaths: []string{pressureProtoPath()},
 			Root: root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.archive", UseCase: "archive_tenant",
 			Access: "protected", Permissions: []string{"tenant.archive"}, PermissionMode: "all", Tenant: "required",
 			Authentication: []string{"jwt"}, Transaction: "local", Idempotency: "none", Composition: "local",
 		}
 	}
 	return add.OperationOptions{
+		Boundary: pressureBoundary(), ProtoPaths: []string{pressureProtoPath()},
 		Root: root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.archive", UseCase: "archive_tenant",
 		Access: "public", Tenant: "optional", Transaction: "none", Idempotency: "none", Composition: "none",
 	}

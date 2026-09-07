@@ -147,6 +147,9 @@ func renderRPCOperation(rpcName, requestType, responseType string, options Opera
 		fmt.Fprintf(&b, "      composition: %s\n", compositionEnum(options.Composition))
 	}
 	fmt.Fprintf(&b, "      execution: { transaction: %s idempotency: %s }\n", transactionEnum(options.Transaction), idempotencyEnum(options.Idempotency))
+	if options.Boundary != nil {
+		fmt.Fprintf(&b, "      boundary: { context: %q aggregate: %q aggregate_not_applicable_reason: %q }\n", options.Boundary.Context, options.Boundary.Aggregate, options.Boundary.AggregateNotApplicableReason)
+	}
 	b.WriteString("    };\n")
 	b.WriteString("  }\n")
 	return b.String()

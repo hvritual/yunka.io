@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	ChangeSetCheckSchemaVersion    = 2
+	ChangeSetCheckSchemaVersion    = 3
 	ChangeSetSemanticSchemaVersion = 1
 )
 
@@ -22,12 +22,13 @@ type ChangeSetSemanticReport struct {
 }
 
 type ChangeSetCheckReport struct {
-	SchemaVersion   int                     `json:"schemaVersion"`
-	BaseSHA         string                  `json:"baseSha"`
-	Reconciliation  Reconciliation          `json:"reconciliation"`
-	Semantic        ChangeSetSemanticReport `json:"semantic"`
-	ContractSources *ContractSourceReport   `json:"contractSources,omitempty"`
-	Conformant      bool                    `json:"conformant"`
+	Boundary        *ChangeSetBoundaryReport `json:"boundary,omitempty"`
+	SchemaVersion   int                      `json:"schemaVersion"`
+	BaseSHA         string                   `json:"baseSha"`
+	Reconciliation  Reconciliation           `json:"reconciliation"`
+	Semantic        ChangeSetSemanticReport  `json:"semantic"`
+	ContractSources *ContractSourceReport    `json:"contractSources,omitempty"`
+	Conformant      bool                     `json:"conformant"`
 }
 
 func ReconcileChangeSet(root string, value ChangeSet) (ChangeSetCheckReport, error) {
@@ -57,7 +58,16 @@ func ReconcileChangeSetWithOptions(ctx context.Context, options projectflow.Opti
 		gitReport.Violations = append(gitReport.Violations, sources.Violations...)
 		sortChangeViolations(gitReport.Violations)
 	}
+	boundary, err := reconcileChangeSetBoundaries(ctx, options, value)
+	if err != nil {
+		return ChangeSetCheckReport{}, err
+	}
+	if boundary != nil {
+		gitReport.Violations = append(gitReport.Violations, boundary.Violations...)
+		sortChangeViolations(gitReport.Violations)
+	}
 	return ChangeSetCheckReport{
+		Boundary:        boundary,
 		ContractSources: sources,
 		SchemaVersion:   ChangeSetCheckSchemaVersion,
 		BaseSHA:         value.BaseSHA,

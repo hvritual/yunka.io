@@ -617,6 +617,70 @@ func (x *ExecutionPolicy) GetIdempotency() IdempotencyPolicy {
 	return IdempotencyPolicy_IDEMPOTENCY_UNSPECIFIED
 }
 
+// BoundaryIntent is explicit architectural intent, not an execution policy or
+// permission grant. Missing intent in legacy contracts remains unknown.
+type BoundaryIntent struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Context   string                 `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
+	Aggregate string                 `protobuf:"bytes,2,opt,name=aggregate,proto3" json:"aggregate,omitempty"`
+	// Use instead of aggregate only when an aggregate genuinely does not apply.
+	// The explanation is evidence, not an automatic architecture waiver.
+	AggregateNotApplicableReason string `protobuf:"bytes,3,opt,name=aggregate_not_applicable_reason,json=aggregateNotApplicableReason,proto3" json:"aggregate_not_applicable_reason,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
+}
+
+func (x *BoundaryIntent) Reset() {
+	*x = BoundaryIntent{}
+	mi := &file_yunka_dsl_v1_options_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BoundaryIntent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BoundaryIntent) ProtoMessage() {}
+
+func (x *BoundaryIntent) ProtoReflect() protoreflect.Message {
+	mi := &file_yunka_dsl_v1_options_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BoundaryIntent.ProtoReflect.Descriptor instead.
+func (*BoundaryIntent) Descriptor() ([]byte, []int) {
+	return file_yunka_dsl_v1_options_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *BoundaryIntent) GetContext() string {
+	if x != nil {
+		return x.Context
+	}
+	return ""
+}
+
+func (x *BoundaryIntent) GetAggregate() string {
+	if x != nil {
+		return x.Aggregate
+	}
+	return ""
+}
+
+func (x *BoundaryIntent) GetAggregateNotApplicableReason() string {
+	if x != nil {
+		return x.AggregateNotApplicableReason
+	}
+	return ""
+}
+
 type OperationDeclaration struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -634,16 +698,17 @@ type OperationDeclaration struct {
 	// and request/response protobuf types explicitly. Method-bound Operations
 	// may omit these fields; the compiler derives them from the RPC method and
 	// rejects explicit values that disagree.
-	RequestType       string `protobuf:"bytes,11,opt,name=request_type,json=requestType,proto3" json:"request_type,omitempty"`
-	ResponseType      string `protobuf:"bytes,12,opt,name=response_type,json=responseType,proto3" json:"response_type,omitempty"`
-	ApplicationMethod string `protobuf:"bytes,13,opt,name=application_method,json=applicationMethod,proto3" json:"application_method,omitempty"`
+	RequestType       string          `protobuf:"bytes,11,opt,name=request_type,json=requestType,proto3" json:"request_type,omitempty"`
+	ResponseType      string          `protobuf:"bytes,12,opt,name=response_type,json=responseType,proto3" json:"response_type,omitempty"`
+	ApplicationMethod string          `protobuf:"bytes,13,opt,name=application_method,json=applicationMethod,proto3" json:"application_method,omitempty"`
+	Boundary          *BoundaryIntent `protobuf:"bytes,14,opt,name=boundary,proto3" json:"boundary,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
 
 func (x *OperationDeclaration) Reset() {
 	*x = OperationDeclaration{}
-	mi := &file_yunka_dsl_v1_options_proto_msgTypes[5]
+	mi := &file_yunka_dsl_v1_options_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -655,7 +720,7 @@ func (x *OperationDeclaration) String() string {
 func (*OperationDeclaration) ProtoMessage() {}
 
 func (x *OperationDeclaration) ProtoReflect() protoreflect.Message {
-	mi := &file_yunka_dsl_v1_options_proto_msgTypes[5]
+	mi := &file_yunka_dsl_v1_options_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -668,7 +733,7 @@ func (x *OperationDeclaration) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OperationDeclaration.ProtoReflect.Descriptor instead.
 func (*OperationDeclaration) Descriptor() ([]byte, []int) {
-	return file_yunka_dsl_v1_options_proto_rawDescGZIP(), []int{5}
+	return file_yunka_dsl_v1_options_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *OperationDeclaration) GetId() string {
@@ -762,6 +827,13 @@ func (x *OperationDeclaration) GetApplicationMethod() string {
 	return ""
 }
 
+func (x *OperationDeclaration) GetBoundary() *BoundaryIntent {
+	if x != nil {
+		return x.Boundary
+	}
+	return nil
+}
+
 var file_yunka_dsl_v1_options_proto_extTypes = []protoimpl.ExtensionInfo{
 	{
 		ExtendedType:  (*descriptorpb.FileOptions)(nil),
@@ -845,7 +917,11 @@ const file_yunka_dsl_v1_options_proto_rawDesc = "" +
 	"\fcapabilities\x18\x04 \x03(\v2#.yunka.dsl.v1.CapabilityRequirementR\fcapabilities\"\x97\x01\n" +
 	"\x0fExecutionPolicy\x12A\n" +
 	"\vtransaction\x18\x01 \x01(\x0e2\x1f.yunka.dsl.v1.TransactionPolicyR\vtransaction\x12A\n" +
-	"\vidempotency\x18\x02 \x01(\x0e2\x1f.yunka.dsl.v1.IdempotencyPolicyR\vidempotency\"\xdb\x04\n" +
+	"\vidempotency\x18\x02 \x01(\x0e2\x1f.yunka.dsl.v1.IdempotencyPolicyR\vidempotency\"\x8f\x01\n" +
+	"\x0eBoundaryIntent\x12\x18\n" +
+	"\acontext\x18\x01 \x01(\tR\acontext\x12\x1c\n" +
+	"\taggregate\x18\x02 \x01(\tR\taggregate\x12E\n" +
+	"\x1faggregate_not_applicable_reason\x18\x03 \x01(\tR\x1caggregateNotApplicableReason\"\x95\x05\n" +
 	"\x14OperationDeclaration\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
 	"\buse_case\x18\x02 \x01(\tR\auseCase\x12 \n" +
@@ -860,7 +936,8 @@ const file_yunka_dsl_v1_options_proto_rawDesc = "" +
 	" \x01(\v2\x1d.yunka.dsl.v1.ExecutionPolicyR\texecution\x12!\n" +
 	"\frequest_type\x18\v \x01(\tR\vrequestType\x12#\n" +
 	"\rresponse_type\x18\f \x01(\tR\fresponseType\x12-\n" +
-	"\x12application_method\x18\r \x01(\tR\x11applicationMethod*r\n" +
+	"\x12application_method\x18\r \x01(\tR\x11applicationMethod\x128\n" +
+	"\bboundary\x18\x0e \x01(\v2\x1c.yunka.dsl.v1.BoundaryIntentR\bboundary*r\n" +
 	"\aDTOKind\x12\x13\n" +
 	"\x0fDTO_UNSPECIFIED\x10\x00\x12\r\n" +
 	"\tDTO_INPUT\x10\x01\x12\x0e\n" +
@@ -909,7 +986,7 @@ func file_yunka_dsl_v1_options_proto_rawDescGZIP() []byte {
 }
 
 var file_yunka_dsl_v1_options_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
-var file_yunka_dsl_v1_options_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_yunka_dsl_v1_options_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_yunka_dsl_v1_options_proto_goTypes = []any{
 	(DTOKind)(0),                        // 0: yunka.dsl.v1.DTOKind
 	(PermissionMode)(0),                 // 1: yunka.dsl.v1.PermissionMode
@@ -922,15 +999,16 @@ var file_yunka_dsl_v1_options_proto_goTypes = []any{
 	(*CapabilityRequirement)(nil),       // 8: yunka.dsl.v1.CapabilityRequirement
 	(*ApplicationDeclaration)(nil),      // 9: yunka.dsl.v1.ApplicationDeclaration
 	(*ExecutionPolicy)(nil),             // 10: yunka.dsl.v1.ExecutionPolicy
-	(*OperationDeclaration)(nil),        // 11: yunka.dsl.v1.OperationDeclaration
-	(*descriptorpb.FileOptions)(nil),    // 12: google.protobuf.FileOptions
-	(*descriptorpb.MessageOptions)(nil), // 13: google.protobuf.MessageOptions
-	(*descriptorpb.ServiceOptions)(nil), // 14: google.protobuf.ServiceOptions
-	(*descriptorpb.MethodOptions)(nil),  // 15: google.protobuf.MethodOptions
+	(*BoundaryIntent)(nil),              // 11: yunka.dsl.v1.BoundaryIntent
+	(*OperationDeclaration)(nil),        // 12: yunka.dsl.v1.OperationDeclaration
+	(*descriptorpb.FileOptions)(nil),    // 13: google.protobuf.FileOptions
+	(*descriptorpb.MessageOptions)(nil), // 14: google.protobuf.MessageOptions
+	(*descriptorpb.ServiceOptions)(nil), // 15: google.protobuf.ServiceOptions
+	(*descriptorpb.MethodOptions)(nil),  // 16: google.protobuf.MethodOptions
 }
 var file_yunka_dsl_v1_options_proto_depIdxs = []int32{
 	0,  // 0: yunka.dsl.v1.DTODeclaration.kind:type_name -> yunka.dsl.v1.DTOKind
-	11, // 1: yunka.dsl.v1.ApplicationDeclaration.operations:type_name -> yunka.dsl.v1.OperationDeclaration
+	12, // 1: yunka.dsl.v1.ApplicationDeclaration.operations:type_name -> yunka.dsl.v1.OperationDeclaration
 	8,  // 2: yunka.dsl.v1.ApplicationDeclaration.capabilities:type_name -> yunka.dsl.v1.CapabilityRequirement
 	4,  // 3: yunka.dsl.v1.ExecutionPolicy.transaction:type_name -> yunka.dsl.v1.TransactionPolicy
 	5,  // 4: yunka.dsl.v1.ExecutionPolicy.idempotency:type_name -> yunka.dsl.v1.IdempotencyPolicy
@@ -938,19 +1016,20 @@ var file_yunka_dsl_v1_options_proto_depIdxs = []int32{
 	2,  // 6: yunka.dsl.v1.OperationDeclaration.authentication:type_name -> yunka.dsl.v1.Authentication
 	3,  // 7: yunka.dsl.v1.OperationDeclaration.composition:type_name -> yunka.dsl.v1.CompositionBoundary
 	10, // 8: yunka.dsl.v1.OperationDeclaration.execution:type_name -> yunka.dsl.v1.ExecutionPolicy
-	12, // 9: yunka.dsl.v1.domain:extendee -> google.protobuf.FileOptions
-	13, // 10: yunka.dsl.v1.dto:extendee -> google.protobuf.MessageOptions
-	14, // 11: yunka.dsl.v1.application:extendee -> google.protobuf.ServiceOptions
-	15, // 12: yunka.dsl.v1.operation:extendee -> google.protobuf.MethodOptions
-	6,  // 13: yunka.dsl.v1.domain:type_name -> yunka.dsl.v1.DomainDeclaration
-	7,  // 14: yunka.dsl.v1.dto:type_name -> yunka.dsl.v1.DTODeclaration
-	9,  // 15: yunka.dsl.v1.application:type_name -> yunka.dsl.v1.ApplicationDeclaration
-	11, // 16: yunka.dsl.v1.operation:type_name -> yunka.dsl.v1.OperationDeclaration
-	17, // [17:17] is the sub-list for method output_type
-	17, // [17:17] is the sub-list for method input_type
-	13, // [13:17] is the sub-list for extension type_name
-	9,  // [9:13] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	11, // 9: yunka.dsl.v1.OperationDeclaration.boundary:type_name -> yunka.dsl.v1.BoundaryIntent
+	13, // 10: yunka.dsl.v1.domain:extendee -> google.protobuf.FileOptions
+	14, // 11: yunka.dsl.v1.dto:extendee -> google.protobuf.MessageOptions
+	15, // 12: yunka.dsl.v1.application:extendee -> google.protobuf.ServiceOptions
+	16, // 13: yunka.dsl.v1.operation:extendee -> google.protobuf.MethodOptions
+	6,  // 14: yunka.dsl.v1.domain:type_name -> yunka.dsl.v1.DomainDeclaration
+	7,  // 15: yunka.dsl.v1.dto:type_name -> yunka.dsl.v1.DTODeclaration
+	9,  // 16: yunka.dsl.v1.application:type_name -> yunka.dsl.v1.ApplicationDeclaration
+	12, // 17: yunka.dsl.v1.operation:type_name -> yunka.dsl.v1.OperationDeclaration
+	18, // [18:18] is the sub-list for method output_type
+	18, // [18:18] is the sub-list for method input_type
+	14, // [14:18] is the sub-list for extension type_name
+	10, // [10:14] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_yunka_dsl_v1_options_proto_init() }
@@ -964,7 +1043,7 @@ func file_yunka_dsl_v1_options_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_yunka_dsl_v1_options_proto_rawDesc), len(file_yunka_dsl_v1_options_proto_rawDesc)),
 			NumEnums:      6,
-			NumMessages:   6,
+			NumMessages:   7,
 			NumExtensions: 4,
 			NumServices:   0,
 		},

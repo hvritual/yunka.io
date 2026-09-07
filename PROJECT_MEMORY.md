@@ -199,6 +199,18 @@ Every repository task must:
 - Local child Operations join the root ExecutionScope/UoW and cannot silently create nested transactions or escalate transaction semantics.
 - Remote composition uses explicit Saga/Outbox semantics rather than distributed local transaction assumptions.
 
+## Service Boundary evidence baseline
+
+- A Yunka Application is the logical Service Boundary; its protobuf Service is the API projection. Do not introduce arbitrary one-Application/many-Service semantics without separately demonstrated need.
+- Architectural boundary intent belongs to the canonical protobuf Operation declaration and Contract Manifest; it is not a runtime permission, transaction policy or a second hand-maintained service taxonomy.
+- Missing intent is unknown. Names, file layout and Operation counts are not proof of business cohesion. Read-only fingerprints and declared-intent coverage confer no mutation, growth or merge authority; inspection must not be represented as a boundary decision.
+- Boundary decisions must be recomputed from canonical facts against the expected task identity and versioned policy. A self-consistent unkeyed digest is not authority; supporting and counter-evidence must both remain bound. Independently matching dimensions across different peers must not manufacture a precedent that no single peer satisfies. Policy compatibility is distinct from mutation authority and business-ontology certification.
+
+- Operation authoring must evaluate a disposable, canonically compiled before/after input set and require a reusable boundary decision before persistent source/landing writes. A plan binds actual HEAD plus current working-tree inputs; these are distinct identities, and neither constitutes retrospective approval of other direct edits.
+- Apply and saved-plan revalidation must recompute evidence and preserve blocking outcomes; absent, stale or legacy proof must not become a compatibility bypass. Shared worktree-private locks coordinate Yunka writers only, never arbitrary external editors. New-boundary initialization and broader sufficiency require explicit policies, not weakening an existing policy to pass fixtures.
+
+- Persisted create-Operation ChangeSet evidence must bind the complete plan and be independently recomputed against immutable base and current canonical input. An unkeyed digest, a copied HEAD or a legacy schema cannot authorize growth. Independent additions may share a baseline only when every candidate retains its own unchanged base witness; other declared additions must never hide existing-model drift.
+
 ## Operation execution baseline
 
 - `pkg/operationplan` is the leaf-safe immutable execution IR, `pkg/contract` is the compiler, and `framework/operation.Executor` is the sole canonical transport-neutral Operation runtime.

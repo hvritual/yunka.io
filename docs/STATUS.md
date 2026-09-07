@@ -438,6 +438,48 @@ Historical candidate evidence from PRs #162/#163/#164 is preserved for its exact
 
 Acceptance is bounded to canonical provenance, Operation context and modeled contract-source/declaration conformance. It does not claim lexical/token-minimal context, a filesystem sandbox, signed task authority, arbitrary custom-option semantics or consumer runtime qualification. Unplanned source moves require a separately scoped migration and fresh task. **Issue #161 remains OPEN and separate**; this delivery does not implement Service Boundary decisions.
 
+## Service Boundary intent and read-only fingerprint — issue #161.1
+
+**State: IMPLEMENTED / IN REVIEW as an independent foundation; issue #161 remains OPEN.**
+
+Canonical protobuf Operation declarations can carry explicit `boundary.context` and either `boundary.aggregate` or an `aggregate_not_applicable_reason`. Missing legacy intent remains unknown. Typed Manifest schema v5 carries the metadata with v1-v5 reader compatibility; the root untyped V1 artifacts and runtime OperationPlan IR retain their existing semantics. Malformed explicit intent is rejected rather than guessed.
+
+`app/cmd/boundarycore` derives a deterministic, per-Operation-linked `canonical-service-boundary/v1` fingerprint from canonical compiler facts. `yunka boundary inspect [options] <domain>/<application>` recompiles current sources, reuses source-set provenance, emits schema-v1 read-only evidence and intent coverage, and writes no project files. It preserves target-Application requirements/capabilities, transitive Operation dependencies, DTO/enum/source models, and method/streaming facts. Unknown/partial/declared describes evidence coverage, not boundary validity. The reusable projection stays in the CLI control-plane module, alongside Audit/Advisor cores, rather than creating an app import of an unpublished new package under the separately versioned `pkg` module. No release pin, local replacement or workspace-disabled tidy gate is changed.
+
+The foundation by itself does not implement evaluation or mutation authority. The subsequent decision and authoring increments below extend it; direct-edit growth detection and boundary-debt policy remain separate; persisted create-proof verification is added by the increment below. It does not infer business context from names or RPC counts, depend on an LLM, or require immediate migration of historical Services. Those enforcement stages remain required before issue #161 can be completed. Exact test, production and real-consumer inspection qualification belong to this increment's PR and immutable evidence; no main merge or complete #161 qualification is implied here.
+
+## Deterministic single-addition boundary decisions — issue #161.2
+
+**State: IMPLEMENTED / IN REVIEW as an independent increment on the qualified PR #166 foundation; issue #161 remains OPEN.**
+
+`boundarycore.EvaluateAddition` now derives a contradiction-first decision from canonical before/after Manifests and exact task identity. Its fixed `canonical-peer-addition/v1` policy separates explicit context contradictions, insufficient/mixed legacy intent, and narrow comparable-peer reuse. A common unchanged peer must jointly witness security, execution/composition, dependencies and client-contract shape; independent per-dimension matches cannot manufacture a nonexistent precedent. Existing declaration drift or unrelated additions cannot be approved as a single Operation addition. Supporting and counter-evidence are retained, and unknown lifecycle/availability evidence is not presented as observed.
+
+The read-only decision binds the base SHA, candidate execution plan, both full normalized Manifest digests, before/after fingerprints and policy version. `RevalidateAddition` rebuilds and compares the complete decision, not just an attacker-recomputable hash. Changed identity/facts/policy, forged outcomes and omitted counter-evidence are rejected. The caller remains responsible for resolving the base and compiling snapshots; these hashes are neither source-byte snapshots nor signatures.
+
+The independently testable core is consumed by the authoring increment below. Persisted create-ChangeSet proof binding is connected by the increment below; universal canonical growth checks remain separate. `boundary inspect` remains read-only. Existing-Operation growth, service moves, batches, new-boundary initialization, richer semantic/runtime evidence and boundary debt remain separate. Parent #161 cannot be closed until the mutation and direct-edit invariants are enforced. Exact test/production/consumer evidence belongs to this increment's PR and artifacts; no main merge or consumer runtime qualification is implied.
+
+## Boundary-gated Operation plan/apply — issue #161.3
+
+**State: IMPLEMENTED / IN REVIEW as an independent increment on PR #167; issue #161 remains OPEN.**
+
+The public `add operation --plan` / apply paths now compile captured canonical before/after input and use the existing contradiction-first decision. Only `reuse_existing_application` can reach source and landing-file writes. Other outcomes produce a blocking schema-v2 plan with no mutations/effects and a nonzero CLI exit. Explicit context/aggregate-or-reason and ordered proto include flags are available; malformed intent, invalid arguments or unusable compiler inputs do not trigger source writes. Other add report schemas remain unchanged.
+
+The plan binds actual current HEAD, current working-tree source/include bytes, project metadata and the entire decision. Disposable snapshots reuse the existing compiler and multi-source provenance rather than trusting generated JSON or inventing a Manifest. Apply uses a Git-private cooperative writer lock, fresh replan and final HEAD/input recheck. `RevalidateOperationPlan` compares the complete current plan, rejects legacy or missing proof, and feeds `change set begin`, which also requires the same immutable baseline. Explicit include content and even nonsemantic source edits invalidate saved input evidence.
+
+This does not assert that the working tree equals HEAD or retrospectively approve unrelated direct edits. The writer lock is not an external-editor sandbox or an atomic transaction across both output files. Saved create-ChangeSet boundary proofs are connected by the increment below; universal check/audit growth detection, boundary-debt policy and new-boundary initialization remain unimplemented. The inherited peer policy intentionally blocks first Operations, missing/mixed legacy intent and unproven new client-contract identities rather than introducing a hidden bypass. Runtime, authz, transactions, dependencies and ordinary verification gates are unchanged.
+
+Real-protoc authoring tests cover reusable versus blocked plans, stale/tampered/consumed evidence, live input changes during compilation, source/include identity, profile paths, nested projects, linked worktrees and multiple source sets. Existing ChangeSet/AX7 tests seed explicit reviewed canonical peer fixtures and retain their permission/tenant/transaction/source-scope negative assertions. Exact final test/production and real-consumer RED/GREEN qualification belongs to this increment's PR and execution evidence. No main integration or complete #161/consumer-runtime qualification is implied.
+
+## Persisted ChangeSet create-boundary proofs — issue #161.4
+
+**State: IMPLEMENTED / IN REVIEW as an independent increment on PR #168; issue #161 remains OPEN.**
+
+ChangeSet v3 retains each full create plan and complete boundary decision, plus captured immutable-base compiler-input identity. Begin independently compiles the raw Git baseline and rejects ignored/current canonical input that is not actually represented by that baseline. Check recompiles captured immutable/current sources and revalidates each complete decision regardless of whether a protobuf delta triggered the ordinary quick gate. Schema-v3 reports expose exact set model/input digests and per-Operation boundary results. The existing policy, scope, ownership, source and semantic checks are not weakened.
+
+Multiple independent new Operations can share the immutable baseline: only other declared base-absent Operations are projected out, all sibling proofs must independently pass, and existing canonical declarations remain visible to every proof. Existing canonical edits alongside creation, migrations and novel client-contract evidence are not silently blessed by the inherited single-addition policy. Existing-only v2 sets remain compatible; legacy create subjects fail closed and require replanning. Caller-supplied include profiles must agree with the saved evidence, and explicit include content drift invalidates the base proof. Checkout location alone does not invalidate base content.
+
+This increment does not implement universal direct-edit growth detection, existing-operation growth policy, first-Operation initialization, structured waivers, or existing/new/fixed boundary debt. It does not sign evidence, certify business ontology, freeze arbitrary external editors or verify consumer runtime. Exact qualification and delivery status belong to this increment's PR/evidence; no main merge or full #161 completion is implied.
+
 ## Current pressure frontier
 
 The active real-consumer frontier is **B13 cross-tenant delegation and delegated device access** in `hvritual/biz` issue #11.
