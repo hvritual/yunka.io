@@ -165,12 +165,24 @@ func agBoundaryExpectedFailure(output string, code int, pattern string) error {
 }
 
 func agBoundaryRun(root string, env []string, binary string, args ...string) (string, int, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	return agBoundaryRunWithTimeout(root, env, 90*time.Second, binary, args...)
+}
+
+func agBoundaryRunWithTimeout(root string, env []string, timeout time.Duration, binary string, args ...string) (string, int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Dir, cmd.Env = root, env
 	cmd.WaitDelay = 2 * time.Second
+	cleanup, err := agBoundaryOwnProcessTree(cmd)
+	if err != nil {
+		return "", -1, err
+	}
+	defer cleanup() // also cover an unexpected panic in subprocess handling
 	out, err := cmd.CombinedOutput()
+	if cleanupErr := cleanup(); cleanupErr != nil {
+		return string(out), -1, fmt.Errorf("AG-01 INCOMPLETE: process-tree cleanup: %w", cleanupErr)
+	}
 	if ctx.Err() != nil {
 		return string(out), -1, ctx.Err()
 	}

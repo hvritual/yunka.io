@@ -118,6 +118,8 @@ internal/assembly/
 
 正式新增提交由本地 Git 或 Runner-local Git 创建，Connector 只用于隔离 control 分支暂存、读回和 PR 管理。main 仅在资格验证和实际审查处置后通过 non-force fast-forward 更新；并行 main 有变化就停下重新整合，不覆盖它。独立 review 的实际结果与测试资格分列，不伪造 APPROVE。每个完成的框架任务最终同步 main，不把已验证 Draft 当作最终交付。回滚：独立 revert 本任务提交；不改数据。
 
+AG-01I 审查收口还包括进程树清理：Unix 命令使用独立进程组，取消和父进程退出后都清理后代；Linux 回归覆盖超时及父进程先退出但管道仍被后代持有。非 Unix 尚无合格 backend 时明确 INCOMPLETE，不静默退化为仅杀直接进程。详见 [AG-01I 验收记录](../waves/AG-01I-boundary-qualification.md)。
+
 ### AG-02 — Biz 封闭 Application 试点
 
 依赖：AG-01。先重新读取 Biz main/框架锁；选一个租户生命周期 Application。允许改其手写实现、所有者工厂、装配适配、测试和消费者文档；生成物只有经规范生成器再生成才可更新。
