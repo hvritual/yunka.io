@@ -1,0 +1,156 @@
+name: issue161-changeset-boundary-qualification
+on:
+  push:
+    branches: [control/161-changeset-boundary-delivery]
+    paths: [.github/workflows/issue161-changeset-boundary-qualification.yml]
+permissions:
+  contents: read
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports: [3306:3306]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      BASE_SHA: 62fe8e194b60637d8fee1d0bec90d9a67ccd9490
+    steps:
+      - name: Checkout isolated controller
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: controller
+          persist-credentials: false
+      - name: Checkout exact prerequisite
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 62fe8e194b60637d8fee1d0bec90d9a67ccd9490
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Load locked toolchain
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git -C candidate rev-parse HEAD)" = "$BASE_SHA"
+          source candidate/tools/toolchain.env
+          echo "go_version=$GO_VERSION" >> "$GITHUB_OUTPUT"
+          echo "protoc_release=$PROTOC_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "protoc_sha=$PROTOC_LINUX_X86_64_SHA256" >> "$GITHUB_OUTPUT"
+          git -C candidate status --short --branch
+          git -C candidate branch --show-current
+          git -C candidate remote -v
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache-dependency-path: |
+            candidate/app/go.sum
+            candidate/framework/go.sum
+            candidate/gateway/go.sum
+            candidate/infras/go.sum
+            candidate/pkg/go.sum
+      - name: Install locked protobuf toolchain
+        shell: bash
+        env:
+          PROTOC_RELEASE: ${{ steps.lock.outputs.protoc_release }}
+          PROTOC_SHA: ${{ steps.lock.outputs.protoc_sha }}
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "$PROTOC_SHA  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          export PATH="$RUNNER_TEMP/protoc/bin:$GITHUB_WORKSPACE/candidate/.yunka/bin:$PATH"
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/candidate/.yunka/bin" >> "$GITHUB_PATH"
+          (cd candidate && make rpc-tools toolchain-check && go build -o "$RUNNER_TEMP/yunka-before" ./app/cmd)
+      - name: Require original source-only boundary gap with unchanged regression
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_file=../controller/tools/qualification/changeset-boundary/changeset_boundary_regression_test.go
+          target=app/cmd/change/changeset_boundary_regression_test.go
+          test ! -e "$target"
+          cp "$source_file" "$target"
+          set +e
+          go test -count=1 -run '^TestIssue161SetBoundaryRejectsSourceOnlyIntentDrift$' ./app/cmd/change > ../evidence/before-RED.log 2>&1
+          result=$?
+          set -e
+          cat ../evidence/before-RED.log
+          test "$result" -ne 0
+          grep -q 'BOUNDARY_PROOF_GAP: source-only architectural context drift was accepted' ../evidence/before-RED.log
+          grep -q '^--- FAIL: TestIssue161SetBoundaryRejectsSourceOnlyIntentDrift' ../evidence/before-RED.log
+          rm "$target"
+          test -z "$(git status --porcelain)"
+      - name: Apply authored product changes and commit with normal Git
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 controller/tools/qualification/changeset-boundary/apply.py candidate
+          cd candidate
+          git add -N .
+          git diff --name-only -- '*.go' | xargs gofmt -w
+          git diff --check
+          git add .
+          git config user.name hvritual
+          git config user.email 11900351+hvritual@users.noreply.github.com
+          git commit -m 'feat(boundary): persist and revalidate ChangeSet creation proofs' -m 'Bind complete Operation plans and immutable canonical inputs; independently reconstruct every declared addition without hiding base drift. Existing-only legacy ChangeSets retain compatibility. Direct-edit growth beyond create subjects remains separately scoped.'
+          git show --stat --format=fuller HEAD | tee ../evidence/commit.txt
+          git diff "$BASE_SHA" HEAD > ../evidence/product.patch
+          git rev-parse HEAD > ../evidence/candidate-sha.txt
+          git rev-parse HEAD^{tree} > ../evidence/candidate-tree.txt
+          test -z "$(git status --porcelain)"
+      - name: Real-protoc new proof tests and all prerequisite suites
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -count=1 -json ./app/cmd/add ./app/cmd/boundarycore ./app/cmd/boundary ./app/cmd/change ./app/cmd/projectflow ./app/cmd/agentcontext ./app/cmd ./pkg/contract ./pkg/architecturepolicy | tee ../evidence/targeted.jsonl
+          python3 - <<'PY'
+          import json
+          events=[json.loads(s) for s in open('../evidence/targeted.jsonl')]
+          focused=[e for e in events if e.get('Test','').startswith('TestIssue161')]
+          assert focused and not any(e['Action'] in ('fail','skip') for e in focused)
+          passed={e['Test'] for e in focused if e['Action']=='pass' and e['Test'].startswith('TestIssue161SetBoundary') and '/' not in e['Test']}
+          expected={'TestIssue161SetBoundaryRejectsSourceOnlyIntentDrift','TestIssue161SetBoundaryProofRoundTripAndDetached','TestIssue161SetBoundaryRecomputesForgedProof','TestIssue161SetBoundaryLegacyExistingOnlyAndMissingAddition','TestIssue161SetBoundaryIndependentCreatesCannotHidePeerDrift','TestIssue161SetBoundaryExplicitIncludeBytesAndProfiles','TestIssue161SetBoundaryRejectsIgnoredBaselineDriftAndCancellation','TestIssue161SetBoundarySurvivesCommittedCheckoutRelocation'}
+          assert passed==expected,(passed,expected)
+          assert len([e for e in events if e['Action']=='pass' and 'Test' not in e])==9
+          print('All eight exact proof groups and nine packages passed without issue161 skips')
+          PY
+          go test -count=1 -race ./app/cmd/add ./app/cmd/projectflow ./app/cmd/boundarycore ./app/cmd/change | tee ../evidence/race.log
+      - name: Complete canonical production and deterministic clean-worktree qualification
+        working-directory: candidate
+        shell: bash
+        env:
+          YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?charset=utf8mb4&parseTime=true&loc=UTC&multiStatements=true
+        run: |
+          set -euo pipefail
+          make verify-production 2>&1 | tee ../evidence/verify-production.log
+          make tidy 2>&1 | tee ../evidence/determinism.log
+          make contract 2>&1 | tee -a ../evidence/determinism.log
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
+      - name: Preserve candidate and qualification evidence without publication
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          if test -f evidence/candidate-sha.txt; then
+            git -C candidate bundle create "$GITHUB_WORKSPACE/evidence/candidate.bundle" HEAD "^$BASE_SHA"
+          fi
+          (cd evidence && find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: issue161-changeset-boundary-qualification
+          path: evidence
+          retention-days: 30
