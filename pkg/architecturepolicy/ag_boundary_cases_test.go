@@ -43,8 +43,8 @@ func NewReader() Reader { return readerView{target: &store.Store{}} }
 			name: "root_internal_allows_sibling", output: "read-ok",
 			files: map[string]string{
 				"internal/a/store/store.go": store,
-				"internal/b/b.go":          "package b\nimport renamed \"" + agBoundaryModule + "/internal/a/store\"\nfunc Read() string { return (&renamed.Store{}).Read() }\n",
-				"cmd/probe/main.go":        "package main\nimport (\"fmt\"; \"" + agBoundaryModule + "/internal/b\")\nfunc main() { fmt.Println(b.Read()) }\n",
+				"internal/b/b.go":           "package b\nimport renamed \"" + agBoundaryModule + "/internal/a/store\"\nfunc Read() string { return (&renamed.Store{}).Read() }\n",
+				"cmd/probe/main.go":         "package main\nimport (\"fmt\"; \"" + agBoundaryModule + "/internal/b\")\nfunc main() { fmt.Println(b.Read()) }\n",
 			},
 		},
 		{
@@ -86,8 +86,8 @@ func New() *View { return &View{target: &store.Store{}} }
 			diagnostic: `^internal/b/b\.go:[0-9]+:[0-9]+: use of internal package example\.com/agboundary/internal/a/internal/store not allowed$`,
 			files: map[string]string{
 				"internal/a/internal/store/store.go": store,
-				"internal/b/b.go":                   "package b\nimport " + alias + " \"" + agBoundaryModule + "/internal/a/internal/store\"\nfunc Read() string { return (&" + alias + ".Store{}).Read() }\n",
-				"cmd/probe/main.go":                 "package main\nimport (\"fmt\"; \"" + agBoundaryModule + "/internal/b\")\nfunc main() { fmt.Println(b.Read()) }\n",
+				"internal/b/b.go":                    "package b\nimport " + alias + " \"" + agBoundaryModule + "/internal/a/internal/store\"\nfunc Read() string { return (&" + alias + ".Store{}).Read() }\n",
+				"cmd/probe/main.go":                  "package main\nimport (\"fmt\"; \"" + agBoundaryModule + "/internal/b\")\nfunc main() { fmt.Println(b.Read()) }\n",
 			},
 		})
 	}

@@ -49,6 +49,9 @@ func TestAGBoundaryMechanisms(t *testing.T) {
 	t.Logf("AG-01 toolchain=%s target=%s/%s; offline, no inherited workspace or GOFLAGS", runtime.Version(), runtime.GOOS, runtime.GOARCH)
 
 	cases := agBoundaryCases()
+	if err := agBoundaryValidateCases(cases); err != nil {
+		t.Fatal(err)
+	}
 	// A legal control must build and execute before any negative is counted.
 	if !t.Run("control", func(t *testing.T) {
 		agBoundaryExercise(t, cases[0], version, goBinary, env)
@@ -209,7 +212,7 @@ func agBoundaryEnvironment(parent []string, cache string) []string {
 		env = append(env, entry)
 	}
 	return append(env,
-		"GOENV=off", "GOTOOLCHAIN=local", "GOWORK=off", "GO111MODULE=on",
+		"GOENV=off", "GOTOOLCHAIN=local", "GOWORK=off", "GO111MODULE=on", "GOTELEMETRY=off",
 		"GOFLAGS=-mod=readonly -buildvcs=false", "GOPROXY=off", "GOSUMDB=off", "GOVCS=*:off",
 		"CGO_ENABLED=0", "GOOS="+runtime.GOOS, "GOARCH="+runtime.GOARCH,
 		"GOROOT="+runtime.GOROOT(), "GOPATH="+filepath.Join(cache, "gopath"), "GOCACHE="+filepath.Join(cache, "build"))
@@ -258,7 +261,7 @@ func TestAGBoundaryHarnessRejectsFalsePass(t *testing.T) {
 		"empty": "", "marker_only": "use of internal package not allowed", "syntax": "internal/b/b.go:2:8: syntax error\n",
 		"mixed": valid + "internal/b/b.go:3:1: syntax error\n", "duplicate": valid + valid,
 		"infrastructure": "go: download failed\n" + valid,
-		"wrong_target": strings.ReplaceAll(valid, "/a/internal/", "/unrelated/internal/"),
+		"wrong_target":   strings.ReplaceAll(valid, "/a/internal/", "/unrelated/internal/"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if err := agBoundaryExpectedFailure(output, 1, pattern); err == nil {

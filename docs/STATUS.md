@@ -4,7 +4,7 @@
 > Authority: current framework/wave/release/pressure status  
 > Live Git HEAD authority: resolve the `main` ref from Git/GitHub; it is not duplicated as a permanent fact here  
 > Behavioral reconciliation baseline: `19bed965852d9dc2ef39e91dcadd7fb6bea4c871` (qualified candidate merged unchanged by PR #119)  
-> Reconciled date: 2026-09-06
+> Reconciled date: 2026-09-07
 > Governance: [`DOCUMENTATION_GOVERNANCE.md`](DOCUMENTATION_GOVERNANCE.md)
 
 ## Current framework state
@@ -437,6 +437,21 @@ The same run replayed the immutable source-scope qualification against `iot-deli
 Historical candidate evidence from PRs #162/#163/#164 is preserved for its exact SHA/tree and is inherited by the integrated implementation through verified tree equality, not a narrative assumption. Fresh exact-main results are in run `34037811821` and artifact `issue160-main-acceptance-evidence`; final documentation-only PR checks and issue disposition are recorded on GitHub. No normal CI/protection configuration or runtime/authz/UoW semantics were changed. Independent automated review was not obtained because the review bot reported its usage limit; tests and this integration inspection are not presented as independent approval.
 
 Acceptance is bounded to canonical provenance, Operation context and modeled contract-source/declaration conformance. It does not claim lexical/token-minimal context, a filesystem sandbox, signed task authority, arbitrary custom-option semantics or consumer runtime qualification. Unplanned source moves require a separately scoped migration and fresh task. **Issue #161 remains OPEN and separate**; this delivery does not implement Service Boundary decisions.
+
+## Application governance implementation stream
+
+The user-selected application-organization plan is [APPLICATION-GOVERNANCE-PLAN.md](architecture/APPLICATION-GOVERNANCE-PLAN.md). It is a control-plane/consumer engineering stream, not a new numbered runtime wave. It preserves the separate #161 Service Boundary work and the existing B13 pressure classification.
+
+| Task | Source state | Verification and scope |
+| --- | --- | --- |
+| AG-00 | Plan archived | Defines AG-01 through AG-09, allowed scope, dependencies, acceptance and rollback; not a claim that all tasks exist |
+| AG-01 / AG-01I | Mechanism regression foundation implemented | 11 named Go mechanism scenarios plus exact inventory and anti-false-pass tests, through existing architecture-check. Candidate qualification and integration identities are recorded on PR #170 and its exact-head delivery run; no consumer refactor or general architecture scanner is claimed |
+| AG-02 | Next dependent consumer task | Biz TenantLifecycle encapsulation, after the AG-01 main integration receipt is verified |
+| AG-03 through AG-09 | Defined, not delivered | Narrow-use-case trial, precise type rules, coverage, template integration, migration/debt-growth and continuous evolution |
+
+The earlier AG-01 head `7c50680f0381505d9cc55a029a2a92baa6b0a140` passed CI run `34119891295` and production run `34119891325`. AG-01I adds test-policy integrity and documentation reconciliation; it must establish its own exact-head qualification rather than inherit the earlier result by narrative. The delivery worker creates a normal Git commit before testing, runs the new candidate with locked Go/protoc and MySQL, and publishes it only after full qualification. PR discussion and Git/action receipts distinguish candidate, reviewed and integrated states; main must be read back before claiming integration.
+
+These tests characterize the language boundary, including expected examples of insufficient encapsulation. They do not certify arbitrary Go code, all operating systems, consumer root-UoW behavior, or a same-process/OS security sandbox. Canonical tool downloads are disabled inside fixture execution; this is not a network firewall.
 
 ## Current pressure frontier
 

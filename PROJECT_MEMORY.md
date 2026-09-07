@@ -242,3 +242,11 @@ Every repository task must:
 - Do not introduce a second source of truth/runtime/security model as a workaround for a consumer blocker.
 - Generic BPMN/workflow engines, distributed transaction/2PC, generic SQL/data-scope DSL, framework-owned business resource taxonomies, universal audit/cache policy, idempotent response replay, and expanded Saga topology semantics remain outside the default framework unless repeated real pressure proves a generic need.
 - Current open/deferred/proven pressure state belongs in `docs/STATUS.md`, not in this file.
+
+## Application governance delivery discipline
+
+- Application code-organization governance follows `docs/architecture/APPLICATION-GOVERNANCE-PLAN.md`. Prefer toolchain-enforced encapsulation, use-case-sized dependencies and existing edge-owned child wrappers; do not introduce another runtime or hand-maintained architecture fact graph.
+- Each development round implements at least one independent task; close an unqualified or unintegrated prerequisite before advancing its dependent consumer migration. Executable mechanism tests are not an arbitrary-project architecture scanner or proof of consumer behavior.
+- New formal implementation commits use local Git or Runner-local Git. Connector staging may use an isolated control branch; control workflows/payloads must not enter the product diff. Never overwrite user changes or force-push.
+- The user authorizes verified framework changes from this stream to be integrated into main. Use non-force fast-forward only after exact candidate verification, review disposition and concurrent-ref checks. Reconcile STATUS and read back the actual integrated SHA/tree. This does not authorize unrelated pending PRs, production deployment or data migration.
+- Qualification, independent review and integration are separate evidence. Do not create a self-APPROVE, turn missing reviewer output into approval, or claim unexecuted/omitted tests as passed. A scope inventory prevents accidental test loss but is not a security boundary against an actor who can rewrite the whole verifier.

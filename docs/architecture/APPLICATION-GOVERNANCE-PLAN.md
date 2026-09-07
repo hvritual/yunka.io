@@ -110,6 +110,14 @@ internal/assembly/
 
 正式验收：实际 Go 必须与 tools/toolchain.env 一致；定向回归无 skip、预期诊断准确；同一源码重复运行一致；make architecture-check 与 make verify（进入完整集成时仍遵守原 verify-production 门槛）；精确提交/树/结果回读。工具缺失为 INCOMPLETE，不降版本宣布合格。非锁版本的开发试运行只能单列为探索证据。回滚：删除/恢复本任务测试文件，不影响运行时。
 
+### AG-01I — 回归完整性与主线集成（AG-02 前置收口）
+
+输入：AG-01 已验证分支。目标：避免减少/重复/替换机制案例后仍报告原覆盖；补齐状态和持久决策入口，按用户授权将框架变动验证后同步 main。
+
+允许：AG 边界测试、当前状态、持久决策、本计划；禁止普通 CI/工具链锁/Runtime/Executor/Authz/UoW/消费者语义变更。明确用例清单及正反例类别；测试删除、替换、缺少入口、覆盖 go.mod、路径逃逸等错误输入。通过变异副本证明旧 harness 接受减少后的案例，新 harness 对同样变异给出准确的 inventory 错误。完整候选运行 locked Go 定向 JSON 测试、原 make verify-production、生成/依赖再生成和 clean-tree 检查。
+
+正式新增提交由本地 Git 或 Runner-local Git 创建，Connector 只用于隔离 control 分支暂存、读回和 PR 管理。main 仅在资格验证和实际审查处置后通过 non-force fast-forward 更新；并行 main 有变化就停下重新整合，不覆盖它。独立 review 的实际结果与测试资格分列，不伪造 APPROVE。每个完成的框架任务最终同步 main，不把已验证 Draft 当作最终交付。回滚：独立 revert 本任务提交；不改数据。
+
 ### AG-02 — Biz 封闭 Application 试点
 
 依赖：AG-01。先重新读取 Biz main/框架锁；选一个租户生命周期 Application。允许改其手写实现、所有者工厂、装配适配、测试和消费者文档；生成物只有经规范生成器再生成才可更新。
