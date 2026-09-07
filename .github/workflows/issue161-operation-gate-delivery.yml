@@ -1,0 +1,207 @@
+name: issue161-operation-gate-delivery
+on:
+  push:
+    branches: [control/161-operation-gate-delivery]
+    paths: [.github/workflows/issue161-operation-gate-delivery.yml]
+permissions:
+  contents: write
+jobs:
+  qualify-and-deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports: [3306:3306]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      BASE_SHA: f8fdce6c3bd7bd63eef05ae23b3fc9ba83c3b0de
+      EXPECTED_MAIN: 7d7fc663f7086df9735ee9089c75f65d2fd100e4
+      CANDIDATE_SHA: 62fe8e194b60637d8fee1d0bec90d9a67ccd9490
+      CANDIDATE_TREE: f6daa1790c3db9511313e4e66c25bc195239e467
+      TARGET_BRANCH: feat/161-operation-boundary-gate
+    steps:
+      - name: Checkout isolated controller
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: controller
+          persist-credentials: false
+      - name: Checkout exact prerequisite
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: f8fdce6c3bd7bd63eef05ae23b3fc9ba83c3b0de
+          path: candidate
+          fetch-depth: 0
+      - name: Checkout immutable read-only consumer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: hvritual/iot-delivery-system
+          ref: 69518dec46bdfaf45cb84a0ee25d64c132b26fc9
+          path: consumer
+          persist-credentials: false
+      - name: Check original transport hashes and locked tool versions
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git -C candidate rev-parse HEAD)" = "$BASE_SHA"
+          source candidate/tools/toolchain.env
+          echo "go_version=$GO_VERSION" >> "$GITHUB_OUTPUT"
+          echo "protoc_release=$PROTOC_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "protoc_sha=$PROTOC_LINUX_X86_64_SHA256" >> "$GITHUB_OUTPUT"
+          python3 - <<'PY'
+          import base64,gzip,hashlib
+          from pathlib import Path
+          d=Path('controller/tools/qualification/operation-gate')
+          out=Path('evidence')
+          expected=[
+            'f66186a6c3588cc35352d099a481f75755642c690a4d231a83ede5e096586808',
+            '9fcf9058367ffa4308025f77740eab6b014fe2bb35d961c2bbf25781be8b4a1d',
+            'bf79dc5cebdeadb0f05a0e98e2aeebadd79de7b9b255e53650ed4812c2bec371',
+            '12c09aaaf1522733abec806c6d622ec14d265f2aa7fe828e3623ae5d0c200c4e',
+            'feee6f7b9bd5083b4be1bc2e2aceaf4ba31238ce99e64399c1702671fd983ebf',
+            'cbdf3b83c9bc25934fd773ae4a56819e1d364e1f63d473e276908566e7f86d98',
+            'e30cd26da5b371fae2c4a756c2178c691a18db8e1cf3ed534cb9075a4e980e6a']
+          parts=[]
+          errors=[]
+          for i,want in enumerate(expected):
+              raw=(d/f'part{i}.b64').read_bytes()
+              (out/f'received-part{i}.txt').write_bytes(raw)
+              data=b''.join(raw.split())
+              # Correct exactly observed transport transcription bytes, then
+              # require the ORIGINAL per-segment, whole-patch, tree and commit hashes.
+              if i==0:
+                  data=data.replace(b'r43GHy74',b'r43GHY74').replace(b'zuDxqeGG0h2cn',b'zuDxqeG0h2cn')
+              actual=hashlib.sha256(data).hexdigest()
+              if actual!=want: errors.append((i,len(data),actual,want))
+              parts.append(data)
+          helper=(d/'consumer.py').read_bytes()
+          (out/'consumer.py').write_bytes(helper)
+          assert not errors,errors
+          assert hashlib.sha256(helper).hexdigest()=='a6e8c576ceb0586da6d2e7acd698176717a5cdbc02181872e29fc9486e7f47f1'
+          patch=gzip.decompress(base64.b64decode(b''.join(parts),validate=True))
+          assert len(patch)==88577
+          assert hashlib.sha256(patch).hexdigest()=='35910b7c825864ac50bbf52dbb98f5edd2158647b20e5279583b825e9db146a6'
+          (out/'product.patch').write_bytes(patch)
+          PY
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache-dependency-path: |
+            candidate/app/go.sum
+            candidate/framework/go.sum
+            candidate/gateway/go.sum
+            candidate/infras/go.sum
+            candidate/pkg/go.sum
+      - name: Build real pre-gate CLI with locked tools
+        shell: bash
+        env:
+          PROTOC_RELEASE: ${{ steps.lock.outputs.protoc_release }}
+          PROTOC_SHA: ${{ steps.lock.outputs.protoc_sha }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "$PROTOC_SHA  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          export PATH="$RUNNER_TEMP/protoc/bin:$GITHUB_WORKSPACE/candidate/.yunka/bin:$PATH"
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/candidate/.yunka/bin" >> "$GITHUB_PATH"
+          (cd candidate && make rpc-tools toolchain-check && go build -o "$RUNNER_TEMP/yunka-before" ./app/cmd)
+      - name: Reproduce exact local Git commit before testing
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --check ../evidence/product.patch
+          git apply --index ../evidence/product.patch
+          test "$(git write-tree)" = "$CANDIDATE_TREE"
+          git diff --cached --check
+          test -z "$(git diff --cached --name-only -- '*.go' | xargs gofmt -l)"
+          git config user.name hvritual
+          git config user.email 11900351+hvritual@users.noreply.github.com
+          GIT_AUTHOR_DATE=2026-09-06T23:48:14Z GIT_COMMITTER_DATE=2026-09-06T23:48:14Z git commit -m 'feat(boundary): gate Operation plans and writes with canonical decisions' -m 'Connect fresh before/after protobuf snapshots, explicit boundary intent, input-bound schema-v2 plans and revalidation to the existing authoring path. Block non-reuse before source writes, coordinate worktree writers, and keep complete ChangeSet/direct-edit growth enforcement separately scoped.'
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          git show --stat --format=fuller HEAD > ../evidence/commit.txt
+          git rev-parse HEAD > ../evidence/candidate-sha.txt
+          git rev-parse HEAD^{tree} > ../evidence/candidate-tree.txt
+          test -z "$(git status --porcelain)"
+      - name: Gate tests and prerequisite regressions
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -count=1 -json ./app/cmd/add ./app/cmd/boundarycore ./app/cmd/boundary ./app/cmd/change ./app/cmd/projectflow ./app/cmd/agentcontext ./app/cmd ./pkg/contract ./pkg/architecturepolicy | tee ../evidence/targeted.jsonl
+          python3 - <<'PY'
+          import json
+          es=[json.loads(line) for line in open('../evidence/targeted.jsonl')]
+          focused=[e for e in es if e.get('Test','').startswith('TestIssue161')]
+          assert focused and not any(e['Action'] in ('fail','skip') for e in focused)
+          expected={
+            'TestIssue161GatePlanApplyRealProtoc','TestIssue161GateBlocksBeforeWriting',
+            'TestIssue161GateRevalidationRejectsTamperingAndDrift','TestIssue161GateCLIBlocksAndValidatesBeforeApply',
+            'TestIssue161GateWriterLockCancellationAndInvalidSource','TestIssue161GateDetectsInputChangeDuringRealCompile',
+            'TestIssue161GateIncludesProfilesAndLinkedWorktree','TestIssue161GateCLIPassesOnlyDeclaredComparablePeer',
+            'TestIssue161GateMultiSourceSnapshotIsClosedAndFresh','TestIssue161GateChangeSetCreateEntryRejectsBlockedStaleAndLegacyPlans'}
+          passed={e['Test'] for e in focused if e['Action']=='pass' and e['Test'].startswith('TestIssue161Gate') and '/' not in e['Test']}
+          assert passed==expected,(passed,expected)
+          assert len([e for e in es if e['Action']=='pass' and 'Test' not in e])==9
+          print('All ten exact gate test groups and all nine packages passed; no issue161 skips')
+          PY
+          go test -count=1 -race ./app/cmd/add ./app/cmd/projectflow ./app/cmd/boundarycore ./app/cmd/change | tee ../evidence/race.log
+      - name: Full canonical production qualification
+        working-directory: candidate
+        shell: bash
+        env:
+          YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?charset=utf8mb4&parseTime=true&loc=UTC&multiStatements=true
+        run: |
+          set -euo pipefail
+          make verify-production 2>&1 | tee ../evidence/verify-production.log
+          make tidy 2>&1 | tee ../evidence/determinism.log
+          make contract 2>&1 | tee -a ../evidence/determinism.log
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
+      - name: Actual old and new authoring CLI on disposable real-consumer copies
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd candidate && go build -o "$RUNNER_TEMP/yunka-after" ./app/cmd)
+          python3 controller/tools/qualification/operation-gate/consumer.py "$RUNNER_TEMP/yunka-before" "$RUNNER_TEMP/yunka-after" "$GITHUB_WORKSPACE/candidate" "$GITHUB_WORKSPACE/consumer" "$GITHUB_WORKSPACE/evidence" | tee evidence/consumer.log
+          test -z "$(git -C consumer status --porcelain)"
+          test -z "$(git -C candidate status --porcelain)"
+      - name: Submit only the exact passing local Git commit
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          test -z "$(git status --porcelain)"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$EXPECTED_MAIN"
+          test "$(git ls-remote origin refs/heads/feat/161-boundary-decision | cut -f1)" = "$BASE_SHA"
+          test -z "$(git ls-remote origin refs/heads/$TARGET_BRANCH)"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          test "$(git ls-remote origin refs/heads/$TARGET_BRANCH | cut -f1)" = "$CANDIDATE_SHA"
+          printf 'submitted=%s\nbranch=%s\nbase=%s\nmain=%s\n' "$CANDIDATE_SHA" "$TARGET_BRANCH" "$BASE_SHA" "$EXPECTED_MAIN" > ../evidence/delivery.txt
+      - name: Preserve exact execution evidence and candidate objects
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          if git -C candidate cat-file -e "$CANDIDATE_SHA^{commit}" 2>/dev/null; then
+            git -C candidate bundle create "$GITHUB_WORKSPACE/evidence/candidate.bundle" HEAD "^$BASE_SHA"
+          fi
+          (cd evidence && find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: issue161-operation-gate-evidence
+          path: evidence
+          retention-days: 30
