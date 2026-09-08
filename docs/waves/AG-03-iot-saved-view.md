@@ -169,9 +169,10 @@ This linkage was added following the review of that candidate in
 [PR #172](https://github.com/hvritual/yunka.io/pull/172). It names historical evidence,
 not qualification of the later amendment containing this paragraph. Every later
 candidate requires fresh exact-head qualification and review. Final main
-integration is recorded by PR #172 and its post-commit main receipt, binding the
-actual framework SHA/tree, successful verification runs and consumer acceptance
-run `34224052206`; no commit attempts to certify itself using its own unwritten SHA.
+integration must be confirmed from PR #172 and a receipt produced only after main
+advances. That receipt must bind the actual framework SHA/tree, successful
+verification runs and consumer acceptance run `34224052206`. Qualification alone
+does not establish integration; no commit certifies itself using its unwritten SHA.
 
 ## Framework handoff and continuation
 
