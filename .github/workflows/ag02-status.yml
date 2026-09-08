@@ -1,0 +1,107 @@
+name: ag02-status-qualification
+on:
+  push:
+    branches: [control/ag02-status-20260908]
+    paths: [.github/workflows/ag02-status.yml, control/ag02/docs_final.py]
+permissions:
+  contents: write
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 4dd2a264c73a2ce6b85ad7ae6238046762e7e0f7
+          path: product
+          fetch-depth: 0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.25.13'
+          cache-dependency-path: |
+            product/pkg/go.sum
+            product/framework/go.sum
+            product/gateway/go.sum
+            product/infras/go.sum
+            product/app/go.sum
+      - name: Bootstrap and locked protoc
+        working-directory: product
+        shell: bash
+        run: |
+          set -euo pipefail
+          E="$RUNNER_TEMP/ag02-framework-evidence"; mkdir -p "$E"
+          cat AGENTS.md PROJECT_MEMORY.md docs/STATUS.md docs/DOCUMENTATION_GOVERNANCE.md > "$E/bootstrap.txt"
+          git status --short --branch; git branch --show-current; git remote -v
+          source tools/toolchain.env
+          test "$(go version | awk '{print $3}')" = "go${GO_VERSION}"
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "${PROTOC_LINUX_X86_64_SHA256}  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ag02-protoc"; unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/ag02-protoc"
+          echo "$RUNNER_TEMP/ag02-protoc/bin" >> "$GITHUB_PATH"
+      - name: Read actual consumer integration, local Git commit and full qualification
+        working-directory: product
+        shell: bash
+        env:
+          GOTOOLCHAIN: local
+          GH_TOKEN: ${{ github.token }}
+          YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?charset=utf8mb4&parseTime=true&loc=UTC&multiStatements=true
+        run: |
+          set -euo pipefail
+          E="$RUNNER_TEMP/ag02-framework-evidence"
+          python3 ../control/control/ag02/docs_final.py 2>&1 | tee "$E/materialize.log"
+          git config user.name hvritual
+          git config user.email 11900351+hvritual@users.noreply.github.com
+          git switch -c docs/ag02-consumer-closure
+          git commit -m 'docs(architecture): reconcile integrated AG-02 consumer qualification'
+          git rev-parse HEAD > "$E/candidate.sha"
+          git rev-parse HEAD^{tree} > "$E/candidate.tree"
+          git diff --stat 4dd2a264c73a2ce6b85ad7ae6238046762e7e0f7 HEAD | tee "$E/diff-stat.txt"
+          make verify-production 2>&1 | tee "$E/verify-production.log"
+          make tidy contract contract-check 2>&1 | tee "$E/determinism.log"
+          git diff --check
+          test -z "$(git status --porcelain)"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = 4dd2a264c73a2ce6b85ad7ae6238046762e7e0f7
+          test -z "$(git ls-remote origin refs/heads/docs/ag02-consumer-closure)"
+          git push origin HEAD:refs/heads/docs/ag02-consumer-closure
+          test "$(git ls-remote origin refs/heads/docs/ag02-consumer-closure | cut -f1)" = "$(cat "$E/candidate.sha")"
+          git format-patch --stdout 4dd2a264c73a2ce6b85ad7ae6238046762e7e0f7..HEAD > "$E/framework.patch"
+          git bundle create "$E/framework.bundle" HEAD ^4dd2a264c73a2ce6b85ad7ae6238046762e7e0f7
+          git bundle verify "$E/framework.bundle" 2>&1 | tee "$E/bundle-verify.txt"
+          mkdir -p "$E/docs/architecture" "$E/docs/waves"
+          cp docs/STATUS.md "$E/docs/STATUS.md"
+          cp docs/architecture/APPLICATION-GOVERNANCE-PLAN.md "$E/docs/architecture/"
+          cp docs/waves/AG-02-biz-encapsulation.md "$E/docs/waves/"
+          python3 - <<'PY'
+          import json,os,pathlib
+          e=pathlib.Path(os.environ['RUNNER_TEMP'])/'ag02-framework-evidence'
+          (e/'RECEIPT.json').write_text(json.dumps({'task':'AG-02 framework handoff','head':(e/'candidate.sha').read_text().strip(),'tree':(e/'candidate.tree').read_text().strip(),'qualified':True,'mainIntegrated':False,'consumerMain':'3519e7ee6e51e33984669871e4f32a55a3597d9f','consumerAcceptanceRun':34191937549,'run':os.environ['GITHUB_RUN_ID'],'signature':None},indent=2)+'\n')
+          PY
+      - name: Evidence manifest
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/ag02-framework-evidence"
+          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ag02-framework-qualification
+          path: ${{ runner.temp }}/ag02-framework-evidence
+          include-hidden-files: true
+          if-no-files-found: error
