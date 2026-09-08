@@ -1,0 +1,138 @@
+name: ag02-main-handoff
+on:
+  push:
+    branches: [control/ag02-main-handoff-20260908]
+    paths: [.github/workflows/ag02-main-handoff.yml]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 5f6623ee3ddad297403727d293dec77bd3c64367
+          fetch-depth: 0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.25.13'
+          cache-dependency-path: |
+            pkg/go.sum
+            framework/go.sum
+            gateway/go.sum
+            infras/go.sum
+            app/go.sum
+      - name: Bootstrap and verify exact candidate prerequisites
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          E="$RUNNER_TEMP/ag02-main-framework"; mkdir -p "$E"
+          cat AGENTS.md PROJECT_MEMORY.md docs/STATUS.md docs/DOCUMENTATION_GOVERNANCE.md > "$E/bootstrap.txt"
+          git status --short --branch; git branch --show-current; git remote -v
+          test "$(git rev-parse HEAD)" = 5f6623ee3ddad297403727d293dec77bd3c64367
+          test "$(git rev-parse HEAD^{tree})" = a094da98ccc9ee444326aafa6b0847db7742d8a0
+          test -z "$(git status --porcelain)"
+          python3 - <<'PY'
+          import os,json,pathlib,urllib.request,subprocess
+          e=pathlib.Path(os.environ['RUNNER_TEMP'])/'ag02-main-framework'
+          headers={'Accept':'application/vnd.github+json','Authorization':'Bearer '+os.environ['GH_TOKEN']}
+          def get(repo,path,name):
+              with urllib.request.urlopen(urllib.request.Request('https://api.github.com/repos/hvritual/'+repo+'/'+path,headers=headers),timeout=30) as r: obj=json.load(r)
+              (e/name).write_text(json.dumps(obj,indent=2)+'\n');return obj
+          head='5f6623ee3ddad297403727d293dec77bd3c64367';base='4dd2a264c73a2ce6b85ad7ae6238046762e7e0f7'
+          pr=get('yunka.io','pulls/171','pr-before.json')
+          assert pr['head']['sha']==head and not pr['draft'] and pr['base']['ref']=='main'
+          assert get('yunka.io','git/ref/heads/main','framework-main-before.json')['object']['sha']==base
+          assert get('yunka.io','git/ref/heads/docs/ag02-consumer-closure','task-ref.json')['object']['sha']==head
+          for run in [34193182404,34193182515]:
+              item=get('yunka.io','actions/runs/'+str(run),str(run)+'.json')
+              assert item['head_sha']==head and item['status']=='completed' and item['conclusion']=='success'
+          review=get('yunka.io','issues/comments/5580122243','independent-review.json')
+          assert review['user']['login']=='chatgpt-codex-connector[bot]'
+          assert "Didn't find any major issues" in review['body'] and head[:10] in review['body']
+          assert not any(x['state']=='CHANGES_REQUESTED' for x in get('yunka.io','pulls/171/reviews?per_page=100','reviews.json'))
+          biz='3519e7ee6e51e33984669871e4f32a55a3597d9f'
+          assert get('biz','git/ref/heads/main','biz-main-before.json')['object']['sha']==biz
+          acceptance=get('biz','actions/runs/34192294589','biz-main-acceptance.json')
+          assert acceptance['status']=='completed' and acceptance['conclusion']=='success'
+          paths=set(subprocess.check_output(['git','diff','--name-only',base,head],text=True).splitlines())
+          assert paths=={'docs/STATUS.md','docs/architecture/APPLICATION-GOVERNANCE-PLAN.md','docs/waves/AG-02-biz-encapsulation.md'},paths
+          PY
+          source tools/toolchain.env
+          test "$(go version | awk '{print $3}')" = "go${GO_VERSION}"
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "${PROTOC_LINUX_X86_64_SHA256}  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ag02-protoc"; unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/ag02-protoc"
+          echo "$RUNNER_TEMP/ag02-protoc/bin" >> "$GITHUB_PATH"
+      - name: Non-force local Git integration and actual-main full acceptance
+        shell: bash
+        env:
+          GOTOOLCHAIN: local
+          GH_TOKEN: ${{ github.token }}
+          YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?charset=utf8mb4&parseTime=true&loc=UTC&multiStatements=true
+        run: |
+          set -euo pipefail
+          E="$RUNNER_TEMP/ag02-main-framework"
+          BASE=4dd2a264c73a2ce6b85ad7ae6238046762e7e0f7
+          HEAD=5f6623ee3ddad297403727d293dec77bd3c64367
+          git merge-base --is-ancestor "$BASE" "$HEAD"
+          git switch -c ag02-main-integration "$BASE"
+          git merge --ff-only "$HEAD"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE"
+          git push origin HEAD:refs/heads/main 2>&1 | tee "$E/main-push.log"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$HEAD"
+          make verify-production 2>&1 | tee "$E/verify-production.log"
+          make tidy contract contract-check 2>&1 | tee "$E/determinism.log"
+          git diff --check
+          git status --porcelain > "$E/worktree-status.txt"
+          test -z "$(git status --porcelain)"
+          gh api repos/hvritual/yunka.io/git/ref/heads/main > "$E/framework-main-after.json"
+          gh api repos/hvritual/yunka.io/git/commits/$HEAD > "$E/framework-commit.json"
+          gh api repos/hvritual/yunka.io/pulls/171 > "$E/pr-after.json"
+          gh api repos/hvritual/biz/git/ref/heads/main > "$E/biz-main-after.json"
+          python3 - <<'PY'
+          import os,json,pathlib,subprocess
+          e=pathlib.Path(os.environ['RUNNER_TEMP'])/'ag02-main-framework'
+          head='5f6623ee3ddad297403727d293dec77bd3c64367';tree='a094da98ccc9ee444326aafa6b0847db7742d8a0';biz='3519e7ee6e51e33984669871e4f32a55a3597d9f'
+          assert json.loads((e/'framework-main-after.json').read_text())['object']['sha']==head
+          assert json.loads((e/'framework-commit.json').read_text())['tree']['sha']==tree
+          assert json.loads((e/'biz-main-after.json').read_text())['object']['sha']==biz
+          pr=json.loads((e/'pr-after.json').read_text());assert pr['merged'] and pr['merge_commit_sha']==head
+          receipt={'schemaVersion':1,'task':'AG-02 framework handoff','framework':{'head':head,'tree':tree,'pr':171,'mainIntegrated':True,'qualification':'PASS','standardRuns':[34193182404,34193182515],'independentAutomatedReviewComment':5580122243},'consumer':{'head':biz,'tree':'3f8926b459fb78688fe0f39e9c4acfb6d93b3b47','pr':16,'mainIntegrated':True,'acceptanceRun':34192294589,'runtimeFramework':'6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb'},'actualFrameworkMainAcceptanceRun':os.environ['GITHUB_RUN_ID'],'go':subprocess.check_output(['go','version'],text=True).strip(),'protoc':subprocess.check_output(['protoc','--version'],text=True).strip(),'worktreeClean':True,'productScope':'three documentation files only','signature':None,'supersededMetadata':{'artifact':10042864608,'file':'RECEIPT.json','field':'consumerAcceptanceRun','oldValue':34191937549,'correctValue':34192294589,'reason':'old control receipt kept failed first-attempt ID; product docs and actual acceptance correctly name the successful repeat; archived evidence remains unchanged'}}
+          (e/'MAIN-RECEIPT.json').write_text(json.dumps(receipt,indent=2)+'\n')
+          print(json.dumps(receipt,indent=2))
+          PY
+          git format-patch --stdout "$BASE"..HEAD > "$E/framework.patch"
+          git bundle create "$E/framework.bundle" HEAD ^"$BASE"
+          git bundle verify "$E/framework.bundle" 2>&1 | tee "$E/bundle-verify.txt"
+          mkdir -p "$E/docs/architecture" "$E/docs/waves"
+          cp docs/STATUS.md "$E/docs/STATUS.md"
+          cp docs/architecture/APPLICATION-GOVERNANCE-PLAN.md "$E/docs/architecture/"
+          cp docs/waves/AG-02-biz-encapsulation.md "$E/docs/waves/"
+      - name: Evidence manifest
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/ag02-main-framework"
+          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ag02-framework-main-acceptance
+          path: ${{ runner.temp }}/ag02-main-framework
+          include-hidden-files: true
+          if-no-files-found: error
