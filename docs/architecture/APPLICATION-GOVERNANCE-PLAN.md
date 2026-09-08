@@ -140,6 +140,8 @@ AG-03 试点保留原 DeliveryService/management 契约，在 `application/saved
 
 依赖：两个试点的最小真实违规。允许工具/控制面分析与测试，不修改 Executor/Authz/UoW。采用 go/packages/go/analysis 或已锁等价基础；先限定可证明的类型、构造和调用关系。校验工厂仅装配使用、不得泄露完整实现/解包器/匿名嵌入额外能力；按实际类型而非 svc/operations 等名称判断。analysistest 正反例必须校验准确诊断。未知动态路径报告 INCOMPLETE。回滚：独立移除本规则，不放宽旧规则。
 
+实际命令为 `yunka audit types --root <go-module> --policy <json> --format agent-json`；精确政策、证据和限制见 [APPLICATION-BOUNDARY-TYPES.md](APPLICATION-BOUNDARY-TYPES.md)。批准的持久 `ag04-consumer-types` 工作流仅有 `contents: read`，固定不可变消费者提交及其原运行时版本，在可丢弃源码中注入并恢复受控 mutant；它不提交、不推送、不修改权限。这是静态消费者资格，不是消费者运行时认证。既有 CI/Production 门禁仍独立必需且不变；AG-05 构建/覆盖矩阵、AG-06 模板和 AG-07 迁移/债务工作保持独立。
+
 ### AG-05 — 全源码清点与统一政策检查
 
 依赖：AG-02/03。声明支持模块及构建矩阵，区分源码清点、适用规则、分析完成度。覆盖嵌套 go.mod/go.work/replace、构建标签、生成标记欺骗、生产依赖测试支持。比较通用工具后仅选择一个主要后端。验收：新包不漏检，工具错误/源码遗漏不返回 PASS；陌生领域名不影响结论。

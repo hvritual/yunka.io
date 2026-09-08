@@ -20,6 +20,8 @@ The two reference sources are Biz `3519e7ee6e51e33984669871e4f32a55a3597d9f`
 The existing consumer parser gates remain in place. This task supplies a reusable
 opt-in type check, not full replacement of their behavioral/runtime tests.
 
+The implementation lives in `app/cmd/applicationboundary`, internal to the CLI module rather than a new published `pkg` API. This preserves the repository's standalone `app` tidy/build model: it continues to consume published `pkg` versions when `GOWORK=off` instead of requiring an unpublished cross-module package.
+
 ## Public command
 
 ```sh
@@ -68,8 +70,9 @@ merge. Integrating type findings into debt-growth/migration proofs belongs to AG
 ```
 
 Symbols are exact package-level Go function/type identities. Import aliases and
-Go type aliases do not change identity. No wildcard scopes or guessed receiver
-names are accepted. Method factories, type-parameter contracts, empty policies,
+Go type aliases do not change identity. Package identities are validated with the
+locked `golang.org/x/mod/module.CheckImportPath`; malformed/reserved import paths
+are rejected before analysis. No wildcard scopes or guessed receiver names are accepted. Method factories, type-parameter contracts, empty policies,
 unknown/duplicate JSON fields, duplicate subjects/slots and missing declared
 symbols do not silently pass. A policy selects one or more result/argument slots;
 ordinary values/configuration outside those slots are not forced into interfaces.
@@ -100,9 +103,7 @@ A small-interface conversion is followed to the original value; it does not redu
 that object's authority. Concrete types have fixed method sets. Interface-returning
 constructors are followed through available module-local source bodies, tuple
 results, direct argument binding, and single-initialization interface locals.
-Private methods are not counted as publicly exposed capability methods. Promoted
-fields are resolved using Go selectors: a private embedded value may expose a
-public field, whereas an ambiguous selector is not treated as accessible.
+Private methods are not counted as publicly exposed capability methods. For a publicly nameable non-pointer concrete result (including an exported alias), the audit also checks the reachable pointer-receiver method set because a caller can type-assert the value, store it in an addressable local, and invoke those methods. Named interface values retain their declared interface method set rather than being converted to pointers. Promoted fields are resolved using Go selectors: a private embedded value may expose a public field, whereas an ambiguous selector is not treated as accessible.
 
 The checker accepts independent non-embedded private wrappers. It follows actual
 constructor implementations instead of merely believing their interface signature.
@@ -116,15 +117,9 @@ not arbitrary application/domain records.
 Return analysis supports ordinary constructors with declarations, assignments,
 expression statements, blocks, if/error-return paths and direct returns. It prunes
 constant boolean dead branches and stops after structurally terminating blocks/if
-arms. Interface locals with multiple assignments,
-address escape, unresolved dynamic constructors, generic/method/variadic interface
-return summaries, recursion/depth overflow, unsupported constructor control flow,
-and absent dependency bodies are INCOMPLETE when they affect selected evidence.
-Reassignment is not treated as proof that an overwritten wide value was returned.
+arms. Interface locals with multiple assignments, address escape, unresolved dynamic constructors, generic/method/variadic interface return summaries, recursion/depth overflow, unsupported constructor control flow, and absent dependency bodies are INCOMPLETE when they affect selected evidence. Conditional, function-literal/closure, or post-return writes to named interface results do not establish proven initialization; unresolved reachability becomes INCOMPLETE instead of PASS. Reassignment is not treated as proof that an overwritten wide value was returned.
 
-Only one source module and active build are loaded. Nested modules, the complete
-OS/architecture/tag matrix, ignored/non-built source, universal dataflow, reflection,
-unsafe and same-process adversarial isolation are not certified. These cannot be
+Only one source module and active build are loaded. A loader entry with no active production Go files may be reported as an explicit exclusion instead of a checked package; a policy that selects an absent/excluded factory still returns INCOMPLETE. Nested modules, the complete OS/architecture/tag matrix, ignored/non-built source, universal dataflow, reflection, unsafe and same-process adversarial isolation are not certified. These cannot be
 turned into "zero violations in the entire repository" by reading a PASS report.
 Source hashes cover parsed module source plus go.mod/go.sum; dependency source,
 compiler provenance and policy authorship are not authenticated by an unkeyed digest.
@@ -155,10 +150,7 @@ The workflow includes its own file, checker, policy, script and dependency paths
 both PR and main triggers; it never commits, pushes, publishes a candidate or changes
 permissions. Existing CI/Production remains required and unchanged.
 
-Exact candidate tests, review disposition and eventual integration are separate
-facts in the delivery PR. This document makes no self-referential qualification
-claim. Removing this bounded opt-in feature can be reverted independently; neither
-consumer implementation nor the earlier audit/ownership gates need be weakened.
+Exact candidate tests, review disposition and eventual integration are separate facts in the delivery PR. Source qualification for code head `e3ef7ca790e7f99d9967546261945aa883f6157b` is recorded by CI `34249954826`, Production `34249955092`, and pinned Biz/IoT static qualification `34249954823`; these runs qualify that exact code tree, not an unpublished or later document-only commit. The final PR head still requires its own ordinary CI/Production and independent review before integration. Historical results for `16f30a6686...`, `1144b11017...`, or `c43203dc295...` remain bound to those exact revisions. This document makes no self-referential merge claim. Removing this bounded opt-in feature can be reverted independently; neither consumer implementation nor the earlier audit/ownership gates need be weakened.
 
 ## Mechanism sources
 
