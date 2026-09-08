@@ -1,0 +1,39 @@
+diff --git a/docs/waves/AG-03-iot-saved-view.md b/docs/waves/AG-03-iot-saved-view.md
+index 442b5d7..290160c 100644
+--- a/docs/waves/AG-03-iot-saved-view.md
++++ b/docs/waves/AG-03-iot-saved-view.md
+@@ -145,6 +145,34 @@ contracts/modules/assembly, dependency locks, web and historical backend are
+ unchanged. Existing evidence proves only its named source. Main integration and
+ post-integration readback are separate from candidate qualification and review.
+ 
++## Framework qualification: exact historical candidate
++
++The first framework documentation candidate was separately qualified; it is not
++part of the consumer runtime qualification above:
++
++- Framework base: `5f6623ee3ddad297403727d293dec77bd3c64367`.
++- Qualified framework commit: `f4b15698f586ea26ec1c110e8af9c66cad1b8d39`.
++- Qualified framework tree: `2208250337540fd61e9ad9cabfe519e662042367`.
++- Qualification: [run 34225085409](https://github.com/hvritual/yunka.io/actions/runs/34225085409), SUCCESS.
++- Artifact: `10055639922`, `ag03-framework-qualification`.
++- Artifact ZIP SHA256: `63c639968fb6d6413be25bbf10ad607f9bd1a0de43084191fff00617b0d31ef1`.
++
++That run created the normal Git commit before locked Go 1.25.13 / protoc 3.21.12
++`make verify-production` on real MySQL 8.4, then checked deterministic generation,
++dependencies and a clean worktree before publishing the exact task branch. The
++artifact's unsigned `QUALIFICATION-RECEIPT.json` records `QUALIFIED_NOT_YET_MERGED`
++and binds that product SHA/tree; its control-workflow SHA is not the product SHA.
++The ZIP/CRC, all nine manifest members and prerequisite-aware Git bundle were
++independently verified during closeout.
++
++This linkage was added following the review of that candidate in
++[PR #172](https://github.com/hvritual/yunka.io/pull/172). It names historical evidence,
++not qualification of the later amendment containing this paragraph. Every later
++candidate requires fresh exact-head qualification and review. Final main
++integration is recorded by PR #172 and its post-commit main receipt, binding the
++actual framework SHA/tree, successful verification runs and consumer acceptance
++run `34224052206`; no commit attempts to certify itself using its own unwritten SHA.
++
+ ## Framework handoff and continuation
+ 
+ This framework change only reconciles STATUS, the AG plan and this evidence. No
