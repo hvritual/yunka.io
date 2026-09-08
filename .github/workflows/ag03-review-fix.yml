@@ -1,0 +1,125 @@
+name: ag03-review-fix
+on:
+  push:
+    branches: [control/ag03-review-fix-20260908]
+    paths: [.github/workflows/ag03-review-fix.yml]
+permissions:
+  contents: write
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GOTOOLCHAIN: local
+      YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?charset=utf8mb4&parseTime=true&loc=UTC&multiStatements=true
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: f4b15698f586ea26ec1c110e8af9c66cad1b8d39
+          path: product
+          fetch-depth: 0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.25.13'
+          cache-dependency-path: |
+            product/pkg/go.sum
+            product/framework/go.sum
+            product/gateway/go.sum
+            product/infras/go.sum
+            product/app/go.sum
+      - name: Bootstrap and recreate exact local commit
+        working-directory: product
+        shell: bash
+        run: |
+          set -euo pipefail
+          E="$RUNNER_TEMP/ag03-review-fix"; mkdir -p "$E"
+          cat AGENTS.md PROJECT_MEMORY.md docs/STATUS.md docs/DOCUMENTATION_GOVERNANCE.md > "$E/bootstrap.txt"
+          git status --short --branch; git branch --show-current; git remote -v
+          test "$(git rev-parse HEAD)" = f4b15698f586ea26ec1c110e8af9c66cad1b8d39
+          test -z "$(git status --porcelain --untracked-files=all)"
+          echo '360ba039b744f4551a35fa177ffd7a245dbe7af585a3238b825f5cb61d61907f  ../control/control/ag03-review-fix.patch' | sha256sum -c -
+          git apply --index ../control/control/ag03-review-fix.patch
+          git diff --cached --check
+          test "$(git write-tree)" = 06aec4322756e3ced727e5a1bd2070f2b12ac98b
+          export GIT_AUTHOR_NAME=hvritual GIT_COMMITTER_NAME=hvritual
+          export GIT_AUTHOR_EMAIL=460657446@qq.com GIT_COMMITTER_EMAIL=460657446@qq.com
+          export GIT_AUTHOR_DATE='1788873649 +0000' GIT_COMMITTER_DATE='1788873649 +0000'
+          git -c commit.gpgsign=false commit -m 'docs(architecture): bind AG-03 framework qualification to its exact candidate'
+          test "$(git rev-parse HEAD)" = 77b070e0909579019bd48e980c23ff3da6bad23e
+          git rev-parse HEAD HEAD^{tree} > "$E/candidate.txt"
+          source tools/toolchain.env
+          test "$(go version | awk '{print $3}')" = "go${GO_VERSION}"
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "${PROTOC_LINUX_X86_64_SHA256}  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ag03-review-protoc"; unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/ag03-review-protoc"
+          echo "$RUNNER_TEMP/ag03-review-protoc/bin" >> "$GITHUB_PATH"
+      - name: Exact-candidate complete verification and read-only checks
+        working-directory: product
+        shell: bash
+        run: |
+          set -euo pipefail
+          E="$RUNNER_TEMP/ag03-review-fix"
+          make verify-production 2>&1 | tee "$E/verify-production.log"
+          make tidy contract contract-check 2>&1 | tee "$E/determinism.log"
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          s=Path('docs/waves/AG-03-iot-saved-view.md').read_text()
+          for value in ['f4b15698f586ea26ec1c110e8af9c66cad1b8d39','2208250337540fd61e9ad9cabfe519e662042367','34225085409','10055639922','63c639968fb6d6413be25bbf10ad607f9bd1a0de43084191fff00617b0d31ef1','not qualification of the later amendment']:
+              assert value in s,value
+          paths=set(subprocess.check_output(['git','diff','--name-only','5f6623ee3ddad297403727d293dec77bd3c64367','HEAD'],text=True).splitlines())
+          assert paths=={'docs/STATUS.md','docs/architecture/APPLICATION-GOVERNANCE-PLAN.md','docs/waves/AG-03-iot-saved-view.md'},paths
+          PY
+      - name: Publish unchanged qualified task branch and exact receipt
+        working-directory: product
+        shell: bash
+        run: |
+          set -euo pipefail
+          E="$RUNNER_TEMP/ag03-review-fix"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = 5f6623ee3ddad297403727d293dec77bd3c64367
+          test "$(git ls-remote origin refs/heads/docs/ag03-consumer-closure | cut -f1)" = f4b15698f586ea26ec1c110e8af9c66cad1b8d39
+          git push origin HEAD:refs/heads/docs/ag03-consumer-closure 2>&1 | tee "$E/task-push.log"
+          test "$(git ls-remote origin refs/heads/docs/ag03-consumer-closure | cut -f1)" = 77b070e0909579019bd48e980c23ff3da6bad23e
+          git format-patch --stdout 5f6623ee3ddad297403727d293dec77bd3c64367..HEAD > "$E/framework.patch"
+          git bundle create "$E/framework.bundle" HEAD ^5f6623ee3ddad297403727d293dec77bd3c64367
+          git bundle verify "$E/framework.bundle" 2>&1 | tee "$E/bundle-verify.txt"
+          git status --porcelain --untracked-files=all > "$E/worktree.txt"
+          python3 - <<'PY'
+          import json,os,pathlib,subprocess
+          p=pathlib.Path(os.environ['RUNNER_TEMP'])/'ag03-review-fix'
+          r={'task':'AG-03 review correction','state':'QUALIFIED_TASK_BRANCH_NOT_MAIN','head':'77b070e0909579019bd48e980c23ff3da6bad23e','tree':'06aec4322756e3ced727e5a1bd2070f2b12ac98b','run':os.environ['GITHUB_RUN_ID'],'pr':172,'consumerHead':'bcd20632b666405c3f7a8fe8d53f591c78450087','consumerAcceptanceRun':34224052206,'go':subprocess.check_output(['go','version'],text=True).strip(),'protoc':subprocess.check_output(['protoc','--version'],text=True).strip(),'signed':False}
+          (p/'QUALIFICATION-RECEIPT.json').write_text(json.dumps(r,indent=2)+'\n')
+          print(json.dumps(r,indent=2))
+          PY
+      - name: Evidence manifest
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ag03-review-fix"
+          cd "$RUNNER_TEMP/ag03-review-fix"
+          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 -r sha256sum > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ag03-review-fix-qualification
+          path: ${{ runner.temp }}/ag03-review-fix
+          include-hidden-files: true
+          if-no-files-found: error
