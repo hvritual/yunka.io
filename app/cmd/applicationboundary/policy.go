@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"go/token"
 	"io"
-	"strings"
+
+	"golang.org/x/mod/module"
 )
 
 const MaxPolicyBytes = 1 << 20
@@ -75,7 +76,7 @@ func uniqueJSON(d *json.Decoder) error {
 	return e
 }
 func importIdentity(s string) bool {
-	return s != "" && strings.TrimSpace(s) == s && !strings.ContainsAny(s, "*\\ \t\r\n:#") && !strings.HasPrefix(s, "/") && !strings.Contains(s, "//") && !strings.HasSuffix(s, "/") && !strings.Contains("/"+s+"/", "/../") && !strings.Contains("/"+s+"/", "/./")
+	return module.CheckImportPath(s) == nil
 }
 func symbolValid(s Symbol) bool {
 	return importIdentity(s.Package) && token.IsIdentifier(s.Name) && s.Name != "_" && !token.Lookup(s.Name).IsKeyword()
