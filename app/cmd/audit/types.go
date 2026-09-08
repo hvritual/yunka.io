@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hvritual/yunka.io/pkg/applicationboundary"
 	"github.com/urfave/cli"
+	"yunka.io/app/cmd/applicationboundary"
 )
 
 func typesCommand() cli.Command {

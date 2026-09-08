@@ -73,7 +73,12 @@ type Source struct {
 	Path   string `json:"path"`
 	SHA256 string `json:"sha256"`
 }
+type ExcludedPackage struct {
+	Package string `json:"package"`
+	Reason  string `json:"reason"`
+}
 type Report struct {
+	ExcludedPackages  []ExcludedPackage `json:"excludedPackages,omitempty"`
 	SchemaVersion     int               `json:"schemaVersion"`
 	Status            string            `json:"status"`
 	PolicySHA256      string            `json:"policySha256"`
@@ -92,6 +97,7 @@ func newReport(policy Policy) Report {
 }
 func (r *Report) finish() {
 	sort.Strings(r.Packages)
+	sort.Slice(r.ExcludedPackages, func(i, j int) bool { return r.ExcludedPackages[i].Package < r.ExcludedPackages[j].Package })
 	sort.Slice(r.Sources, func(i, j int) bool { return r.Sources[i].Path < r.Sources[j].Path })
 	sort.Slice(r.Findings, func(i, j int) bool {
 		a, b := r.Findings[i], r.Findings[j]

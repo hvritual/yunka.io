@@ -124,6 +124,7 @@ func Check(ctx context.Context, root string, policy Policy, options Options) Rep
 	}
 	program := Program{Fset: cfg.Fset, Root: abs}
 	module := ""
+	var excluded []ExcludedPackage
 	for _, p := range loaded {
 		if p.Module == nil || filepath.Clean(p.Module.Dir) != abs {
 			return incomplete("loaded package is outside the selected module")
@@ -133,8 +134,12 @@ func Check(ctx context.Context, root string, policy Policy, options Options) Rep
 		} else if module != p.Module.Path {
 			return incomplete("multiple source modules require separate typed checks")
 		}
+		if len(p.GoFiles) == 0 && len(p.CompiledGoFiles) == 0 {
+			excluded = append(excluded, ExcludedPackage{Package: p.PkgPath, Reason: "no-active-production-go-files"})
+			continue
+		}
 		if len(p.Syntax) == 0 || p.TypesInfo == nil {
-			return incomplete("loaded package has no complete syntax/types")
+			return incomplete(fmt.Sprintf("loaded package %s has incomplete syntax/types: go=%d compiled=%d syntax=%d typesInfo=%t", p.PkgPath, len(p.GoFiles), len(p.CompiledGoFiles), len(p.Syntax), p.TypesInfo != nil))
 		}
 		program.Packages = append(program.Packages, SourcePackage{Types: p.Types, Info: p.TypesInfo, Files: p.Syntax})
 	}
@@ -144,6 +149,7 @@ func Check(ctx context.Context, root string, policy Policy, options Options) Rep
 		}
 	}
 	r = Analyze(program, policy)
+	r.ExcludedPackages = excluded
 	if ctx.Err() != nil {
 		return incomplete("analysis cancelled")
 	}

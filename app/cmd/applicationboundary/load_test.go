@@ -92,3 +92,30 @@ func TestLoaderDoesNotInheritCommandInjection(t *testing.T) {
 		t.Fatalf("inherited unapproved driver/workspace: %+v", r)
 	}
 }
+
+func TestModuleTestOnlyPackagesAreExplicitlyExcluded(t *testing.T) {
+	root := writeModule(t, `func Build()Reader{return &narrow{}}`)
+	testdir := filepath.Join(root, "testonly")
+	if err := os.Mkdir(testdir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(testdir, "only_test.go"), []byte("package testonly\nimport \"testing\"\nfunc TestNothing(t *testing.T){}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	r := Check(context.Background(), root, policyFor("Build"), Options{})
+	if r.Status != Pass {
+		t.Fatalf("test-only package invalidated production analysis: %+v", r)
+	}
+	// Go package loaders may omit test-only directories entirely. When returned,
+	// these entries must be explicit exclusions, never silently claimed checked.
+	for _, e := range r.ExcludedPackages {
+		if e.Package != testPackage+"/testonly" || e.Reason != "no-active-production-go-files" {
+			t.Fatalf("unexpected exclusion: %+v", e)
+		}
+	}
+	policy := policyFor("Build")
+	policy.Factories[0].Symbol.Package = testPackage + "/testonly"
+	if r := Check(context.Background(), root, policy, Options{}); r.Status != Incomplete {
+		t.Fatal("selected excluded subject passed")
+	}
+}
