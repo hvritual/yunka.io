@@ -1,0 +1,131 @@
+name: ag03-framework-handoff
+on:
+  push:
+    branches: [control/ag03-framework-handoff-20260908]
+permissions:
+  contents: write
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 5f6623ee3ddad297403727d293dec77bd3c64367
+          path: product
+          fetch-depth: 0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.25.13'
+          cache-dependency-path: |
+            product/app/go.sum
+            product/framework/go.sum
+            product/gateway/go.sum
+            product/infras/go.sum
+            product/pkg/go.sum
+      - name: Locked protoc and source bootstrap
+        working-directory: product
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/ag03-framework-evidence"; mkdir -p "$out"
+          source tools/toolchain.env
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "$PROTOC_LINUX_X86_64_SHA256  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ag03-protoc"; unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/ag03-protoc"
+          echo "$RUNNER_TEMP/ag03-protoc/bin" >> "$GITHUB_PATH"
+          cat AGENTS.md PROJECT_MEMORY.md docs/STATUS.md > "$out/bootstrap.txt"
+          git status --short --branch > "$out/base-status.txt"
+      - name: Commit exact documentation with local Git
+        working-directory: product
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 5f6623ee3ddad297403727d293dec77bd3c64367
+          test -z "$(git status --porcelain)"
+          python3 - <<'PY'
+          import pathlib,hashlib,subprocess
+          raw=pathlib.Path('../control/control/ag03/handoff.patch').read_bytes()
+          assert hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()=='637d73fea748965446a05f7ce8b3759bb21d6986'
+          # Remove the two transport-only leading spaces on diff headers.
+          assert raw.count(b'\n diff --git ')==2
+          patch=raw.replace(b'\n diff --git ',b'\ndiff --git ')
+          assert hashlib.sha256(patch).hexdigest()=='b507013d5bc8daae72b14a664d0bbd846b231bf3b73fe89e8d8b1af140139e0f'
+          subprocess.run(['git','apply','--index','-'],input=patch,check=True)
+          PY
+          test "$(git write-tree)" = 2208250337540fd61e9ad9cabfe519e662042367
+          git diff --cached --check
+          export GIT_AUTHOR_NAME=hvritual GIT_COMMITTER_NAME=hvritual
+          export GIT_AUTHOR_EMAIL=460657446@qq.com GIT_COMMITTER_EMAIL=460657446@qq.com
+          export GIT_AUTHOR_DATE='1788869559 +0000' GIT_COMMITTER_DATE='1788869559 +0000'
+          git -c commit.gpgsign=false commit -m 'docs(architecture): close AG-03 narrow saved-view consumer pilot'
+          test "$(git rev-parse HEAD)" = f4b15698f586ea26ec1c110e8af9c66cad1b8d39
+          git rev-parse HEAD HEAD^{tree} > "$RUNNER_TEMP/ag03-framework-evidence/candidate.txt"
+          python3 - <<'PY'
+          import subprocess
+          changed=set(subprocess.check_output(['git','diff','--name-only','HEAD^','HEAD'],text=True).splitlines())
+          assert changed=={'docs/STATUS.md','docs/architecture/APPLICATION-GOVERNANCE-PLAN.md','docs/waves/AG-03-iot-saved-view.md'},changed
+          PY
+      - name: Full qualification and zero drift
+        working-directory: product
+        shell: bash
+        env:
+          GOTOOLCHAIN: local
+          YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?charset=utf8mb4&parseTime=true&loc=UTC&multiStatements=true
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/ag03-framework-evidence"
+          make verify-production 2>&1 | tee "$out/verify-production.log"
+          make tidy contract contract-check 2>&1 | tee "$out/determinism.log"
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
+      - name: Publish exact qualified documentation branch
+        working-directory: product
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/ag03-framework-evidence"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = 5f6623ee3ddad297403727d293dec77bd3c64367
+          current="$(git ls-remote origin refs/heads/docs/ag03-consumer-closure | cut -f1)"
+          test -z "$current" || test "$current" = f4b15698f586ea26ec1c110e8af9c66cad1b8d39
+          git push origin HEAD:refs/heads/docs/ag03-consumer-closure
+          test "$(git ls-remote origin refs/heads/docs/ag03-consumer-closure | cut -f1)" = f4b15698f586ea26ec1c110e8af9c66cad1b8d39
+          git diff --binary HEAD^ HEAD > "$out/handoff.patch"
+          git bundle create "$out/candidate.bundle" HEAD ^5f6623ee3ddad297403727d293dec77bd3c64367
+          git bundle verify "$out/candidate.bundle"
+          git status --porcelain --untracked-files=all > "$out/worktree.txt"
+          python3 - <<'PY'
+          import json,subprocess,pathlib,os
+          p=pathlib.Path(os.environ['RUNNER_TEMP'])/'ag03-framework-evidence'
+          r={'task':'AG-03 framework documentation handoff','state':'QUALIFIED_NOT_YET_MERGED','head':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'run':os.environ['GITHUB_RUN_ID'],'consumerHead':'bcd20632b666405c3f7a8fe8d53f591c78450087','consumerAcceptanceRun':34224052206,'signed':False}
+          (p/'QUALIFICATION-RECEIPT.json').write_text(json.dumps(r,indent=2)+'\n')
+          PY
+      - name: Evidence manifest
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/ag03-framework-evidence"
+          cd "$RUNNER_TEMP/ag03-framework-evidence"
+          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 -r sha256sum > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ag03-framework-qualification
+          path: ${{ runner.temp }}/ag03-framework-evidence
+          include-hidden-files: true
+          if-no-files-found: error
