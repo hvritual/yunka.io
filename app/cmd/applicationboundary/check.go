@@ -290,7 +290,7 @@ func (c *checker) checkShapes(subject string, pos token.Pos, contract *types.Int
 		for i := 0; i < contract.NumMethods(); i++ {
 			allowed[contract.Method(i).Id()] = true
 		}
-		set := types.NewMethodSet(s.typ)
+		set := c.reachableMethodSet(s.typ)
 		var extra []string
 		for i := 0; i < set.Len(); i++ {
 			m := set.At(i).Obj()
@@ -357,4 +357,28 @@ func exportedFields(root types.Type) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// A publicly nameable non-pointer result can be asserted out of its interface,
+// stored in an addressable local and then used through pointer-receiver methods.
+// Exported aliases make otherwise-private concrete types nameable as well.
+func (c *checker) reachableMethodSet(t types.Type) *types.MethodSet {
+	concrete := types.Unalias(t)
+	named, ok := concrete.(*types.Named)
+	if !ok || types.IsInterface(concrete) {
+		return types.NewMethodSet(t)
+	}
+	nameable := named.Obj().Exported()
+	for _, p := range c.packages {
+		for _, name := range p.Scope().Names() {
+			obj, ok := p.Scope().Lookup(name).(*types.TypeName)
+			if ok && obj.Exported() && types.Identical(types.Unalias(obj.Type()), concrete) {
+				nameable = true
+			}
+		}
+	}
+	if nameable {
+		return types.NewMethodSet(types.NewPointer(concrete))
+	}
+	return types.NewMethodSet(t)
 }

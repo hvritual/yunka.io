@@ -17,6 +17,7 @@ type valueRef struct {
 	expr     ast.Expr
 	object   *types.Var
 	slot     int
+	readPos  token.Pos
 	bindings map[*types.Var]valueRef
 }
 
@@ -117,6 +118,25 @@ func (c *checker) variable(v valueRef, obj *types.Var, stack map[*types.Func]boo
 	// interface without a visible assignment and therefore invalidates this proof.
 	writes := []valueRef{}
 	escapes := false
+	// Only a direct initialization in this function's body can establish this
+	// bounded proof. Conditional/literal-body writes are not known to execute;
+	// they must not manufacture a non-nil named result.
+	directWrites := map[ast.Node]bool{}
+	for _, stmt := range v.fn.decl.Body.List {
+		directWrites[stmt] = true
+		if decl, ok := stmt.(*ast.DeclStmt); ok {
+			if gen, ok := decl.Decl.(*ast.GenDecl); ok {
+				for _, spec := range gen.Specs {
+					directWrites[spec] = true
+				}
+			}
+		}
+	}
+	readPos := v.readPos
+	if v.expr != nil {
+		readPos = v.expr.Pos()
+	}
+	uncertain := false
 	ast.Inspect(v.fn.decl.Body, func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.UnaryExpr:
@@ -134,6 +154,9 @@ func (c *checker) variable(v valueRef, obj *types.Var, stack map[*types.Func]boo
 				if !ok || v.pkg.Info.ObjectOf(id) != obj {
 					continue
 				}
+				if !directWrites[x] || !readPos.IsValid() || x.Pos() >= readPos {
+					uncertain = true
+				}
 				ref := valueRef{pkg: v.pkg, fn: v.fn, bindings: v.bindings}
 				if len(x.Rhs) == len(x.Lhs) {
 					ref.expr = x.Rhs[i]
@@ -147,6 +170,9 @@ func (c *checker) variable(v valueRef, obj *types.Var, stack map[*types.Func]boo
 			for i, id := range x.Names {
 				if v.pkg.Info.Defs[id] != obj {
 					continue
+				}
+				if !directWrites[x] || !readPos.IsValid() || x.Pos() >= readPos {
+					uncertain = true
 				}
 				ref := valueRef{pkg: v.pkg, fn: v.fn, bindings: v.bindings}
 				if len(x.Values) == len(x.Names) {
@@ -170,6 +196,9 @@ func (c *checker) variable(v valueRef, obj *types.Var, stack map[*types.Func]boo
 	}
 	// A parameter already has an incoming value. Even one subsequent assignment
 	// is mutable: an earlier branch may have returned the incoming wide value.
+	if uncertain {
+		return unknown("interface initialization is not proven before the selected use")
+	}
 	if escapes || len(writes) > 1 || (parameter && len(writes) > 0) {
 		return unknown("mutable or address-escaped interface provenance is unsupported")
 	}
@@ -214,7 +243,7 @@ func (c *checker) functionResult(fn *function, index int, bindings map[*types.Va
 				}
 			}
 		case *ast.ReturnStmt:
-			ref := valueRef{pkg: fn.pkg, fn: fn, bindings: bindings}
+			ref := valueRef{pkg: fn.pkg, fn: fn, bindings: bindings, readPos: x.Pos()}
 			if len(x.Results) == 0 {
 				ref.object = sig.Results().At(index)
 			} else if len(x.Results) == sig.Results().Len() {
