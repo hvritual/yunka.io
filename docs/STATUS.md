@@ -4,7 +4,7 @@
 > Authority: current framework/wave/release/pressure status  
 > Live Git HEAD authority: resolve the `main` ref from Git/GitHub; it is not duplicated as a permanent fact here  
 > Behavioral reconciliation baseline: `19bed965852d9dc2ef39e91dcadd7fb6bea4c871` (qualified candidate merged unchanged by PR #119)  
-> Reconciled date: 2026-09-07
+> Reconciled date: 2026-09-08
 > Governance: [`DOCUMENTATION_GOVERNANCE.md`](DOCUMENTATION_GOVERNANCE.md)
 
 ## Current framework state
@@ -445,11 +445,13 @@ The user-selected application-organization plan is [APPLICATION-GOVERNANCE-PLAN.
 | Task | Source state | Verification and scope |
 | --- | --- | --- |
 | AG-00 | Plan archived | Defines AG-01 through AG-09, allowed scope, dependencies, acceptance and rollback; not a claim that all tasks exist |
-| AG-01 / AG-01I | Mechanism regression foundation implemented | 11 named Go mechanism scenarios, 13 inventory-mutation cases, exact reviewed fixture fingerprints, 11 definition-binding regressions, anti-false-pass tests and two Linux process-tree cleanup regressions, through existing architecture-check. See [AG-01I evidence](waves/AG-01I-boundary-qualification.md). Candidate qualification and integration identities are recorded on PR #170 and its exact-head delivery run; no consumer refactor or general architecture scanner is claimed |
-| AG-02 | Next dependent consumer task | Biz TenantLifecycle encapsulation, after the AG-01 main integration receipt is verified |
+| AG-01 / AG-01I | Complete / qualified / merged through PR #170 | 11 named Go mechanism scenarios, 13 inventory-mutation cases, exact reviewed fixture fingerprints, 11 definition-binding regressions, anti-false-pass tests and two Linux process-tree cleanup regressions, through existing architecture-check. See [AG-01I evidence](waves/AG-01I-boundary-qualification.md). Candidate qualification and integration identities are recorded on PR #170 and its exact-head delivery run; no consumer refactor or general architecture scanner is claimed |
+| AG-02 / AG-02R | Complete / consumer-qualified / merged through Biz PR #16 | TenantLifecycle encapsulation plus strict runtime-readiness and current-read owner-invariant corrections. Actual consumer main `3519e7ee6e51e33984669871e4f32a55a3597d9f`, tree `3f8926b459fb78688fe0f39e9c4acfb6d93b3b47`, revalidated by Biz run `34192294589`. [Exact evidence](waves/AG-02-biz-encapsulation.md); no Yunka runtime/compiler change |
 | AG-03 through AG-09 | Defined, not delivered | Narrow-use-case trial, precise type rules, coverage, template integration, migration/debt-growth and continuous evolution |
 
 The earlier AG-01 head `7c50680f0381505d9cc55a029a2a92baa6b0a140` passed CI run `34119891295` and production run `34119891325`. AG-01I adds test-policy integrity and documentation reconciliation; it must establish its own exact-head qualification rather than inherit the earlier result by narrative. The delivery worker creates a normal Git commit before testing, runs the new candidate with locked Go/protoc and MySQL, and publishes it only after full qualification. PR discussion and Git/action receipts distinguish candidate, reviewed and integrated states; main must be read back before claiming integration.
+
+AG-01I main integration was completed at `4dd2a264c73a2ce6b85ad7ae6238046762e7e0f7` with exact-main run `34136019602`. AG-02 then used the consumer's existing runtime/generator pin `6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb`; current-main CLI placement checks do not imply a consumer runtime upgrade. Biz #17 is the demonstrated consumer last-owner snapshot defect, not a new Yunka UoW defect. The two relevant Biz workflows now retain the readiness and deterministic snapshot regressions in their recurring gates. AG-03 is the next independent pilot; generic AG-04+ rules and templates remain undelivered.
 
 These tests characterize the language boundary, including expected examples of insufficient encapsulation. They do not certify arbitrary Go code, all operating systems, consumer root-UoW behavior, or a same-process/OS security sandbox. Canonical tool downloads are disabled inside fixture execution; this is not a network firewall. Unix process-group cleanup has Linux qualification only; non-Unix execution reports INCOMPLETE until its process-tree backend is implemented and qualified.
 

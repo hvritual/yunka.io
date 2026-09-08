@@ -128,6 +128,8 @@ AG-01I.2 固定用例定义绑定：每个清单项除名称和正反类别外�
 
 将实现从生成 wrapper 同包范围移出，采用应用级 internal；复用 source-edge wrapper，业务对象不获得完整目标实现。保留根 UoW 子调用、租户隔离与原接口。验收：非法兄弟导入反例被拒绝，合法装配、现有生成零漂移与真实 MySQL/子 Operation/回滚通过。若 Ownership/ChangePlan 不支持新位置，保存最小失败并拆出框架任务，不手加宽泛豁免。回滚：应用代码/装配一起回退，不改 schema。
 
+AG-02 的兼容落点采用 `internal/access/application/tenantlifecycle/internal/usecase`：移出生成 wrapper 的同包私有范围，同时保留现有 Change Plan/Audit 的 Application 根。前文 sibling 目录是候选示例，不是强制另建目录真相。试点产生的就绪证据竞争和消费者 owner 快照缺陷必须保留确定性回归；已验证的新测试同时接入对应常规工作流的测试选择器和路径触发范围，不能只存在于一次性交付脚本中。当前资格与集成结果见 STATUS 和 [AG-02 证据](../waves/AG-02-biz-encapsulation.md)。
+
 ### AG-03 — IoT Delivery 窄用例试点
 
 依赖：AG-01；与 AG-02 可独立实现，模板推广需二者均验收。选边界较小用例；把全量 Repository 收窄到实际需要的方法，分离规则、SQLite 与兼容映射。允许相关手写业务、端口、持久化适配、特征测试。保持 API/Operation ID/CAS/授权/审计/Outbox。验收：依赖确实收窄，不只是拆文件；临时 SQLite、回归和适用 HTTP/gRPC 验证；生成无漂移。回滚：用例整批回退；schema 变化另开任务。
