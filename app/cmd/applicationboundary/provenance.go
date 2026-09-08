@@ -258,6 +258,9 @@ func (c *checker) functionResult(fn *function, index int, bindings map[*types.Va
 			result = append(result, c.expression(ref, stack, depth+1)...)
 			return true
 		case *ast.IfStmt:
+			if walk(x.Init) {
+				return true
+			}
 			value := fn.pkg.Info.Types[x.Cond].Value
 			if value != nil && value.Kind() == constant.Bool {
 				if constant.BoolVal(value) {
@@ -268,7 +271,9 @@ func (c *checker) functionResult(fn *function, index int, bindings map[*types.Va
 			bodyTerminates := walk(x.Body)
 			elseTerminates := walk(x.Else)
 			return bodyTerminates && elseTerminates
-		case *ast.DeclStmt, *ast.AssignStmt, *ast.ExprStmt, *ast.EmptyStmt:
+		case *ast.ExprStmt:
+			return isBuiltinPanic(fn.pkg.Info, x.X)
+		case *ast.DeclStmt, *ast.AssignStmt, *ast.EmptyStmt:
 			// Initializers are evaluated only when they feed the selected result. Bodies
 			// of function literals do not return from this constructor.
 		default:

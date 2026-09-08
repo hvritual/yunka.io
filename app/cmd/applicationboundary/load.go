@@ -106,9 +106,12 @@ func Check(ctx context.Context, root string, policy Policy, options Options) Rep
 		captureMu.Unlock()
 		return parser.ParseFile(fset, name, src, parser.ParseComments|parser.AllErrors)
 	}
-	loaded, err := packages.Load(cfg, "./...")
-	if err != nil || ctx.Err() != nil {
-		return incomplete("package loading failed or was cancelled; verify toolchain and cached dependencies")
+	loaded, err := loadModuleSource(cfg)
+	if err != nil {
+		return incomplete(err.Error())
+	}
+	if ctx.Err() != nil {
+		return incomplete("package loading was cancelled")
 	}
 	if len(loaded) == 0 {
 		return incomplete("module has no packages for the active build")
