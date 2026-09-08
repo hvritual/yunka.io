@@ -134,6 +134,8 @@ AG-02 的兼容落点采用 `internal/access/application/tenantlifecycle/interna
 
 依赖：AG-01；与 AG-02 可独立实现，模板推广需二者均验收。选边界较小用例；把全量 Repository 收窄到实际需要的方法，分离规则、SQLite 与兼容映射。允许相关手写业务、端口、持久化适配、特征测试。保持 API/Operation ID/CAS/授权/审计/Outbox。验收：依赖确实收窄，不只是拆文件；临时 SQLite、回归和适用 HTTP/gRPC 验证；生成无漂移。回滚：用例整批回退；schema 变化另开任务。
 
+AG-03 试点保留原 DeliveryService/management 契约，在 `application/savedview/internal/usecase` 隔离保存视图实现，实际注入对象的方法集从全量 22 方法收窄为 CreateSavedView/ListSavedViews 两方法；SQL 适配仍使用既有根事务执行器。相同特征测试必须同时验证不可变旧基线和候选，包含历史错误语义，不能只检查新代码自己符合自己。原整文件豁免不扩张，新增有限调用规则必须带伪装反例。资格验证暴露的 SQLite 启动锁顺序问题单列 AG-03R：保留原等待时长、以真实持锁复现及竞态重复验证，不用重跑至绿代替定位。所有新测试与导入探针进入既有常规回归；当前资格与集成见 STATUS 和 [AG-03 证据](../waves/AG-03-iot-saved-view.md)。
+
 ### AG-04 — 工厂/能力类型检查
 
 依赖：两个试点的最小真实违规。允许工具/控制面分析与测试，不修改 Executor/Authz/UoW。采用 go/packages/go/analysis 或已锁等价基础；先限定可证明的类型、构造和调用关系。校验工厂仅装配使用、不得泄露完整实现/解包器/匿名嵌入额外能力；按实际类型而非 svc/operations 等名称判断。analysistest 正反例必须校验准确诊断。未知动态路径报告 INCOMPLETE。回滚：独立移除本规则，不放宽旧规则。
