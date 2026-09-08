@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "factories": [
+    {
+      "symbol": {
+        "package": "github.com/hvritual/iot-delivery-system/backend-yunka/internal/delivery/application/savedview",
+        "name": "Build"
+      },
+      "allowedCallerPackages": [
+        "github.com/hvritual/iot-delivery-system/backend-yunka/internal/delivery"
+      ],
+      "results": [
+        {
+          "index": 0,
+          "contract": {
+            "package": "github.com/hvritual/iot-delivery-system/backend-yunka/internal/delivery/application/savedview",
+            "name": "Application"
+          }
+        }
+      ],
+      "arguments": [
+        {
+          "index": 0,
+          "contract": {
+            "package": "github.com/hvritual/iot-delivery-system/backend-yunka/internal/delivery/ports",
+            "name": "SavedViewRepository"
+          }
+        }
+      ]
+    }
+  ]
+}

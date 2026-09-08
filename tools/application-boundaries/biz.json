@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "factories": [
+    {
+      "symbol": {
+        "package": "github.com/hvritual/biz/internal/access/application/tenantlifecycle",
+        "name": "Build"
+      },
+      "allowedCallerPackages": [
+        "github.com/hvritual/biz/internal/bizruntime"
+      ],
+      "results": [
+        {
+          "index": 0,
+          "contract": {
+            "package": "github.com/hvritual/biz/internal/access/application",
+            "name": "TenantLifecycleApplication"
+          }
+        }
+      ]
+    }
+  ]
+}

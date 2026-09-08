@@ -17,8 +17,9 @@ const AppName = "audit"
 
 func Command() cli.Command {
 	return cli.Command{
-		Name:  AppName,
-		Usage: "inspect deterministic framework-conformance evidence without mutating the project",
+		Name:        AppName,
+		Subcommands: []cli.Command{typesCommand()},
+		Usage:       "inspect deterministic framework-conformance evidence without mutating the project",
 		Flags: []cli.Flag{
 			cli.StringFlag{Name: "root", Value: ".", Usage: "project root"},
 			cli.StringFlag{Name: "base", Usage: "optional Git ref used to classify proven findings as existing, new, or fixed debt"},

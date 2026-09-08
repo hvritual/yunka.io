@@ -1,0 +1,117 @@
+name: ag04-consumer-types
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - pkg/applicationboundary/**
+      - app/cmd/audit/**
+      - tools/application-boundaries/**
+      - tools/qualify_ag04_consumers.py
+      - '**/go.mod'
+      - '**/go.sum'
+      - go.work
+      - tools/toolchain.env
+      - .github/workflows/ag04-consumer-types.yml
+  pull_request:
+    paths:
+      - pkg/applicationboundary/**
+      - app/cmd/audit/**
+      - tools/application-boundaries/**
+      - tools/qualify_ag04_consumers.py
+      - '**/go.mod'
+      - '**/go.sum'
+      - go.work
+      - tools/toolchain.env
+      - .github/workflows/ag04-consumer-types.yml
+
+permissions:
+  contents: read
+
+jobs:
+  typed-consumer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - consumer: biz
+            repository: hvritual/biz
+            revision: 3519e7ee6e51e33984669871e4f32a55a3597d9f
+            runtime: 6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb
+            runtime_path: consumer/yunka.io
+            module_path: consumer/project
+          - consumer: iot
+            repository: hvritual/iot-delivery-system
+            revision: bcd20632b666405c3f7a8fe8d53f591c78450087
+            runtime: 057ebcf88a87303eb633eb6e604d306f633dfac0
+            runtime_path: consumer/project/third_party/yunka
+            module_path: consumer/project/backend-yunka
+    env:
+      GOTOOLCHAIN: local
+      GOWORK: 'off'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          path: checker
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ${{ matrix.repository }}
+          ref: ${{ matrix.revision }}
+          path: consumer/project
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: hvritual/yunka.io
+          ref: ${{ matrix.runtime }}
+          path: ${{ matrix.runtime_path }}
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.25.13'
+          cache-dependency-path: |
+            checker/pkg/go.sum
+            checker/app/go.sum
+            consumer/**/go.sum
+      - name: Build current checker and prepare pinned consumer dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          source checker/tools/toolchain.env
+          test "$(go version | awk '{print $3}')" = "go${GO_VERSION}"
+          test "$(git -C consumer/project rev-parse HEAD)" = '${{ matrix.revision }}'
+          test "$(git -C '${{ matrix.runtime_path }}' rev-parse HEAD)" = '${{ matrix.runtime }}'
+          GOWORK="$GITHUB_WORKSPACE/checker/go.work" go -C checker/app build -mod=readonly -o "$RUNNER_TEMP/yunka" ./cmd
+          (cd '${{ matrix.module_path }}' && go mod download)
+          test -z "$(git -C consumer/project status --porcelain --untracked-files=all)"
+          test -z "$(git -C checker status --porcelain --untracked-files=all)"
+      - name: Positive, deterministic, actual-object and factory-scope qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 checker/tools/qualify_ag04_consumers.py \
+            --consumer '${{ matrix.consumer }}' --checkout consumer/project \
+            --checker "$RUNNER_TEMP/yunka" \
+            --policy "checker/tools/application-boundaries/${{ matrix.consumer }}.json" \
+            --output "$RUNNER_TEMP/ag04-${{ matrix.consumer }}"
+          test -z "$(git -C '${{ matrix.runtime_path }}' status --porcelain --untracked-files=all)"
+          test -z "$(git -C checker status --porcelain --untracked-files=all)"
+          git -C checker rev-parse HEAD HEAD^{tree} > "$RUNNER_TEMP/ag04-${{ matrix.consumer }}/checker-git.txt"
+      - name: Evidence hashes
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ag04-${{ matrix.consumer }}"
+          cd "$RUNNER_TEMP/ag04-${{ matrix.consumer }}"
+          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 -r sha256sum > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ag04-${{ matrix.consumer }}-typed-evidence
+          path: ${{ runner.temp }}/ag04-${{ matrix.consumer }}
+          if-no-files-found: error
+          retention-days: 30
