@@ -1,0 +1,59 @@
+name: ag05-source-policy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - app/cmd/sourceaudit/**
+      - app/cmd/audit/**
+      - tools/source-policy/**
+      - tools/qualify_ag05_sources.py
+      - '**/go.mod'
+      - '**/go.sum'
+      - '**/go.work'
+      - '**/go.work.sum'
+      - tools/toolchain.env
+      - .github/workflows/ag05-source-policy.yml
+  pull_request:
+    paths:
+      - app/cmd/sourceaudit/**
+      - app/cmd/audit/**
+      - tools/source-policy/**
+      - tools/qualify_ag05_sources.py
+      - '**/go.mod'
+      - '**/go.sum'
+      - '**/go.work'
+      - '**/go.work.sum'
+      - tools/toolchain.env
+      - .github/workflows/ag05-source-policy.yml
+
+permissions:
+  contents: read
+
+jobs:
+  source-readback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Retain exact immutable source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/ag05-source"
+          mkdir -p "$out"
+          git rev-parse HEAD 'HEAD^{tree}' > "$out/identity.txt"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          git bundle create "$out/source.bundle" HEAD
+          git bundle verify "$out/source.bundle"
+          (cd "$out" && sha256sum identity.txt source.bundle > SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ag05-source-readback
+          path: ${{ runner.temp }}/ag05-source
+          if-no-files-found: error
+          retention-days: 30
