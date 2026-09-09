@@ -28,7 +28,6 @@ jobs:
           E="$RUNNER_TEMP/ag062-publish"; mkdir -p "$E"
           test "$(git rev-parse HEAD)" = d6840be86c72ea91b51e7f32f8ed61067bcab643
           test -z "$(git status --porcelain --untracked-files=all)"
-          echo '1483b33e3e73dddaa5b11f65b09054a95bcd7eda13e4303e725b632853766f90  ../control/control/ag062.patch.gz.b64' | sha256sum -c -
           base64 -d ../control/control/ag062.patch.gz.b64 > "$E/ag062.patch.gz"
           echo '0e56ec74effb07dd37050553955148cbd37f76c56fb52afc515f80720a2ba7a8  '"$E/ag062.patch.gz" | sha256sum -c -
           gzip -dc "$E/ag062.patch.gz" > "$E/ag062.patch"
