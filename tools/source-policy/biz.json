@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "name": "linux",
+      "goos": "linux",
+      "goarch": "amd64",
+      "cgo": false,
+      "tags": []
+    },
+    {
+      "name": "integration",
+      "goos": "linux",
+      "goarch": "amd64",
+      "cgo": false,
+      "tags": [
+        "integration"
+      ]
+    }
+  ],
+  "modules": [
+    {
+      "path": "project",
+      "workspace": "off",
+      "profiles": [
+        "linux",
+        "integration"
+      ]
+    }
+  ],
+  "components": [
+    {
+      "name": "biz",
+      "path": "project",
+      "kind": "production",
+      "allow": [
+        "contracts"
+      ],
+      "allowExternal": true
+    },
+    {
+      "name": "contracts",
+      "path": "project/contracts",
+      "kind": "production",
+      "allow": [],
+      "allowExternal": true
+    }
+  ],
+  "exclusions": [
+    {
+      "path": "yunka.io",
+      "kind": "dependency",
+      "reason": "Unchanged pinned consumer runtime; inventoried dependency source is not consumer-owned application code"
+    }
+  ],
+  "testSupportImports": [
+    "yunka.io/framework/testkit",
+    "yunka.io/pkg/testkit",
+    "yunka.io/pkg/mock",
+    "github.com/DATA-DOG/go-sqlmock"
+  ]
+}

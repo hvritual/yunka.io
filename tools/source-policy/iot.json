@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "name": "linux",
+      "goos": "linux",
+      "goarch": "amd64",
+      "cgo": false,
+      "tags": []
+    },
+    {
+      "name": "yu31",
+      "goos": "linux",
+      "goarch": "amd64",
+      "cgo": false,
+      "tags": [
+        "yu31"
+      ]
+    }
+  ],
+  "modules": [
+    {
+      "path": "project",
+      "kind": "manifest-only",
+      "workspace": "off",
+      "profiles": []
+    },
+    {
+      "path": "project/backend",
+      "workspace": "off",
+      "profiles": [
+        "linux"
+      ]
+    },
+    {
+      "path": "project/backend-yunka",
+      "workspace": "off",
+      "profiles": [
+        "linux",
+        "yu31"
+      ]
+    }
+  ],
+  "components": [
+    {
+      "name": "legacy",
+      "path": "project/backend",
+      "kind": "production",
+      "allow": [],
+      "allowExternal": true
+    },
+    {
+      "name": "delivery",
+      "path": "project/backend-yunka",
+      "kind": "production",
+      "allow": [
+        "contracts"
+      ],
+      "allowExternal": true
+    },
+    {
+      "name": "contracts",
+      "path": "project/backend-yunka/contracts",
+      "kind": "production",
+      "allow": [],
+      "allowExternal": true
+    }
+  ],
+  "exclusions": [
+    {
+      "path": "project/third_party/yunka",
+      "kind": "dependency",
+      "reason": "Unchanged pinned external Yunka runtime and its source modules, not a blanket consumer-code exemption"
+    }
+  ],
+  "testSupportImports": [
+    "yunka.io/framework/testkit",
+    "yunka.io/pkg/testkit",
+    "yunka.io/pkg/mock",
+    "github.com/hvritual/yunka.io/framework/testkit",
+    "github.com/hvritual/yunka.io/pkg/testkit",
+    "github.com/hvritual/yunka.io/pkg/mock",
+    "github.com/DATA-DOG/go-sqlmock"
+  ]
+}

@@ -1,9 +1,13 @@
 name: ag05-source-policy
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
+      - '**/*.go'
+      - docs/STATUS.md
+      - docs/architecture/APPLICATION-SOURCE-POLICY.md
       - app/cmd/sourceaudit/**
       - app/cmd/audit/**
       - tools/source-policy/**
@@ -16,6 +20,9 @@ on:
       - .github/workflows/ag05-source-policy.yml
   pull_request:
     paths:
+      - '**/*.go'
+      - docs/STATUS.md
+      - docs/architecture/APPLICATION-SOURCE-POLICY.md
       - app/cmd/sourceaudit/**
       - app/cmd/audit/**
       - tools/source-policy/**
@@ -55,5 +62,123 @@ jobs:
         with:
           name: ag05-source-readback
           path: ${{ runner.temp }}/ag05-source
+          if-no-files-found: error
+          retention-days: 30
+
+  qualify-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - subject: framework
+            root: checker
+          - subject: biz
+            root: consumer
+            repository: hvritual/biz
+            revision: 3519e7ee6e51e33984669871e4f32a55a3597d9f
+            runtime: 6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb
+            runtime_path: consumer/yunka.io
+            module_path: consumer/project
+          - subject: iot
+            root: consumer
+            repository: hvritual/iot-delivery-system
+            revision: bcd20632b666405c3f7a8fe8d53f591c78450087
+            runtime: 057ebcf88a87303eb633eb6e604d306f633dfac0
+            runtime_path: consumer/project/third_party/yunka
+            module_path: consumer/project/backend-yunka
+    env:
+      GOTOOLCHAIN: local
+      GOWORK: 'off'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          path: checker
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        if: matrix.subject != 'framework'
+        with:
+          repository: ${{ matrix.repository }}
+          ref: ${{ matrix.revision }}
+          path: consumer/project
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        if: matrix.subject != 'framework'
+        with:
+          repository: hvritual/yunka.io
+          ref: ${{ matrix.runtime }}
+          path: ${{ matrix.runtime_path }}
+          persist-credentials: false
+      - name: Load locked toolchain
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          source checker/tools/toolchain.env
+          echo "go_version=${GO_VERSION:?}" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache-dependency-path: |
+            checker/**/go.sum
+            consumer/**/go.sum
+      - name: Build checker and execute required regression inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          source checker/tools/toolchain.env
+          test "$(go version | awk '{print $3}')" = "go${GO_VERSION}"
+          mkdir -p "$RUNNER_TEMP/ag05-${{ matrix.subject }}"
+          GOWORK="$GITHUB_WORKSPACE/checker/go.work" go -C checker/app build -mod=readonly -o "$RUNNER_TEMP/yunka" ./cmd
+          GOWORK="$GITHUB_WORKSPACE/checker/go.work" go -C checker/app test -json -race -count=1 -timeout=5m ./cmd/sourceaudit ./cmd/audit > "$RUNNER_TEMP/ag05-${{ matrix.subject }}/tests.jsonl"
+          test -z "$(git -C checker status --porcelain --untracked-files=all)"
+      - name: Prepare approved dependencies for the declared source profiles
+        shell: bash
+        env:
+          SUBJECT: ${{ matrix.subject }}
+          REVISION: ${{ matrix.revision }}
+          RUNTIME: ${{ matrix.runtime }}
+          RUNTIME_PATH: ${{ matrix.runtime_path }}
+          MODULE_PATH: ${{ matrix.module_path }}
+        run: |
+          set -euo pipefail
+          if [ "$SUBJECT" = framework ]; then
+            for module in pkg framework gateway infras app; do
+              (cd "checker/$module" && go mod download)
+            done
+          else
+            test "$(git -C consumer/project rev-parse HEAD)" = "$REVISION"
+            test "$(git -C "$RUNTIME_PATH" rev-parse HEAD)" = "$RUNTIME"
+            (cd "$MODULE_PATH" && go mod download)
+            test -z "$(git -C consumer/project status --porcelain --untracked-files=all)"
+            test -z "$(git -C "$RUNTIME_PATH" status --porcelain --untracked-files=all)"
+          fi
+          test -z "$(git -C checker status --porcelain --untracked-files=all)"
+      - name: Exact source, matrix, controlled negatives and read-only qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 checker/tools/qualify_ag05_sources.py \
+            --subject '${{ matrix.subject }}' --root '${{ matrix.root }}' \
+            --checker "$RUNNER_TEMP/yunka" --checker-checkout checker \
+            --tests "$RUNNER_TEMP/ag05-${{ matrix.subject }}/tests.jsonl" \
+            --output "$RUNNER_TEMP/ag05-${{ matrix.subject }}"
+          test -z "$(git -C checker status --porcelain --untracked-files=all)"
+      - name: Retain diagnostic evidence even on failure
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/ag05-${{ matrix.subject }}"
+          mkdir -p "$out"
+          git -C checker rev-parse HEAD 'HEAD^{tree}' > "$out/checker-git.txt"
+          (cd "$out" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 -r sha256sum > SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: ag05-${{ matrix.subject }}-source-evidence
+          path: ${{ runner.temp }}/ag05-${{ matrix.subject }}
           if-no-files-found: error
           retention-days: 30

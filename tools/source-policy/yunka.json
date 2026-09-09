@@ -1,0 +1,176 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "name": "linux",
+      "goos": "linux",
+      "goarch": "amd64",
+      "cgo": false,
+      "tags": []
+    },
+    {
+      "name": "windows",
+      "goos": "windows",
+      "goarch": "amd64",
+      "cgo": false,
+      "tags": []
+    },
+    {
+      "name": "tagged",
+      "goos": "linux",
+      "goarch": "amd64",
+      "cgo": false,
+      "tags": [
+        "integration",
+        "contractsync",
+        "yunka_dependency_anchor"
+      ]
+    }
+  ],
+  "modules": [
+    {
+      "path": "pkg",
+      "workspace": "go.work",
+      "profiles": [
+        "linux",
+        "windows",
+        "tagged"
+      ]
+    },
+    {
+      "path": "framework",
+      "workspace": "go.work",
+      "profiles": [
+        "linux",
+        "windows",
+        "tagged"
+      ]
+    },
+    {
+      "path": "gateway",
+      "workspace": "go.work",
+      "profiles": [
+        "linux",
+        "windows",
+        "tagged"
+      ]
+    },
+    {
+      "path": "infras",
+      "workspace": "go.work",
+      "profiles": [
+        "linux",
+        "windows",
+        "tagged"
+      ]
+    },
+    {
+      "path": "app",
+      "workspace": "go.work",
+      "profiles": [
+        "linux",
+        "windows",
+        "tagged"
+      ]
+    }
+  ],
+  "components": [
+    {
+      "name": "pkg",
+      "path": "pkg",
+      "kind": "production",
+      "allow": [],
+      "allowExternal": true
+    },
+    {
+      "name": "framework",
+      "path": "framework",
+      "kind": "production",
+      "allow": [
+        "pkg"
+      ],
+      "allowExternal": true
+    },
+    {
+      "name": "gateway",
+      "path": "gateway",
+      "kind": "production",
+      "allow": [
+        "framework",
+        "pkg"
+      ],
+      "allowExternal": true
+    },
+    {
+      "name": "infras",
+      "path": "infras",
+      "kind": "production",
+      "allow": [
+        "framework",
+        "pkg"
+      ],
+      "allowExternal": true
+    },
+    {
+      "name": "app",
+      "path": "app",
+      "kind": "production",
+      "allow": [
+        "framework",
+        "gateway",
+        "pkg",
+        "infras"
+      ],
+      "allowExternal": true
+    },
+    {
+      "name": "pkg-testkit",
+      "path": "pkg/testkit",
+      "kind": "test-support",
+      "allow": [
+        "pkg"
+      ],
+      "allowExternal": true
+    },
+    {
+      "name": "pkg-mock",
+      "path": "pkg/mock",
+      "kind": "test-support",
+      "allow": [
+        "pkg"
+      ],
+      "allowExternal": true
+    },
+    {
+      "name": "framework-testkit",
+      "path": "framework/testkit",
+      "kind": "test-support",
+      "allow": [
+        "pkg",
+        "framework",
+        "pkg-testkit"
+      ],
+      "allowExternal": true
+    }
+  ],
+  "exclusions": [
+    {
+      "path": "app/cmd/applicationboundary/testdata",
+      "kind": "fixture",
+      "reason": "Deliberately violating analysistest source; qualified by the typed checker test harness"
+    },
+    {
+      "path": "app/cmd/assembly/testdata",
+      "kind": "fixture",
+      "reason": "Standalone assembly runtime fixtures compiled and run by assembly tests"
+    },
+    {
+      "path": "app/cmd/dev/testdata",
+      "kind": "fixture",
+      "reason": "Disposable runtime-helper program used by developer workflow process tests"
+    }
+  ],
+  "testSupportImports": [
+    "github.com/DATA-DOG/go-sqlmock"
+  ]
+}
