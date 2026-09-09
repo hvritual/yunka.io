@@ -217,7 +217,7 @@ Every repository task must:
 - Every node/edge carries declared, observed, or explicitly inferred evidence; absence of evidence remains absence of an edge.
 - Contract/OperationPlan facts contribute Domain/Application/Operation/Permission/message/binding/dependency evidence.
 - Runtime Health/routes/RPC/event inventory and resilience/selector snapshots may contribute observed evidence through explicit adapters.
-- Trace evidence aggregation is read-only runtime evidence and does not by itself create Application Graph edges or imply complete Saga topology.
+- Trace evidence aggregation is read-only runtime evidence and does not itself create Application Graph edges or imply complete Saga topology.
 - Graph/diagnostics never infer architecture from grep, package names, method naming, or raw URL patterns.
 - W07 diagnostics are read-only and must not expose credentials, payloads, caller identity, grant scopes, or secret configuration values.
 
@@ -249,4 +249,6 @@ Every repository task must:
 - Each development round implements at least one independent task; close an unqualified or unintegrated prerequisite before advancing its dependent consumer migration. Executable mechanism tests are not an arbitrary-project architecture scanner or proof of consumer behavior.
 - New formal implementation commits use local Git or Runner-local Git. Connector staging may use an isolated control branch; control workflows/payloads must not enter the product diff. Never overwrite user changes or force-push.
 - The user authorizes verified framework changes from this stream to be integrated into main. Use non-force fast-forward only after exact candidate verification, review disposition and concurrent-ref checks. Reconcile STATUS and read back the actual integrated SHA/tree. This does not authorize unrelated pending PRs, production deployment or data migration.
-- Qualification, independent review and integration are separate evidence. Do not create a self-APPROVE, turn missing reviewer output into approval, or claim unexecuted/omitted tests as passed. A scope inventory prevents accidental test loss but is not a security boundary against an actor who can rewrite the whole verifier.
+- External code-review services are removed from the required delivery workflow by user decision. Follow the external code-review service policy in `AGENTS.md`; it supersedes older mandatory automated re-review wording. Do not request/retry the service or wait for quota, and do not silently substitute another provider.
+- Implementation self-checks, disposition of real findings, exact-head automated qualification, authorized non-force integration and actual-main readback remain mandatory. Preserve existing human approval/protection requirements; provider account settings are separate from repository instructions.
+- Qualification, optional independent review and integration are separate evidence. Do not create a self-APPROVE, turn missing reviewer output into approval, or claim unexecuted/omitted tests as passed. A scope inventory prevents accidental test loss but is not a security boundary against an actor who can rewrite the whole verifier.

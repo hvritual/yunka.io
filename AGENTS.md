@@ -31,6 +31,34 @@ Do not skip this bootstrap for small, read-only, or follow-up tasks. When work i
 - Never overwrite, discard, reset, or clean existing user changes without explicit authorization.
 - Before Connector writes, confirm the branch/base SHA to avoid writing against a stale baseline. Avoid concurrent writes to the same path/ref; sequence dependent writes using the latest returned SHA.
 
+## External code-review service policy
+
+The user has removed the external Codex code-review service from the required
+repository workflow. This decision applies to current and future tasks and
+supersedes older task/PR instructions that make an external automated final-head
+review a prerequisite for integration.
+
+- Do not request or retry the external review service, wait for its quota, or
+  require another review service to continue ordinary delivery. Re-enabling an
+  external reviewer requires a new explicit user instruction.
+- Preserve implementation self-checks and evidence-based disposition of known
+  findings. Real unresolved defects remain blockers; removing the service does
+  not make a defect fixed. Preserve historical findings, replies and failed runs.
+- Preserve exact-candidate CI, Production, applicable source/type/template and
+  real-consumer gates, dependency/generated/clean-tree checks, and required
+  post-integration gates. Missing or failed required evidence is still incomplete.
+- Preserve explicit merge authorization, concurrent-ref/ancestry checks,
+  non-force integration, and actual main SHA/tree readback. Existing GitHub branch
+  protections, status checks, and human approvals are not disabled by this policy.
+- Report external review as **not performed / not required by current policy**,
+  never as passed or independently approved. Self-checks and automated tests do
+  not constitute an independent human or service approval.
+- Do not uninstall or disconnect the GitHub connector, delete review history,
+  change billing/permissions, or rewrite product behavior to remove this service.
+  Repository policy does not itself switch off provider-hosted automatic review;
+  only claim that setting changed after a successful provider-setting write and
+  readback. Incidental provider output is not a reinstated integration gate.
+
 ## Documentation truth policy
 
 - Follow `docs/DOCUMENTATION_GOVERNANCE.md` for document classes and truth ownership.
