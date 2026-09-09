@@ -25,10 +25,12 @@ remain trusted prerequisites; this is not filesystem locking or a concurrency
 sandbox. Process-global environment mutation by unrelated goroutines is not an
 endorsed configuration mechanism.
 
-Four permanent test parents (twelve named events) cover a real fresh root-contained
+Five permanent test parents (fifteen named events) cover a real fresh root-contained
 Go build cache, zero runner calls for five writable inputs, multi-entry GOPATH,
 missing cache beneath an external symlink, relative paths, implicit cache defaults
-and a real external-cache PASS control. The original source digest and absence of
+and a real external-cache PASS control. A normal GOPATH/src checkout is allowed;
+the effective GOPATH/pkg/mod location is separately resolved and a symlink back
+into original source is rejected. The original source digest and absence of
 created cache files are checked. All names are in the recurring test inventory.
 
 The exact root-cache test fails against the unchanged prior checker: it emits only

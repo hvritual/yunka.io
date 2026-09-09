@@ -98,3 +98,34 @@ func TestExternalBuildCacheRemainsLegal(t *testing.T) {
 		t.Fatal("legal external cache changed source")
 	}
 }
+
+// A normal GOPATH/src checkout is not the module cache. Resolve the actual
+// derived pkg/mod location, including symlinks, instead of rejecting its parent.
+func TestGOPATHDerivedCacheBoundary(t *testing.T) {
+	for _, linked := range []bool{false, true} {
+		t.Run(fmt.Sprint(linked), func(t *testing.T) {
+			gp := t.TempDir()
+			root := filepath.Join(gp, "src", "project")
+			if linked {
+				root = t.TempDir()
+			}
+			if err := os.MkdirAll(root, 0700); err != nil {
+				t.Fatal(err)
+			}
+			env := []string{"GOPATH=" + gp}
+			if linked {
+				if err := os.MkdirAll(filepath.Join(gp, "pkg"), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(root, filepath.Join(gp, "pkg", "mod")); err != nil {
+					t.Fatal(err)
+				}
+				if err := checkWritePaths(root, env); err == nil || !strings.Contains(err.Error(), "GOMODCACHE") {
+					t.Fatalf("derived linked module cache was accepted: %v", err)
+				}
+			} else if err := checkWritePaths(root, env); err != nil {
+				t.Fatalf("normal GOPATH/src was mistaken for the writable cache: %v", err)
+			}
+		})
+	}
+}

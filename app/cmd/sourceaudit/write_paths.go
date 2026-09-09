@@ -25,7 +25,8 @@ func checkWritePaths(root string, env []string) error {
 			paths[k] = value
 		}
 	}
-	for i, value := range filepath.SplitList(values["GOPATH"]) {
+	gopaths := filepath.SplitList(values["GOPATH"])
+	for i, value := range gopaths {
 		paths[fmt.Sprintf("GOPATH[%d]", i)] = value
 	}
 	// Go's environment is controlled by environment(): XDG_CACHE_HOME and
@@ -33,6 +34,9 @@ func checkWritePaths(root string, env []string) error {
 	home := values["HOME"]
 	if runtime.GOOS == "windows" {
 		home = values["USERPROFILE"]
+	}
+	if values["GOMODCACHE"] == "" && len(gopaths) > 0 {
+		paths["default GOMODCACHE"] = filepath.Join(gopaths[0], "pkg", "mod")
 	}
 	if home != "" {
 		if values["GOCACHE"] == "" {
@@ -62,7 +66,7 @@ func checkWritePaths(root string, env []string) error {
 		}
 		// A cache that is itself an ancestor of the source can write cache entries
 		// over that source too. General home/temp parent directories are normal.
-		if strings.Contains(key, "CACHE") || strings.HasPrefix(key, "GOPATH[") {
+		if strings.Contains(key, "CACHE") {
 			if rel, err := filepath.Rel(resolved, root); err != nil || relative(filepath.ToSlash(rel), true) {
 				return fmt.Errorf("writable %s must not overlap the audited root", key)
 			}
