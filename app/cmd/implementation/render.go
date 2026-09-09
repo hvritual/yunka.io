@@ -120,6 +120,10 @@ func freshAlias(base string, imports map[string]string) string {
 }
 
 func starterFiles(port portShape, owner, contractImport, key, caller string) (map[string][]byte, error) {
+	port, err := isolatePortAliases(port)
+	if err != nil {
+		return nil, err
+	}
 	files := map[string][]byte{}
 	addGo := func(name, body string) error {
 		data, err := format.Source([]byte("// Editable Yunka implementation starter. Not generated code; owned by the developer.\n" + body))

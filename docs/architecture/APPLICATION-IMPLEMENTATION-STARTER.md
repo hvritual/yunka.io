@@ -52,6 +52,12 @@ naming or read stale generated outputs as the source of truth. A rendered servic
 comment identifies its port within the declared domain; ambiguous or unsupported
 port shapes are rejected rather than guessed.
 
+Canonical Go import paths and selected types remain unchanged, while editable
+method signatures use a separate stable import-alias namespace. Legal PB aliases
+such as `service`, `New`, or `ctx` cannot collide with starter declarations. The
+projection clones signature ASTs and never rewrites canonical port bytes; repeated
+planning has the same contents and canonical-source hash.
+
 For the default Go root and `shelf/catalog` the created subtree is:
 
 ```text

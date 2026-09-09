@@ -91,7 +91,8 @@ jobs:
             'TestAG061ExecutableShapeAndBoundaries','TestAG061CanonicalCompileApplyAndRegenerate',
             'TestAG061PublicCommandPlanAndApply','TestAG061ImplementationCommandIsRegistered',
             'TestAG061StarterRemainsInsideCanonicalChangeScope',
-            'TestAG061CanonicalDottedKeyIsAccepted','TestAG061PackageConflictsPrecedeEveryWrite'}
+            'TestAG061CanonicalDottedKeyIsAccepted','TestAG061PackageConflictsPrecedeEveryWrite',
+            'TestAG061CanonicalImportAliasesDoNotCollide','TestAG061AliasNormalizationPreservesCanonicalInput'}
           assert not any(e['Action'] in ('fail','skip') for e in events), 'failed/skipped required evidence'
           passed={e.get('Test') for e in events if e['Action']=='pass'}
           assert required <= passed, sorted(required-passed)
