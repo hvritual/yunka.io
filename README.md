@@ -4,6 +4,10 @@
 the separately versioned infrastructure-extension and gateway modules, command-line tooling,
 and the RPC generator.
 
+## Editable implementation starters
+
+After declaring a leaf Application and its Operations, run `yunka add implementation --root . --composition-package <exact-Go-package> --format agent-json <domain>/<application>` to preview the canonical-interface-based starter. Add `--apply` to create the owner factory, hidden per-use-case handlers, explicit type policy and task/ADR templates without overwriting developer files. Every handler starts with an explicit not-implemented error; no business success, persistence or runtime registration is generated. Composed/dependency-bearing templates and automatic authoring propagation are not included in this first increment. See the [implementation starter contract](docs/architecture/APPLICATION-IMPLEMENTATION-STARTER.md) and [current status](docs/STATUS.md).
+
 ## Requirements
 
 - Go 1.25.13

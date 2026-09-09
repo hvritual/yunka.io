@@ -152,6 +152,8 @@ AG-05 的命令和单一 Go-native 后端契约见 [APPLICATION-SOURCE-POLICY.md
 
 依赖：AG-02~05。先保留现有生成端口位置；固化所有者工厂、隐藏实现、窄用例、测试资产隔离、任务/ADR 模板。统一更新 scaffold、ownership、context、change plan 的派生路径，不能另造映射真相。验收：空目录生成不同于两库的业务；规范生成两次零差异；常规新增不用手补规则，原消费者兼容。
 
+AG-06 按独立闭环推进：**AG-06.1** 先交付 `yunka add implementation` 的只读计划与显式、只创建的叶子 Application 骨架，复用规范生成端口与已有 Application 编辑范围；每个用例独立处理器，未实现方法必须返回错误，禁止编造业务行为。附带显式 factory/type policy 和任务/ADR 模板，既有文件冲突不得覆盖。**AG-06.2** 再接入 init/context/常规扩展和源码政策默认流程；**AG-06.3** 补齐带类型依赖的模板与连续契约变化资格。AG-06.1 不处理依赖型/组合型 Application，不等于整个 AG-06 已完成。具体接口与验收边界见 [实现骨架契约](APPLICATION-IMPLEMENTATION-STARTER.md)，当前进度只见 STATUS / #178。
+
 ### AG-07 — 受控结构迁移 + 债务增长
 
 依赖：AG-04/05；修改 ChangeSet 前先核对 #161 PR 链。只在现有协议上扩展，绑定 base、主体、旧/新路径与类型映射、允许语义和必需测试；不创建第二 Done 协议。base/current 使用同一检查器和政策；同一违规新增调用者也算增长，不能只数 ID。规则/豁免更新不能与违规功能自我批准。验收：允许合法迁移、拒绝扩大数组/跳过测试/过期证据/政策自改/假修复；兼容旧协议。
