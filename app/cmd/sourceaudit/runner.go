@@ -25,7 +25,7 @@ func environment(profile Profile, workspace string) []string {
 			vars[key] = value
 		}
 	}
-	for k, v := range map[string]string{"PATH": filepath.Join(runtime.GOROOT(), "bin") + string(os.PathListSeparator) + os.Getenv("PATH"), "GOROOT": runtime.GOROOT(), "GOENV": "off", "GOFLAGS": "", "GOWORK": workspace, "GOTOOLCHAIN": "local", "GO111MODULE": "on", "GOPACKAGESDRIVER": "off", "GOPROXY": "off", "GOSUMDB": "off", "GOVCS": "*:off", "GOCACHEPROG": "", "GOTELEMETRY": "off", "GOOS": profile.GOOS, "GOARCH": profile.GOARCH, "CGO_ENABLED": "0"} {
+	for k, v := range map[string]string{"PATH": sourceToolPath(), "GOROOT": runtime.GOROOT(), "GOENV": "off", "GOFLAGS": "", "GOWORK": workspace, "GOTOOLCHAIN": "local", "GO111MODULE": "on", "GOPACKAGESDRIVER": "off", "GOPROXY": "off", "GOSUMDB": "off", "GOVCS": "*:off", "GOCACHEPROG": "", "GOTELEMETRY": "off", "GOOS": profile.GOOS, "GOARCH": profile.GOARCH, "CGO_ENABLED": "0"} {
 		vars[k] = v
 	}
 	if profile.CGO {
@@ -44,6 +44,60 @@ func environment(profile Profile, workspace string) []string {
 	return out
 }
 
+// Only the Go installation and fixed host-system tool directories participate in
+// subprocess lookup. Never append the caller's PATH: go list may invoke gcc,
+// clang, assembler or pkg-config while resolving an active cgo package. These
+// system directories are trusted installation prerequisites, not a sandbox.
+// Missing native/cross tools are reported as incomplete metadata by runProfile.
+func sourceToolPath() string {
+	dirs := []string{filepath.Join(runtime.GOROOT(), "bin")}
+	if runtime.GOOS != "windows" {
+		dirs = append(dirs, "/usr/bin", "/bin")
+	}
+	return strings.Join(dirs, string(os.PathListSeparator))
+}
+
+// environment removes caller CC overrides. The runner also validates its final
+// environment so a missing compiler cannot silently qualify metadata-only CGO.
+// This is a trusted-host prerequisite, not a compiler signature or sandbox.
+func cgoToolEnvironment(env []string) ([]string, error) {
+	values := map[string]string{}
+	for _, entry := range env {
+		if k, v, ok := strings.Cut(entry, "="); ok {
+			values[k] = v
+		}
+	}
+	if values["CGO_ENABLED"] != "1" {
+		return env, nil
+	}
+	compiler := values["CC"]
+	if compiler == "" {
+		for _, candidate := range []string{"/usr/bin/cc", "/bin/cc"} {
+			if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0 {
+				compiler = candidate
+				break
+			}
+		}
+	}
+	if !filepath.IsAbs(compiler) {
+		return nil, fmt.Errorf("CGO metadata requires an absolute trusted host compiler")
+	}
+	info, err := os.Stat(compiler)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0111 == 0 {
+		return nil, fmt.Errorf("CGO metadata compiler is unavailable")
+	}
+	if filepath.Dir(compiler) != "/usr/bin" && filepath.Dir(compiler) != "/bin" {
+		return nil, fmt.Errorf("CGO metadata compiler must belong to a trusted host tool directory")
+	}
+	out := make([]string, 0, len(env)+1)
+	for _, entry := range env {
+		if !strings.HasPrefix(entry, "CC=") {
+			out = append(out, entry)
+		}
+	}
+	return append(out, "CC="+compiler), nil
+}
+
 type boundedBuffer struct {
 	b    bytes.Buffer
 	left int
@@ -59,6 +113,14 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 }
 
 func runGo(ctx context.Context, goBinary, dir string, env []string, args ...string) ([]byte, error) {
+	// Metadata loading does not always invoke a compiler on every Go version.
+	// Establish a real native compiler explicitly rather than claiming a complete
+	// CGO profile merely because go list accepted its syntax without one.
+	var err error
+	env, err = cgoToolEnvironment(env)
+	if err != nil {
+		return nil, err
+	}
 	cmd := exec.CommandContext(ctx, goBinary, args...)
 	cmd.Dir = dir
 	cmd.Env = env
