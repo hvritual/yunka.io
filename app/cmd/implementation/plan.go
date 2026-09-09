@@ -123,21 +123,20 @@ func Run(ctx context.Context, options Options, apply bool) (Report, error) {
 }
 func digest(data []byte) string { return fmt.Sprintf("%x", sha256.Sum256(data)) }
 
+// Key semantics belong to contract.Lint on the current canonical manifest. This
+// preliminary split checks only the physical path/import constraints of this
+// starter, not a second policy-key grammar. In particular '.' is not forbidden.
 func applicationParts(key string) (string, string, error) {
 	parts := strings.Split(key, "/")
 	if len(parts) != 2 {
 		return "", "", fmt.Errorf("add implementation: expected domain/application")
 	}
-	for _, part := range parts {
-		if part == "" || part == "internal" || part == "vendor" {
-			return "", "", fmt.Errorf("add implementation: unsupported or reserved template path segment %q", part)
+	for i, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "internal" || part == "vendor" || module.CheckImportPath(part) != nil || !filepath.IsLocal(part) || strings.ContainsAny(part, "/\\") {
+			return "", "", fmt.Errorf("add implementation: canonical key cannot be used as a contained Go package path: %q", part)
 		}
-		for i, r := range part {
-			if (r >= 'a' && r <= 'z') || (i > 0 && ((r >= '0' && r <= '9') || r == '_' || r == '-')) {
-				continue
-			}
-			return "", "", fmt.Errorf("add implementation: invalid template path segment %q", part)
-		}
+		parts[i] = part
 	}
 	return parts[0], parts[1], nil
 }
@@ -158,6 +157,7 @@ func render(project projectflow.ProjectDescriptor, manifest contract.Manifest, k
 		return Report{}, fmt.Errorf("add implementation: generated import root must match its current module path")
 	}
 	manifest.Normalize()
+	key = domain + "/" + app
 	var selected *contract.Service
 	for i := range manifest.Services {
 		s := &manifest.Services[i]
@@ -258,5 +258,5 @@ func preflight(root *os.Root, report *Report) error {
 			}
 		}
 	}
-	return nil
+	return preflightPackages(root, report.Files)
 }

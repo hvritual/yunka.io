@@ -90,7 +90,8 @@ jobs:
             'TestAG061ExistingIdenticalFilesRemainDeveloperOwned','TestAG061SignatureAmbiguityFailsClosed',
             'TestAG061ExecutableShapeAndBoundaries','TestAG061CanonicalCompileApplyAndRegenerate',
             'TestAG061PublicCommandPlanAndApply','TestAG061ImplementationCommandIsRegistered',
-            'TestAG061StarterRemainsInsideCanonicalChangeScope'}
+            'TestAG061StarterRemainsInsideCanonicalChangeScope',
+            'TestAG061CanonicalDottedKeyIsAccepted','TestAG061PackageConflictsPrecedeEveryWrite'}
           assert not any(e['Action'] in ('fail','skip') for e in events), 'failed/skipped required evidence'
           passed={e.get('Test') for e in events if e['Action']=='pass'}
           assert required <= passed, sorted(required-passed)

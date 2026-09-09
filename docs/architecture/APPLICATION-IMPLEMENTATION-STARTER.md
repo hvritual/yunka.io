@@ -34,6 +34,11 @@ An existing ChangeSet still requires its own plan/ownership/exact-path admission
 `--protoc` and repeated `--proto-path` use the same projectflow source compiler.
 Contract inventories continue to own their own include paths.
 
+Application-key semantics are validated by the existing contract lint and matched
+to the current canonical manifest. The starter separately checks physical Go import
+paths: dotted keys such as `shelf/catalog.v2` are accepted unchanged; a key whose
+segment cannot form a Go import path is rejected, not silently encoded or renamed.
+
 A caller package must be explicit, valid, within the current module and outside the
 new owner subtree. This is reviewed policy, not automatic proof that its business
 logic is composition-only. A typo or absent caller package is not auto-created.
@@ -78,7 +83,10 @@ a shared broad Repository on the forwarding facade.
 
 Identical existing targets are reported `unchanged`. A differing user file,
 symlink, non-regular target or invalid path rejects the whole preflight before
-creating any target. New writes are exclusive and contained by Go's `os.Root`
+creating any target. Existing unplanned Go files in each destination package
+directory must also have compatible package declarations; canonical external test
+packages are allowed. Malformed or conflicting package clauses reject the preflight
+without partial creation. New writes are exclusive and contained by Go's `os.Root`
 APIs (the repository already requires Go 1.25.13). No force/overwrite/update policy
 exists. Regeneration never owns or deletes starter files.
 
