@@ -16,6 +16,18 @@ import (
 
 type runner func(context.Context, string, string, []string, ...string) ([]byte, error)
 
+// runtime.GOROOT honors the environment captured when this process starts.
+// A caller override is not a trusted installation, even when its fake Go reports
+// the expected version. Remember it so unsetting GOROOT later cannot bless it.
+var initialGOROOTOverride = os.Getenv("GOROOT")
+
+func requireUnmodifiedGOROOT() error {
+	if initialGOROOTOverride != "" || os.Getenv("GOROOT") != "" {
+		return fmt.Errorf("source audit requires GOROOT unset at process startup and during analysis")
+	}
+	return nil
+}
+
 // Only explicit cache/temp/OS inputs are inherited. Go's executable is resolved
 // absolutely, never via a parent PATH or a repository-supplied package driver.
 func environment(profile Profile, workspace string) []string {
@@ -113,6 +125,9 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 }
 
 func runGo(ctx context.Context, goBinary, dir string, env []string, args ...string) ([]byte, error) {
+	if err := requireUnmodifiedGOROOT(); err != nil {
+		return nil, err
+	}
 	// Metadata loading does not always invoke a compiler on every Go version.
 	// Establish a real native compiler explicitly rather than claiming a complete
 	// CGO profile merely because go list accepted its syntax without one.
@@ -139,6 +154,10 @@ func runGo(ctx context.Context, goBinary, dir string, env []string, args ...stri
 }
 
 func toolchain(ctx context.Context, run runner, dir string) (string, string, map[string]bool, error) {
+	// Reject before resolving, stat-ing or invoking a caller-controlled Go tree.
+	if err := requireUnmodifiedGOROOT(); err != nil {
+		return "", "", nil, err
+	}
 	exe := "go"
 	if runtime.GOOS == "windows" {
 		exe += ".exe"

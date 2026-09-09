@@ -58,6 +58,14 @@ JSON and agent-JSON are identical. `--timeout` defaults to two minutes and is
 bounded at ten minutes. Invalid CLI/policy input is an error. `FAIL` and
 `INCOMPLETE` both exit nonzero; only `PASS` exits zero.
 
+The checker must start with `GOROOT` unset (or empty) and it must remain unset
+while analysis runs. A nonempty inherited or later override is `AG-SRC-000 /
+INCOMPLETE` before any Go tool executes; clearing a startup override inside the
+running process does not establish a trusted installation. Start a fresh process
+with `env -u GOROOT yunka audit source ...` on Unix. The compiled installation and
+fixed host-system tool directories remain trusted prerequisites, not authenticated
+binaries or a security sandbox. Parent PATH and CC/CXX/PKG_CONFIG are not inherited.
+
 Missing cache/toolchain, unknown modules, omitted source, unsupported targets,
 invalid source or input drift cannot produce an empty clean PASS. INCOMPLETE
 outranks FAIL while preserving every proven violation already established.
