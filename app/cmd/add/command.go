@@ -6,6 +6,7 @@ import (
 
 	"github.com/hvritual/yunka.io/pkg/diagnostic"
 	"github.com/urfave/cli"
+	"yunka.io/app/cmd/implementation"
 )
 
 const (
@@ -43,17 +44,17 @@ type OperationHTTPSemantics struct {
 }
 
 type OperationSemantics struct {
-	UseCase             string                  `json:"useCase"`
-	Access              string                  `json:"access"`
-	Permissions         []string                `json:"permissions"`
-	PermissionMode      string                  `json:"permissionMode,omitempty"`
-	Tenant              string                  `json:"tenant"`
-	Authentication      []string                `json:"authentication"`
-	Transaction         string                  `json:"transaction"`
-	Idempotency         string                  `json:"idempotency"`
-	Composition         string                  `json:"composition"`
-	RequiresOperations  []string                `json:"requiresOperations"`
-	HTTP                *OperationHTTPSemantics `json:"http,omitempty"`
+	UseCase            string                  `json:"useCase"`
+	Access             string                  `json:"access"`
+	Permissions        []string                `json:"permissions"`
+	PermissionMode     string                  `json:"permissionMode,omitempty"`
+	Tenant             string                  `json:"tenant"`
+	Authentication     []string                `json:"authentication"`
+	Transaction        string                  `json:"transaction"`
+	Idempotency        string                  `json:"idempotency"`
+	Composition        string                  `json:"composition"`
+	RequiresOperations []string                `json:"requiresOperations"`
+	HTTP               *OperationHTTPSemantics `json:"http,omitempty"`
 }
 
 type Report struct {
@@ -151,6 +152,7 @@ func Command() cli.Command {
 		Usage: "create developer-owned structural application artifacts without inventing business semantics",
 		Subcommands: []cli.Command{
 			applicationCommand(),
+			implementation.Command(),
 			operationCommand(),
 			eventCommand(),
 			moduleCommand(),

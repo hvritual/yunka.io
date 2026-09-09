@@ -1,0 +1,115 @@
+name: ag06-template-qualification
+
+on:
+  pull_request:
+    paths:
+      - app/cmd/implementation/**
+      - app/cmd/add/**
+      - app/cmd/projectflow/**
+      - app/cmd/ownership/**
+      - app/cmd/change/**
+      - app/cmd/applicationboundary/**
+      - pkg/contract/**
+      - contracts/**
+      - '**/go.mod'
+      - '**/go.sum'
+      - go.work
+      - tools/toolchain.env
+      - docs/architecture/APPLICATION-IMPLEMENTATION-STARTER.md
+      - .github/workflows/ag06-template-qualification.yml
+  push:
+    branches: [main]
+    paths:
+      - app/cmd/implementation/**
+      - app/cmd/add/**
+      - app/cmd/projectflow/**
+      - app/cmd/ownership/**
+      - app/cmd/change/**
+      - app/cmd/applicationboundary/**
+      - pkg/contract/**
+      - contracts/**
+      - '**/go.mod'
+      - '**/go.sum'
+      - go.work
+      - tools/toolchain.env
+      - docs/architecture/APPLICATION-IMPLEMENTATION-STARTER.md
+      - .github/workflows/ag06-template-qualification.yml
+
+permissions:
+  contents: read
+
+jobs:
+  starter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Read lock
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          echo "go_version=${GO_VERSION:?}" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache-dependency-path: |
+            app/go.sum
+            pkg/go.sum
+      - name: Install locked protoc
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          test "$(go version | awk '{print $3}')" = "go${GO_VERSION}"
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "${PROTOC_LINUX_X86_64_SHA256}  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ag06-protoc"
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/ag06-protoc"
+          echo "$RUNNER_TEMP/ag06-protoc/bin" >> "$GITHUB_PATH"
+      - name: Compile, generate, replay and reject real boundary violations
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ag06-starter"
+          git rev-parse HEAD HEAD^{tree} > "$RUNNER_TEMP/ag06-starter/identity.txt"
+          go -C app test -exec="/usr/bin/env -u GOROOT" -json -race -count=1 -timeout=5m ./cmd/implementation ./cmd/add -run '^TestAG061' > "$RUNNER_TEMP/ag06-starter/tests.jsonl"
+          python3 - <<'PY'
+          import json,os,pathlib
+          p=pathlib.Path(os.environ['RUNNER_TEMP'])/'ag06-starter'
+          events=[json.loads(line) for line in (p/'tests.jsonl').read_text().splitlines()]
+          required={
+            'TestAG061CanonicalStarterShape','TestAG061MultiApplicationNamingComesFromRenderer',
+            'TestAG061UnsupportedInputsNeverWrite','TestAG061PreflightProtectsEveryTarget',
+            'TestAG061ExistingIdenticalFilesRemainDeveloperOwned','TestAG061SignatureAmbiguityFailsClosed',
+            'TestAG061ExecutableShapeAndBoundaries','TestAG061CanonicalCompileApplyAndRegenerate',
+            'TestAG061PublicCommandPlanAndApply','TestAG061ImplementationCommandIsRegistered',
+            'TestAG061StarterRemainsInsideCanonicalChangeScope'}
+          assert not any(e['Action'] in ('fail','skip') for e in events), 'failed/skipped required evidence'
+          passed={e.get('Test') for e in events if e['Action']=='pass'}
+          assert required <= passed, sorted(required-passed)
+          (p/'result.json').write_text(json.dumps({'status':'PASS','scope':'AG-06.1 starter only','required':sorted(required),'passedNamedEvents':sum(e['Action']=='pass' and bool(e.get('Test')) for e in events)},indent=2)+'\n')
+          PY
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
+      - name: Evidence manifest
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ag06-starter"
+          cd "$RUNNER_TEMP/ag06-starter"
+          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 -r sha256sum > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ag06-starter-qualification
+          path: ${{ runner.temp }}/ag06-starter
+          if-no-files-found: error
+          retention-days: 30
