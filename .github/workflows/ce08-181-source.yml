@@ -1,0 +1,33 @@
+name: Issue 181 pinned source
+on:
+  push:
+    branches: [control/ce08-181-delivery-20260910]
+    paths: [.github/workflows/ce08-181-source.yml]
+permissions: {contents: read}
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: d6840be86c72ea91b51e7f32f8ed61067bcab643
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Archive exact source without local credentials
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = d6840be86c72ea91b51e7f32f8ed61067bcab643
+          mkdir -p "$RUNNER_TEMP/source"
+          git status --short --branch
+          git branch --show-current
+          git remote -v
+          git archive HEAD | gzip -n > "$RUNNER_TEMP/source/yunka-base.tar.gz"
+          git rev-parse HEAD HEAD^{tree} > "$RUNNER_TEMP/source/source.txt"
+          sha256sum "$RUNNER_TEMP/source/yunka-base.tar.gz"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: issue181-pinned-source
+          path: ${{ runner.temp }}/source
+          retention-days: 14
+          if-no-files-found: error
