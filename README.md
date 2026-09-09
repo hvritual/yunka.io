@@ -20,7 +20,6 @@ Exact tool versions are locked in `tools/toolchain.env`; local and CI verificati
 - `infras/`: separately versioned optional infrastructure plugins and adapters
 - `app/`: the `yunka` command-line tool
 - `contracts/proto/`: the single canonical RPC protobuf source tree
-- `compat/go-kit-kit-log/`: repository-owned SLS logging compatibility module
 
 The modules are joined by the root `go.work`. `app` intentionally uses the distinct module
 path `yunka.io/app`; `framework`, `gateway`, and `infras` use the public module paths
@@ -67,13 +66,11 @@ C2 makes `tools/toolchain.env` the canonical tool lock for Go, protoc, and govul
 
 ## Dependency convergence
 
-C4 removes the historical external `github.com/go-kit/kit v0.10.0` dependency graph and the workspace-wide genproto version replace. The pinned Aliyun SLS SDK still imports `github.com/go-kit/kit/log` and `github.com/go-kit/kit/log/level`, so the repository owns a narrow compatibility workspace module at `compat/go-kit-kit-log`. That module exposes only the logging surface required by the SDK and delegates to `github.com/go-kit/log v0.2.1`; it does not carry the monolithic kit module's historical etcd, gRPC, or genproto graph.
+C4 originally isolated the SLS SDK's logging dependency behind `compat/go-kit-kit-log`. That repository-local compatibility module and its replacements were subsequently removed when the product modules became independently publishable. It is a historical migration mechanism, not a current workspace member; see `docs/waves/C4-dependency-convergence.md` for that original scope.
 
-Because `go mod tidy` operates on one module at a time, each product module that reaches the SLS SDK carries the same version-scoped local replacement for `github.com/go-kit/kit v0.10.0`, while root `go.work` keeps the compatibility module as a workspace main module. The target is always the reviewed repository directory; arbitrary external replacements remain forbidden.
+The current workspace consists of the five product modules (`pkg`, `framework`, `gateway`, `infras`, `app`). `tools/dependency-policy.json` is the authority for required dependency versions, forbidden modules/replacements, and explicitly reviewed legacy-import islands. The current policy uses the published `github.com/go-kit/kit v0.13.0` / `github.com/go-kit/log v0.2.1` dependency chain and requires no local compatibility replacement. C6 removed the isolated legacy RPC generator module.
 
-`tools/dependency-policy.json` is enforced by `yunka dependency check` / `make dependency-check`. The gate validates the repository-local compatibility module, rejects unsplit etcd, grpc-gateway v1, monolithic genproto, any external replacement, a reintroduced genproto replace, and new legacy protobuf imports outside approved compatibility islands. Existing generated gateway/SMS protobuf files remain reviewed compatibility artifacts where still required; C4 did not rewrite them.
-
-The workspace contains five product modules (`pkg`, `framework`, `gateway`, `infras`, `app`) plus the single logging compatibility module. C6 removed the isolated legacy RPC generator module.
+`yunka dependency check` / `make dependency-check` enforce that policy against the actual manifests. New source must not restore retired local compatibility paths, external replacements, or forbidden legacy imports merely to make a consumer load. A frozen consumer retaining an old replacement must be assessed against its own pinned runtime; current framework source does not silently repair it.
 
 ## Infrastructure extension module
 
@@ -332,6 +329,10 @@ RPC contracts now come only from `contracts/proto` and are generated only with p
 ### Typed application-boundary audit
 
 `yunka audit types --root <go-module> --policy <json> --format agent-json` performs an opt-in, read-only check of one Go module and one active build using an approved, already-populated dependency cache. A non-PASS result returns nonzero. Explicit policy selects factory result and injected-argument method sets plus exact allowed caller packages; unresolved constructor provenance reports INCOMPLETE. The check does not certify runtime safety, every build profile, or whole-repository coverage. See [`docs/architecture/APPLICATION-BOUNDARY-TYPES.md`](docs/architecture/APPLICATION-BOUNDARY-TYPES.md) for the exact contract and limits.
+
+### Full-source and build-profile policy audit
+
+`yunka audit source --root <repository> --policy <json> --format agent-json` inventories physical Go source, module/workspace manifests and explicit exclusions independently of `./...`, then checks component imports and production/test-support separation over the declared GOOS/GOARCH/CGO/tag matrix. Unknown modules, uncovered files, loader faults and input drift are INCOMPLETE, never PASS. Go reads a private source copy; the original project and its pinned dependencies are not repaired or upgraded. This is static source/import coverage, not runtime or arbitrary type-safety certification. See [`docs/architecture/APPLICATION-SOURCE-POLICY.md`](docs/architecture/APPLICATION-SOURCE-POLICY.md) for policy, limits and exact qualification responsibilities.
 
 ### Change control-state paths
 

@@ -57,7 +57,7 @@ Every repository task must:
 ## Workspace and dependency baseline
 
 - The repository is a Go workspace rooted at `go.work`.
-- Product modules are `pkg`, `framework`, `gateway`, `infras`, and `app`; the repository also owns the narrow `compat/go-kit-kit-log` compatibility module required by the pinned SLS SDK.
+- Product modules are `pkg`, `framework`, `gateway`, `infras`, and `app`. Independently publishable product modules must not depend on retired repository-local compatibility replacements. Actual workspace membership and dependency versions are owned by `go.work` and `tools/dependency-policy.json`; historical C4 compatibility paths are not active module requirements.
 - Historical monolithic dependency/runtime surfaces may remain only in explicitly reviewed compatibility islands.
 - `tools/dependency-policy.json` is the durable dependency-graph guard.
 - Legacy protobuf/runtime dependencies must not spread into new framework/application/infrastructure-plugin code.
