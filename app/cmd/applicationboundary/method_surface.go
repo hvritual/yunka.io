@@ -31,7 +31,7 @@ func (c *checker) reachableMethodSet(t types.Type) (*types.MethodSet, bool) {
 			if types.Identical(types.Unalias(obj.Type()), concrete) {
 				nameable = true
 			}
-			if alias, ok := obj.Type().(*types.Alias); ok && alias.TypeParams().Len() > 0 && aliasShapeMayMatch(alias.Rhs(), concrete) {
+			if alias, ok := obj.Type().(*types.Alias); ok && alias.TypeParams().Len() > 0 && aliasCanName(alias, concrete) {
 				possibleGenericAlias = true
 			}
 		}
@@ -52,20 +52,4 @@ func (c *checker) reachableMethodSet(t types.Type) (*types.MethodSet, bool) {
 		}
 	}
 	return value, false
-}
-
-func aliasShapeMayMatch(pattern, concrete types.Type) bool {
-	pattern = types.Unalias(pattern)
-	if _, ok := pattern.(*types.TypeParam); ok {
-		return true
-	}
-	if named, ok := pattern.(*types.Named); ok {
-		other, ok := concrete.(*types.Named)
-		return ok && named.Origin() == other.Origin()
-	}
-	if _, ok := pattern.(*types.Struct); ok {
-		_, ok := concrete.(*types.Struct)
-		return ok
-	}
-	return false
 }

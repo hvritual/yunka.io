@@ -46,6 +46,31 @@ requires the exact AG-TYPE-003 or AG-TYPE-000 diagnosis; positives remain PASS.
 The original named-value, interface, opaque-field, source-coverage, toolchain and
 termination regressions remain unchanged.
 
+## Precision correction: unrelated generic structures must remain legal
+
+Candidate `3c708f47310bc5dc2d34858a27973b1a0bb6849d`, tree
+`4e75c1d1c9e05b1753d7e7cc65f44fc4628a1526`, passed CI `34293358010`,
+Production `34293357978` and consumer types `34293358023`. Review comment
+`3963405591` then showed that merely sharing the struct kind was too broad:
+`Public[T] = struct{ Value T }` cannot name `struct{ hidden }`, and must not
+block that private representation. That candidate also remained unmerged.
+
+The possibility check now compares field count, identity, embedding and tags,
+then structural field types, named origins, repeated type arguments, containers,
+function signatures and interface methods. Incompatible shapes are ruled out.
+Known arguments must satisfy non-dependent constraints; when all alias arguments
+are inferred, Go's own `types.Instantiate(..., validate=true)` checks all
+constraints, including dependent ones, and exact resulting identity. Unknown or
+unused arguments remain unresolved rather than guessed. The check is bounded;
+its role is to rule out impossible public spellings, not solve arbitrary generics.
+
+Seventeen further subcases cover mismatched names/arity/embedding/tags, repeated
+argument conflicts, container/function/interface differences, possible shapes,
+known and dependent constraint failures, and genuinely unresolved arguments.
+Unrelated or impossible aliases produce no finding; possible unresolved public
+pointer authority remains AG-TYPE-000/INCOMPLETE. The earlier eleven alias cases
+and all pre-alias regressions remain in the same ordinary test suite.
+
 ## Delivery boundary
 
 Only the type-surface helper, its call site, regressions and this evidence record
