@@ -132,7 +132,7 @@ jobs:
           test "$(go version | awk '{print $3}')" = "go${GO_VERSION}"
           mkdir -p "$RUNNER_TEMP/ag05-${{ matrix.subject }}"
           GOWORK="$GITHUB_WORKSPACE/checker/go.work" go -C checker/app build -mod=readonly -o "$RUNNER_TEMP/yunka" ./cmd
-          GOWORK="$GITHUB_WORKSPACE/checker/go.work" go -C checker/app test -json -race -count=1 -timeout=5m ./cmd/sourceaudit ./cmd/audit > "$RUNNER_TEMP/ag05-${{ matrix.subject }}/tests.jsonl"
+          GOWORK="$GITHUB_WORKSPACE/checker/go.work" go -C checker/app test -exec="/usr/bin/env -u GOROOT" -json -race -count=1 -timeout=5m ./cmd/sourceaudit ./cmd/audit > "$RUNNER_TEMP/ag05-${{ matrix.subject }}/tests.jsonl"
           test -z "$(git -C checker status --porcelain --untracked-files=all)"
       - name: Prepare approved dependencies for the declared source profiles
         shell: bash

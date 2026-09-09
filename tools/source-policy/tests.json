@@ -23,6 +23,7 @@
     "TestGOPATHDerivedCacheBoundary",
     "TestGOPATHDerivedCacheBoundary/false",
     "TestGOPATHDerivedCacheBoundary/true",
+    "TestGoTestDriverGOROOTBoundary",
     "TestHiddenAndGeneratedBoundaryViolations",
     "TestHiddenAndGeneratedBoundaryViolations/.private",
     "TestHiddenAndGeneratedBoundaryViolations/_hidden",

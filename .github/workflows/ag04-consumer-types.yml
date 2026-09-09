@@ -85,7 +85,7 @@ jobs:
           test "$(git -C consumer/project rev-parse HEAD)" = '${{ matrix.revision }}'
           test "$(git -C '${{ matrix.runtime_path }}' rev-parse HEAD)" = '${{ matrix.runtime }}'
           GOWORK="$GITHUB_WORKSPACE/checker/go.work" go -C checker/app build -mod=readonly -o "$RUNNER_TEMP/yunka" ./cmd
-          GOWORK="$GITHUB_WORKSPACE/checker/go.work" go -C checker/app test -race -count=1 ./cmd/applicationboundary ./cmd/audit
+          GOWORK="$GITHUB_WORKSPACE/checker/go.work" go -C checker/app test -exec="/usr/bin/env -u GOROOT" -race -count=1 ./cmd/applicationboundary ./cmd/audit
           (cd '${{ matrix.module_path }}' && go mod download)
           test -z "$(git -C consumer/project status --porcelain --untracked-files=all)"
           test -z "$(git -C checker status --porcelain --untracked-files=all)"

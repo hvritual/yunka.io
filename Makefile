@@ -93,8 +93,7 @@ rpc-bridge-check: rpc-legacy-check rpc-consumer-check
 	if grep -R -n -E 'sync\.Pool|reflect\.Value|func init\(\)' \
 		pkg/rpcbridge gateway/rpc/bridge gateway/rpc/client gateway/rpc/handle \
 		gateway/rpc/method gateway/rpc/server gateway/rpc/transport/grpc/server.go; then \
-		echo "rpc-bridge-check: typed bridge contains hidden registration, reflection, or pooling" >&2; \
-		exit 1; \
+		echo "rpc-bridge-check: typed bridge contains hidden registration, reflection, or pooling" >&2; exit 1; \
 	fi
 	@cd pkg && $(GO) test -count=10 ./rpcbridge
 	@cd gateway && $(GO) test -count=10 ./rpc/bridge ./rpc/client ./rpc/consumercompat ./rpc/transport/grpc
@@ -148,7 +147,11 @@ c10-3-runtime-closure-check: toolchain-check architecture-check rpc-tools rpc-to
 test:
 	@set -eu; for module in $(MODULES); do \
 		echo "==> go test ./$$module/..."; \
-		(cd $$module && $(GO) test ./...); \
+		if [ "$$module" = app ]; then \
+			(cd $$module && $(GO) test -exec="/usr/bin/env -u GOROOT" ./...); \
+		else \
+			(cd $$module && $(GO) test ./...); \
+		fi; \
 	done
 
 race:
