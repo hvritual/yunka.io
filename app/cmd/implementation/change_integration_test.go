@@ -47,6 +47,9 @@ service ShelfAPI{option (yunka.dsl.v1.application)={name:"catalog" operations:{i
 		t.Fatal(err)
 	}
 	options := projectflow.Options{Root: root, Protoc: protoc, ProtoPaths: []string{filepath.Join(repo, "contracts/proto")}}
+	if _, err := projectflow.Generate(context.Background(), options); err != nil {
+		t.Fatal(err)
+	}
 	r, err := implementation.Run(context.Background(), implementation.Options{Project: options, Application: "shelf/catalog", CompositionPackage: "example.com/books/bootstrap"}, true)
 	if err != nil {
 		t.Fatal(err)
