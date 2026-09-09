@@ -85,6 +85,19 @@ func check(ctx context.Context, root, policyPath string, run runner) (r Report, 
 	if hasUnknown(r.Findings) {
 		return r, nil
 	}
+	if e := checkWritePaths(root, environment(Profile{}, "off")); e != nil {
+		r.add("AG-SRC-000", Unknown, "", "", "", "", e.Error())
+		return r, nil
+	}
+	// Repeat the same prerequisite on the exact environment used for every
+	// command. No first invocation is permitted to write into original inputs.
+	underlying := run
+	run = func(ctx context.Context, binary, dir string, env []string, args ...string) ([]byte, error) {
+		if e := checkWritePaths(root, env); e != nil {
+			return nil, e
+		}
+		return underlying(ctx, binary, dir, env, args...)
+	}
 	tmpBase, err := filepath.Abs(os.TempDir())
 	if err != nil {
 		return r, err
