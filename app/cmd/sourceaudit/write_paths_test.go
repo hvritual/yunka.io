@@ -129,3 +129,44 @@ func TestGOPATHDerivedCacheBoundary(t *testing.T) {
 		})
 	}
 }
+
+// Exercise the same fallback resolver used by Check without changing host /tmp.
+func TestDefaultTempPathResolvesBeforeWorkspaceCreation(t *testing.T) {
+	root := fixture(t, fixturePolicy(), map[string]string{"ok.go": "package nebula\n"})
+	outside := t.TempDir()
+	for _, into := range []bool{false, true} {
+		t.Run(fmt.Sprint(into), func(t *testing.T) {
+			parent := t.TempDir()
+			link := filepath.Join(parent, "platform-default")
+			target := outside
+			if into {
+				target = root
+			}
+			if err := os.Symlink(target, link); err != nil {
+				t.Fatal(err)
+			}
+			before, err := scan(context.Background(), root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := outsideTempBase(root, link)
+			if into {
+				if err == nil || got != "" || !strings.Contains(err.Error(), "outside the audited root") {
+					t.Fatalf("default temp alias accepted: %q %v", got, err)
+				}
+			} else {
+				real, resolveErr := filepath.EvalSymlinks(target)
+				if err != nil || resolveErr != nil || got != real {
+					t.Fatalf("legal default temp path not resolved: %q %v %v", got, err, resolveErr)
+				}
+			}
+			after, err := scan(context.Background(), root)
+			if err != nil || after.digest != before.digest {
+				t.Fatal("checking temp location mutated input")
+			}
+		})
+	}
+	if _, err := outsideTempBase(root, "relative-temp"); err == nil {
+		t.Fatal("ambiguous relative fallback accepted")
+	}
+}

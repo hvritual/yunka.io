@@ -98,12 +98,9 @@ func check(ctx context.Context, root, policyPath string, run runner) (r Report, 
 		}
 		return underlying(ctx, binary, dir, env, args...)
 	}
-	tmpBase, err := filepath.Abs(os.TempDir())
+	tmpBase, err := outsideTempBase(root, os.TempDir())
 	if err != nil {
-		return r, err
-	}
-	if rel, e := filepath.Rel(root, tmpBase); e == nil && relative(filepath.ToSlash(rel), true) {
-		r.add("AG-SRC-000", Unknown, "", "", "", "", "temporary workspace must be outside the audited root")
+		r.add("AG-SRC-000", Unknown, "", "", "", "", err.Error())
 		return r, nil
 	}
 	tmp, err := os.MkdirTemp(tmpBase, "yunka-sourceaudit-")

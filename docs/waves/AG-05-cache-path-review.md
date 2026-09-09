@@ -25,7 +25,7 @@ remain trusted prerequisites; this is not filesystem locking or a concurrency
 sandbox. Process-global environment mutation by unrelated goroutines is not an
 endorsed configuration mechanism.
 
-Five permanent test parents (fifteen named events) cover a real fresh root-contained
+Six permanent test parents (eighteen named events) cover a real fresh root-contained
 Go build cache, zero runner calls for five writable inputs, multi-entry GOPATH,
 missing cache beneath an external symlink, relative paths, implicit cache defaults
 and a real external-cache PASS control. A normal GOPATH/src checkout is allowed;
@@ -39,3 +39,10 @@ Local Go 1.23.2 RED/GREEN is exploratory evidence only. Final locked Go 1.25.13,
 MySQL Production, source-policy and prior type-consumer gates plus independent
 exact-head review precede non-force integration. Separate actual-main receipts
 are required before task completion; historical passing runs are not inherited.
+
+Follow-up review `3967179830` identified the unset-environment default temp path:
+its lexical absolute name could still alias original source. The same real-path
+resolver now validates that fallback, and workspace creation receives the resolved
+path. A safe test-owned stand-in for the platform default exercises allowed and
+root-alias cases without modifying host `/tmp`; root bytes remain unchanged.
+Relative or unresolvable fallback paths are INCOMPLETE, not hidden write access.

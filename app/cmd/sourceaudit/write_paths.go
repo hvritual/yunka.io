@@ -106,3 +106,17 @@ func resolveWritePath(value string) (string, error) {
 		p = parent
 	}
 }
+
+// The platform default temp directory is also an input, even with TMPDIR unset.
+// Return its real path so creation does not revisit an unchecked lexical alias.
+func outsideTempBase(root, candidate string) (string, error) {
+	resolved, err := resolveWritePath(candidate)
+	if err != nil {
+		return "", fmt.Errorf("cannot resolve the default temporary workspace")
+	}
+	rel, err := filepath.Rel(root, resolved)
+	if err != nil || relative(filepath.ToSlash(rel), true) {
+		return "", fmt.Errorf("temporary workspace must be outside the audited root")
+	}
+	return resolved, nil
+}
