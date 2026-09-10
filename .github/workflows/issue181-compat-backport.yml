@@ -1,0 +1,44 @@
+name: Issue 181 Biz compatibility backport
+on:
+  push:
+    branches: [control/ce08-181-delivery-20260910]
+    paths: ['.github/workflows/issue181-compat-backport.yml']
+permissions:
+  contents: write
+jobs:
+  backport:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: compat/biz-ce08-issue181
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Apply only issue 181 production hunk and qualify
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('pkg/contract/c9_application_codegen.go')
+          s=p.read_text()
+          old='''\t\ttargetApplicationType := targetNaming.ApplicationInterface\n\t\tif target.Domain != service.Domain {\n\t\t\talias := imports.add(rootImport+"/"+target.Domain+"/application", safeFileName(target.Domain)+"application")\n\t\t\ttargetApplicationType = alias + "." + targetNaming.ApplicationInterface\n\t\t}\n'''
+          new='''\t\ttargetApplicationType := targetNaming.ApplicationInterface\n\t\tcrossDomain := target.Domain != service.Domain\n\t\tif crossDomain {\n\t\t\t// Keep the concrete target Application out of the source domain package.\n\t\t\t// Cross-domain child edges own a narrow structural interface containing\n\t\t\t// only the Operations explicitly required by this source edge.\n\t\t\ttargetApplicationType = edgeSymbol + "TargetApplication"\n\t\t}\n'''
+          if old not in s: raise SystemExit('target application import hunk missing')
+          s=s.replace(old,new,1)
+          old='''\t\tfmt.Fprintf(&declarations, "type %s interface {\\n%s}\\n\\n", interfaceName, interfaceMethods.String())\n\t\tfmt.Fprintf(&declarations, "type %s struct { application %s; executor operation.Executor }\\n\\n", implementationName, targetApplicationType)\n'''
+          new='''\t\tfmt.Fprintf(&declarations, "type %s interface {\\n%s}\\n\\n", interfaceName, interfaceMethods.String())\n\t\tif crossDomain {\n\t\t\tfmt.Fprintf(&declarations, "// %s is the consumer-edge-owned view of the target Application.\\n", targetApplicationType)\n\t\t\tfmt.Fprintf(&declarations, "type %s interface {\\n%s}\\n\\n", targetApplicationType, interfaceMethods.String())\n\t\t}\n\t\tfmt.Fprintf(&declarations, "type %s struct { application %s; executor operation.Executor }\\n\\n", implementationName, targetApplicationType)\n'''
+          if old not in s: raise SystemExit('target interface declaration hunk missing')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+          gofmt -w pkg/contract/c9_application_codegen.go
+          git diff --check
+          go test ./pkg/contract
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add pkg/contract/c9_application_codegen.go
+          git commit -m 'compat(contract): backport issue 181 child edge fix for Biz'
+          git push origin HEAD:compat/biz-ce08-issue181
