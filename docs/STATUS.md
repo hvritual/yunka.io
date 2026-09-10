@@ -25,7 +25,7 @@
 | Separately versioned infrastructure extension module | **Complete / production-qualified / merged** | issue #121 / PR #122; exact candidate `fc09f296cccb14ae18891bc43642d5efe43bd484` passed CI #430 and production #190, then merged as `70611d6cee5dd4e37ae6a803bcb38b938acd59c9`; independent `infras/vX.Y.Z` tag surface exists, but no `infras/v0.1.0` release tag is claimed yet |
 | Typed infrastructure capability export / binding | **Complete / production-qualified / merged** | issue #124 / PR #131; exact candidate `c3123fb4a3e7731f0edf5539c3d8003fc0e41bc7` passed CI #475 and production #233 after synchronization with AX6 main, merged as `d06a6330db9093e0bc586decb6bdc00122b4aa99`, and exact-main push CI #476 / production #234 also passed |
 | Active numbered Yunka framework wave | **None selected** | new framework work remains pressure-driven rather than roadmap-driven; AX/Terminalization control-plane work does not by itself create a numbered framework wave |
-| Proven open Yunka P0/P1 runtime/compiler/authz/persistence/trace-closure defects | **0 known at reconciliation** | do not promote hypotheses into framework defects without executable consumer evidence |
+| Proven open Yunka P0/P1 runtime/compiler/authz/persistence/trace-closure defects | **0 known after #181 closure** | Biz CE-08 proved C9 cross-domain child codegen issue #181; PR #183 closed it with framework PR/main qualification and locked-baseline real-consumer reverse qualification. Do not promote hypotheses into framework defects without executable consumer evidence |
 
 ## Current developer workflow
 
@@ -480,6 +480,18 @@ local actor authority
 ```
 
 No Yunka primitive should be added preemptively. If the current APIs cannot express this safely, the consumer must first preserve a minimal failing case, classify the generic gap, stop at the framework boundary, and only then open a Yunka change.
+
+## C9 cross-domain child capability codegen — issue #181
+
+**State: COMPLETE / PRODUCTION-QUALIFIED / REAL-CONSUMER REVERSE-QUALIFIED / MERGED through PR #183.**
+
+Biz CE-08 pressure proved a generic C9 generator defect: a valid acyclic Application graph can contain cross-domain edges in both directions, while generated child wrappers previously typed their implementation field against the target domain's complete `application` interface. That compressed the valid Application graph into a Go package import cycle (`access/application <-> commercial/application`).
+
+PR #183 changes only the generated cross-domain wrapper implementation dependency to a source-edge-owned narrow target Application interface. The child capability remains source-edge-owned, exposes only explicitly required Operations, invokes `ExecuteChildTyped`, and preserves OperationPlan, permission closure, ExecutionScope/UoW and transport rules. Same-domain generation is unchanged.
+
+Exact behavioral candidate `02d1990e72a857198672145c0c0bd6a23c8b592c` passed PR CI run `34433008360`, production run `34433008340`, AG05 source-policy run `34433008351`, and AG06 template qualification run `34433008339`. Locked-baseline Biz reverse qualification run `34433195253` applied only the #181 production hunk to consumer framework baseline `6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb`, regenerated Biz CE-08 candidate `96ca815be34ed2eeeaf67b048e04217f72990b18`, and proved reciprocal application-package imports and `import cycle not allowed` were removed. Evidence artifact `10135249478` has digest `sha256:f6e89b3579fc91f222e4a53abd01939010a6f57805042d0451e08afbd337b635`. Remaining Biz failures are consumer CE-08 work, not framework #181 failures.
+
+PR #183 merged as `dfc0c9d995d8d263f895ede6e43b5446ff8fedb4`; its tree equals the qualified candidate tree. Exact-main push CI run `34433354606`, production run `34433354584`, AG05 run `34433354627`, and AG06 run `34433354596` all passed. External code review was not performed and is not required by current repository policy; automated tests and self-checks are not represented as independent approval.
 
 ## Known deferred limitations
 
