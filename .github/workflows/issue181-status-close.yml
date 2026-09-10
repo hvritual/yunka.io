@@ -1,0 +1,47 @@
+name: Issue 181 status reconciliation
+on:
+  push:
+    branches: [control/ce08-181-delivery-20260910]
+    paths: ['.github/workflows/issue181-status-close.yml']
+permissions:
+  contents: write
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: docs/issue-181-c9-codegen-closure
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Reconcile current status authority only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "dfc0c9d995d8d263f895ede6e43b5446ff8fedb4"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('docs/STATUS.md')
+          s=p.read_text()
+          old='> Reconciled date: 2026-09-09'
+          if old not in s: raise SystemExit('reconciled-date anchor missing')
+          s=s.replace(old, '> Reconciled date: 2026-09-10', 1)
+          old='| Proven open Yunka P0/P1 runtime/compiler/authz/persistence/trace-closure defects | **0 known at reconciliation** | do not promote hypotheses into framework defects without executable consumer evidence |'
+          new='| Proven open Yunka P0/P1 runtime/compiler/authz/persistence/trace-closure defects | **0 known after #181 closure** | Biz CE-08 proved C9 cross-domain child codegen issue #181; PR #183 closed it with framework PR/main qualification and locked-baseline real-consumer reverse qualification. Do not promote hypotheses into framework defects without executable consumer evidence |'
+          if old not in s: raise SystemExit('open-defect row anchor missing')
+          s=s.replace(old,new,1)
+          marker='## Known deferred limitations\n'
+          if marker not in s: raise SystemExit('deferred-limitations marker missing')
+          section='''## C9 cross-domain child capability codegen — issue #181\n\n**State: COMPLETE / PRODUCTION-QUALIFIED / REAL-CONSUMER REVERSE-QUALIFIED / MERGED through PR #183.**\n\nBiz CE-08 pressure proved a generic C9 generator defect: a valid acyclic Application graph can contain cross-domain edges in both directions, while generated child wrappers previously typed their implementation field against the target domain's complete `application` interface. That compressed the valid Application graph into a Go package import cycle (`access/application <-> commercial/application`).\n\nPR #183 changes only the generated cross-domain wrapper implementation dependency to a source-edge-owned narrow target Application interface. The child capability itself remains source-edge-owned, exposes only explicitly required Operations, invokes `ExecuteChildTyped`, and preserves OperationPlan, permission closure, ExecutionScope/UoW and transport rules. Same-domain generation is unchanged.\n\nExact behavioral candidate `02d1990e72a857198672145c0c0bd6a23c8b592c` passed PR CI run `34433008360`, production run `34433008340`, AG05 source-policy run `34433008351`, and AG06 template qualification run `34433008339`. Locked-baseline Biz reverse qualification run `34433195253` applied only the #181 production hunk to the consumer's framework baseline `6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb`, regenerated Biz CE-08 candidate `96ca815be34ed2eeeaf67b048e04217f72990b18`, and proved the reciprocal application-package imports and `import cycle not allowed` failure were removed. Evidence artifact `10135249478` has digest `sha256:f6e89b3579fc91f222e4a53abd01939010a6f57805042d0451e08afbd337b635`. Remaining Biz compile/test failures are consumer wiring, test capability and permission-fixture work already recorded on Biz PR #38; they are not framework #181 failures.\n\nPR #183 merged as `dfc0c9d995d8d263f895ede6e43b5446ff8fedb4`; its tree `efb9337b0ec4f274c9ccca13ce31d7b2dfb374c0` equals the qualified candidate tree. Exact-main push CI run `34433354606`, production run `34433354584`, AG05 run `34433354627`, and AG06 run `34433354596` all passed. External code review was not performed and is not required by current repository policy; automated tests and self-checks are not represented as independent approval.\n\n'''
+          s=s.replace(marker,section+marker,1)
+          p.write_text(s)
+          PY
+          git diff --check
+          test "$(git status --short | awk '{print $2}')" = "docs/STATUS.md"
+          git diff -- docs/STATUS.md
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add docs/STATUS.md
+          git commit -m 'docs(status): record issue 181 qualified closure'
+          git push origin HEAD:docs/issue-181-c9-codegen-closure
