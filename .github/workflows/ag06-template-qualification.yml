@@ -91,7 +91,7 @@ jobs:
           git rev-parse HEAD HEAD^{tree} > "$RUNNER_TEMP/ag06-starter/identity.txt"
           go -C app test -exec="/usr/bin/env -u GOROOT" -json -race -count=1 -timeout=5m \
             ./cmd/implementation ./cmd/add ./cmd/project ./cmd/agentcontext ./cmd/ownership ./cmd/projectflow ./cmd/change ./cmd/audit \
-            -run '^TestAG06(1|2)' > "$RUNNER_TEMP/ag06-starter/tests.jsonl"
+            -run '^TestAG06(1|2|3)' > "$RUNNER_TEMP/ag06-starter/tests.jsonl"
           python3 - <<'PY'
           import json,os,pathlib
           p=pathlib.Path(os.environ['RUNNER_TEMP'])/'ag06-starter'
@@ -109,11 +109,14 @@ jobs:
             'TestAG062SourceAuditUsesInitializedDefaultPolicy','TestAG062ImplementationLayoutIsCanonicalAndShared',
             'TestAG062ChangePlanResolvesExistingSealedHandlerAndGovernanceGates','TestAG062ChangePlanFailsClosedOnPartialSealedStarter',
             'TestAG062AddOperationPreservesExistingSealedStarter','TestAG062AddOperationRejectsPartialSealedStarterBeforeMutation',
-            'TestAG062ContextExposesDefaultGovernanceWorkflow','TestAG062OwnershipClassifiesInitializedSourcePolicy'}
+            'TestAG062ContextExposesDefaultGovernanceWorkflow','TestAG062OwnershipClassifiesInitializedSourcePolicy',
+            'TestAG063TypedDependencyStarterUsesCanonicalChildCapability','TestAG063TypedDependencyShapeAndBoundaries',
+            'TestAG063InvalidDependencyFactsFailClosed','TestAG063LeafStarterContractUnchanged',
+            'TestAG063CanonicalProtoApplyAndRegenerate'}
           assert not any(e['Action'] in ('fail','skip') for e in events), 'failed/skipped required evidence'
           passed={e.get('Test') for e in events if e['Action']=='pass'}
           assert required <= passed, sorted(required-passed)
-          (p/'result.json').write_text(json.dumps({'status':'PASS','scope':'AG-06.1 starter plus AG-06.2 default governance','required':sorted(required),'passedNamedEvents':sum(e['Action']=='pass' and bool(e.get('Test')) for e in events)},indent=2)+'\n')
+          (p/'result.json').write_text(json.dumps({'status':'PASS','scope':'AG-06.1 starter plus AG-06.2 default governance plus AG-06.3a typed requires qualification','required':sorted(required),'passedNamedEvents':sum(e['Action']=='pass' and bool(e.get('Test')) for e in events)},indent=2)+'\n')
           PY
           git diff --check
           test -z "$(git status --porcelain --untracked-files=all)"
