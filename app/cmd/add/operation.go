@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode"
 
+	projectcmd "yunka.io/app/cmd/project"
 	"yunka.io/app/cmd/projectflow"
 )
 
@@ -125,18 +126,31 @@ func changeOperation(options OperationOptions, apply bool) (Report, error) {
 	if err != nil {
 		return Report{}, err
 	}
-	implementationRelative := filepath.ToSlash(filepath.Join(inputs.Project.GeneratedGoRoot, domain, "application", operationFileStem(options.OperationID)+".go"))
-	implementationOwner, err := requireEditable(inputs.Project.Root, implementationRelative)
+	layout, err := projectflow.DescribeImplementationLayout(inputs.Project, domain, application, rpcName)
 	if err != nil {
-		return Report{}, err
+		return Report{}, sourceFailure("", err)
 	}
-	implementationAbsolute := projectflow.ResolveDescriptorPath(inputs.Project, implementationRelative)
-	if _, statErr := os.Stat(implementationAbsolute); statErr == nil {
-		return Report{}, conflictFailure(implementationRelative, fmt.Errorf("add operation: developer implementation landing file already exists; refusing to overwrite"))
-	} else if !os.IsNotExist(statErr) {
-		return Report{}, sourceFailure(implementationRelative, statErr)
+	sealed, err := sealedImplementationState(inputs.Project, layout)
+	if err != nil {
+		return Report{}, conflictFailure(layout.Root, err)
 	}
-	implementationContents := []byte(renderImplementationLanding(domain, application, options.OperationID, rpcName))
+	implementationRelative := ""
+	implementationOwner := ""
+	var implementationContents []byte
+	if !sealed {
+		implementationRelative = filepath.ToSlash(filepath.Join(inputs.Project.GeneratedGoRoot, domain, "application", operationFileStem(options.OperationID)+".go"))
+		implementationOwner, err = requireEditable(inputs.Project.Root, implementationRelative)
+		if err != nil {
+			return Report{}, err
+		}
+		implementationAbsolute := projectflow.ResolveDescriptorPath(inputs.Project, implementationRelative)
+		if _, statErr := os.Stat(implementationAbsolute); statErr == nil {
+			return Report{}, conflictFailure(implementationRelative, fmt.Errorf("add operation: developer implementation landing file already exists; refusing to overwrite"))
+		} else if !os.IsNotExist(statErr) {
+			return Report{}, sourceFailure(implementationRelative, statErr)
+		}
+		implementationContents = []byte(renderImplementationLanding(domain, application, options.OperationID, rpcName))
+	}
 
 	report := Report{
 		SchemaVersion: SchemaVersion,
@@ -146,11 +160,8 @@ func changeOperation(options OperationOptions, apply bool) (Report, error) {
 			"useCase": options.UseCase, "service": service.Name, "rpc": rpcName,
 			"requestType": packageName + "." + requestType, "responseType": packageName + "." + responseType,
 		},
-		Mutations: []Mutation{
-			{Path: source.Relative, Action: "modified", Owner: owner},
-			{Path: implementationRelative, Action: "created", Owner: implementationOwner},
-		},
-		Effects: contractEffects(inputs.Project, true, true),
+		Mutations: []Mutation{{Path: source.Relative, Action: "modified", Owner: owner}},
+		Effects:   contractEffects(inputs.Project, true, true),
 		NextActions: []NextAction{
 			{Command: "yunka generate", Purpose: "derive protobuf Go, OperationPlan, policy/transport adapters, and assembly facts"},
 			{Command: "yunka change plan --operation " + shellQuote(options.OperationID) + " --intent implementation --format json", Purpose: "resolve the newly canonical Operation implementation boundary after generation"},
@@ -161,8 +172,17 @@ func changeOperation(options OperationOptions, apply bool) (Report, error) {
 		Notes: []string{
 			"Request/response messages are empty structural DTOs; add business fields explicitly.",
 			"Access, tenant, transaction, idempotency, composition, permissions, authentication, dependencies, and HTTP facts come only from the caller flags.",
-			"The Go landing file contains only package declaration and TODO guidance; no receiver, function body, persistence, Saga, Outbox, event publication, external effect, or business implementation was generated.",
 		},
+	}
+	if sealed {
+		report.Notes = append(report.Notes, "An existing sealed-v1 Application starter was preserved; no competing flat implementation landing file was created. Run generate then change plan to resolve the canonical handler path.")
+		report.NextActions = append(report.NextActions, NextAction{Command: "yunka audit types --root . --policy " + shellQuote(layout.TypePolicy) + " --format agent-json", Purpose: "verify the existing sealed Application factory/capability boundary"})
+	} else {
+		report.Mutations = append(report.Mutations, Mutation{Path: implementationRelative, Action: "created", Owner: implementationOwner})
+		report.Notes = append(report.Notes, "No sealed Application starter exists, so the legacy flat Go landing file is retained for compatibility; it contains only package/TODO guidance and no business implementation.")
+	}
+	if sourcePolicyExists(inputs.Project) {
+		report.NextActions = append(report.NextActions, NextAction{Command: "yunka audit source --root . --format agent-json", Purpose: "verify the initialized default source policy"})
 	}
 	if !apply {
 		report.Kind = "operation-plan"
@@ -173,20 +193,54 @@ func changeOperation(options OperationOptions, apply bool) (Report, error) {
 		return report, nil
 	}
 
-	if err := writeNewFile(implementationAbsolute, implementationContents); err != nil {
-		if os.IsExist(err) {
-			return Report{}, conflictFailure(implementationRelative, err)
+	if sealed {
+		if err := writeAtomic(source.Absolute, []byte(updated)); err != nil {
+			return Report{}, sourceFailure(source.Relative, err)
 		}
-		return Report{}, sourceFailure(implementationRelative, err)
-	}
-	if err := writeAtomic(source.Absolute, []byte(updated)); err != nil {
-		rollbackErr := os.Remove(implementationAbsolute)
-		if rollbackErr != nil && !os.IsNotExist(rollbackErr) {
-			return Report{}, sourceFailure(source.Relative, fmt.Errorf("%w; rollback of %s also failed: %v", err, implementationRelative, rollbackErr))
+	} else {
+		implementationAbsolute := projectflow.ResolveDescriptorPath(inputs.Project, implementationRelative)
+		if err := writeNewFile(implementationAbsolute, implementationContents); err != nil {
+			if os.IsExist(err) {
+				return Report{}, conflictFailure(implementationRelative, err)
+			}
+			return Report{}, sourceFailure(implementationRelative, err)
 		}
-		return Report{}, sourceFailure(source.Relative, err)
+		if err := writeAtomic(source.Absolute, []byte(updated)); err != nil {
+			rollbackErr := os.Remove(implementationAbsolute)
+			if rollbackErr != nil && !os.IsNotExist(rollbackErr) {
+				return Report{}, sourceFailure(source.Relative, fmt.Errorf("%w; rollback of %s also failed: %v", err, implementationRelative, rollbackErr))
+			}
+			return Report{}, sourceFailure(source.Relative, err)
+		}
 	}
 
 	normalizeReport(&report)
 	return report, nil
+}
+
+func sealedImplementationState(project projectflow.ProjectDescriptor, layout projectflow.ImplementationLayout) (bool, error) {
+	states := make([]bool, 0, 2)
+	for _, relative := range []string{layout.Build, layout.TypePolicy} {
+		info, err := os.Lstat(projectflow.ResolveDescriptorPath(project, relative))
+		if os.IsNotExist(err) {
+			states = append(states, false)
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return false, fmt.Errorf("add operation: sealed starter marker must be a regular non-symlink file: %s", relative)
+		}
+		states = append(states, true)
+	}
+	if states[0] != states[1] {
+		return false, fmt.Errorf("add operation: partial sealed starter at %s; build.go and architecture.types.json must either both exist or both be absent", layout.Root)
+	}
+	return states[0], nil
+}
+
+func sourcePolicyExists(project projectflow.ProjectDescriptor) bool {
+	info, err := os.Lstat(projectflow.ResolveDescriptorPath(project, projectcmd.SourcePolicyRelativePath))
+	return err == nil && info.Mode().IsRegular() && info.Mode()&os.ModeSymlink == 0
 }

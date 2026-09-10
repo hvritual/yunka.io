@@ -45,8 +45,8 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 	if !reflect.DeepEqual(first, second) {
 		t.Fatalf("context snapshot is not deterministic:\nfirst=%#v\nsecond=%#v", first, second)
 	}
-	if SchemaVersion != 6 || first.SchemaVersion != 6 {
-		t.Fatalf("schema version constant/snapshot=%d/%d want=6/6", SchemaVersion, first.SchemaVersion)
+	if SchemaVersion != 7 || first.SchemaVersion != 7 {
+		t.Fatalf("schema version constant/snapshot=%d/%d want=7/7", SchemaVersion, first.SchemaVersion)
 	}
 	if first.Project.Profiled {
 		t.Fatal("conventional project unexpectedly reported as profiled")
@@ -59,6 +59,7 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 	}
 	assertLocation(t, first, "operation-plans", "generated", "present")
 	assertLocation(t, first, "provider-manifest", "managed", "missing")
+	assertLocation(t, first, "source-policy", "governance-config", "missing")
 	if first.Commands.Check != "yunka check --format agent-json" {
 		t.Fatalf("check command=%q", first.Commands.Check)
 	}
@@ -70,6 +71,12 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 	}
 	if first.AgentProtocol.NewOperationApply != "yunka add operation <application> <operation> ... --format agent-json" {
 		t.Fatalf("new operation apply command=%q", first.AgentProtocol.NewOperationApply)
+	}
+	if first.AgentProtocol.NewImplementationPlan != "yunka add implementation --composition-package <exact-package> --format agent-json <domain/application>" {
+		t.Fatalf("new implementation plan command=%q", first.AgentProtocol.NewImplementationPlan)
+	}
+	if first.AgentProtocol.NewImplementationApply != "yunka add implementation --composition-package <exact-package> --apply --format agent-json <domain/application>" {
+		t.Fatalf("new implementation apply command=%q", first.AgentProtocol.NewImplementationApply)
 	}
 	if first.AgentProtocol.ExistingPlan != "yunka change plan --operation <operation> --format agent-json" {
 		t.Fatalf("change plan command=%q", first.AgentProtocol.ExistingPlan)
@@ -98,6 +105,9 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 	if first.AgentProtocol.Audit != "yunka audit --format agent-json" {
 		t.Fatalf("audit command=%q", first.AgentProtocol.Audit)
 	}
+	if first.AgentProtocol.SourceAudit != "yunka audit source --root . --format agent-json" {
+		t.Fatalf("source audit command=%q", first.AgentProtocol.SourceAudit)
+	}
 	if first.AgentProtocol.AdvisorRequest != "yunka advisor request --format agent-json" {
 		t.Fatalf("advisor request command=%q", first.AgentProtocol.AdvisorRequest)
 	}
@@ -119,9 +129,11 @@ func TestBuildConventionalProjectProducesStableReadOnlyContext(t *testing.T) {
 		t.Fatal("machine-readable output is not byte-stable")
 	}
 	for _, expected := range []string{
-		"\"schemaVersion\": 6",
+		"\"schemaVersion\": 7",
 		"\"newOperationPlan\"",
 		"\"newOperationApply\"",
+		"\"newImplementationPlan\"",
+		"\"sourceAudit\"",
 		"\"changeSetBegin\"",
 		"\"changeSetCheck\"",
 		"\"remediationBind\"",
@@ -202,4 +214,20 @@ func treeDigest(root string) (string, error) {
 	}
 	digest := sha256.Sum256([]byte(strings.Join(records, "\n")))
 	return hex.EncodeToString(digest[:]), nil
+}
+
+func TestAG062ContextExposesDefaultGovernanceWorkflow(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "go.mod"), "module example.com/demo\n\ngo 1.25.0\n")
+	if err := os.MkdirAll(filepath.Join(root, "contracts", "proto"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := Build(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertLocation(t, snapshot, "source-policy", "governance-config", "missing")
+	if snapshot.AgentProtocol.SourceAudit != "yunka audit source --root . --format agent-json" || !strings.Contains(snapshot.AgentProtocol.NewImplementationPlan, "yunka add implementation") || !strings.Contains(snapshot.AgentProtocol.NewImplementationApply, "--apply") {
+		t.Fatalf("agent protocol=%#v", snapshot.AgentProtocol)
+	}
 }

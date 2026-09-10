@@ -80,3 +80,41 @@ func TestSourceAuditInputErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestAG062SourceAuditUsesInitializedDefaultPolicy(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".yunka"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/defaultpolicy\n\ngo 1.25.0\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "base.go"), []byte("package defaultpolicy\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	p := sourceaudit.Policy{
+		SchemaVersion: 1,
+		Profiles:      []sourceaudit.Profile{{Name: "host", GOOS: runtime.GOOS, GOARCH: runtime.GOARCH, Tags: []string{}}},
+		Modules:       []sourceaudit.ModulePolicy{{Path: ".", Workspace: "off", Profiles: []string{"host"}}},
+		Components:    []sourceaudit.Component{{Name: "project", Path: ".", Kind: "production", Allow: []string{}, AllowExternal: true}},
+	}
+	contents, err := json.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".yunka", "source-policy.json"), contents, 0600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	app := cli.NewApp()
+	app.Writer = &out
+	app.ErrWriter = &out
+	app.Commands = []cli.Command{Command()}
+	if err := app.Run([]string{"yunka", "audit", "source", "--root", root, "--format", "agent-json"}); err != nil {
+		t.Fatalf("default source policy failed: %v\n%s", err, out.String())
+	}
+	var report sourceaudit.Report
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil || report.Status != sourceaudit.Pass {
+		t.Fatalf("report=%+v err=%v output=%s", report, err, out.String())
+	}
+}

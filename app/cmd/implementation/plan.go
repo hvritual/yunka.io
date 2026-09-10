@@ -194,7 +194,11 @@ func render(project projectflow.ProjectDescriptor, manifest contract.Manifest, k
 	if err != nil {
 		return Report{}, err
 	}
-	directory := path.Join(project.GeneratedGoRoot, domain, "application", app)
+	layout, err := projectflow.DescribeImplementationLayout(project, domain, app, "")
+	if err != nil {
+		return Report{}, err
+	}
+	directory := layout.Root
 	ownerImport := project.GoModule + "/" + directory
 	if caller == ownerImport || strings.HasPrefix(caller, ownerImport+"/") {
 		return Report{}, fmt.Errorf("add implementation: composition must be outside the new owner implementation")

@@ -22,6 +22,8 @@ type ScaffoldReport struct {
 	BootstrapEntrypoint string
 	DevManifest         string
 	DevSkipped          string
+	SourcePolicy        string
+	SourcePolicySkipped string
 }
 
 // Scaffold materializes the non-business project shape referenced by the
@@ -60,6 +62,28 @@ func Scaffold(root string, config Config) (ScaffoldReport, error) {
 	}
 	report := ScaffoldReport{Directories: directories}
 
+	goModPath := filepath.Join(absolute, "go.mod")
+	hasGoModule := true
+	if _, err := os.Stat(goModPath); err != nil {
+		if !os.IsNotExist(err) {
+			return ScaffoldReport{}, err
+		}
+		hasGoModule = false
+	}
+	if hasGoModule {
+		contents, err := defaultSourcePolicyBytes()
+		if err != nil {
+			return ScaffoldReport{}, err
+		}
+		policyPath := filepath.Join(absolute, filepath.FromSlash(SourcePolicyRelativePath))
+		if err := writeIfMissing(policyPath, contents); err != nil {
+			return ScaffoldReport{}, err
+		}
+		report.SourcePolicy = SourcePolicyRelativePath
+	} else {
+		report.SourcePolicySkipped = "go.mod is required before a default source policy can be scaffolded"
+	}
+
 	if config.Workflow.Contract.ProtoRoot != "" {
 		protoRoot := filepath.Join(absolute, filepath.FromSlash(config.Workflow.Contract.ProtoRoot))
 		hasProto, err := containsProtoFile(protoRoot)
@@ -84,12 +108,9 @@ func Scaffold(root string, config Config) (ScaffoldReport, error) {
 		return ScaffoldReport{}, err
 	}
 
-	if _, err := os.Stat(filepath.Join(absolute, "go.mod")); err != nil {
-		if os.IsNotExist(err) {
-			report.DevSkipped = "go.mod is required before a runnable dev manifest can be scaffolded"
-			return report, nil
-		}
-		return ScaffoldReport{}, err
+	if !hasGoModule {
+		report.DevSkipped = "go.mod is required before a runnable dev manifest can be scaffolded"
+		return report, nil
 	}
 	mains, err := discoverMainPackages(absolute)
 	if err != nil {

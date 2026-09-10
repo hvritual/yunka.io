@@ -17,6 +17,7 @@ import (
 	"github.com/hvritual/yunka.io/pkg/operationplan"
 	"github.com/urfave/cli"
 	"yunka.io/app/cmd/ownership"
+	projectcmd "yunka.io/app/cmd/project"
 	"yunka.io/app/cmd/projectflow"
 )
 
@@ -194,7 +195,14 @@ func BuildWithOptions(options projectflow.Options, operation, intent string, dep
 		if err != nil {
 			return Plan{}, &Failure{Kind: FailureEvidence, Err: fmt.Errorf("change plan: declaration source context: %w", err)}
 		}
-		plan.EditableTargets = nil
+		// IntentBoth must retain independently proven implementation ownership while
+		// replacing the provisional contract targets with canonical declaration
+		// sources. Contract source identity must not erase a sealed handler target.
+		var implementationTargets []EditableTarget
+		if intent == IntentBoth {
+			implementationTargets = preserveImplementationTargets(plan.EditableTargets, inputs.ContractSourceFiles)
+		}
+		plan.EditableTargets = implementationTargets
 		unresolved := plan.UnresolvedTargets[:0]
 		for _, item := range plan.UnresolvedTargets {
 			if item.Kind != "contract-source" {
@@ -215,10 +223,25 @@ func BuildWithOptions(options projectflow.Options, operation, intent string, dep
 			}
 			plan.EditableTargets = append(plan.EditableTargets, EditableTarget{Path: decision.Path, Owner: decision.Owner, Reason: "canonical Operation or transitive DTO declaration source; unrelated file imports confer no edit authority"})
 		}
-		plan.Gates = deriveGates(plan, inputs.Project.GoModule)
+		plan.Gates = deriveGates(plan, inputs.Project)
 		normalizePlan(&plan)
 	}
 	return plan, nil
+}
+
+func preserveImplementationTargets(targets []EditableTarget, contractSourceFiles []string) []EditableTarget {
+	contractPaths := make(map[string]struct{}, len(contractSourceFiles))
+	for _, path := range contractSourceFiles {
+		contractPaths[filepath.ToSlash(path)] = struct{}{}
+	}
+	result := make([]EditableTarget, 0, len(targets))
+	for _, target := range targets {
+		if _, isContract := contractPaths[filepath.ToSlash(target.Path)]; isContract {
+			continue
+		}
+		result = append(result, target)
+	}
+	return result
 }
 
 func buildFromFacts(inputs projectflow.OwnershipInputs, graph applicationgraph.Graph, operation, intent string, depth int) (Plan, error) {
@@ -251,10 +274,12 @@ func buildFromFacts(inputs projectflow.OwnershipInputs, graph applicationgraph.G
 		addContractEffects(&plan, inputs)
 	}
 	if intent == IntentImplementation || intent == IntentBoth {
-		addImplementationTarget(&plan, inputs)
+		if err := addImplementationTarget(&plan, inputs); err != nil {
+			return Plan{}, err
+		}
 	}
 	plan.Risks = deriveRisks(target, impact)
-	plan.Gates = deriveGates(plan, inputs.Project.GoModule)
+	plan.Gates = deriveGates(plan, inputs.Project)
 	normalizePlan(&plan)
 	return plan, nil
 }
@@ -339,8 +364,49 @@ func addContractTargets(plan *Plan, inputs projectflow.OwnershipInputs) error {
 	return nil
 }
 
-func addImplementationTarget(plan *Plan, inputs projectflow.OwnershipInputs) {
+func addImplementationTarget(plan *Plan, inputs projectflow.OwnershipInputs) error {
 	domain := strings.TrimSpace(plan.Operation.Domain)
+	application := strings.TrimSpace(plan.Operation.Application)
+	method := strings.TrimSpace(plan.Operation.Attributes["applicationMethod"])
+	layout, err := projectflow.DescribeImplementationLayout(inputs.Project, domain, application, method)
+	if err != nil {
+		return &Failure{Kind: FailureEvidence, Err: fmt.Errorf("change plan: implementation layout: %w", err)}
+	}
+	buildState, err := regularProjectFile(inputs.Project, layout.Build)
+	if err != nil {
+		return &Failure{Kind: FailureEvidence, Location: layout.Build, Err: err}
+	}
+	policyState, err := regularProjectFile(inputs.Project, layout.TypePolicy)
+	if err != nil {
+		return &Failure{Kind: FailureEvidence, Location: layout.TypePolicy, Err: err}
+	}
+	if buildState != policyState {
+		plan.UnresolvedTargets = append(plan.UnresolvedTargets, UnresolvedTarget{Kind: "implementation", Scope: layout.Root, Candidates: []string{layout.Build, layout.TypePolicy}, Reason: "sealed Application governance is partial: build.go and architecture.types.json must either both exist or both be absent; repair the starter before editing"})
+		return nil
+	}
+	if buildState {
+		handlerState, err := regularProjectFile(inputs.Project, layout.Handler)
+		if err != nil {
+			return &Failure{Kind: FailureEvidence, Location: layout.Handler, Err: err}
+		}
+		if !handlerState {
+			plan.UnresolvedTargets = append(plan.UnresolvedTargets, UnresolvedTarget{Kind: "implementation", Scope: layout.Root, Candidates: []string{layout.Handler}, Reason: "sealed Application exists but the canonical Operation handler is absent; do not create a flat landing file or guess another path"})
+			return nil
+		}
+		report, err := ownership.Build(inputs.Project.Root, []string{layout.Handler})
+		if err != nil || len(report.Decisions) != 1 || !report.Decisions[0].SafeAutoEdit {
+			reason := "ownership decision missing"
+			if err != nil {
+				reason = err.Error()
+			} else if len(report.Decisions) == 1 {
+				reason = report.Decisions[0].Reason
+			}
+			return &Failure{Kind: FailureEvidence, Location: layout.Handler, Err: fmt.Errorf("change plan: sealed handler is not editable: %s", reason)}
+		}
+		decision := report.Decisions[0]
+		plan.EditableTargets = append(plan.EditableTargets, EditableTarget{Path: decision.Path, Owner: decision.Owner, Reason: "canonical applicationMethod maps to the existing sealed-v1 use-case handler; no filename selection is required"})
+		return nil
+	}
 	scope := inputs.Project.GeneratedGoRoot
 	if domain != "" {
 		scope = filepath.ToSlash(filepath.Join(scope, domain, "application"))
@@ -349,8 +415,26 @@ func addImplementationTarget(plan *Plan, inputs projectflow.OwnershipInputs) {
 		Kind:       "implementation",
 		Scope:      scope,
 		Candidates: []string{},
-		Reason:     "canonical OperationPlan identifies the application boundary but does not own a handwritten implementation filename; select an implementation file inside the application boundary and pass it through `yunka ownership check` before editing",
+		Reason:     "no sealed Application starter exists; legacy handwritten implementations remain compatible and require explicit target selection through `yunka ownership check`",
 	})
+	return nil
+}
+
+func regularProjectFile(project projectflow.ProjectDescriptor, relative string) (bool, error) {
+	if strings.TrimSpace(relative) == "" {
+		return false, nil
+	}
+	info, err := os.Lstat(projectflow.ResolveDescriptorPath(project, relative))
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return false, fmt.Errorf("expected a regular non-symlink file")
+	}
+	return true, nil
 }
 
 func addContractEffects(plan *Plan, inputs projectflow.OwnershipInputs) {
@@ -400,7 +484,7 @@ func deriveRisks(target applicationgraph.Node, impact applicationgraph.ImpactRep
 	return risks
 }
 
-func deriveGates(plan Plan, goModule string) []Gate {
+func deriveGates(plan Plan, project projectflow.ProjectDescriptor) []Gate {
 	var gates []Gate
 	if len(plan.EditableTargets) > 0 {
 		paths := make([]string, 0, len(plan.EditableTargets))
@@ -421,7 +505,15 @@ func deriveGates(plan Plan, goModule string) []Gate {
 		Gate{Command: "yunka generate", Purpose: "regenerate canonical derived artifacts"},
 		Gate{Command: "yunka check --format agent-json", Purpose: "validate structure, generated drift, and receive machine remediation if validation fails"},
 	)
-	if strings.TrimSpace(goModule) != "" {
+	if sourcePolicy, _ := regularProjectFile(project, projectcmd.SourcePolicyRelativePath); sourcePolicy {
+		gates = append(gates, Gate{Command: "yunka audit source --root . --format agent-json", Purpose: "verify the initialized full-source/build-profile policy without duplicating its path in task input"})
+	}
+	if layout, err := projectflow.DescribeImplementationLayout(project, plan.Operation.Domain, plan.Operation.Application, plan.Operation.Attributes["applicationMethod"]); err == nil {
+		if exists, _ := regularProjectFile(project, layout.TypePolicy); exists {
+			gates = append(gates, Gate{Command: "yunka audit types --root . --policy " + strconv.Quote(layout.TypePolicy) + " --format agent-json", Purpose: "verify the sealed Application factory and capability surface"})
+		}
+	}
+	if strings.TrimSpace(project.GoModule) != "" {
 		gates = append(gates, Gate{Command: "go test ./...", Purpose: "run consumer Go tests"})
 	}
 	gates = append(gates, Gate{Command: "yunka dev", Purpose: "start the qualified developer runtime and verify readiness/runtime behavior"})

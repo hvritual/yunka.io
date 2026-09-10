@@ -223,7 +223,7 @@ Every repository task must:
 
 ## Developer workflow and runtime baseline
 
-- The normal developer workflow is `yunka init -> yunka generate -> yunka check -> yunka dev`.
+- The normal developer workflow is `yunka init -> yunka generate -> yunka check -> yunka dev`; Go-project init also creates a preserved developer-owned `.yunka/source-policy.json` baseline when missing, so source completeness can be checked without guessing a policy path.
 - Top-level generate/check reuse the canonical Domain/protobuf/Provider/Contract/Module/Assembly pipeline; they are not a second compiler.
 - `yunka check` is read-only. Fast-feedback evidence is disposable optimization data and unsafe/missing evidence falls back to canonical validation.
 - `yunka doctor` is read-only and does not auto-repair dependencies/generation/migrations.
@@ -246,6 +246,7 @@ Every repository task must:
 ## Application governance delivery discipline
 
 - Application code-organization governance follows `docs/architecture/APPLICATION-GOVERNANCE-PLAN.md`. Prefer toolchain-enforced encapsulation, use-case-sized dependencies and existing edge-owned child wrappers; do not introduce another runtime or hand-maintained architecture fact graph.
+- AG-06 sealed implementation paths are derived, not registered: `projectflow.DescribeImplementationLayout` is shared by starter and change planning; canonical Application/Operation identity remains owned by contract/compiler evidence. Context/ownership/default source audit and ordinary Operation additions reuse this projection, while legacy non-sealed projects remain compatible.
 - Each development round implements at least one independent task; close an unqualified or unintegrated prerequisite before advancing its dependent consumer migration. Executable mechanism tests are not an arbitrary-project architecture scanner or proof of consumer behavior.
 - New formal implementation commits use local Git or Runner-local Git. Connector staging may use an isolated control branch; control workflows/payloads must not enter the product diff. Never overwrite user changes or force-push.
 - The user authorizes verified framework changes from this stream to be integrated into main. Use non-force fast-forward only after exact candidate verification, review disposition and concurrent-ref checks. Reconcile STATUS and read back the actual integrated SHA/tree. This does not authorize unrelated pending PRs, production deployment or data migration.

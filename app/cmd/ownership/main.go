@@ -11,6 +11,7 @@ import (
 	"github.com/hvritual/yunka.io/pkg/modulespec"
 	"github.com/urfave/cli"
 	"yunka.io/app/cmd/dxoutput"
+	projectcmd "yunka.io/app/cmd/project"
 	"yunka.io/app/cmd/projectflow"
 )
 
@@ -154,6 +155,9 @@ func (current classifier) classify(path string) Decision {
 	}
 	if declarativeModuleSpecPath(relative, project.ModulesRoot) {
 		return decision(relative, "developer-module", MutationEditable, true, "path is the canonical declarative module spec location")
+	}
+	if relative == projectcmd.SourcePolicyRelativePath {
+		return decision(relative, "developer-governance", MutationEditable, true, "path is the project source-policy configuration created by yunka init")
 	}
 	for _, config := range []string{project.Profile, project.ProviderManifest, project.DevManifest} {
 		if strings.TrimSpace(config) != "" && relative == clean(config) {

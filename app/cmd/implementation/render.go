@@ -15,6 +15,7 @@ import (
 
 	"github.com/hvritual/yunka.io/pkg/contract"
 	"yunka.io/app/cmd/applicationboundary"
+	"yunka.io/app/cmd/projectflow"
 )
 
 type portShape struct {
@@ -153,7 +154,10 @@ func starterFiles(port portShape, owner, contractImport, key, caller string) (ma
 			return nil, fmt.Errorf("add implementation: unsupported canonical method signature")
 		}
 		name := method.Names[0].Name
-		filename := strings.ToLower(name) + "_handler.go"
+		filename, err := projectflow.ImplementationHandlerFilename(name)
+		if err != nil {
+			return nil, err
+		}
 		if names[filename] {
 			return nil, fmt.Errorf("add implementation: case-folded method path conflict: %s", name)
 		}

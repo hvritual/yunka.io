@@ -26,6 +26,7 @@ func TestBuildDerivesSafeMutationBoundariesWithoutOwnershipManifest(t *testing.T
 		"modules/audit/runtime.go",
 		"modules/module.yunka.json",
 		".yunka/providers.json",
+		".yunka/source-policy.json",
 		".yunka/protobuf-go.json",
 		"README.md",
 	}
@@ -48,6 +49,7 @@ func TestBuildDerivesSafeMutationBoundariesWithoutOwnershipManifest(t *testing.T
 	assertDecision(t, report, "modules/audit/runtime.go", "unclassified", MutationUnclassified, false)
 	assertDecision(t, report, "modules/module.yunka.json", "unclassified", MutationUnclassified, false)
 	assertDecision(t, report, ".yunka/providers.json", "developer-config", MutationEditable, true)
+	assertDecision(t, report, ".yunka/source-policy.json", "developer-governance", MutationEditable, true)
 	assertDecision(t, report, ".yunka/protobuf-go.json", "protobuf-go-generator", MutationGeneratedOnly, false)
 	assertDecision(t, report, "README.md", "unclassified", MutationUnclassified, false)
 
@@ -122,4 +124,17 @@ func mustWrite(t *testing.T, path, contents string) {
 	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestAG062OwnershipClassifiesInitializedSourcePolicy(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "go.mod"), "module example.com/demo\n\ngo 1.25.0\n")
+	if err := os.MkdirAll(filepath.Join(root, "contracts", "proto"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	report, err := Build(root, []string{".yunka/source-policy.json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertDecision(t, report, ".yunka/source-policy.json", "developer-governance", MutationEditable, true)
 }

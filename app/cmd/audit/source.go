@@ -3,9 +3,11 @@ package audit
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/urfave/cli"
+	projectcmd "yunka.io/app/cmd/project"
 	"yunka.io/app/cmd/sourceaudit"
 )
 
@@ -14,7 +16,7 @@ func sourceCommand() cli.Command {
 		Name: "source", Usage: "inventory all owned Go source and check an explicit module/build-profile import policy (read-only)",
 		Flags: []cli.Flag{
 			cli.StringFlag{Name: "root", Value: ".", Usage: "root containing owned modules, policy and every local workspace/replace target"},
-			cli.StringFlag{Name: "policy", Usage: "required root-contained source-policy JSON file"},
+			cli.StringFlag{Name: "policy", Usage: "root-contained source-policy JSON file; defaults to .yunka/source-policy.json"},
 			cli.StringFlag{Name: "format", Value: "text", Usage: "text, json or agent-json"},
 			cli.DurationFlag{Name: "timeout", Value: 2 * time.Minute, Usage: "total analysis budget (maximum ten minutes)"},
 		},
@@ -23,8 +25,9 @@ func sourceCommand() cli.Command {
 			if format != "text" && format != "json" && format != "agent-json" {
 				return fmt.Errorf("source audit: unsupported format %q", format)
 			}
-			if c.String("policy") == "" {
-				return fmt.Errorf("source audit requires --policy")
+			policy := strings.TrimSpace(c.String("policy"))
+			if policy == "" {
+				policy = projectcmd.SourcePolicyRelativePath
 			}
 			budget := c.Duration("timeout")
 			if budget <= 0 || budget > 10*time.Minute {
@@ -32,7 +35,7 @@ func sourceCommand() cli.Command {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), budget)
 			defer cancel()
-			r, err := sourceaudit.Check(ctx, c.String("root"), c.String("policy"))
+			r, err := sourceaudit.Check(ctx, c.String("root"), policy)
 			if err != nil {
 				return err
 			}

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"yunka.io/app/cmd/projectflow"
 	applicationgraph "github.com/hvritual/yunka.io/pkg/applicationgraph"
 	"github.com/hvritual/yunka.io/pkg/diagnostic"
+	"yunka.io/app/cmd/projectflow"
 )
 
 func TestBuildFromFactsPlansExistingOperationWithoutSemanticGuessing(t *testing.T) {
@@ -185,5 +185,68 @@ func mustWrite(t *testing.T, path, contents string) {
 	}
 	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestAG062ChangePlanResolvesExistingSealedHandlerAndGovernanceGates(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "go.mod"), "module example.com/demo\n\ngo 1.25.0\n")
+	mustWrite(t, filepath.Join(root, ".yunka", "source-policy.json"), "{}\n")
+	layout, err := projectflow.DescribeImplementationLayout(testInputs(root, nil).Project, "device", "device_management", "GetMachine")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{layout.Build, layout.TypePolicy, layout.Handler} {
+		mustWrite(t, filepath.Join(root, filepath.FromSlash(path)), "package placeholder\n")
+	}
+	graph := testGraph()
+	for i := range graph.Nodes {
+		if graph.Nodes[i].Kind == applicationgraph.NodeOperation {
+			graph.Nodes[i].Attributes["applicationMethod"] = "GetMachine"
+		}
+	}
+	plan, err := buildFromFacts(testInputs(root, nil), graph, "device.machine.get", IntentImplementation, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.UnresolvedTargets) != 0 || len(plan.EditableTargets) != 1 || plan.EditableTargets[0].Path != layout.Handler {
+		t.Fatalf("targets editable=%#v unresolved=%#v", plan.EditableTargets, plan.UnresolvedTargets)
+	}
+	if !hasGate(plan.Gates, "yunka audit source --root . --format agent-json") || !hasGate(plan.Gates, "yunka audit types --root . --policy") {
+		t.Fatalf("governance gates=%#v", plan.Gates)
+	}
+}
+
+func TestAG062ChangePlanFailsClosedOnPartialSealedStarter(t *testing.T) {
+	root := t.TempDir()
+	inputs := testInputs(root, nil)
+	layout, err := projectflow.DescribeImplementationLayout(inputs.Project, "device", "device_management", "GetMachine")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(root, filepath.FromSlash(layout.Build)), "package owner\n")
+	graph := testGraph()
+	for i := range graph.Nodes {
+		if graph.Nodes[i].Kind == applicationgraph.NodeOperation {
+			graph.Nodes[i].Attributes["applicationMethod"] = "GetMachine"
+		}
+	}
+	plan, err := buildFromFacts(inputs, graph, "device.machine.get", IntentImplementation, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.EditableTargets) != 0 || len(plan.UnresolvedTargets) != 1 || !strings.Contains(plan.UnresolvedTargets[0].Reason, "partial") {
+		t.Fatalf("partial starter targets=%#v %#v", plan.EditableTargets, plan.UnresolvedTargets)
+	}
+}
+
+func TestAG062IntentBothPreservesSealedImplementationTarget(t *testing.T) {
+	targets := []EditableTarget{
+		{Path: "contracts/proto/device.proto", Owner: "developer-contract"},
+		{Path: "internal/device/application/device_management/internal/usecase/getmachine_handler.go", Owner: "developer-implementation"},
+	}
+	got := preserveImplementationTargets(targets, []string{"contracts/proto/device.proto"})
+	if len(got) != 1 || got[0].Path != targets[1].Path || got[0].Owner != "developer-implementation" {
+		t.Fatalf("implementation targets=%#v", got)
 	}
 }

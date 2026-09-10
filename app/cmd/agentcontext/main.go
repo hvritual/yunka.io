@@ -17,7 +17,7 @@ import (
 
 const (
 	AppName       = "context"
-	SchemaVersion = 6
+	SchemaVersion = 7
 )
 
 type Snapshot struct {
@@ -47,23 +47,26 @@ type Commands struct {
 }
 
 type AgentProtocol struct {
-	OperationContext     string `json:"operationContext"`
-	AllOperationContexts string `json:"allOperationContexts"`
-	NewStructure         string `json:"newStructure"`
-	NewOperationPlan     string `json:"newOperationPlan"`
-	NewOperationApply    string `json:"newOperationApply"`
-	ExistingPlan         string `json:"existingPlan"`
-	ChangeBegin          string `json:"changeBegin"`
-	ChangeCheck          string `json:"changeCheck"`
-	ChangeVerify         string `json:"changeVerify"`
-	ChangeSetBegin       string `json:"changeSetBegin"`
-	ChangeSetCheck       string `json:"changeSetCheck"`
-	RemediationBind      string `json:"remediationBind"`
-	RemediationCheck     string `json:"remediationCheck"`
-	Audit                string `json:"audit"`
-	AdvisorRequest       string `json:"advisorRequest"`
-	AdvisorValidate      string `json:"advisorValidate"`
-	RuntimeEvent         string `json:"runtimeEvent"`
+	OperationContext       string `json:"operationContext"`
+	AllOperationContexts   string `json:"allOperationContexts"`
+	NewStructure           string `json:"newStructure"`
+	NewOperationPlan       string `json:"newOperationPlan"`
+	NewOperationApply      string `json:"newOperationApply"`
+	NewImplementationPlan  string `json:"newImplementationPlan"`
+	NewImplementationApply string `json:"newImplementationApply"`
+	ExistingPlan           string `json:"existingPlan"`
+	ChangeBegin            string `json:"changeBegin"`
+	ChangeCheck            string `json:"changeCheck"`
+	ChangeVerify           string `json:"changeVerify"`
+	ChangeSetBegin         string `json:"changeSetBegin"`
+	ChangeSetCheck         string `json:"changeSetCheck"`
+	RemediationBind        string `json:"remediationBind"`
+	RemediationCheck       string `json:"remediationCheck"`
+	Audit                  string `json:"audit"`
+	SourceAudit            string `json:"sourceAudit"`
+	AdvisorRequest         string `json:"advisorRequest"`
+	AdvisorValidate        string `json:"advisorValidate"`
+	RuntimeEvent           string `json:"runtimeEvent"`
 }
 
 func Command() cli.Command {
@@ -94,6 +97,7 @@ func Build(root string) (Snapshot, error) {
 		location(descriptor, "provider-manifest", "managed", descriptor.ProviderManifest, "run `yunka init` to adopt the managed provider manifest"),
 		location(descriptor, "protobuf-go-manifest", "managed", descriptor.ProtobufGoManifest, "run `yunka init` to adopt strict protobuf Go output ownership"),
 		location(descriptor, "dev-manifest", "runtime-config", descriptor.DevManifest, "configure the project dev manifest before running `yunka dev`"),
+		location(descriptor, "source-policy", "governance-config", ".yunka/source-policy.json", "run `yunka init` after go.mod exists, or supply an explicit --policy"),
 		location(descriptor, "contract-manifest", "generated", filepath.ToSlash(filepath.Join(descriptor.ContractGenerated, contractcore.ManifestFilename)), "run `yunka generate`"),
 		location(descriptor, "operation-plans", "generated", filepath.ToSlash(filepath.Join(descriptor.ContractGenerated, contractcore.OperationPlansFilename)), "run `yunka generate`"),
 		location(descriptor, "assembly-plan", "generated", filepath.ToSlash(filepath.Join(descriptor.ContractGenerated, contractcore.AssemblyPlanFilename)), "run `yunka generate`"),
@@ -120,23 +124,26 @@ func Build(root string) (Snapshot, error) {
 			GraphImpact: "yunka graph impact --format json --operation <operation>",
 		},
 		AgentProtocol: AgentProtocol{
-			OperationContext:     "yunka context --operation <operation> --json",
-			AllOperationContexts: "yunka context --all-operations --json",
-			NewStructure:         "yunka add <application|event|module> ...",
-			NewOperationPlan:     "yunka add operation <application> <operation> ... --plan --format agent-json",
-			NewOperationApply:    "yunka add operation <application> <operation> ... --format agent-json",
-			ExistingPlan:         "yunka change plan --operation <operation> --format agent-json",
-			ChangeBegin:          "yunka change begin --operation <operation> --format agent-json",
-			ChangeCheck:          "yunka change check --format agent-json",
-			ChangeVerify:         "yunka change verify --format agent-json",
-			ChangeSetBegin:       "yunka change set begin [--contract <contract.json>] [--create-plan <plan.json>] --format agent-json",
-			ChangeSetCheck:       "yunka change set check --format agent-json",
-			RemediationBind:      "yunka change set remediation bind --finding <finding-id> --format agent-json",
-			RemediationCheck:     "yunka change set remediation check --format agent-json",
-			Audit:                "yunka audit --format agent-json",
-			AdvisorRequest:       "yunka advisor request --format agent-json",
-			AdvisorValidate:      "yunka advisor validate --request <request.json> --response <response.json> --format agent-json",
-			RuntimeEvent:         "yunka dev --event-format jsonl",
+			OperationContext:       "yunka context --operation <operation> --json",
+			AllOperationContexts:   "yunka context --all-operations --json",
+			NewStructure:           "yunka add <application|event|module> ...",
+			NewOperationPlan:       "yunka add operation <application> <operation> ... --plan --format agent-json",
+			NewOperationApply:      "yunka add operation <application> <operation> ... --format agent-json",
+			NewImplementationPlan:  "yunka add implementation --composition-package <exact-package> --format agent-json <domain/application>",
+			NewImplementationApply: "yunka add implementation --composition-package <exact-package> --apply --format agent-json <domain/application>",
+			ExistingPlan:           "yunka change plan --operation <operation> --format agent-json",
+			ChangeBegin:            "yunka change begin --operation <operation> --format agent-json",
+			ChangeCheck:            "yunka change check --format agent-json",
+			ChangeVerify:           "yunka change verify --format agent-json",
+			ChangeSetBegin:         "yunka change set begin [--contract <contract.json>] [--create-plan <plan.json>] --format agent-json",
+			ChangeSetCheck:         "yunka change set check --format agent-json",
+			RemediationBind:        "yunka change set remediation bind --finding <finding-id> --format agent-json",
+			RemediationCheck:       "yunka change set remediation check --format agent-json",
+			Audit:                  "yunka audit --format agent-json",
+			SourceAudit:            "yunka audit source --root . --format agent-json",
+			AdvisorRequest:         "yunka advisor request --format agent-json",
+			AdvisorValidate:        "yunka advisor validate --request <request.json> --response <response.json> --format agent-json",
+			RuntimeEvent:           "yunka dev --event-format jsonl",
 		},
 	}, nil
 }

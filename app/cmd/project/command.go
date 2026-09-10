@@ -48,6 +48,11 @@ func Command() cli.Command {
 			fmt.Printf("generated-go: root=%s import=%s\n", config.Workflow.GeneratedGo.Root, generatedImport)
 			fmt.Printf("providers: manifest=%s\n", providerManifest)
 			fmt.Printf("protobuf-go: manifest=%s\n", protobufManifest)
+			if scaffold.SourcePolicy != "" {
+				fmt.Printf("source-policy: %s\n", scaffold.SourcePolicy)
+			} else if scaffold.SourcePolicySkipped != "" {
+				fmt.Printf("source-policy: %s not-created reason=%s\n", SourcePolicyRelativePath, scaffold.SourcePolicySkipped)
+			}
 			if scaffold.BootstrapContract != "" {
 				fmt.Printf("bootstrap-contract: %s\n", scaffold.BootstrapContract)
 			}
