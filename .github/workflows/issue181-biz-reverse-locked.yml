@@ -1,0 +1,122 @@
+name: Issue 181 Biz locked-baseline reverse qualification
+on:
+  push:
+    branches: [control/ce08-181-delivery-20260910]
+    paths: ['.github/workflows/issue181-biz-reverse-locked.yml']
+permissions:
+  contents: read
+jobs:
+  reverse-qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      LOCKED_YUNKA_SHA: 6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb
+      FORMAL_YUNKA_SHA: 02d1990e72a857198672145c0c0bd6a23c8b592c
+      BIZ_SHA: 96ca815be34ed2eeeaf67b048e04217f72990b18
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: hvritual/biz
+          ref: ${{ env.BIZ_SHA }}
+          path: biz
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.LOCKED_YUNKA_SHA }}
+          path: yunka.io
+          persist-credentials: false
+      - id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          source yunka.io/tools/toolchain.env
+          echo "go=$GO_VERSION" >> "$GITHUB_OUTPUT"
+          echo "protoc=$PROTOC_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "protoc_sha=$PROTOC_LINUX_X86_64_SHA256" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go }}
+          cache: false
+      - name: Apply only issue-181 production hunk to locked framework checkout
+        working-directory: yunka.io
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('pkg/contract/c9_application_codegen.go')
+          s=p.read_text()
+          old='''\t\ttargetApplicationType := targetNaming.ApplicationInterface\n\t\tif target.Domain != service.Domain {\n\t\t\talias := imports.add(rootImport+"/"+target.Domain+"/application", safeFileName(target.Domain)+"application")\n\t\t\ttargetApplicationType = alias + "." + targetNaming.ApplicationInterface\n\t\t}\n'''
+          new='''\t\ttargetApplicationType := targetNaming.ApplicationInterface\n\t\tcrossDomain := target.Domain != service.Domain\n\t\tif crossDomain {\n\t\t\ttargetApplicationType = edgeSymbol + "TargetApplication"\n\t\t}\n'''
+          if old not in s: raise SystemExit('locked target block drifted')
+          s=s.replace(old,new,1)
+          old='''\t\tfmt.Fprintf(&declarations, "type %s interface {\\n%s}\\n\\n", interfaceName, interfaceMethods.String())\n\t\tfmt.Fprintf(&declarations, "type %s struct { application %s; executor operation.Executor }\\n\\n", implementationName, targetApplicationType)\n'''
+          new='''\t\tfmt.Fprintf(&declarations, "type %s interface {\\n%s}\\n\\n", interfaceName, interfaceMethods.String())\n\t\tif crossDomain {\n\t\t\tfmt.Fprintf(&declarations, "// %s is the consumer-edge-owned view of the target Application.\\n", targetApplicationType)\n\t\t\tfmt.Fprintf(&declarations, "type %s interface {\\n%s}\\n\\n", targetApplicationType, interfaceMethods.String())\n\t\t}\n\t\tfmt.Fprintf(&declarations, "type %s struct { application %s; executor operation.Executor }\\n\\n", implementationName, targetApplicationType)\n'''
+          if old not in s: raise SystemExit('locked declarations block drifted')
+          p.write_text(s.replace(old,new,1))
+          PY
+          gofmt -w pkg/contract/c9_application_codegen.go
+          git diff --check
+          test "$(git diff --name-only)" = "pkg/contract/c9_application_codegen.go"
+          git diff -- pkg/contract/c9_application_codegen.go > "$RUNNER_TEMP/locked-repair.diff"
+          sha256sum pkg/contract/c9_application_codegen.go > "$RUNNER_TEMP/locked-codegen.sha256"
+      - name: Install locked generators
+        env:
+          RELEASE: ${{ steps.lock.outputs.protoc }}
+          CHECKSUM: ${{ steps.lock.outputs.protoc_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${RELEASE}/protoc-${RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "$CHECKSUM  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          make -C yunka.io rpc-tools
+          echo "$GITHUB_WORKSPACE/yunka.io/.yunka/bin" >> "$GITHUB_PATH"
+      - name: Regenerate and compile real Biz CE-08 candidate
+        working-directory: biz
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'formal_yunka=%s\nlocked_yunka=%s\nbiz=%s\n' "$FORMAL_YUNKA_SHA" "$LOCKED_YUNKA_SHA" "$BIZ_SHA" | tee "$RUNNER_TEMP/source.txt"
+          make generate YUNKA_ROOT="$GITHUB_WORKSPACE/yunka.io" PROTOC="$RUNNER_TEMP/protoc/bin/protoc" | tee "$RUNNER_TEMP/generate.log"
+          git diff --check
+          ! grep -F 'internal/commercial/application' internal/access/application/zz_yunka_tenant_lifecycle_capability_ports_gen.go
+          ! grep -F 'internal/access/application' internal/commercial/application/zz_yunka_entitlement_management_capability_ports_gen.go
+          grep -F 'TargetApplication interface' internal/access/application/zz_yunka_tenant_lifecycle_capability_ports_gen.go
+          grep -F 'TargetApplication interface' internal/commercial/application/zz_yunka_entitlement_management_capability_ports_gen.go
+          set +e
+          go test ./... -run '^$' > "$RUNNER_TEMP/compile-all.log" 2>&1
+          compile_status=$?
+          go test ./... > "$RUNNER_TEMP/full-business.log" 2>&1
+          full_status=$?
+          set -e
+          ! grep -Fq 'import cycle not allowed' "$RUNNER_TEMP/compile-all.log"
+          ! grep -Fq 'import cycle not allowed' "$RUNNER_TEMP/full-business.log"
+          printf 'CONSUMER_COMPILE_STATUS=%s\nCONSUMER_FULL_STATUS=%s\n' "$compile_status" "$full_status" | tee "$RUNNER_TEMP/classification.txt"
+          if [ "$compile_status" -ne 0 ]; then
+            cat "$RUNNER_TEMP/compile-all.log"
+            grep -Eq 'does not implement|missing method|CommercialSubscriptionManagement|undefined|cannot use' "$RUNNER_TEMP/compile-all.log"
+          fi
+          if [ "$full_status" -ne 0 ] && [ "$compile_status" -eq 0 ]; then
+            grep -Fq 'tenant.create permission mismatch' "$RUNNER_TEMP/full-business.log"
+          fi
+          git diff --name-only | sort > "$RUNNER_TEMP/generated-files.txt"
+          sha256sum internal/access/application/zz_yunka_tenant_lifecycle_capability_ports_gen.go internal/commercial/application/zz_yunka_entitlement_management_capability_ports_gen.go > "$RUNNER_TEMP/generated-capability.sha256"
+          cp "$RUNNER_TEMP"/{source.txt,generate.log,compile-all.log,full-business.log,classification.txt,generated-files.txt,generated-capability.sha256} .
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: issue181-biz-locked-reverse-${{ env.FORMAL_YUNKA_SHA }}
+          path: |
+            biz/source.txt
+            biz/generate.log
+            biz/compile-all.log
+            biz/full-business.log
+            biz/classification.txt
+            biz/generated-files.txt
+            biz/generated-capability.sha256
+            ${{ runner.temp }}/locked-repair.diff
+            ${{ runner.temp }}/locked-codegen.sha256
+          if-no-files-found: warn
+          retention-days: 30
