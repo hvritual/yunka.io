@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/hvritual/yunka.io/pkg/contract"
 	"yunka.io/app/cmd/applicationboundary"
+	modulecmd "yunka.io/app/cmd/module"
 	"yunka.io/app/cmd/projectflow"
 )
 
@@ -200,5 +203,113 @@ func TestAG063LeafStarterContractUnchanged(t *testing.T) {
 	}
 	if len(policy.Factories[0].Arguments) != 0 {
 		t.Fatalf("leaf starter gained dependency arguments: %+v", policy.Factories[0].Arguments)
+	}
+}
+
+func typedDependencyCompilerProject(t *testing.T) (string, Options) {
+	t.Helper()
+	repo, err := filepath.Abs("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	protoc, err := exec.LookPath("protoc")
+	if err != nil {
+		t.Fatal("AG06.3 canonical qualification requires protoc")
+	}
+	root := t.TempDir()
+	put(t, root, "go.mod", "module example.com/logistics\n\ngo 1.25.0\n")
+	put(t, root, "contracts/proto/inventory.proto", `syntax = "proto3";
+package inventory.v1;
+import "yunka/dsl/v1/options.proto";
+option go_package = "example.com/logistics/wire/inventory;inventoryv1";
+option (yunka.dsl.v1.domain) = {name:"inventory" version:"v1"};
+message ReserveRequest {string id = 1;}
+message ReserveResponse {string id = 1;}
+service StockAPI {
+ option (yunka.dsl.v1.application) = {
+  name:"stock"
+  operations:{id:"inventory.stock.reserve" use_case:"reserve_stock" public:true
+   request_type:"inventory.v1.ReserveRequest" response_type:"inventory.v1.ReserveResponse" application_method:"Reserve"
+   execution:{transaction:TRANSACTION_LOCAL idempotency:IDEMPOTENCY_NONE}}
+ };
+}
+`)
+	put(t, root, "contracts/proto/dispatch.proto", `syntax = "proto3";
+package dispatch.v1;
+import "yunka/dsl/v1/options.proto";
+option go_package = "example.com/logistics/wire/dispatch;dispatchv1";
+option (yunka.dsl.v1.domain) = {name:"dispatch" version:"v1"};
+message PlanRequest {string id = 1;}
+message PlanResponse {string id = 1;}
+service RoutesAPI {
+ option (yunka.dsl.v1.application) = {
+  name:"routes"
+  requires:"inventory/stock"
+  operations:{id:"dispatch.route.plan" use_case:"plan_route" public:true
+   requires_operations:"inventory.stock.reserve" composition:COMPOSITION_LOCAL
+   request_type:"dispatch.v1.PlanRequest" response_type:"dispatch.v1.PlanResponse" application_method:"Plan"
+   execution:{transaction:TRANSACTION_LOCAL idempotency:IDEMPOTENCY_NONE}}
+ };
+}
+`)
+	if err = modulecmd.GenerateWithOptions(modulecmd.Options{Name: "inventory", Root: filepath.Join(root, "modules"), NoConfig: true, Logger: false}); err != nil {
+		t.Fatal(err)
+	}
+	if err = modulecmd.GenerateWithOptions(modulecmd.Options{Name: "dispatch", Root: filepath.Join(root, "modules"), NoConfig: true, Logger: false}); err != nil {
+		t.Fatal(err)
+	}
+	return root, Options{Project: projectflow.Options{Root: root, Protoc: protoc, ProtoPaths: []string{filepath.Join(repo, "contracts/proto")}}, Application: "dispatch/routes", CompositionPackage: "example.com/logistics/bootstrap"}
+}
+
+func TestAG063CanonicalProtoApplyAndRegenerate(t *testing.T) {
+	root, options := typedDependencyCompilerProject(t)
+	ctx := context.Background()
+	if _, err := projectflow.Generate(ctx, options.Project); err != nil {
+		t.Fatal(err)
+	}
+	before := snapshot(t, root)
+	planned, err := Run(ctx, options, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, snapshot(t, root)) {
+		t.Fatal("typed dependency plan mutated canonical project")
+	}
+	applied, err := Run(ctx, options, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if applied.Mode != "applied" || len(applied.Files) != len(planned.Files) {
+		t.Fatalf("unexpected typed dependency apply report: %+v", applied)
+	}
+	var build string
+	for _, file := range applied.Files {
+		if strings.HasSuffix(file.Path, "/build.go") {
+			build = file.Content
+		}
+	}
+	if !strings.Contains(build, "RoutesToInventoryStockChildCapability") {
+		t.Fatalf("canonical proto did not produce typed child dependency:\n%s", build)
+	}
+	once := snapshot(t, root)
+	for i := 0; i < 2; i++ {
+		if _, err := projectflow.Generate(ctx, options.Project); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(once, snapshot(t, root)) {
+			t.Fatal("canonical regeneration changed typed developer starter")
+		}
+	}
+	if _, err := projectflow.Check(ctx, options.Project); err != nil {
+		t.Fatal(err)
+	}
+	repeated, err := Run(ctx, options, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range repeated.Files {
+		if file.Action != "unchanged" {
+			t.Fatalf("repeated typed apply rewrote %s", file.Path)
+		}
 	}
 }
