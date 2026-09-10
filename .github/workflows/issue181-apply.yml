@@ -1,0 +1,43 @@
+name: Issue 181 apply reviewed repair
+on:
+  push:
+    branches: [control/ce08-181-delivery-20260910]
+    paths: ['.github/workflows/issue181-apply.yml']
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout control payload
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: control
+          persist-credentials: false
+      - name: Checkout exact product branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/issue-181-c9-cross-domain-child-cycle
+          path: product
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Apply exact reviewed patch and push formal commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C product rev-parse HEAD)" = "d6840be86c72ea91b51e7f32f8ed61067bcab643"
+          base64 -d control/control/issue181/implementation.patch.gz.b64 | gzip -d > "$RUNNER_TEMP/issue181.patch"
+          echo "494d79963d3215aea7384907b24512fc5992398e0864cbb00eee69b809e89b2e  $RUNNER_TEMP/issue181.patch" | sha256sum -c -
+          git -C product apply --check "$RUNNER_TEMP/issue181.patch"
+          git -C product apply "$RUNNER_TEMP/issue181.patch"
+          git -C product diff --check
+          actual="$(git -C product status --short | awk '{print $2}' | sort)"
+          expected="$(printf '%s\n' Makefile pkg/contract/c9_application_codegen.go pkg/contract/c9_application_codegen_test.go pkg/contract/c9_cross_domain_cycle_runtime_test.go | sort)"
+          test "$actual" = "$expected"
+          git -C product config user.name github-actions[bot]
+          git -C product config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git -C product add Makefile pkg/contract/c9_application_codegen.go pkg/contract/c9_application_codegen_test.go pkg/contract/c9_cross_domain_cycle_runtime_test.go
+          git -C product commit -m 'fix(contract): prevent cross-domain child application import cycles'
+          git -C product push origin HEAD:fix/issue-181-c9-cross-domain-child-cycle
+          git -C product rev-parse HEAD
