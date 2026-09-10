@@ -2,12 +2,14 @@ name: ag062-publish
 on:
   push:
     branches: [control/ag06-2-publish-20260910]
-    paths: [.github/workflows/ag062-publish.yml]
+    paths:
+      - .github/workflows/ag062-publish.yml
+      - control/ag062.patch.gz
 permissions:
   contents: write
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -20,7 +22,7 @@ jobs:
           ref: d6840be86c72ea91b51e7f32f8ed61067bcab643
           path: product
           fetch-depth: 0
-      - name: Recreate and publish exact local candidate
+      - name: Recreate and publish exact AG-06.2 candidate
         working-directory: product
         shell: bash
         run: |
@@ -28,8 +30,8 @@ jobs:
           E="$RUNNER_TEMP/ag062-publish"; mkdir -p "$E"
           test "$(git rev-parse HEAD)" = d6840be86c72ea91b51e7f32f8ed61067bcab643
           test -z "$(git status --porcelain --untracked-files=all)"
-          base64 -d ../control/control/ag062.patch.gz.b64 > "$E/ag062.patch.gz"
-          echo '0e56ec74effb07dd37050553955148cbd37f76c56fb52afc515f80720a2ba7a8  '"$E/ag062.patch.gz" | sha256sum -c -
+          cp ../control/control/ag062.patch.gz "$E/ag062.patch.gz"
+          echo '504c8d949a65ee169d4e55056a0ebc28060b34cfd478bdcf28dc82d50a5ce364  '"$E/ag062.patch.gz" | sha256sum -c -
           gzip -dc "$E/ag062.patch.gz" > "$E/ag062.patch"
           echo '6d87d489cb1820be4438a40189771750763d16c27aacd5e8e02cf26e6cd24ea8  '"$E/ag062.patch" | sha256sum -c -
           git apply --index "$E/ag062.patch"
