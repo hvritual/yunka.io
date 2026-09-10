@@ -12,16 +12,16 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: c95034ec54eda2db9e0f87d6090efd91af444cd0
+          ref: 2c2d4e2f20e9f82dd25a052aa85140382eecb0e1
           path: product
           fetch-depth: 0
-      - name: Publish AG-06.2 status closure branch
+      - name: Publish final AG-06.2 status prose convergence
         working-directory: product
         shell: bash
         run: |
           set -euo pipefail
-          main=c95034ec54eda2db9e0f87d6090efd91af444cd0
-          branch=docs/ag06-2-closure-20260910
+          main=2c2d4e2f20e9f82dd25a052aa85140382eecb0e1
+          branch=docs/ag06-2-status-final-20260910
           test "$(git rev-parse HEAD)" = "$main"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$main"
           test -z "$(git ls-remote origin refs/heads/$branch | cut -f1)"
@@ -30,21 +30,20 @@ jobs:
           from pathlib import Path
           p=Path('docs/STATUS.md')
           s=p.read_text()
-          old='| AG-06.2 | Implementation in progress under issue #180 | Default `init/context/ownership/change plan/add operation/source-policy` integration for the same sealed-v1 layout without a second registry. [Contract](architecture/APPLICATION-DEFAULT-GOVERNANCE.md). Exact qualification/integration belongs to its delivery PR; not yet accepted on main |'
-          new='| AG-06.2 | Complete / qualified / merged through [PR #182](https://github.com/hvritual/yunka.io/pull/182); issue #180 completed; parent #178 OPEN | Default `init/context/ownership/change plan/add operation/source-policy` integration for the same sealed-v1 layout without a second registry. [Contract](architecture/APPLICATION-DEFAULT-GOVERNANCE.md). Accepted main `c95034ec54eda2db9e0f87d6090efd91af444cd0`, tree `1fd0d5a0a4740ffbb2608e2b4302b41a65bb1eb6`; final merge candidate passed CI `34433676497`, Production `34433676455`, AG-05 `34433676538`, AG-06 `34433676501`, AG-04 `34433676398`, and separate actual-main push CI `34434033848`, Production `34434033849`, AG-05 `34434033851`, AG-06 `34434033853`, AG-04 `34434033902`. AG-06.3 remains not delivered |'
+          old='AG-06.2 is the active increment: it propagates the same derived sealed-v1 layout into initialized source policy, context/ownership, change planning and ordinary Operation additions without migrating existing consumers. AG-06.3 typed-dependency evolution and later migration/debt work remain undelivered.'
+          new='AG-06.2 is accepted on behavioral main at `c95034ec54eda2db9e0f87d6090efd91af444cd0`, with docs-only status reconciliation through PR #185 on the subsequent main line. AG-06.3 typed-dependency evolution is the next undelivered increment; later migration/debt work remains undelivered.'
           assert s.count(old)==1, s.count(old)
-          assert s.count('Reconciled date: 2026-09-09')==1
-          s=s.replace(old,new).replace('Reconciled date: 2026-09-09','Reconciled date: 2026-09-10')
+          s=s.replace(old,new)
           p.write_text(s)
           PY
           git diff --check
           test "$(git diff --name-only)" = docs/STATUS.md
-          grep -F 'AG-06.2 | Complete / qualified / merged through' docs/STATUS.md
-          grep -F 'Reconciled date: 2026-09-10' docs/STATUS.md
+          grep -F 'AG-06.2 is accepted on behavioral main' docs/STATUS.md
+          test "$(grep -Foc 'AG-06.2 is the active increment' docs/STATUS.md)" = 0
           git add docs/STATUS.md
           export GIT_AUTHOR_NAME=hvritual GIT_COMMITTER_NAME=hvritual
           export GIT_AUTHOR_EMAIL=460657446@qq.com GIT_COMMITTER_EMAIL=460657446@qq.com
-          git -c commit.gpgsign=false commit -m 'docs(status): close AG-06.2 delivery'
+          git -c commit.gpgsign=false commit -m 'docs(status): converge AG-06.2 final prose'
           test -z "$(git status --porcelain --untracked-files=all)"
           git push origin HEAD:refs/heads/$branch
           git rev-parse HEAD HEAD^{tree}
