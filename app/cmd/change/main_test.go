@@ -191,6 +191,9 @@ func mustWrite(t *testing.T, path, contents string) {
 func TestAG062ChangePlanResolvesExistingSealedHandlerAndGovernanceGates(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "go.mod"), "module example.com/demo\n\ngo 1.25.0\n")
+	if err := os.MkdirAll(filepath.Join(root, "contracts", "proto"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	mustWrite(t, filepath.Join(root, ".yunka", "source-policy.json"), "{}\n")
 	layout, err := projectflow.DescribeImplementationLayout(testInputs(root, nil).Project, "device", "device_management", "GetMachine")
 	if err != nil {
