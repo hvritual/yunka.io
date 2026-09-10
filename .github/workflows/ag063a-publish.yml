@@ -1,399 +1,72 @@
-name: ag063a-publish
+name: ag063a-publish-v2
 on:
   push:
     branches: [control/ag06-3a-publish-20260910]
-    paths: [.github/workflows/ag063a-publish.yml]
+    paths:
+      - .github/workflows/ag063a-publish.yml
+      - .github/ag063a/**
 permissions:
   contents: write
 jobs:
   publish:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: feat/ag06-3-typed-dependencies
+          ref: feat/ag06-3a-typed-dependencies
           fetch-depth: 0
-      - name: Implement and qualify AG-06.3a
+      - name: Fetch control payload
         shell: bash
         run: |
           set -euo pipefail
-          base=482c2f6d61737d1c68ee63d90ca7ddb05f8cccc8
+          git fetch --no-tags origin control/ag06-3a-publish-20260910
+          git show FETCH_HEAD:.github/ag063a/apply.py > "$RUNNER_TEMP/ag063_apply.py"
+          git show FETCH_HEAD:.github/ag063a/dependencies.go > "$RUNNER_TEMP/dependencies.go"
+          git show FETCH_HEAD:.github/ag063a/typed_dependency_test.go > "$RUNNER_TEMP/typed_dependency_test.go"
+      - name: Read locked toolchain
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          echo "go_version=${GO_VERSION:?}" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache-dependency-path: |
+            app/go.sum
+            pkg/go.sum
+      - name: Install locked protoc
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "${PROTOC_LINUX_X86_64_SHA256}  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/protoc"
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+      - name: Apply and qualify AG-06.3a
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=cc546c7d25ee316442eafacd3c93599f7691f22a
           test "$(git rev-parse HEAD)" = "$base"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$base"
           test -z "$(git status --porcelain --untracked-files=all)"
-          python3 - <<'PY'
-          from pathlib import Path
-
-          plan=Path('app/cmd/implementation/plan.go')
-          s=plan.read_text()
-          old='''\tif len(selected.Application.Requires) > 0 || len(selected.Application.Capabilities) > 0 {\n\t\treturn Report{}, fmt.Errorf("add implementation: composed/infrastructure-dependent Applications require the later typed-dependency template; refusing to omit dependencies")\n\t}\n\tfor _, m := range selected.Methods {\n\t\tif m.Operation == nil || len(m.Operation.RequiresOperations) > 0 || (m.Operation.Composition != "" && m.Operation.Composition != "none") {\n\t\t\treturn Report{}, fmt.Errorf("add implementation: unsupported composed Operation %s", m.Name)\n\t\t}\n\t}\n\tfor _, o := range selected.Application.Operations {\n\t\tif len(o.RequiresOperations) > 0 || (o.Composition != "" && o.Composition != "none") {\n\t\t\treturn Report{}, fmt.Errorf("add implementation: unsupported composed Operation %s", o.ID)\n\t\t}\n\t}\n'''
-          new='''\tif len(selected.Application.Capabilities) > 0 {\n\t\treturn Report{}, fmt.Errorf("add implementation: infrastructure-capability Applications require an explicit capability template; refusing to omit dependencies")\n\t}\n'''
-          assert s.count(old)==1
-          s=s.replace(old,new)
-          old='''\tport, err := selectPort(generated, *selected)\n\tif err != nil {\n\t\treturn Report{}, err\n\t}\n'''
-          new='''\tport, err := selectPort(generated, *selected)\n\tif err != nil {\n\t\treturn Report{}, err\n\t}\n\tcontractImport := project.GeneratedGoImport + "/" + domain + "/application"\n\tdependencies, err := selectDependencies(generated, manifest, *selected, port, contractImport)\n\tif err != nil {\n\t\treturn Report{}, err\n\t}\n'''
-          assert s.count(old)==1
-          s=s.replace(old,new)
-          old='''\tcontents, err := starterFiles(port, ownerImport, project.GeneratedGoImport+"/"+domain+"/application", key, caller)\n'''
-          new='''\tcontents, err := starterFiles(port, ownerImport, contractImport, key, caller, dependencies)\n'''
-          assert s.count(old)==1
-          s=s.replace(old,new)
-          s=s.replace('Contract: project.GeneratedGoImport + "/" + domain + "/application." + port.name','Contract: contractImport + "." + port.name')
-          plan.write_text(s)
-
-          render=Path('app/cmd/implementation/render.go')
-          s=render.read_text()
-          s=s.replace('func starterFiles(port portShape, owner, contractImport, key, caller string) (map[string][]byte, error) {','func starterFiles(port portShape, owner, contractImport, key, caller string, dependencies []dependencyShape) (map[string][]byte, error) {',1)
-          old='''\townerBody := fmt.Sprintf("package owner\\nimport ( _port %q; _impl %q )\\n\\n// Build is a resource-free composition entry point, not a business invocation API.\\nfunc Build() _port.%s {return _impl.New()}\\n", contractImport, owner+"/internal/usecase", port.name)\n'''
-          new='''\townerBody := fmt.Sprintf("package owner\\nimport ( _port %q; _impl %q )\\n\\n// Build is a resource-free composition entry point, not a business invocation API.\\nnfunc Build() _port.%s {return _impl.New()}\\n", contractImport, owner+"/internal/usecase", port.name)\n\tif len(dependencies) > 0 {\n\t\tparams := make([]string, 0, len(dependencies))\n\t\targs := make([]string, 0, len(dependencies))\n\t\tfor i, dependency := range dependencies {\n\t\t\tparams = append(params, fmt.Sprintf("dependency%d _port.%s", i, dependency.ContractName))\n\t\t\targs = append(args, fmt.Sprintf("dependency%d", i))\n\t\t}\n\t\townerBody = fmt.Sprintf("package owner\\nimport ( _port %q; _impl %q )\\n\\n// Build accepts only generated source-edge child capabilities.\\nfunc Build(%s) (_port.%s,error) {return _impl.New(%s)}\\n", contractImport, owner+"/internal/usecase", strings.Join(params, ","), port.name, strings.Join(args, ","))\n\t}\n'''
-          # fix accidental marker before replacement
-          new=new.replace('\\n\\n// Build is a resource-free composition entry point, not a business invocation API.\\nnfunc','\\n\\n// Build is a resource-free composition entry point, not a business invocation API.\\nfunc')
-          assert s.count(old)==1
-          s=s.replace(old,new)
-          s=s.replace('var fields, delegates strings.Builder','var fields, delegates, initializers strings.Builder',1)
-          old='''\t\timports := neededImports(fn, port.imports)\n\t\terrAlias := freshAlias("_startererrors", imports)\n\t\timports[errAlias] = "errors"\n\t\tbody := fmt.Sprintf("package usecase\\nimport(\\n%s)\\n\\n// handle%s owns this use case only. Add narrow dependencies here, not to the facade.\\ntype handle%s struct{}\\n\\nfunc (h *handle%s) execute%s {return nil,%s.New(%q)}\\n", importLines(imports), name, name, name, signature, errAlias, key+"."+name+": not implemented")\n'''
-          new='''\t\timports := neededImports(fn, port.imports)\n\t\tvar dependencyFields strings.Builder\n\t\tdependencyAlias := ""\n\t\tfor dependencyIndex, dependency := range dependencies {\n\t\t\tif !dependency.Uses(name) {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\tif dependencyAlias == "" {\n\t\t\t\tdependencyAlias = freshAlias("_starterdependency", imports)\n\t\t\t\timports[dependencyAlias] = dependency.ContractImport\n\t\t\t}\n\t\t\tfmt.Fprintf(&dependencyFields, "dependency%d %s.%s\\n", dependencyIndex, dependencyAlias, dependency.ContractName)\n\t\t}\n\t\terrAlias := freshAlias("_startererrors", imports)\n\t\timports[errAlias] = "errors"\n\t\tbody := fmt.Sprintf("package usecase\\nimport(\\n%s)\\n\\n// handle%s owns this use case only. Dependencies are exact source-edge child capabilities.\\ntype handle%s struct{\\n%s}\\n\\nfunc (h *handle%s) execute%s {return nil,%s.New(%q)}\\n", importLines(imports), name, name, dependencyFields.String(), name, signature, errAlias, key+"."+name+": not implemented")\n'''
-          assert s.count(old)==1
-          s=s.replace(old,new)
-          old='''\t\tfmt.Fprintf(&fields, "h%d handle%s\\n", i, name)\n'''
-          new='''\t\tfmt.Fprintf(&fields, "h%d handle%s\\n", i, name)\n\t\tfmt.Fprintf(&initializers, "h%d: handle%s{", i, name)\n\t\tfor dependencyIndex, dependency := range dependencies {\n\t\t\tif dependency.Uses(name) {\n\t\t\t\tfmt.Fprintf(&initializers, "dependency%d: dependency%d,", dependencyIndex, dependencyIndex)\n\t\t\t}\n\t\t}\n\t\tinitializers.WriteString("},")\n'''
-          assert s.count(old)==1
-          s=s.replace(old,new)
-          old='''\twiring := fmt.Sprintf("package usecase\\nimport(\\n%s)\\n\\ntype service struct {\\n%s}\\n\\n// New exposes only the canonical interface; never return or unwrap service.\\nfunc New() %s.%s {return &service{}}\\n\\nvar _ %s.%s = (*service)(nil)\\n\\n%s", importLines(allImports), fields.String(), portAlias, port.name, portAlias, port.name, delegates.String())\n'''
-          new='''\tvar wiring string\n\tif len(dependencies) == 0 {\n\t\twiring = fmt.Sprintf("package usecase\\nimport(\\n%s)\\n\\ntype service struct {\\n%s}\\n\\n// New exposes only the canonical interface; never return or unwrap service.\\nfunc New() %s.%s {return &service{}}\\n\\nvar _ %s.%s = (*service)(nil)\\n\\n%s", importLines(allImports), fields.String(), portAlias, port.name, portAlias, port.name, delegates.String())\n\t} else {\n\t\terrAlias := freshAlias("_startererrors", allImports)\n\t\tallImports[errAlias] = "errors"\n\t\tparams := make([]string, 0, len(dependencies))\n\t\tvar checks strings.Builder\n\t\tfor i, dependency := range dependencies {\n\t\t\tparams = append(params, fmt.Sprintf("dependency%d %s.%s", i, portAlias, dependency.ContractName))\n\t\t\tfmt.Fprintf(&checks, "if dependency%d == nil {return nil,%s.New(%q)}\\n", i, errAlias, key+": dependency "+dependency.Key+" is required")\n\t\t}\n\t\twiring = fmt.Sprintf("package usecase\\nimport(\\n%s)\\n\\ntype service struct {\\n%s}\\n\\n// New accepts only generated source-edge child capabilities and exposes only the canonical interface.\\nfunc New(%s) (%s.%s,error) {%sreturn &service{%s},nil}\\n\\nvar _ %s.%s = (*service)(nil)\\n\\n%s", importLines(allImports), fields.String(), strings.Join(params, ","), portAlias, port.name, checks.String(), initializers.String(), portAlias, port.name, delegates.String())\n\t}\n'''
-          assert s.count(old)==1
-          s=s.replace(old,new)
-          old='''\tpolicy := applicationboundary.Policy{SchemaVersion: applicationboundary.SchemaVersion, Factories: []applicationboundary.Factory{{Symbol: applicationboundary.Symbol{Package: owner, Name: "Build"}, AllowedCallers: []string{caller}, Results: []applicationboundary.Slot{{Index: 0, Contract: applicationboundary.Symbol{Package: contractImport, Name: port.name}}}}}}\n'''
-          new='''\tfactory := applicationboundary.Factory{Symbol: applicationboundary.Symbol{Package: owner, Name: "Build"}, AllowedCallers: []string{caller}, Results: []applicationboundary.Slot{{Index: 0, Contract: applicationboundary.Symbol{Package: contractImport, Name: port.name}}}}\n\tfor i, dependency := range dependencies {\n\t\tfactory.Arguments = append(factory.Arguments, applicationboundary.Slot{Index: i, Contract: applicationboundary.Symbol{Package: dependency.ContractImport, Name: dependency.ContractName}})\n\t}\n\tpolicy := applicationboundary.Policy{SchemaVersion: applicationboundary.SchemaVersion, Factories: []applicationboundary.Factory{factory}}\n'''
-          assert s.count(old)==1
-          s=s.replace(old,new)
-          s=s.replace('Cross-Application/infrastructure-dependent templates are a later AG-06 task.','Canonical Application `requires` edges use generated source-edge ChildCapability interfaces; infrastructure capability templates remain unsupported and are never guessed.')
-          render.write_text(s)
-
-          Path('app/cmd/implementation/dependencies.go').write_text(r'''package implementation
-
-import (
-    "fmt"
-    "go/ast"
-    "go/parser"
-    "go/token"
-    "path"
-    "sort"
-    "strings"
-
-    "github.com/hvritual/yunka.io/pkg/contract"
-)
-
-type dependencyShape struct {
-    Key            string
-    ContractImport string
-    ContractName   string
-    Methods        []string
-}
-
-func (dependency dependencyShape) Uses(method string) bool {
-    index := sort.SearchStrings(dependency.Methods, method)
-    return index < len(dependency.Methods) && dependency.Methods[index] == method
-}
-
-func selectDependencies(files []contract.GeneratedApplicationFile, manifest contract.Manifest, service contract.Service, port portShape, contractImport string) ([]dependencyShape, error) {
-    if service.Application == nil || len(service.Application.Requires) == 0 {
-        return nil, nil
-    }
-    const suffix = "_application_port_gen.go"
-    if !strings.HasSuffix(port.path, suffix) {
-        return nil, fmt.Errorf("add implementation: canonical port path has no capability sibling")
-    }
-    capabilityPath := strings.TrimSuffix(port.path, suffix) + "_capability_ports_gen.go"
-    var source []byte
-    for _, file := range files {
-        if file.Path == capabilityPath {
-            if source != nil {
-                return nil, fmt.Errorf("add implementation: duplicate canonical capability artifact %s", capabilityPath)
-            }
-            source = file.Content
-        }
-    }
-    if source == nil {
-        return nil, fmt.Errorf("add implementation: canonical capability artifact %s is missing", capabilityPath)
-    }
-    parsed, err := parser.ParseFile(token.NewFileSet(), capabilityPath, source, parser.SkipObjectResolution)
-    if err != nil {
-        return nil, err
-    }
-    interfaces := map[string]*ast.InterfaceType{}
-    var providers []*ast.InterfaceType
-    for _, decl := range parsed.Decls {
-        gen, ok := decl.(*ast.GenDecl)
-        if !ok {
-            continue
-        }
-        for _, spec := range gen.Specs {
-            typ, ok := spec.(*ast.TypeSpec)
-            if !ok {
-                continue
-            }
-            iface, ok := typ.Type.(*ast.InterfaceType)
-            if !ok {
-                continue
-            }
-            interfaces[typ.Name.Name] = iface
-            if strings.HasSuffix(typ.Name.Name, "Capabilities") {
-                providers = append(providers, iface)
-            }
-        }
-    }
-    if len(providers) != 1 {
-        return nil, fmt.Errorf("add implementation: expected one canonical capability provider, found %d", len(providers))
-    }
-    requires := append([]string(nil), service.Application.Requires...)
-    if len(providers[0].Methods.List) != len(requires) {
-        return nil, fmt.Errorf("add implementation: canonical capability dependency count mismatch")
-    }
-    targets := map[string]contract.Service{}
-    for _, candidate := range manifest.Services {
-        if candidate.Application != nil {
-            targets[candidate.Domain+"/"+candidate.Application.Name] = candidate
-        }
-    }
-    result := make([]dependencyShape, 0, len(requires))
-    for index, field := range providers[0].Methods.List {
-        if len(field.Names) != 1 {
-            return nil, fmt.Errorf("add implementation: malformed canonical capability provider method")
-        }
-        fn, ok := field.Type.(*ast.FuncType)
-        if !ok || fn.Params == nil || len(fn.Params.List) != 0 || fn.Results == nil || len(fn.Results.List) != 1 {
-            return nil, fmt.Errorf("add implementation: malformed canonical capability provider signature")
-        }
-        ident, ok := fn.Results.List[0].Type.(*ast.Ident)
-        if !ok || !strings.HasSuffix(ident.Name, "ChildCapability") {
-            return nil, fmt.Errorf("add implementation: canonical dependency is not a child capability")
-        }
-        child := interfaces[ident.Name]
-        if child == nil || child.Methods == nil || len(child.Methods.List) == 0 {
-            return nil, fmt.Errorf("add implementation: dependency %s exposes no required child Operation", requires[index])
-        }
-        target, ok := targets[requires[index]]
-        if !ok || target.Application == nil {
-            return nil, fmt.Errorf("add implementation: canonical dependency %s has no Application", requires[index])
-        }
-        operationIDs := map[string]bool{}
-        for _, method := range target.Methods {
-            if method.Operation != nil {
-                operationIDs[method.Operation.ID] = true
-            }
-        }
-        for _, operation := range target.Application.Operations {
-            operationIDs[operation.ID] = true
-        }
-        used := map[string]bool{}
-        for _, method := range service.Methods {
-            if method.Operation == nil {
-                continue
-            }
-            for _, operationID := range method.Operation.RequiresOperations {
-                if operationIDs[operationID] {
-                    used[method.Name] = true
-                }
-            }
-        }
-        for _, operation := range service.Application.Operations {
-            for _, operationID := range operation.RequiresOperations {
-                if operationIDs[operationID] {
-                    used[operation.ApplicationMethod] = true
-                }
-            }
-        }
-        methods := make([]string, 0, len(used))
-        for method := range used {
-            methods = append(methods, method)
-        }
-        sort.Strings(methods)
-        if len(methods) == 0 {
-            return nil, fmt.Errorf("add implementation: dependency %s is not used by a typed source Operation", requires[index])
-        }
-        result = append(result, dependencyShape{Key: requires[index], ContractImport: contractImport, ContractName: ident.Name, Methods: methods})
-    }
-    _ = path.Clean(capabilityPath)
-    return result, nil
-}
-''')
-
-          Path('app/cmd/implementation/typed_dependency_test.go').write_text(r'''package implementation
-
-import (
-    "bytes"
-    "context"
-    "os"
-    "path/filepath"
-    "reflect"
-    "strings"
-    "testing"
-
-    "github.com/hvritual/yunka.io/pkg/contract"
-    "yunka.io/app/cmd/applicationboundary"
-    "yunka.io/app/cmd/projectflow"
-)
-
-func thirdDomainDependencyFixture(root string) (projectflow.ProjectDescriptor, contract.Manifest) {
-    project := projectflow.ProjectDescriptor{Root: root, GoModule: "example.com/dispatch", GeneratedGoRoot: "src/app", GeneratedGoImport: "example.com/dispatch/src/app"}
-    manifest := contract.Manifest{SchemaVersion: contract.ManifestVersion,
-        Files: []contract.File{
-            {Name: "dispatch.proto", Package: "dispatch.v1", GoPackage: "example.com/dispatch/wire/dispatch;dispatchv1", Domain: &contract.DomainDeclaration{Name: "dispatch", Version: "v1"}},
-            {Name: "inventory.proto", Package: "inventory.v1", GoPackage: "example.com/dispatch/wire/inventory;inventoryv1", Domain: &contract.DomainDeclaration{Name: "inventory", Version: "v1"}},
-        },
-        Messages: []contract.Message{
-            {Name: "PlanRequest", FullName: "dispatch.v1.PlanRequest"}, {Name: "PlanResponse", FullName: "dispatch.v1.PlanResponse"},
-            {Name: "ReserveRequest", FullName: "inventory.v1.ReserveRequest"}, {Name: "ReserveResponse", FullName: "inventory.v1.ReserveResponse"},
-        },
-        Services: []contract.Service{
-            {Name: "RouteApplication", FullName: "dispatch.v1.RouteApplication", Domain: "dispatch", Application: &contract.ApplicationDeclaration{Name: "routes", Requires: []string{"inventory/stock"}, Operations: []contract.OperationDeclaration{{ID: "dispatch.route.plan", UseCase: "plan_route", Public: true, RequiresOperations: []string{"inventory.stock.reserve"}, Composition: "local", RequestType: "dispatch.v1.PlanRequest", ResponseType: "dispatch.v1.PlanResponse", ApplicationMethod: "PlanRoute", Execution: &contract.ExecutionPolicy{Transaction: "none", Idempotency: "none"}}}}},
-            {Name: "StockApplication", FullName: "inventory.v1.StockApplication", Domain: "inventory", Application: &contract.ApplicationDeclaration{Name: "stock", Operations: []contract.OperationDeclaration{{ID: "inventory.stock.reserve", UseCase: "reserve_stock", Public: true, RequestType: "inventory.v1.ReserveRequest", ResponseType: "inventory.v1.ReserveResponse", ApplicationMethod: "ReserveStock", Execution: &contract.ExecutionPolicy{Transaction: "none", Idempotency: "none"}}}}},
-        },
-    }
-    return project, manifest
-}
-
-func TestAG063TypedRequiresUseGeneratedEdgeCapability(t *testing.T) {
-    project, manifest := thirdDomainDependencyFixture(t.TempDir())
-    report, err := render(project, manifest, "dispatch/routes", project.GoModule+"/bootstrap")
-    if err != nil {
-        t.Fatal(err)
-    }
-    var build, wiring, handler, policyText string
-    for _, file := range report.Files {
-        switch {
-        case strings.HasSuffix(file.Path, "/build.go"):
-            build = file.Content
-        case strings.HasSuffix(file.Path, "/internal/usecase/wiring.go"):
-            wiring = file.Content
-        case strings.HasSuffix(file.Path, "/internal/usecase/planroute_handler.go"):
-            handler = file.Content
-        case strings.HasSuffix(file.Path, "/architecture.types.json"):
-            policyText = file.Content
-        }
-    }
-    for _, pair := range []struct{ text, want string }{
-        {build, "dependency0 _port.RoutesToInventoryStockChildCapability"},
-        {build, "(_port.RouteApplication, error)"},
-        {wiring, "dependency0 _starterport.RoutesToInventoryStockChildCapability"},
-        {handler, "dependency0 _starterdependency.RoutesToInventoryStockChildCapability"},
-    } {
-        if !strings.Contains(pair.text, pair.want) {
-            t.Fatalf("missing typed dependency %q:\n%s", pair.want, pair.text)
-        }
-    }
-    policy, err := applicationboundary.ReadPolicy(strings.NewReader(policyText))
-    if err != nil {
-        t.Fatal(err)
-    }
-    if len(policy.Factories) != 1 || len(policy.Factories[0].Arguments) != 1 || policy.Factories[0].Arguments[0].Contract.Name != "RoutesToInventoryStockChildCapability" {
-        t.Fatalf("dependency contract is not AG-04 bound: %+v", policy)
-    }
-}
-
-func TestAG063ThirdDomainTypedDependencyCompilesAndRejectsWideAuthority(t *testing.T) {
-    root := t.TempDir()
-    project, manifest := thirdDomainDependencyFixture(root)
-    report, err := render(project, manifest, "dispatch/routes", project.GoModule+"/bootstrap")
-    if err != nil {
-        t.Fatal(err)
-    }
-    repo, err := filepath.Abs("../../..")
-    if err != nil {
-        t.Fatal(err)
-    }
-    put(t, root, "go.mod", "module example.com/dispatch\n\ngo 1.25.0\n\nrequire (\n github.com/hvritual/yunka.io/framework v0.0.0\n github.com/hvritual/yunka.io/pkg v0.1.0\n)\nreplace github.com/hvritual/yunka.io/framework => "+filepath.ToSlash(filepath.Join(repo,"framework"))+"\nreplace github.com/hvritual/yunka.io/pkg => "+filepath.ToSlash(filepath.Join(repo,"pkg"))+"\n")
-    put(t, root, "wire/dispatch/model.go", "package dispatchv1\ntype PlanRequest struct{}\ntype PlanResponse struct{}\n")
-    put(t, root, "wire/inventory/model.go", "package inventoryv1\ntype ReserveRequest struct{}\ntype ReserveResponse struct{}\n")
-    generated, err := contract.RenderC9ApplicationCode(manifest, contract.ApplicationCodeOptions{RootImport: project.GeneratedGoImport})
-    if err != nil {
-        t.Fatal(err)
-    }
-    for _, file := range generated {
-        if strings.Contains(file.Path, "/application/") || strings.Contains(file.Path, "/policy/") {
-            put(t, root, project.GeneratedGoRoot+"/"+file.Path, string(file.Content))
-        }
-    }
-    for _, file := range report.Files {
-        put(t, root, file.Path, file.Content)
-    }
-    bootstrap := `package bootstrap
-import (
- "context"
- owner "example.com/dispatch/src/app/dispatch/application/routes"
- port "example.com/dispatch/src/app/dispatch/application"
- inventoryv1 "example.com/dispatch/wire/inventory"
-)
-type dependency struct{}
-func (*dependency) ReserveStock(context.Context,*inventoryv1.ReserveRequest)(*inventoryv1.ReserveResponse,error){return nil,nil}
-func BuildRoutes()(port.RouteApplication,error){return owner.Build(&dependency{})}
-`
-    put(t, root, "bootstrap/build.go", bootstrap)
-    if out, err := childGo(t, root, "test", "-mod=mod", "-count=1", "./..."); err != nil {
-        t.Fatalf("typed third-domain starter does not compile: %v\n%s", err, out)
-    }
-    policyData, err := os.ReadFile(filepath.Join(root, "src/app/dispatch/application/routes/architecture.types.json"))
-    if err != nil {
-        t.Fatal(err)
-    }
-    policy, err := applicationboundary.ReadPolicy(bytes.NewReader(policyData))
-    if err != nil {
-        t.Fatal(err)
-    }
-    before := snapshot(t, root)
-    original := applicationboundary.Check(context.Background(), root, policy, applicationboundary.Options{})
-    if original.Status != applicationboundary.Pass || original.CheckedReferences != 1 {
-        t.Fatalf("legal typed dependency rejected: %+v", original)
-    }
-    put(t, root, "bootstrap/build.go", bootstrap+"\nfunc (*dependency) ExtraAuthority(){}\n")
-    widened := applicationboundary.Check(context.Background(), root, policy, applicationboundary.Options{})
-    if widened.Status != applicationboundary.Fail || !hasRule(widened, "AG-TYPE-003") {
-        t.Fatalf("wide dependency escaped: %+v", widened)
-    }
-    put(t, root, "bootstrap/build.go", bootstrap)
-    bad := "outsider/probe.go"
-    put(t, root, bad, `package outsider
-import hidden "example.com/dispatch/src/app/dispatch/application/routes/internal/usecase"
-func Probe(){_,_ = hidden.New(nil)}
-`)
-    output, compileErr := childGo(t, root, "build", "-mod=readonly", "./outsider")
-    if compileErr == nil || !strings.Contains(output, "use of internal package example.com/dispatch/src/app/dispatch/application/routes/internal/usecase not allowed") {
-        t.Fatalf("wrong hidden import result: %v\n%s", compileErr, output)
-    }
-    if err := os.Remove(filepath.Join(root, bad)); err != nil { t.Fatal(err) }
-    if err := os.Remove(filepath.Join(root, "outsider")); err != nil { t.Fatal(err) }
-    restored := applicationboundary.Check(context.Background(), root, policy, applicationboundary.Options{})
-    a,_ := original.Marshal(); b,_ := restored.Marshal()
-    if !bytes.Equal(a,b) || !reflect.DeepEqual(before, snapshot(t, root)) {
-        t.Fatal("third-domain source/evidence did not restore")
-    }
-}
-
-func TestAG063RequiresWithoutTypedOperationEdgeFailsClosed(t *testing.T) {
-    project, manifest := thirdDomainDependencyFixture(t.TempDir())
-    manifest.Services[0].Application.Operations[0].RequiresOperations = nil
-    if _, err := render(project, manifest, "dispatch/routes", project.GoModule+"/bootstrap"); err == nil || !strings.Contains(err.Error(), "exposes no required child Operation") {
-        t.Fatalf("unused dependency did not fail closed: %v", err)
-    }
-}
-''')
-
-          doc=Path('docs/architecture/APPLICATION-IMPLEMENTATION-STARTER.md')
-          s=doc.read_text()
-          s=s.replace('AG-06.1 intentionally rejects declared infrastructure and cross-Application\nrequirements, composed Operations, streaming or incompatible signature shapes,\nempty Applications and ambiguous port identity. It does not silently discard\nthese facts. AG-06.2 will integrate default templates and source policies into\ninit/context/normal authoring. AG-06.3 will qualify typed dependency templates and\nconsecutive contract evolution. Those tasks and AG-07 migration/debt-growth remain\nseparate; this starter\'s delivery does not mark the parent stage complete.', 'AG-06.3a extends the starter only for canonical Application `requires` edges. It\nconsumes the generated source-edge `ChildCapability` interface and injects it only\ninto handlers whose canonical Operations require target Operations. The AG-04\nfactory policy binds the same Build argument type. Infrastructure `capabilities`\nremain explicit unsupported input; no service locator or target hidden implementation\nis introduced. AG-06.3b consecutive evolution and AG-07 migration/debt-growth remain\nseparate; the parent stage is not complete until that qualification closes.')
-          doc.write_text(s)
-          PY
+          python3 "$RUNNER_TEMP/ag063_apply.py"
+          cp "$RUNNER_TEMP/dependencies.go" app/cmd/implementation/dependencies.go
+          cp "$RUNNER_TEMP/typed_dependency_test.go" app/cmd/implementation/typed_dependency_test.go
           gofmt -w app/cmd/implementation/plan.go app/cmd/implementation/render.go app/cmd/implementation/dependencies.go app/cmd/implementation/typed_dependency_test.go
           git diff --check
-          source tools/toolchain.env
-          test "$(go version | awk '{print $3}')" = "go${GO_VERSION}" || true
           go -C app test -exec="/usr/bin/env -u GOROOT" -race -count=1 -timeout=8m ./cmd/implementation -run '^TestAG06(1|2|3)'
-          test -z "$(git status --porcelain --untracked-files=all | grep '^??' | grep -v '^?? app/cmd/implementation/dependencies.go' | grep -v '^?? app/cmd/implementation/typed_dependency_test.go' || true)"
-          git add app/cmd/implementation/plan.go app/cmd/implementation/render.go app/cmd/implementation/dependencies.go app/cmd/implementation/typed_dependency_test.go docs/architecture/APPLICATION-IMPLEMENTATION-STARTER.md
-          export GIT_AUTHOR_NAME=hvritual GIT_COMMITTER_NAME=hvritual
-          export GIT_AUTHOR_EMAIL=460657446@qq.com GIT_COMMITTER_EMAIL=460657446@qq.com
-          git -c commit.gpgsign=false commit -m 'feat(template): add typed requires starter'
-          git push origin HEAD:refs/heads/feat/ag06-3-typed-dependencies
+      - name: Commit task branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --short
+          git add app/cmd/implementation/plan.go app/cmd/implementation/render.go app/cmd/implementation/dependencies.go app/cmd/implementation/typed_dependency_test.go
+          git -c user.name=github-actions -c user.email=41898282+github-actions[bot]@users.noreply.github.com -c commit.gpgsign=false commit -m 'feat(template): add typed requires starter'
+          git push origin HEAD:refs/heads/feat/ag06-3a-typed-dependencies
           git rev-parse HEAD HEAD^{tree}
