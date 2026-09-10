@@ -58,19 +58,34 @@ service ShelfAPI{option (yunka.dsl.v1.application)={name:"catalog" operations:{i
 	if err != nil {
 		t.Fatal(err)
 	}
+	inputs, err := projectflow.DescribeOwnershipInputs(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	layout, err := projectflow.DescribeImplementationLayout(inputs.Project, "shelf", "catalog", "ListBooks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonicalScope := filepath.ToSlash(filepath.Join(inputs.Project.GeneratedGoRoot, "shelf", "application"))
+	for _, file := range r.Files {
+		if !strings.HasPrefix(file.Path, canonicalScope+"/") {
+			t.Fatalf("starter %s escapes canonical scope %s", file.Path, canonicalScope)
+		}
+	}
+	if len(plan.UnresolvedTargets) != 0 {
+		t.Fatalf("sealed starter must resolve its handler, unresolved=%#v", plan.UnresolvedTargets)
+	}
 	found := false
-	for _, target := range plan.UnresolvedTargets {
-		if target.Kind != "implementation" {
+	for _, target := range plan.EditableTargets {
+		if target.Path != layout.Handler {
 			continue
 		}
 		found = true
-		for _, file := range r.Files {
-			if !strings.HasPrefix(file.Path, target.Scope+"/") {
-				t.Fatalf("starter %s escapes canonical scope %s", file.Path, target.Scope)
-			}
+		if !strings.HasPrefix(target.Path, canonicalScope+"/") {
+			t.Fatalf("resolved handler %s escapes canonical scope %s", target.Path, canonicalScope)
 		}
 	}
 	if !found {
-		t.Fatal("canonical implementation scope absent")
+		t.Fatalf("canonical sealed handler %s absent from editable targets %#v", layout.Handler, plan.EditableTargets)
 	}
 }
