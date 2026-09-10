@@ -4,7 +4,7 @@ on:
     branches: [control/ag06-2-publish-20260910]
     paths:
       - .github/workflows/ag062-publish.yml
-      - control/ag062.patch.gz
+      - control/ag062/chunks/**
 permissions:
   contents: write
 jobs:
@@ -30,7 +30,16 @@ jobs:
           E="$RUNNER_TEMP/ag062-publish"; mkdir -p "$E"
           test "$(git rev-parse HEAD)" = d6840be86c72ea91b51e7f32f8ed61067bcab643
           test -z "$(git status --porcelain --untracked-files=all)"
-          cp ../control/control/ag062.patch.gz "$E/ag062.patch.gz"
+          chunks=../control/control/ag062/chunks
+          echo '3ff64529f0e7664c44e8c27ba7bb36a4e0037869410e7e853c8fac18163a65cb  '"$chunks/part00.bin" | sha256sum -c -
+          echo 'bfb5554f5319f9d689791e2566cc746156508059856e5820db3d4800d83402b0  '"$chunks/part01.bin" | sha256sum -c -
+          echo 'a0806fdfb7e13db86e4aeb812bb23b9fe1bd0bd2e6f5c285e001b001be31ee6e  '"$chunks/part02.bin" | sha256sum -c -
+          echo '62d7c688c1b6d072006166e0221be8d30299918ea1305cd4e7525f012a36c83c  '"$chunks/part03.bin" | sha256sum -c -
+          echo 'd5b8ba6ac7ab124dac2d0952c1318b2d032404b0b7bee3ad92918e220d2f8339  '"$chunks/part04.bin" | sha256sum -c -
+          echo 'e9da195a0277c7c2ca06d7816b5a67efb99b613a8fe02b26e52675dd1cc15bc4  '"$chunks/part05.bin" | sha256sum -c -
+          echo '68d2a137b773ed08d14666b510941ce6116e9f1e158ac49c7de9155016ee54e5  '"$chunks/part06.bin" | sha256sum -c -
+          echo 'c2762386c951210c4336423de2ff57768b92ca39bb47ac468ffecade68056c47  '"$chunks/part07.bin" | sha256sum -c -
+          cat "$chunks"/part0*.bin > "$E/ag062.patch.gz"
           echo '504c8d949a65ee169d4e55056a0ebc28060b34cfd478bdcf28dc82d50a5ce364  '"$E/ag062.patch.gz" | sha256sum -c -
           gzip -dc "$E/ag062.patch.gz" > "$E/ag062.patch"
           echo '6d87d489cb1820be4438a40189771750763d16c27aacd5e8e02cf26e6cd24ea8  '"$E/ag062.patch" | sha256sum -c -
