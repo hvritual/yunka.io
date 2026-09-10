@@ -33,16 +33,13 @@ jobs:
           test "$(git rev-parse HEAD^1)" = "$task"
           test "$(git rev-parse HEAD^2)" = "$main"
           test -z "$(git status --porcelain --untracked-files=all)"
-          git diff --check "$main"..HEAD
-          # The main-side diff must contain only the AG-06.2 product paths; the
-          # task-side diff must contain exactly the independently qualified #183
-          # paths. This proves neither side was overwritten during integration.
+          git diff --check "$main..HEAD"
           python3 - <<'PY'
           import subprocess
           main='dfc0c9d995d8d263f895ede6e43b5446ff8fedb4'
           task='456589d0a7c2265a283cf8ebb4fabc31e17cebc6'
-          main_side=set(subprocess.check_output(['git','diff','--name-only',main,'..HEAD'],text=True).splitlines())
-          task_side=set(subprocess.check_output(['git','diff','--name-only',task,'..HEAD'],text=True).splitlines())
+          main_side=set(subprocess.check_output(['git','diff','--name-only',f'{main}..HEAD'],text=True).splitlines())
+          task_side=set(subprocess.check_output(['git','diff','--name-only',f'{task}..HEAD'],text=True).splitlines())
           expected_main_changes={'Makefile','pkg/contract/c9_application_codegen.go','pkg/contract/c9_application_codegen_test.go','pkg/contract/c9_cross_domain_cycle_runtime_test.go'}
           assert task_side==expected_main_changes,(task_side,expected_main_changes)
           assert not (main_side & expected_main_changes), main_side & expected_main_changes
