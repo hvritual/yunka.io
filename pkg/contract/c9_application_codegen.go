@@ -233,9 +233,12 @@ func renderC9CapabilityPorts(service Service, naming serviceCodegenNaming, servi
 		constructorName := "New" + edgeSymbol + "ChildCapability"
 
 		targetApplicationType := targetNaming.ApplicationInterface
-		if target.Domain != service.Domain {
-			alias := imports.add(rootImport+"/"+target.Domain+"/application", safeFileName(target.Domain)+"application")
-			targetApplicationType = alias + "." + targetNaming.ApplicationInterface
+		crossDomain := target.Domain != service.Domain
+		if crossDomain {
+			// Keep the concrete target Application out of the source domain package.
+			// Cross-domain child edges own a narrow structural interface containing
+			// only the Operations explicitly required by this source edge.
+			targetApplicationType = edgeSymbol + "TargetApplication"
 		}
 
 		operations, err := c9RequiredCapabilityOperations(service, target)
@@ -263,6 +266,10 @@ func renderC9CapabilityPorts(service Service, naming serviceCodegenNaming, servi
 			fmt.Fprintf(&wrapperMethods, "\treturn operation.ExecuteChildTyped(ctx, capability.executor, %s.%s(), request, capability.application.%s)\n}\n\n", policyAlias, c9PlanFunctionName(targetNaming, operationBinding.MethodName), operationBinding.MethodName)
 		}
 		fmt.Fprintf(&declarations, "type %s interface {\n%s}\n\n", interfaceName, interfaceMethods.String())
+		if crossDomain {
+			fmt.Fprintf(&declarations, "// %s is the consumer-edge-owned view of the target Application.\n", targetApplicationType)
+			fmt.Fprintf(&declarations, "type %s interface {\n%s}\n\n", targetApplicationType, interfaceMethods.String())
+		}
 		fmt.Fprintf(&declarations, "type %s struct { application %s; executor operation.Executor }\n\n", implementationName, targetApplicationType)
 		fmt.Fprintf(&declarations, "func %s(application %s, executor operation.Executor) (%s, error) {\n", constructorName, targetApplicationType, interfaceName)
 		fmt.Fprintf(&declarations, "\tif application == nil { return nil, errors.New(%q) }\n", "contract C9 child capability: target application is required")
