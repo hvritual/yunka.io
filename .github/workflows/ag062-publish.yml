@@ -12,41 +12,39 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: 456589d0a7c2265a283cf8ebb4fabc31e17cebc6
+          ref: c95034ec54eda2db9e0f87d6090efd91af444cd0
           path: product
           fetch-depth: 0
-      - name: Merge latest qualified main without rewriting task history
+      - name: Publish AG-06.2 status closure branch
         working-directory: product
         shell: bash
         run: |
           set -euo pipefail
-          task=456589d0a7c2265a283cf8ebb4fabc31e17cebc6
-          main=dfc0c9d995d8d263f895ede6e43b5446ff8fedb4
-          test "$(git rev-parse HEAD)" = "$task"
-          test -z "$(git status --porcelain --untracked-files=all)"
-          test "$(git ls-remote origin refs/heads/feat/ag06-2-default-governance | cut -f1)" = "$task"
+          main=c95034ec54eda2db9e0f87d6090efd91af444cd0
+          branch=docs/ag06-2-closure-20260910
+          test "$(git rev-parse HEAD)" = "$main"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$main"
-          git cat-file -e "$main^{commit}"
+          test -z "$(git ls-remote origin refs/heads/$branch | cut -f1)"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('docs/STATUS.md')
+          s=p.read_text()
+          old='| AG-06.2 | Implementation in progress under issue #180 | Default `init/context/ownership/change plan/add operation/source-policy` integration for the same sealed-v1 layout without a second registry. [Contract](architecture/APPLICATION-DEFAULT-GOVERNANCE.md). Exact qualification/integration belongs to its delivery PR; not yet accepted on main |'
+          new='| AG-06.2 | Complete / qualified / merged through [PR #182](https://github.com/hvritual/yunka.io/pull/182); issue #180 completed; parent #178 OPEN | Default `init/context/ownership/change plan/add operation/source-policy` integration for the same sealed-v1 layout without a second registry. [Contract](architecture/APPLICATION-DEFAULT-GOVERNANCE.md). Accepted main `c95034ec54eda2db9e0f87d6090efd91af444cd0`, tree `1fd0d5a0a4740ffbb2608e2b4302b41a65bb1eb6`; final merge candidate passed CI `34433676497`, Production `34433676455`, AG-05 `34433676538`, AG-06 `34433676501`, AG-04 `34433676398`, and separate actual-main push CI `34434033848`, Production `34434033849`, AG-05 `34434033851`, AG-06 `34434033853`, AG-04 `34434033902`. AG-06.3 remains not delivered |'
+          assert s.count(old)==1, s.count(old)
+          assert s.count('Reconciled date: 2026-09-09')==1
+          s=s.replace(old,new).replace('Reconciled date: 2026-09-09','Reconciled date: 2026-09-10')
+          p.write_text(s)
+          PY
+          git diff --check
+          test "$(git diff --name-only)" = docs/STATUS.md
+          grep -F 'AG-06.2 | Complete / qualified / merged through' docs/STATUS.md
+          grep -F 'Reconciled date: 2026-09-10' docs/STATUS.md
+          git add docs/STATUS.md
           export GIT_AUTHOR_NAME=hvritual GIT_COMMITTER_NAME=hvritual
           export GIT_AUTHOR_EMAIL=460657446@qq.com GIT_COMMITTER_EMAIL=460657446@qq.com
-          git -c commit.gpgsign=false merge --no-ff --no-edit "$main"
-          test "$(git rev-parse HEAD^1)" = "$task"
-          test "$(git rev-parse HEAD^2)" = "$main"
+          git -c commit.gpgsign=false commit -m 'docs(status): close AG-06.2 delivery'
           test -z "$(git status --porcelain --untracked-files=all)"
-          git diff --check "$main..HEAD"
-          python3 - <<'PY'
-          import subprocess
-          main='dfc0c9d995d8d263f895ede6e43b5446ff8fedb4'
-          task='456589d0a7c2265a283cf8ebb4fabc31e17cebc6'
-          main_side=set(subprocess.check_output(['git','diff','--name-only',f'{main}..HEAD'],text=True).splitlines())
-          task_side=set(subprocess.check_output(['git','diff','--name-only',f'{task}..HEAD'],text=True).splitlines())
-          expected_main_changes={'Makefile','pkg/contract/c9_application_codegen.go','pkg/contract/c9_application_codegen_test.go','pkg/contract/c9_cross_domain_cycle_runtime_test.go'}
-          assert task_side==expected_main_changes,(task_side,expected_main_changes)
-          assert not (main_side & expected_main_changes), main_side & expected_main_changes
-          assert '.github/workflows/ag06-template-qualification.yml' in main_side
-          assert 'app/cmd/change/main.go' in main_side
-          assert 'docs/architecture/APPLICATION-DEFAULT-GOVERNANCE.md' in main_side
-          assert len(main_side)==26,len(main_side)
-          PY
-          git push origin HEAD:refs/heads/feat/ag06-2-default-governance
+          git push origin HEAD:refs/heads/$branch
           git rev-parse HEAD HEAD^{tree}
