@@ -81,6 +81,13 @@ func TestRenderC9ApplicationCodeGeneratesChildOperationCapability(t *testing.T) 
 	if strings.Contains(capability, "Resolve(") || strings.Contains(capability, "map[string]any") {
 		t.Fatalf("service locator leaked into child capability:\n%s", capability)
 	}
+	if strings.Contains(capability, "example.com/biz/internal/site/application") {
+		t.Fatalf("cross-domain child capability must not import the target Application package:\n%s", capability)
+	}
+	if !strings.Contains(capability, "type TransferToSiteValidationTargetApplication interface") ||
+		!strings.Contains(capability, "func NewTransferToSiteValidationChildCapability(application TransferToSiteValidationTargetApplication") {
+		t.Fatalf("cross-domain child capability is not backed by an edge-owned narrow target interface:\n%s", capability)
+	}
 }
 
 func TestRenderC9TransportsEstablishIdempotencyContext(t *testing.T) {
