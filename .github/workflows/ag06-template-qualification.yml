@@ -5,6 +5,10 @@ on:
     paths:
       - app/cmd/implementation/**
       - app/cmd/add/**
+      - app/cmd/project/**
+      - app/cmd/agentcontext/**
+      - app/cmd/audit/**
+      - app/cmd/sourceaudit/**
       - app/cmd/projectflow/**
       - app/cmd/ownership/**
       - app/cmd/change/**
@@ -16,12 +20,17 @@ on:
       - go.work
       - tools/toolchain.env
       - docs/architecture/APPLICATION-IMPLEMENTATION-STARTER.md
+      - docs/architecture/APPLICATION-DEFAULT-GOVERNANCE.md
       - .github/workflows/ag06-template-qualification.yml
   push:
     branches: [main]
     paths:
       - app/cmd/implementation/**
       - app/cmd/add/**
+      - app/cmd/project/**
+      - app/cmd/agentcontext/**
+      - app/cmd/audit/**
+      - app/cmd/sourceaudit/**
       - app/cmd/projectflow/**
       - app/cmd/ownership/**
       - app/cmd/change/**
@@ -33,6 +42,7 @@ on:
       - go.work
       - tools/toolchain.env
       - docs/architecture/APPLICATION-IMPLEMENTATION-STARTER.md
+      - docs/architecture/APPLICATION-DEFAULT-GOVERNANCE.md
       - .github/workflows/ag06-template-qualification.yml
 
 permissions:
@@ -79,7 +89,9 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/ag06-starter"
           git rev-parse HEAD HEAD^{tree} > "$RUNNER_TEMP/ag06-starter/identity.txt"
-          go -C app test -exec="/usr/bin/env -u GOROOT" -json -race -count=1 -timeout=5m ./cmd/implementation ./cmd/add -run '^TestAG061' > "$RUNNER_TEMP/ag06-starter/tests.jsonl"
+          go -C app test -exec="/usr/bin/env -u GOROOT" -json -race -count=1 -timeout=5m \
+            ./cmd/implementation ./cmd/add ./cmd/project ./cmd/agentcontext ./cmd/ownership ./cmd/projectflow ./cmd/change ./cmd/audit \
+            -run '^TestAG06(1|2)' > "$RUNNER_TEMP/ag06-starter/tests.jsonl"
           python3 - <<'PY'
           import json,os,pathlib
           p=pathlib.Path(os.environ['RUNNER_TEMP'])/'ag06-starter'
@@ -92,11 +104,16 @@ jobs:
             'TestAG061PublicCommandPlanAndApply','TestAG061ImplementationCommandIsRegistered',
             'TestAG061StarterRemainsInsideCanonicalChangeScope',
             'TestAG061CanonicalDottedKeyIsAccepted','TestAG061PackageConflictsPrecedeEveryWrite',
-            'TestAG061CanonicalImportAliasesDoNotCollide','TestAG061AliasNormalizationPreservesCanonicalInput'}
+            'TestAG061CanonicalImportAliasesDoNotCollide','TestAG061AliasNormalizationPreservesCanonicalInput',
+            'TestAG062InitCreatesStableDefaultSourcePolicy','TestAG062InitWithoutGoModuleDoesNotCreateInvalidPolicy',
+            'TestAG062SourceAuditUsesInitializedDefaultPolicy','TestAG062ImplementationLayoutIsCanonicalAndShared',
+            'TestAG062ChangePlanResolvesExistingSealedHandlerAndGovernanceGates','TestAG062ChangePlanFailsClosedOnPartialSealedStarter',
+            'TestAG062AddOperationPreservesExistingSealedStarter','TestAG062AddOperationRejectsPartialSealedStarterBeforeMutation',
+            'TestAG062ContextExposesDefaultGovernanceWorkflow','TestAG062OwnershipClassifiesInitializedSourcePolicy'}
           assert not any(e['Action'] in ('fail','skip') for e in events), 'failed/skipped required evidence'
           passed={e.get('Test') for e in events if e['Action']=='pass'}
           assert required <= passed, sorted(required-passed)
-          (p/'result.json').write_text(json.dumps({'status':'PASS','scope':'AG-06.1 starter only','required':sorted(required),'passedNamedEvents':sum(e['Action']=='pass' and bool(e.get('Test')) for e in events)},indent=2)+'\n')
+          (p/'result.json').write_text(json.dumps({'status':'PASS','scope':'AG-06.1 starter plus AG-06.2 default governance','required':sorted(required),'passedNamedEvents':sum(e['Action']=='pass' and bool(e.get('Test')) for e in events)},indent=2)+'\n')
           PY
           git diff --check
           test -z "$(git status --porcelain --untracked-files=all)"
