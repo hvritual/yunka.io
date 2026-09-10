@@ -12,62 +12,37 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ github.sha }}
-          path: control
-          persist-credentials: false
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: d6840be86c72ea91b51e7f32f8ed61067bcab643
+          ref: e9a4c9f9afe87e058820c6a17256377cff4f649f
           path: product
           fetch-depth: 0
-      - name: Verify full tree, then publish non-workflow portion
+      - name: Patch only stale Issue160 schema assertion and publish
         working-directory: product
         shell: bash
         run: |
           set -euo pipefail
-          E="$RUNNER_TEMP/ag062-publish"; mkdir -p "$E"
-          test "$(git rev-parse HEAD)" = d6840be86c72ea91b51e7f32f8ed61067bcab643
+          test "$(git rev-parse HEAD)" = e9a4c9f9afe87e058820c6a17256377cff4f649f
           test -z "$(git status --porcelain --untracked-files=all)"
-          chunks=../control/control/ag062/chunks
-          echo '3ff64529f0e7664c44e8c27ba7bb36a4e0037869410e7e853c8fac18163a65cb  '"$chunks/part00.bin" | sha256sum -c -
-          echo 'bfb5554f5319f9d689791e2566cc746156508059856e5820db3d4800d83402b0  '"$chunks/part01.bin" | sha256sum -c -
-          echo 'a0806fdfb7e13db86e4aeb812bb23b9fe1bd0bd2e6f5c285e001b001be31ee6e  '"$chunks/part02.bin" | sha256sum -c -
-          echo '62d7c688c1b6d072006166e0221be8d30299918ea1305cd4e7525f012a36c83c  '"$chunks/part03.bin" | sha256sum -c -
-          echo 'd5b8ba6ac7ab124dac2d0952c1318b2d032404b0b7bee3ad92918e220d2f8339  '"$chunks/part04.bin" | sha256sum -c -
-          echo 'e9da195a0277c7c2ca06d7816b5a67efb99b613a8fe02b26e52675dd1cc15bc4  '"$chunks/part05.bin" | sha256sum -c -
-          echo '68d2a137b773ed08d14666b510941ce6116e9f1e158ac49c7de9155016ee54e5  '"$chunks/part06.bin" | sha256sum -c -
-          echo 'c2762386c951210c4336423de2ff57768b92ca39bb47ac468ffecade68056c47  '"$chunks/part07.bin" | sha256sum -c -
-          cat "$chunks"/part0*.bin > "$E/ag062.patch.gz"
-          echo '504c8d949a65ee169d4e55056a0ebc28060b34cfd478bdcf28dc82d50a5ce364  '"$E/ag062.patch.gz" | sha256sum -c -
-          gzip -dc "$E/ag062.patch.gz" > "$E/ag062.patch"
-          echo '6d87d489cb1820be4438a40189771750763d16c27aacd5e8e02cf26e6cd24ea8  '"$E/ag062.patch" | sha256sum -c -
-          git apply --index "$E/ag062.patch"
-          git diff --cached --check
-          test "$(git write-tree)" = 0ecf9fa3976d31dac7f6c320042aa9b2918eff54
-          printf '%s\n' "$(git write-tree)" > "$E/full-target-tree.txt"
-          test "$(git hash-object .github/workflows/ag06-template-qualification.yml)" = 9b5917ed8280cc3b428ea1c6da313760f76a35fe
-          git restore --source=d6840be86c72ea91b51e7f32f8ed61067bcab643 --staged --worktree -- .github/workflows/ag06-template-qualification.yml
-          git diff --cached --check
+          path=app/cmd/agentcontext/operation_test.go
+          before='value.SchemaVersion != 6 || value.ContractContext != nil'
+          after='value.SchemaVersion != SchemaVersion || value.ContractContext != nil'
+          test "$(grep -Foc "$before" "$path")" = 1
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/cmd/agentcontext/operation_test.go')
+          s=p.read_text()
+          old='value.SchemaVersion != 6 || value.ContractContext != nil'
+          new='value.SchemaVersion != SchemaVersion || value.ContractContext != nil'
+          assert s.count(old)==1
+          p.write_text(s.replace(old,new))
+          PY
+          test "$(grep -Foc "$after" "$path")" = 1
+          git diff --check
+          test "$(git diff --name-only)" = "$path"
+          git add "$path"
           export GIT_AUTHOR_NAME=hvritual GIT_COMMITTER_NAME=hvritual
           export GIT_AUTHOR_EMAIL=460657446@qq.com GIT_COMMITTER_EMAIL=460657446@qq.com
-          git -c commit.gpgsign=false commit -m 'feat(governance): integrate sealed application defaults into authoring flow'
+          git -c commit.gpgsign=false commit -m 'test(context): keep bootstrap regression schema-agnostic'
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = d6840be86c72ea91b51e7f32f8ed61067bcab643
-          current="$(git ls-remote origin refs/heads/feat/ag06-2-default-governance | cut -f1)"
-          test "$current" = d6840be86c72ea91b51e7f32f8ed61067bcab643
+          test "$(git ls-remote origin refs/heads/feat/ag06-2-default-governance | cut -f1)" = e9a4c9f9afe87e058820c6a17256377cff4f649f
           git push origin HEAD:refs/heads/feat/ag06-2-default-governance
-          git rev-parse HEAD HEAD^{tree} > "$E/partial-identity.txt"
-          git status --porcelain --untracked-files=all > "$E/worktree.txt"
-      - name: Evidence manifest
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          E="$RUNNER_TEMP/ag062-publish"; mkdir -p "$E"; cd "$E"
-          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 -r sha256sum > SHA256SUMS
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
-        with:
-          name: ag062-publish-evidence
-          path: ${{ runner.temp }}/ag062-publish
-          if-no-files-found: error
-          retention-days: 7
+          git rev-parse HEAD HEAD^{tree}
