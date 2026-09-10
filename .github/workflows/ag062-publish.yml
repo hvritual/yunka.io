@@ -2,9 +2,7 @@ name: ag062-publish
 on:
   push:
     branches: [control/ag06-2-publish-20260910]
-    paths:
-      - .github/workflows/ag062-publish.yml
-      - control/ag062/chunks/**
+    paths: [.github/workflows/ag062-publish.yml]
 permissions:
   contents: write
 jobs:
@@ -22,7 +20,7 @@ jobs:
           ref: d6840be86c72ea91b51e7f32f8ed61067bcab643
           path: product
           fetch-depth: 0
-      - name: Recreate and publish exact AG-06.2 candidate
+      - name: Verify full tree, then publish non-workflow portion
         working-directory: product
         shell: bash
         run: |
@@ -46,19 +44,18 @@ jobs:
           git apply --index "$E/ag062.patch"
           git diff --cached --check
           test "$(git write-tree)" = 0ecf9fa3976d31dac7f6c320042aa9b2918eff54
+          printf '%s\n' "$(git write-tree)" > "$E/full-target-tree.txt"
+          test "$(git hash-object .github/workflows/ag06-template-qualification.yml)" = 9b5917ed8280cc3b428ea1c6da313760f76a35fe
+          git restore --source=d6840be86c72ea91b51e7f32f8ed61067bcab643 --staged --worktree -- .github/workflows/ag06-template-qualification.yml
+          git diff --cached --check
           export GIT_AUTHOR_NAME=hvritual GIT_COMMITTER_NAME=hvritual
           export GIT_AUTHOR_EMAIL=460657446@qq.com GIT_COMMITTER_EMAIL=460657446@qq.com
-          export GIT_AUTHOR_DATE='2026-09-09T20:39:07Z' GIT_COMMITTER_DATE='2026-09-09T20:39:07Z'
           git -c commit.gpgsign=false commit -m 'feat(governance): integrate sealed application defaults into authoring flow'
-          test "$(git rev-parse HEAD)" = e56136298ff812003f9a4c254073d84cd4ff2e7b
-          test "$(git rev-parse HEAD^{tree})" = 0ecf9fa3976d31dac7f6c320042aa9b2918eff54
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = d6840be86c72ea91b51e7f32f8ed61067bcab643
           current="$(git ls-remote origin refs/heads/feat/ag06-2-default-governance | cut -f1)"
           test "$current" = d6840be86c72ea91b51e7f32f8ed61067bcab643
           git push origin HEAD:refs/heads/feat/ag06-2-default-governance
-          test "$(git ls-remote origin refs/heads/feat/ag06-2-default-governance | cut -f1)" = e56136298ff812003f9a4c254073d84cd4ff2e7b
-          git rev-parse HEAD HEAD^{tree} > "$E/identity.txt"
-          git diff --stat d6840be86c72ea91b51e7f32f8ed61067bcab643..HEAD > "$E/diff-stat.txt"
+          git rev-parse HEAD HEAD^{tree} > "$E/partial-identity.txt"
           git status --porcelain --untracked-files=all > "$E/worktree.txt"
       - name: Evidence manifest
         if: always()
