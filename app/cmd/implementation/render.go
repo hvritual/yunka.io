@@ -121,6 +121,10 @@ func freshAlias(base string, imports map[string]string) string {
 }
 
 func starterFiles(port portShape, owner, contractImport, key, caller string) (map[string][]byte, error) {
+	return starterFilesWithDependencies(port, owner, contractImport, key, caller, nil)
+}
+
+func starterFilesWithDependencies(port portShape, owner, contractImport, key, caller string, dependencies []dependencyShape) (map[string][]byte, error) {
 	port, err := isolatePortAliases(port)
 	if err != nil {
 		return nil, err
@@ -135,6 +139,15 @@ func starterFiles(port portShape, owner, contractImport, key, caller string) (ma
 		return nil
 	}
 	ownerBody := fmt.Sprintf("package owner\nimport ( _port %q; _impl %q )\n\n// Build is a resource-free composition entry point, not a business invocation API.\nfunc Build() _port.%s {return _impl.New()}\n", contractImport, owner+"/internal/usecase", port.name)
+	if len(dependencies) > 0 {
+		params := make([]string, 0, len(dependencies))
+		args := make([]string, 0, len(dependencies))
+		for i, dependency := range dependencies {
+			params = append(params, fmt.Sprintf("dependency%d _port.%s", i, dependency.ContractName))
+			args = append(args, fmt.Sprintf("dependency%d", i))
+		}
+		ownerBody = fmt.Sprintf("package owner\nimport ( _port %q; _impl %q )\n\n// Build accepts only generated source-edge child capabilities.\nfunc Build(%s) (_port.%s,error) {return _impl.New(%s)}\n", contractImport, owner+"/internal/usecase", strings.Join(params, ","), port.name, strings.Join(args, ","))
+	}
 	if err := addGo("build.go", ownerBody); err != nil {
 		return nil, err
 	}
@@ -146,7 +159,7 @@ func starterFiles(port portShape, owner, contractImport, key, caller string) (ma
 	}
 	portAlias := freshAlias("_starterport", allImports)
 	allImports[portAlias] = contractImport
-	var fields, delegates strings.Builder
+	var fields, delegates, initializers strings.Builder
 	names := map[string]bool{}
 	for i, method := range port.methods {
 		fn, ok := method.Type.(*ast.FuncType)
@@ -189,13 +202,39 @@ func starterFiles(port portShape, owner, contractImport, key, caller string) (ma
 		}
 		signature = strings.TrimPrefix(signature, "func")
 		imports := neededImports(fn, port.imports)
+		var dependencyFields strings.Builder
+		dependencyAlias := ""
+		for dependencyIndex, dependency := range dependencies {
+			if !dependency.Uses(name) {
+				continue
+			}
+			if dependencyAlias == "" {
+				dependencyAlias = freshAlias("_starterdependency", imports)
+				imports[dependencyAlias] = dependency.ContractImport
+			}
+			fmt.Fprintf(&dependencyFields, "dependency%d %s.%s\n", dependencyIndex, dependencyAlias, dependency.ContractName)
+		}
 		errAlias := freshAlias("_startererrors", imports)
 		imports[errAlias] = "errors"
-		body := fmt.Sprintf("package usecase\nimport(\n%s)\n\n// handle%s owns this use case only. Add narrow dependencies here, not to the facade.\ntype handle%s struct{}\n\nfunc (h *handle%s) execute%s {return nil,%s.New(%q)}\n", importLines(imports), name, name, name, signature, errAlias, key+"."+name+": not implemented")
-		if err := addGo("internal/usecase/"+filename, body); err != nil {
-			return nil, err
+		if dependencyFields.Len() == 0 {
+			body := fmt.Sprintf("package usecase\nimport(\n%s)\n\n// handle%s owns this use case only. Add narrow dependencies here, not to the facade.\ntype handle%s struct{}\n\nfunc (h *handle%s) execute%s {return nil,%s.New(%q)}\n", importLines(imports), name, name, name, signature, errAlias, key+"."+name+": not implemented")
+			if err := addGo("internal/usecase/"+filename, body); err != nil {
+				return nil, err
+			}
+		} else {
+			body := fmt.Sprintf("package usecase\nimport(\n%s)\n\n// handle%s owns this use case only. Dependencies are exact source-edge child capabilities.\ntype handle%s struct{\n%s}\n\nfunc (h *handle%s) execute%s {return nil,%s.New(%q)}\n", importLines(imports), name, name, dependencyFields.String(), name, signature, errAlias, key+"."+name+": not implemented")
+			if err := addGo("internal/usecase/"+filename, body); err != nil {
+				return nil, err
+			}
 		}
 		fmt.Fprintf(&fields, "h%d handle%s\n", i, name)
+		fmt.Fprintf(&initializers, "h%d: handle%s{", i, name)
+		for dependencyIndex, dependency := range dependencies {
+			if dependency.Uses(name) {
+				fmt.Fprintf(&initializers, "dependency%d: dependency%d,", dependencyIndex, dependencyIndex)
+			}
+		}
+		initializers.WriteString("},")
 		ctxType, err := expression(fn.Params.List[0].Type)
 		if err != nil {
 			return nil, err
@@ -210,11 +249,28 @@ func starterFiles(port portShape, owner, contractImport, key, caller string) (ma
 		}
 		fmt.Fprintf(&delegates, "func (s *service) %s(ctx %s, request %s) (%s,error) {return s.h%d.execute(ctx,request)}\n", name, ctxType, reqType, respType, i)
 	}
-	wiring := fmt.Sprintf("package usecase\nimport(\n%s)\n\ntype service struct {\n%s}\n\n// New exposes only the canonical interface; never return or unwrap service.\nfunc New() %s.%s {return &service{}}\n\nvar _ %s.%s = (*service)(nil)\n\n%s", importLines(allImports), fields.String(), portAlias, port.name, portAlias, port.name, delegates.String())
+	var wiring string
+	if len(dependencies) == 0 {
+		wiring = fmt.Sprintf("package usecase\nimport(\n%s)\n\ntype service struct {\n%s}\n\n// New exposes only the canonical interface; never return or unwrap service.\nfunc New() %s.%s {return &service{}}\n\nvar _ %s.%s = (*service)(nil)\n\n%s", importLines(allImports), fields.String(), portAlias, port.name, portAlias, port.name, delegates.String())
+	} else {
+		errAlias := freshAlias("_startererrors", allImports)
+		allImports[errAlias] = "errors"
+		params := make([]string, 0, len(dependencies))
+		var checks strings.Builder
+		for i, dependency := range dependencies {
+			params = append(params, fmt.Sprintf("dependency%d %s.%s", i, portAlias, dependency.ContractName))
+			fmt.Fprintf(&checks, "if dependency%d == nil {return nil,%s.New(%q)}\n", i, errAlias, key+": dependency "+dependency.Key+" is required")
+		}
+		wiring = fmt.Sprintf("package usecase\nimport(\n%s)\n\ntype service struct {\n%s}\n\n// New accepts only generated source-edge child capabilities and exposes only the canonical interface.\nfunc New(%s) (%s.%s,error) {%sreturn &service{%s},nil}\n\nvar _ %s.%s = (*service)(nil)\n\n%s", importLines(allImports), fields.String(), strings.Join(params, ","), portAlias, port.name, checks.String(), initializers.String(), portAlias, port.name, delegates.String())
+	}
 	if err := addGo("internal/usecase/wiring.go", wiring); err != nil {
 		return nil, err
 	}
-	policy := applicationboundary.Policy{SchemaVersion: applicationboundary.SchemaVersion, Factories: []applicationboundary.Factory{{Symbol: applicationboundary.Symbol{Package: owner, Name: "Build"}, AllowedCallers: []string{caller}, Results: []applicationboundary.Slot{{Index: 0, Contract: applicationboundary.Symbol{Package: contractImport, Name: port.name}}}}}}
+	factory := applicationboundary.Factory{Symbol: applicationboundary.Symbol{Package: owner, Name: "Build"}, AllowedCallers: []string{caller}, Results: []applicationboundary.Slot{{Index: 0, Contract: applicationboundary.Symbol{Package: contractImport, Name: port.name}}}}
+	for i, dependency := range dependencies {
+		factory.Arguments = append(factory.Arguments, applicationboundary.Slot{Index: i, Contract: applicationboundary.Symbol{Package: dependency.ContractImport, Name: dependency.ContractName}})
+	}
+	policy := applicationboundary.Policy{SchemaVersion: applicationboundary.SchemaVersion, Factories: []applicationboundary.Factory{factory}}
 	if err := policy.Validate(); err != nil {
 		return nil, err
 	}
@@ -223,6 +279,10 @@ func starterFiles(port portShape, owner, contractImport, key, caller string) (ma
 		return nil, err
 	}
 	files["architecture.types.json"] = append(data, '\n')
+	dependencyNote := "Cross-Application/infrastructure-dependent templates are a later AG-06 task."
+	if len(dependencies) > 0 {
+		dependencyNote = "Canonical Application `requires` edges use generated source-edge ChildCapability interfaces; infrastructure capability templates remain unsupported and are never guessed."
+	}
 	files["README.md"] = []byte(fmt.Sprintf(`# %s implementation starter
 
 Developer-owned files. The canonical interface remains %s.%s.
@@ -238,7 +298,7 @@ capabilities; never inject a full Repository merely behind a narrower interface.
 Generated PB/ports/Assembly remain generator-owned. Do not move or edit them.
 After a contract change, use canonical generation and compile the implementation;
 this create-only starter does not silently rewrite existing methods or policy.
-Cross-Application/infrastructure-dependent templates are a later AG-06 task.
+%s
 
 Validate using the existing commands (policy path is relative to module root):
 
@@ -250,7 +310,7 @@ Validate using the existing commands (policy path is relative to module root):
 Run the reviewed source policy separately with yunka audit source. This per-owner
 type policy is not a whole-repository source policy or a new architecture graph.
 Record task intent and decisions with the two templates below before adding code.
-`, key, contractImport, port.name, caller))
+`, key, contractImport, port.name, caller, dependencyNote))
 	files["docs/task-template.md"] = []byte(taskTemplate)
 	files["docs/adr-template.md"] = []byte(adrTemplate)
 	return files, nil

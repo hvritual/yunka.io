@@ -171,18 +171,11 @@ func render(project projectflow.ProjectDescriptor, manifest contract.Manifest, k
 	if selected == nil {
 		return Report{}, fmt.Errorf("add implementation: Application %s not found in current canonical inputs", key)
 	}
-	if len(selected.Application.Requires) > 0 || len(selected.Application.Capabilities) > 0 {
-		return Report{}, fmt.Errorf("add implementation: composed/infrastructure-dependent Applications require the later typed-dependency template; refusing to omit dependencies")
+	if len(selected.Application.Capabilities) > 0 {
+		return Report{}, fmt.Errorf("add implementation: infrastructure-capability Applications require an explicit capability template; refusing to omit dependencies")
 	}
-	for _, m := range selected.Methods {
-		if m.Operation == nil || len(m.Operation.RequiresOperations) > 0 || (m.Operation.Composition != "" && m.Operation.Composition != "none") {
-			return Report{}, fmt.Errorf("add implementation: unsupported composed Operation %s", m.Name)
-		}
-	}
-	for _, o := range selected.Application.Operations {
-		if len(o.RequiresOperations) > 0 || (o.Composition != "" && o.Composition != "none") {
-			return Report{}, fmt.Errorf("add implementation: unsupported composed Operation %s", o.ID)
-		}
+	if err := validateDependencyOperations(manifest, *selected); err != nil {
+		return Report{}, err
 	}
 	// Use the existing compiler/renderer's exact artifacts; do not reimplement its
 	// single/multi-Application interface naming or PB Go type resolution.
@@ -191,6 +184,11 @@ func render(project projectflow.ProjectDescriptor, manifest contract.Manifest, k
 		return Report{}, err
 	}
 	port, err := selectPort(generated, *selected)
+	if err != nil {
+		return Report{}, err
+	}
+	contractImport := project.GeneratedGoImport + "/" + domain + "/application"
+	dependencies, err := selectDependencies(generated, manifest, *selected, port, contractImport)
 	if err != nil {
 		return Report{}, err
 	}
@@ -203,11 +201,11 @@ func render(project projectflow.ProjectDescriptor, manifest contract.Manifest, k
 	if caller == ownerImport || strings.HasPrefix(caller, ownerImport+"/") {
 		return Report{}, fmt.Errorf("add implementation: composition must be outside the new owner implementation")
 	}
-	contents, err := starterFiles(port, ownerImport, project.GeneratedGoImport+"/"+domain+"/application", key, caller)
+	contents, err := starterFilesWithDependencies(port, ownerImport, contractImport, key, caller, dependencies)
 	if err != nil {
 		return Report{}, err
 	}
-	report := Report{SchemaVersion: 1, Mode: "plan", Application: key, Contract: project.GeneratedGoImport + "/" + domain + "/application." + port.name, ContractFile: path.Join(project.GeneratedGoRoot, port.path), ContractSHA256: digest(port.source), CompositionPackage: caller, Files: []File{}}
+	report := Report{SchemaVersion: 1, Mode: "plan", Application: key, Contract: contractImport + "." + port.name, ContractFile: path.Join(project.GeneratedGoRoot, port.path), ContractSHA256: digest(port.source), CompositionPackage: caller, Files: []File{}}
 	seen := map[string]bool{}
 	for name, data := range contents {
 		if name == "README.md" {
