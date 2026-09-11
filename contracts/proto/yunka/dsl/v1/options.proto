@@ -25,6 +25,10 @@ enum Authentication {
   AUTHENTICATION_JWT = 1;
   AUTHENTICATION_API_KEY = 2;
   AUTHENTICATION_SERVICE = 3;
+  // Browser authority established by a trusted server-side Web session.
+  // The framework treats this as a distinct authentication provenance and
+  // never aliases it to API-key, JWT or service-token credentials.
+  AUTHENTICATION_WEB_SESSION = 4;
 }
 
 message DomainDeclaration {
