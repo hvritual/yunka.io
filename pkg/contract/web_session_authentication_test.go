@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	contractdslv1 "yunka.io/pkg/contractdsl/v1"
+	contractdslv1 "github.com/hvritual/yunka.io/pkg/contractdsl/v1"
 )
 
 func TestWebSessionAuthenticationProvenance(t *testing.T) {
