@@ -1,0 +1,78 @@
+name: Web-session authentication contract generation
+on:
+  push:
+    branches: [feat/web-session-authentication-contract]
+    paths: ['.github/workflows/web-session-auth-generation.yml']
+permissions:
+  contents: write
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: '${{ github.sha }}'
+          fetch-depth: 0
+          persist-credentials: true
+      - id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          echo "go_version=$GO_VERSION" >> "$GITHUB_OUTPUT"
+          echo "protoc_release=$PROTOC_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "protoc_sha=$PROTOC_LINUX_X86_64_SHA256" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with: {go-version: '${{ steps.lock.outputs.go_version }}', cache: false}
+      - name: Install locked protoc
+        env:
+          RELEASE: '${{ steps.lock.outputs.protoc_release }}'
+          CHECKSUM: '${{ steps.lock.outputs.protoc_sha }}'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 20 "https://github.com/protocolbuffers/protobuf/releases/download/v${RELEASE}/protoc-${RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "$CHECKSUM  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+      - name: Add compiler mapping
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('pkg/contract/dsl_descriptor.go')
+          text = path.read_text()
+          old = '''\tcase 3:\n\t\treturn "service-token"\n\tdefault:\n\t\treturn ""\n'''
+          new = '''\tcase 3:\n\t\treturn "service-token"\n\tcase 4:\n\t\treturn "web-session"\n\tdefault:\n\t\treturn ""\n'''
+          if old not in text:
+              raise SystemExit('authenticationName anchor not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+      - name: Regenerate canonical DSL artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          make rpc-generate
+          gofmt -w pkg/contract/dsl_descriptor.go pkg/contract/web_session_authentication_test.go
+      - name: Qualify compiler and generated contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd pkg
+          go test -count=1 ./contract -run 'WebSessionAuthentication|GeneratedPolicyPreservesAPIKeyAndWebSession'
+          go test -count=1 ./contract ./operationplan
+      - name: Commit generated framework contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add contracts/proto/yunka/dsl/v1/options.proto pkg/contract/dsl_descriptor.go pkg/contract/web_session_authentication_test.go pkg/contractdsl contracts/generated
+          if git diff --cached --quiet; then
+            echo 'WEB_SESSION_CONTRACT=ALREADY_GENERATED'
+            exit 0
+          fi
+          git commit -m 'feat(contract): generate web-session authentication provenance'
+          git push origin HEAD:feat/web-session-authentication-contract
