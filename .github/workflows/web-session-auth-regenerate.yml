@@ -1,0 +1,60 @@
+name: Web-session authentication regenerate
+on:
+  push:
+    branches: [feat/web-session-authentication-contract]
+    paths: ['.github/workflows/web-session-auth-regenerate.yml']
+permissions:
+  contents: write
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: '${{ github.sha }}'
+          persist-credentials: true
+          fetch-depth: 0
+      - id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          echo "go_version=$GO_VERSION" >> "$GITHUB_OUTPUT"
+          echo "protoc_release=$PROTOC_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "protoc_sha=$PROTOC_LINUX_X86_64_SHA256" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with: {go-version: '${{ steps.lock.outputs.go_version }}', cache: false}
+      - name: Install locked protoc
+        env:
+          RELEASE: '${{ steps.lock.outputs.protoc_release }}'
+          CHECKSUM: '${{ steps.lock.outputs.protoc_sha }}'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 "https://github.com/protocolbuffers/protobuf/releases/download/v${RELEASE}/protoc-${RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "$CHECKSUM  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+      - name: Regenerate canonical artifacts and qualify
+        shell: bash
+        run: |
+          set -euo pipefail
+          make rpc-generate
+          gofmt -w pkg/contract/dsl_descriptor.go pkg/contract/web_session_authentication_test.go
+          cd pkg
+          go test -count=1 ./contract -run 'WebSessionAuthentication|GeneratedPolicyPreservesAPIKeyAndWebSession'
+          go test -count=1 ./contract ./operationplan
+      - name: Commit generated artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pkg/contractdsl contracts/generated pkg/contract/dsl_descriptor.go pkg/contract/web_session_authentication_test.go
+          if git diff --cached --quiet; then
+            echo 'WEB_SESSION_REGEN=ALREADY_CLEAN'
+            exit 0
+          fi
+          git commit -m 'feat(contract): regenerate web-session authentication artifacts'
+          git push origin HEAD:feat/web-session-authentication-contract
