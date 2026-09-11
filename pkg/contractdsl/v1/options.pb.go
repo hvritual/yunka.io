@@ -133,6 +133,10 @@ const (
 	Authentication_AUTHENTICATION_JWT         Authentication = 1
 	Authentication_AUTHENTICATION_API_KEY     Authentication = 2
 	Authentication_AUTHENTICATION_SERVICE     Authentication = 3
+	// Browser authority established by a trusted server-side Web session.
+	// The framework treats this as a distinct authentication provenance and
+	// never aliases it to API-key, JWT or service-token credentials.
+	Authentication_AUTHENTICATION_WEB_SESSION Authentication = 4
 )
 
 // Enum value maps for Authentication.
@@ -142,12 +146,14 @@ var (
 		1: "AUTHENTICATION_JWT",
 		2: "AUTHENTICATION_API_KEY",
 		3: "AUTHENTICATION_SERVICE",
+		4: "AUTHENTICATION_WEB_SESSION",
 	}
 	Authentication_value = map[string]int32{
 		"AUTHENTICATION_UNSPECIFIED": 0,
 		"AUTHENTICATION_JWT":         1,
 		"AUTHENTICATION_API_KEY":     2,
 		"AUTHENTICATION_SERVICE":     3,
+		"AUTHENTICATION_WEB_SESSION": 4,
 	}
 )
 
@@ -872,12 +878,13 @@ const file_yunka_dsl_v1_options_proto_rawDesc = "" +
 	"\x10DTO_VALUE_OBJECT\x10\x05*8\n" +
 	"\x0ePermissionMode\x12\x12\n" +
 	"\x0ePERMISSION_ALL\x10\x00\x12\x12\n" +
-	"\x0ePERMISSION_ANY\x10\x01*\x80\x01\n" +
+	"\x0ePERMISSION_ANY\x10\x01*\xa0\x01\n" +
 	"\x0eAuthentication\x12\x1e\n" +
 	"\x1aAUTHENTICATION_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12AUTHENTICATION_JWT\x10\x01\x12\x1a\n" +
 	"\x16AUTHENTICATION_API_KEY\x10\x02\x12\x1a\n" +
-	"\x16AUTHENTICATION_SERVICE\x10\x03*f\n" +
+	"\x16AUTHENTICATION_SERVICE\x10\x03\x12\x1e\n" +
+	"\x1aAUTHENTICATION_WEB_SESSION\x10\x04*f\n" +
 	"\x13CompositionBoundary\x12\x1b\n" +
 	"\x17COMPOSITION_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11COMPOSITION_LOCAL\x10\x01\x12\x1b\n" +
