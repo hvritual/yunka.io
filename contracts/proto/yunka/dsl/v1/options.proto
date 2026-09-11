@@ -4,7 +4,7 @@ package yunka.dsl.v1;
 
 import "google/protobuf/descriptor.proto";
 
-option go_package = "yunka.io/pkg/contractdsl/v1;contractdslv1";
+option go_package = "github.com/hvritual/yunka.io/pkg/contractdsl/v1;contractdslv1";
 
 enum DTOKind {
   DTO_UNSPECIFIED = 0;
@@ -40,6 +40,16 @@ message DTODeclaration {
   DTOKind kind = 1;
 }
 
+// CapabilityRequirement declares one process/App-scoped constructor dependency.
+// The compiler carries the logical key and Go contract identity into AssemblyPlan
+// and generated Application dependency structs; runtime values are resolved only
+// during bootstrap and are never exposed through a business service locator.
+message CapabilityRequirement {
+  string name = 1;
+  string go_package = 2;
+  string go_type = 3;
+}
+
 message ApplicationDeclaration {
   string name = 1;
   // Stable application capability keys in <domain>/<application> form.
@@ -48,6 +58,10 @@ message ApplicationDeclaration {
   // transport binding. These operations are available to typed local child
   // capabilities without becoming protobuf RPC methods.
   repeated OperationDeclaration operations = 3;
+  // Process/App-scoped infrastructure capabilities required by this
+  // Application constructor. These are distinct from cross-Application
+  // requires edges and from Operation requires_operations edges.
+  repeated CapabilityRequirement capabilities = 4;
 }
 
 enum CompositionBoundary {
