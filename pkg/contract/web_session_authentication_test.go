@@ -18,9 +18,9 @@ func TestWebSessionAuthenticationProvenance(t *testing.T) {
 
 func TestGeneratedPolicyPreservesAPIKeyAndWebSession(t *testing.T) {
 	service := Service{
-		Name:     "ExampleApplication",
-		FullName: "example.v1.ExampleApplication",
-		Domain:   "example",
+		Name:        "ExampleApplication",
+		FullName:    "example.v1.ExampleApplication",
+		Domain:      "example",
 		Application: &ApplicationDeclaration{Name: "example"},
 		Methods: []Method{{
 			Name:     "Read",

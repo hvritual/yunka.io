@@ -416,6 +416,8 @@ func authenticationName(value uint64) string {
 		return "api-key"
 	case 3:
 		return "service-token"
+	case 4:
+		return "web-session"
 	default:
 		return ""
 	}
