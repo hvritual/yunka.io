@@ -2,7 +2,7 @@ name: production
 
 on:
   push:
-    branches: [main, fix/ce13-http-conflict-status]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:

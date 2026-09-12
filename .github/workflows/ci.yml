@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: [main, fix/ce13-http-conflict-status]
+    branches: [main]
   pull_request:
 
 permissions:
