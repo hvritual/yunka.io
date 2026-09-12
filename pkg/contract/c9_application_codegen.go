@@ -387,6 +387,8 @@ func renderC9RESTAdapter(service Service, packages []protoGoPackage, messages ma
 	imports.add("yunka.io/framework/execution", "execution")
 	imports.add("yunka.io/framework/operation", "operation")
 	imports.add("yunka.io/gateway/authz", "authz")
+	imports.add("google.golang.org/grpc/codes", "codes")
+	imports.add("google.golang.org/grpc/status", "status")
 	imports.add("yunka.io/gateway/httpbinding", "httpbinding")
 	imports.add("google.golang.org/protobuf/encoding/protojson", "protojson")
 
@@ -478,6 +480,7 @@ func renderC9RESTAdapter(service Service, packages []protoGoPackage, messages ma
 	b.WriteString("\tif authz.IsDenied(err) {\n\t\tstatusCode := http.StatusForbidden\n\t\tvar denied *authz.DeniedError\n\t\tif errors.As(err, &denied) && (denied.Decision.Reason == authz.ReasonUnauthenticated || denied.Decision.Reason == authz.ReasonAuthenticationMethod) { statusCode = http.StatusUnauthorized }\n\t\thttp.Error(writer, http.StatusText(statusCode), statusCode); return\n\t}\n")
 	b.WriteString("\tif errors.Is(err, execution.ErrIdempotencyKeyRequired) { http.Error(writer, \"idempotency key required\", http.StatusBadRequest); return }\n")
 	b.WriteString("\tif errors.Is(err, execution.ErrIdempotencyInProgress) || errors.Is(err, execution.ErrIdempotencyCompleted) { http.Error(writer, \"idempotency conflict\", http.StatusConflict); return }\n")
+	b.WriteString("\tif code := status.Code(err); code == codes.Aborted || code == codes.AlreadyExists { http.Error(writer, \"application conflict\", http.StatusConflict); return }\n")
 	b.WriteString("\tif errors.Is(err, operation.ErrExecutorUnavailable) || errors.Is(err, operation.ErrSecurityUnavailable) || errors.Is(err, operation.ErrSecurityNilContext) || errors.Is(err, operation.ErrIdempotencyUnavailable) { http.Error(writer, \"operation execution unavailable\", http.StatusInternalServerError); return }\n")
 	b.WriteString("\thttp.Error(writer, \"application request failed\", http.StatusBadRequest)\n}\n\n")
 	b.WriteString(handlers.String())

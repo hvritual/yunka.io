@@ -51,6 +51,16 @@ func TestRenderC9ApplicationCodeEmitsOnlyExecutorTransports(t *testing.T) {
 	if !strings.Contains(rest, "operation.ExecuteTyped") || strings.Contains(rest, "runtime.Prepare") {
 		t.Fatalf("REST is not executor-backed:\n%s", rest)
 	}
+	if !strings.Contains(rest, `status.Code(err); code == codes.Aborted || code == codes.AlreadyExists`) ||
+		!strings.Contains(rest, `http.Error(writer, "application conflict", http.StatusConflict)`) {
+		t.Fatalf("REST adapter must map explicit gRPC conflicts to HTTP 409:\n%s", rest)
+	}
+	if !strings.Contains(rest, `"google.golang.org/grpc/codes"`) || !strings.Contains(rest, `"google.golang.org/grpc/status"`) {
+		t.Fatalf("REST conflict mapping imports are missing:\n%s", rest)
+	}
+	if !strings.Contains(rest, `http.Error(writer, "application request failed", http.StatusBadRequest)`) {
+		t.Fatalf("unknown application errors must remain generic bad requests:\n%s", rest)
+	}
 }
 
 func TestRenderC9ApplicationCodeGeneratesChildOperationCapability(t *testing.T) {
