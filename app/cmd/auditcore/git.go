@@ -116,7 +116,7 @@ func CollectGoSourceAtCommit(projectRoot, sourceRoot, commitSHA string) (SourceS
 }
 
 func parseGoSourceBytes(path string, contents []byte) (GoSourceFile, error) {
-	file, err := parser.ParseFile(token.NewFileSet(), path, contents, parser.ImportsOnly|parser.ParseComments)
+	file, err := parser.ParseFile(token.NewFileSet(), path, contents, parser.ParseComments)
 	if err != nil {
 		return GoSourceFile{}, fmt.Errorf("audit debt: parse %s: %w", path, err)
 	}
@@ -124,12 +124,15 @@ func parseGoSourceBytes(path string, contents []byte) (GoSourceFile, error) {
 	if err != nil {
 		return GoSourceFile{}, fmt.Errorf("audit debt: imports %s: %w", path, err)
 	}
+	testFile := strings.HasSuffix(strings.ToLower(path), "_test.go")
 	return GoSourceFile{
-		Path:      cleanSlash(path),
-		Package:   strings.TrimSpace(file.Name.Name),
-		Test:      strings.HasSuffix(strings.ToLower(path), "_test.go"),
-		Generated: ast.IsGenerated(file),
-		Imports:   imports,
+		Path:         cleanSlash(path),
+		Package:      strings.TrimSpace(file.Name.Name),
+		Test:         testFile,
+		Generated:    ast.IsGenerated(file),
+		Exception:    nameException(file.Doc),
+		Imports:      imports,
+		Declarations: collectSourceDeclarations(file, testFile),
 	}, nil
 }
 
