@@ -21,6 +21,15 @@ func TestCheckAllRejectsUnmanagedDomainTopology(t *testing.T) {
 	}
 }
 
+func TestCheckRejectsUnmanagedDomainTopology(t *testing.T) {
+	_, internal := newCoverageTestProject(t)
+	writeCoverageTestFile(t, filepath.Join(internal, "access", "domain", "tenant.go"), "package domain\n")
+
+	if err := Check(internal); err == nil || !strings.Contains(err.Error(), "UNMANAGED_DOMAIN_TOPOLOGY") {
+		t.Fatalf("Check error=%v, want UNMANAGED_DOMAIN_TOPOLOGY", err)
+	}
+}
+
 func TestRegenerateAllRejectsUnmanagedDomainTopology(t *testing.T) {
 	_, internal := newCoverageTestProject(t)
 	writeCoverageTestFile(t, filepath.Join(internal, "access", "application", "service.go"), "package application\n")
@@ -137,6 +146,23 @@ func TestCoverageExemptionRequiresReason(t *testing.T) {
 	_, err := ValidateCoverage(internal)
 	if err == nil || !strings.Contains(err.Error(), "requires a reason") {
 		t.Fatalf("ValidateCoverage error=%v, want missing-reason rejection", err)
+	}
+}
+
+func TestCoverageRejectsNonCanonicalExemptionWhitespace(t *testing.T) {
+	root, internal := newCoverageTestProject(t)
+	writeCoverageTestFile(t, filepath.Join(internal, "legacy", "domain", "model.go"), "package domain\n")
+	writeCoverageTestContract(t, root, CoverageContract{
+		SchemaVersion: DomainCoverageSchemaVersion,
+		Exemptions: []CoverageExemption{{
+			Domain: " legacy",
+			Reason: "migration is tracked separately",
+		}},
+	})
+
+	_, err := ValidateCoverage(internal)
+	if err == nil || !strings.Contains(err.Error(), "non-canonical whitespace") {
+		t.Fatalf("ValidateCoverage error=%v, want non-canonical whitespace rejection", err)
 	}
 }
 
