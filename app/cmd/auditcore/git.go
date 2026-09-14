@@ -130,7 +130,7 @@ func parseGoSourceBytes(path string, contents []byte) (GoSourceFile, error) {
 		Package:           strings.TrimSpace(file.Name.Name),
 		Test:              testFile,
 		Generated:         ast.IsGenerated(file),
-		PackageDocumented: hasDocumentation(file.Doc),
+		PackageDocumented: hasPackageDocumentation(file),
 		Exception:         nameException(file.Doc),
 		Imports:           imports,
 		Declarations:      collectSourceDeclarations(file, testFile),
