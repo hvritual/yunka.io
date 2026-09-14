@@ -9,13 +9,14 @@ Before planning, analyzing, editing, or running task-specific commands:
 1. Read this `AGENTS.md` completely.
 2. Read `PROJECT_MEMORY.md` completely for durable governance and architecture invariants.
 3. Read `docs/STATUS.md` completely for the current framework/wave/release and pressure state.
-4. Run `git status --short --branch` when a local checkout is available.
-5. Run `git branch --show-current` and `git remote -v` when a local checkout is available.
-6. Preserve all existing user changes and inspect any relevant current, historical, and evidence documentation before editing.
+4. Read `docs/ENGINEERING_QUALITY_RULES.md` completely before creating, renaming, refactoring, reviewing, or generating source code or durable tests.
+5. Run `git status --short --branch` when a local checkout is available.
+6. Run `git branch --show-current` and `git remote -v` when a local checkout is available.
+7. Preserve all existing user changes and inspect any relevant current, historical, and evidence documentation before editing.
 
 Do not skip this bootstrap for small, read-only, or follow-up tasks. When work is performed through the GitHub Connector because no local checkout is available, verify the target repository, base branch/ref, and current head commit through the Connector before mutating repository state.
 
-`AGENTS.md` is the current repository-governance authority. `PROJECT_MEMORY.md` is the durable architecture/governance decision authority. `docs/STATUS.md` is the current delivery/status authority. If an older historical entry conflicts with these current authorities, follow the authority that owns that fact and treat the older entry as historical or stale.
+`AGENTS.md` is the current repository-governance authority. `PROJECT_MEMORY.md` is the durable architecture/governance decision authority. `docs/STATUS.md` is the current delivery/status authority. `docs/ENGINEERING_QUALITY_RULES.md` is the durable human-reviewability and semantic code-quality authority. If an older historical entry conflicts with these current authorities, follow the authority that owns that fact and treat the older entry as historical or stale.
 
 ## Repository and Git policy
 
@@ -68,6 +69,17 @@ review a prerequisite for integration.
 - Completed roadmaps under `docs/waves/**` may preserve their original planning prose, but must be explicitly classified as `HISTORICAL` when that prose can be mistaken for current status.
 - Exact qualification evidence proves only the exact candidate/tree it names. Do not silently promote historical evidence into current status.
 - A change that closes, opens, defers, supersedes, or activates a framework wave/pressure item must reconcile `docs/STATUS.md` in the same delivery flow.
+
+## Engineering quality baseline
+
+- Follow `docs/ENGINEERING_QUALITY_RULES.md` for human-reviewability, semantic naming, comments, package documentation, abstraction justification, test naming, AI change metadata, semantic review findings and engineering-debt rules.
+- Production source identities describe durable domain/technical semantics, not task history. Delivery identifiers and labels belong in Issues, pull requests, commits and evidence, not in long-lived package/file/symbol/test identities unless they are genuine business concepts.
+- Generic container names such as `model.go`, `types.go`, `common.go`, `utils.go`, `helper.go`, `Manager` or `Processor` require a real cohesive responsibility; they are not default organization patterns.
+- Comments explain invariants, side effects, boundaries and non-obvious decisions. Comments that only restate a declaration do not satisfy the documentation baseline.
+- Generated and handwritten ownership must remain explicit. Never move developer-owned behavior into generator overwrite scope merely to satisfy organization rules.
+- New abstractions require a demonstrated boundary, dependency-isolation purpose, domain meaning, lifecycle ownership or multiple implementations. Do not add abstraction layers solely to make AI output look structured.
+- Non-trivial AI changes must make WHY / WHAT / BOUNDARY / PROOF reviewable without reconstructing the original conversation and must not increase blocking engineering-quality debt without an explicit waiver.
+- Existing historical source may be migrated incrementally, but new or touched source must not intentionally introduce new violations in the touched scope.
 
 ## Durable memory maintenance
 
