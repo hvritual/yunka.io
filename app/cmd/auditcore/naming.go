@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 const (
@@ -13,7 +14,8 @@ const (
 )
 
 var historicalTaskPrefix = regexp.MustCompile(`(?i)^(?:(?:ag|ax|cg|ce|yu)[_-]?\d+(?:[._-]\d+)*|ec[_-]?ri[_-]?\d+(?:[._-]\d+)*|(?:b|c)\d+(?:[._-]\d+)*)`)
-var numberedHistoryPrefix = regexp.MustCompile(`(?i)^(?:round|wave|phase|stage|task|tmp|final|old)[_-]?\d+`)
+
+var historicalIdentityLabels = []string{"round", "wave", "phase", "stage", "task", "tmp", "final", "old"}
 
 var genericContainerNames = map[string]struct{}{
 	"model": {}, "types": {}, "common": {}, "utils": {}, "helper": {}, "misc": {}, "manager": {}, "processor": {}, "data": {},
@@ -85,7 +87,7 @@ func evaluateNaming(snapshot SourceSnapshot) []Finding {
 	return findings
 }
 
-func historicalIdentityReason(kind, identity string) string {
+func historicalIdentityReason(_ string, identity string) string {
 	identity = strings.TrimSpace(identity)
 	if identity == "" {
 		return ""
@@ -93,13 +95,25 @@ func historicalIdentityReason(kind, identity string) string {
 	if match := historicalTaskPrefix.FindString(identity); match != "" {
 		return "identity starts with delivery-history token " + match
 	}
-	if match := numberedHistoryPrefix.FindString(identity); match != "" {
-		return "identity starts with numbered delivery-history label " + match
+	if label := historicalLabelPrefix(identity); label != "" {
+		return "identity starts with delivery-history label " + label
 	}
-	if kind == "file" || kind == "package" {
-		switch leadingIdentityWord(identity) {
-		case "round", "wave", "phase", "stage", "task", "tmp", "final", "old":
-			return "identity is led by a delivery-history label rather than durable domain or technical semantics"
+	return ""
+}
+
+func historicalLabelPrefix(identity string) string {
+	identity = strings.TrimSpace(identity)
+	lower := strings.ToLower(identity)
+	for _, label := range historicalIdentityLabels {
+		if lower == label {
+			return identity
+		}
+		if !strings.HasPrefix(lower, label) || len(identity) <= len(label) {
+			continue
+		}
+		next := rune(identity[len(label)])
+		if next == '_' || next == '-' || unicode.IsDigit(next) || unicode.IsUpper(next) {
+			return identity[:len(label)]
 		}
 	}
 	return ""
