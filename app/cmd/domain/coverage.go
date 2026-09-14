@@ -15,6 +15,7 @@ import (
 const (
 	DomainCoverageSchemaVersion = 1
 	DomainCoverageRelativePath  = ".yunka/domain-coverage.json"
+	domainTopologyAnchor        = "domain"
 
 	CoverageManaged CoverageState = "MANAGED"
 	CoverageExempt  CoverageState = "EXEMPT"
@@ -65,9 +66,12 @@ var domainTopologySignals = []string{
 }
 
 // InspectCoverage derives Domain ownership from canonical source evidence.
-// A domain.json means MANAGED. A domain-like tree without a manifest may be
-// EXEMPT only when the project declares an exact exemption. Otherwise it is
-// UNKNOWN and ValidateCoverage will fail closed.
+// A domain.json means MANAGED. An unmanaged tree is considered a Domain
+// compiler surface only when the canonical domain/ anchor exists; sibling
+// application/policy/transport output alone may belong to other Yunka
+// compilers and must not be reclassified here. An anchored tree without a
+// manifest may be EXEMPT only when the project declares an exact exemption.
+// Otherwise it is UNKNOWN and ValidateCoverage will fail closed.
 func InspectCoverage(root string) ([]CoverageEntry, error) {
 	root = strings.TrimSpace(root)
 	if root == "" {
@@ -166,11 +170,15 @@ func ValidateCoverage(root string) ([]CoverageEntry, error) {
 
 func domainLikeSignals(root string) ([]string, error) {
 	signals := make([]string, 0, len(domainTopologySignals))
+	anchored := false
 	for _, relative := range domainTopologySignals {
 		info, err := os.Stat(filepath.Join(root, relative))
 		switch {
 		case err == nil && info.IsDir():
 			signals = append(signals, relative)
+			if relative == domainTopologyAnchor {
+				anchored = true
+			}
 		case err == nil:
 			continue
 		case os.IsNotExist(err):
@@ -178,6 +186,9 @@ func domainLikeSignals(root string) ([]string, error) {
 		default:
 			return nil, err
 		}
+	}
+	if !anchored {
+		return nil, nil
 	}
 	return signals, nil
 }
