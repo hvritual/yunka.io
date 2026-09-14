@@ -126,13 +126,14 @@ func parseGoSourceBytes(path string, contents []byte) (GoSourceFile, error) {
 	}
 	testFile := strings.HasSuffix(strings.ToLower(path), "_test.go")
 	return GoSourceFile{
-		Path:         cleanSlash(path),
-		Package:      strings.TrimSpace(file.Name.Name),
-		Test:         testFile,
-		Generated:    ast.IsGenerated(file),
-		Exception:    nameException(file.Doc),
-		Imports:      imports,
-		Declarations: collectSourceDeclarations(file, testFile),
+		Path:              cleanSlash(path),
+		Package:           strings.TrimSpace(file.Name.Name),
+		Test:              testFile,
+		Generated:         ast.IsGenerated(file),
+		PackageDocumented: hasDocumentation(file.Doc),
+		Exception:         nameException(file.Doc),
+		Imports:           imports,
+		Declarations:      collectSourceDeclarations(file, testFile),
 	}, nil
 }
 
