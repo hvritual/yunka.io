@@ -7,8 +7,9 @@ func TestEvaluateSourceProducesOnlyCanonicalDirectImportViolations(t *testing.T)
 		SourceRoot: "internal",
 		Files: []GoSourceFile{
 			{
-				Path:    "internal/tenant/application/service.go",
-				Package: "application",
+				Path:              "internal/tenant/application/service.go",
+				Package:           "application",
+				PackageDocumented: true,
 				Imports: []string{
 					"example.com/demo/internal/device/ports",
 					"github.com/hvritual/yunka.io/framework/platform",
@@ -69,8 +70,9 @@ func TestEvaluateSourceRecognizesQualifiedConsumerModuleAliases(t *testing.T) {
 	snapshot := SourceSnapshot{
 		SourceRoot: "internal",
 		Files: []GoSourceFile{{
-			Path:    "internal/access/application/service.go",
-			Package: "application",
+			Path:              "internal/access/application/service.go",
+			Package:           "application",
+			PackageDocumented: true,
 			Imports: []string{
 				"github.com/hvritual/biz/internal/deviceops/ports",
 				"yunka.io/framework/platform",
@@ -101,8 +103,9 @@ func TestEvaluateSourceDoesNotInferArbitrarySuffixAsYunkaModule(t *testing.T) {
 	snapshot := SourceSnapshot{
 		SourceRoot: "internal",
 		Files: []GoSourceFile{{
-			Path:    "internal/tenant/application/service.go",
-			Package: "application",
+			Path:              "internal/tenant/application/service.go",
+			Package:           "application",
+			PackageDocumented: true,
 			Imports: []string{
 				"example.org/not-yunka/framework/platform",
 				"example.org/not-yunka/gateway/authz",
@@ -123,9 +126,10 @@ func TestEvaluateSourceDoesNotInferUndeclaredDomainBoundary(t *testing.T) {
 	snapshot := SourceSnapshot{
 		SourceRoot: "internal",
 		Files: []GoSourceFile{{
-			Path:    "internal/tenant/application/service.go",
-			Package: "application",
-			Imports: []string{"example.com/demo/internal/device/ports"},
+			Path:              "internal/tenant/application/service.go",
+			Package:           "application",
+			PackageDocumented: true,
+			Imports:           []string{"example.com/demo/internal/device/ports"},
 		}},
 	}
 	findings := EvaluateSource(snapshot, RuleOptions{
