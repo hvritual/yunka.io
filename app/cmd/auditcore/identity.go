@@ -135,7 +135,25 @@ func hasDocumentation(group *ast.CommentGroup) bool {
 	if group == nil {
 		return false
 	}
-	return strings.TrimSpace(group.Text()) != ""
+	for _, comment := range group.List {
+		if comment == nil {
+			continue
+		}
+		text := strings.TrimSpace(comment.Text)
+		text = strings.TrimSpace(strings.TrimPrefix(text, "//"))
+		text = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(text, "/*"), "*/"))
+		for _, line := range strings.Split(text, "\n") {
+			line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "*"))
+			if line == "" || strings.HasPrefix(line, nameExceptionDirective) || strings.HasPrefix(line, "go:") {
+				continue
+			}
+			if strings.HasPrefix(line, "Code generated ") && strings.Contains(line, " DO NOT EDIT.") {
+				continue
+			}
+			return true
+		}
+	}
+	return false
 }
 
 func receiverIdentity(fields *ast.FieldList) string {
