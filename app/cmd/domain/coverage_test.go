@@ -32,7 +32,7 @@ func TestCheckRejectsUnmanagedDomainTopology(t *testing.T) {
 
 func TestRegenerateAllRejectsUnmanagedDomainTopology(t *testing.T) {
 	_, internal := newCoverageTestProject(t)
-	writeCoverageTestFile(t, filepath.Join(internal, "access", "application", "service.go"), "package application\n")
+	writeCoverageTestFile(t, filepath.Join(internal, "access", "domain", "model.go"), "package domain\n")
 
 	count, err := RegenerateAll(internal)
 	if err == nil || !strings.Contains(err.Error(), "UNMANAGED_DOMAIN_TOPOLOGY") {
@@ -103,6 +103,28 @@ func TestCoverageDoesNotClassifyOrdinaryInternalPackageAsDomain(t *testing.T) {
 	}
 	if len(entries) != 0 {
 		t.Fatalf("ordinary internal package classified as domain: %#v", entries)
+	}
+}
+
+func TestCoverageDoesNotClassifyApplicationCompilerTopologyAsDomain(t *testing.T) {
+	_, internal := newCoverageTestProject(t)
+	writeCoverageTestFile(t, filepath.Join(internal, "tenant", "application", "service.go"), "package application\n")
+	writeCoverageTestFile(t, filepath.Join(internal, "tenant", "policy", "authorization.go"), "package policy\n")
+	writeCoverageTestFile(t, filepath.Join(internal, "tenant", "transport", "http.go"), "package transport\n")
+
+	entries, err := ValidateCoverage(internal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("application/compiler output classified as Domain compiler surface: %#v", entries)
+	}
+	count, err := CheckAll(internal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("managed count=%d want 0", count)
 	}
 }
 
