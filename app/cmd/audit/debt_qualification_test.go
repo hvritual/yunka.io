@@ -28,7 +28,8 @@ func TestBuildWithBaseClassifiesDebtWithoutMutatingRepository(t *testing.T) {
 	writeAuditProjectFile(t, filepath.Join(root, "contracts", "proto", "tenant.proto"), "syntax = \"proto3\";\n")
 	writeAuditProjectFile(t, filepath.Join(root, "contracts", "generated", contract.ManifestFilename), string(append(manifestBytes, '\n')))
 	servicePath := filepath.Join(root, "internal", "tenant", "application", "service.go")
-	writeAuditProjectFile(t, servicePath, `package application
+	writeAuditProjectFile(t, servicePath, `// Package application owns tenant use-case orchestration for this fixture.
+package application
 
 import (
 	"example.com/demo/internal/device/ports"
@@ -44,7 +45,8 @@ var _ = platform.Provider{}
 	gitAudit(t, root, "commit", "-m", "baseline")
 
 	// Preserve one proven violation, remove one, and introduce one.
-	writeAuditProjectFile(t, servicePath, `package application
+	writeAuditProjectFile(t, servicePath, `// Package application owns tenant use-case orchestration for this fixture.
+package application
 
 import (
 	"github.com/hvritual/yunka.io/framework/platform"
@@ -113,7 +115,7 @@ func TestBuildWithBaseFailsClosedAcrossModuleIdentityChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeAuditProjectFile(t, filepath.Join(root, "contracts", "generated", contract.ManifestFilename), string(append(manifestBytes, '\n')))
-	writeAuditProjectFile(t, filepath.Join(root, "internal", "tenant", "application", "service.go"), "package application\n")
+	writeAuditProjectFile(t, filepath.Join(root, "internal", "tenant", "application", "service.go"), "// Package application owns tenant use-case orchestration for this fixture.\npackage application\n")
 	gitAudit(t, root, "init")
 	gitAudit(t, root, "config", "user.email", "audit@example.invalid")
 	gitAudit(t, root, "config", "user.name", "Yunka Audit Test")
