@@ -32,7 +32,8 @@ func TestBuildUsesCanonicalManifestAndRemainsReadOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeAuditProjectFile(t, filepath.Join(root, "contracts", "generated", contract.ManifestFilename), string(append(manifestBytes, '\n')))
-	writeAuditProjectFile(t, filepath.Join(root, "internal", "tenant", "application", "service.go"), `package application
+	writeAuditProjectFile(t, filepath.Join(root, "internal", "tenant", "application", "service.go"), `// Package application owns tenant use-case orchestration for this fixture.
+package application
 
 import (
 	"example.com/demo/internal/device/ports"
