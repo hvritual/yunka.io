@@ -29,14 +29,12 @@ func evaluateNaming(snapshot SourceSnapshot) []Finding {
 		packageKey := filepath.ToSlash(filepath.Dir(file.Path)) + "\x00" + file.Package
 		packageFiles[packageKey] = append(packageFiles[packageKey], file)
 
-		if file.Exception == "" {
+		if file.Exception == "" && !file.Test {
 			if reason := historicalIdentityReason("file", sourceFileIdentity(file.Path)); reason != "" {
 				findings = append(findings, historicalIdentityFinding(file.Path, "file", sourceFileIdentity(file.Path), reason))
 			}
-			if !file.Test {
-				if finding, ok := genericContainerFinding(file); ok {
-					findings = append(findings, finding)
-				}
+			if finding, ok := genericContainerFinding(file); ok {
+				findings = append(findings, finding)
 			}
 		}
 		for _, declaration := range file.Declarations {
