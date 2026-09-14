@@ -75,6 +75,7 @@ Rules:
 - `domain` names exactly one direct child of the checked root;
 - `reason` is mandatory;
 - `owner` and `expires` are optional metadata;
+- exemption string fields must be canonical and cannot contain leading or trailing whitespace;
 - `expires`, when present, uses `YYYY-MM-DD`;
 - duplicate exemptions are rejected;
 - an exemption that no longer matches an existing unmanaged domain-like surface is rejected as stale;
@@ -84,7 +85,7 @@ The exception register owns only exemptions. It does not duplicate `domain.json`
 
 ## Generation and checking
 
-Project-level Domain generation and checking both perform coverage validation before acting on managed domains.
+Project-level Domain generation and checking both perform coverage validation before acting on managed domains. The lower-level Go `domain.Check` API uses the same coverage closure, so callers cannot bypass ownership validation by avoiding the CLI/project wrapper.
 
 An `UNKNOWN` surface therefore blocks both:
 
