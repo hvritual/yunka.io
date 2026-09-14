@@ -214,6 +214,11 @@ func validateCoverageContract(contract CoverageContract) error {
 	for index, exemption := range contract.Exemptions {
 		domain := strings.TrimSpace(exemption.Domain)
 		reason := strings.TrimSpace(exemption.Reason)
+		owner := strings.TrimSpace(exemption.Owner)
+		expires := strings.TrimSpace(exemption.Expires)
+		if exemption.Domain != domain || exemption.Reason != reason || exemption.Owner != owner || exemption.Expires != expires {
+			return fmt.Errorf("domain: %s exemption for %q contains non-canonical whitespace", DomainCoverageRelativePath, domain)
+		}
 		if domain == "" || domain == "." || domain == ".." || domain != filepath.Base(domain) || strings.ContainsAny(domain, "/\\") {
 			return fmt.Errorf("domain: %s exemptions[%d].domain must be one direct domain directory name", DomainCoverageRelativePath, index)
 		}
@@ -224,13 +229,11 @@ func validateCoverageContract(contract CoverageContract) error {
 			return fmt.Errorf("domain: %s contains duplicate exemption for %q", DomainCoverageRelativePath, domain)
 		}
 		seen[domain] = struct{}{}
-		if expires := strings.TrimSpace(exemption.Expires); expires != "" {
+		if expires != "" {
 			if _, err := time.Parse("2006-01-02", expires); err != nil {
 				return fmt.Errorf("domain: %s exemption for %q has invalid expires date %q; use YYYY-MM-DD", DomainCoverageRelativePath, domain, exemption.Expires)
 			}
 		}
-		contract.Exemptions[index].Domain = domain
-		contract.Exemptions[index].Reason = reason
 	}
 	return nil
 }
