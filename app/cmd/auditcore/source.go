@@ -80,7 +80,7 @@ func CollectGoSource(projectRoot, sourceRoot string) (SourceSnapshot, error) {
 			Package:           strings.TrimSpace(file.Name.Name),
 			Test:              testFile,
 			Generated:         ast.IsGenerated(file),
-			PackageDocumented: hasDocumentation(file.Doc),
+			PackageDocumented: hasPackageDocumentation(file),
 			Exception:         nameException(file.Doc),
 			Imports:           imports,
 			Declarations:      collectSourceDeclarations(file, testFile),
