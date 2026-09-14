@@ -1,0 +1,72 @@
+name: documentation-consumer-qualification
+
+on:
+  pull_request:
+    paths:
+      - 'app/cmd/audit/**'
+      - 'app/cmd/auditcore/**'
+      - 'docs/ENGINEERING_QUALITY_RULES.md'
+      - '.github/workflows/documentation-consumer-qualification.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Load locked Go version
+        id: toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1091
+          source tools/toolchain.env
+          : "${GO_VERSION:?}"
+          echo "go_version=${GO_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: ${{ steps.toolchain.outputs.go_version }}
+          cache-dependency-path: app/go.sum
+
+      - name: Checkout exact consumer evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/hvritual/biz.git "$RUNNER_TEMP/biz"
+          git -C "$RUNNER_TEMP/biz" checkout --quiet c89ec471306c91f49fdf265f1766495abb1f4f08
+          test "$(git -C "$RUNNER_TEMP/biz" rev-parse HEAD)" = "c89ec471306c91f49fdf265f1766495abb1f4f08"
+
+          git clone --quiet https://github.com/hvritual/iot-delivery-system.git "$RUNNER_TEMP/iot-delivery-system"
+          git -C "$RUNNER_TEMP/iot-delivery-system" checkout --quiet c38ce0efcbe11d8ef9201381f895c7e9a85ddbc0
+          test "$(git -C "$RUNNER_TEMP/iot-delivery-system" rev-parse HEAD)" = "c38ce0efcbe11d8ef9201381f895c7e9a85ddbc0"
+
+      - name: Test deterministic documentation rules
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./cmd/auditcore -count=1
+
+      - name: Qualify documentation policy against consumers
+        working-directory: app
+        shell: bash
+        env:
+          YUNKA_QUALIFY_BIZ_ROOT: ${{ runner.temp }}/biz
+          YUNKA_QUALIFY_IOT_ROOT: ${{ runner.temp }}/iot-delivery-system
+        run: |
+          set -euo pipefail
+          go test ./cmd/audit -run '^TestConsumerDocumentationQualification$' -count=1 -v
+
+      - name: Prove consumer sources remained unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git -C "$RUNNER_TEMP/biz" status --porcelain)"
+          test -z "$(git -C "$RUNNER_TEMP/iot-delivery-system" status --porcelain)"
