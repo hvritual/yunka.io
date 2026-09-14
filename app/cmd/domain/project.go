@@ -3,14 +3,12 @@ package domain
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
-	"strings"
 )
 
 // RegenerateAll discovers every managed domain directly below root and
-// regenerates its persistence-only artifacts. A missing root is treated as an
-// empty project so top-level project generation can remain zero-configuration.
+// regenerates its persistence-only artifacts. Domain-like surfaces with no
+// explicit ownership decision fail closed before generation starts.
 func RegenerateAll(root string) (int, error) {
 	roots, err := managedDomainRoots(root)
 	if err != nil {
@@ -25,8 +23,10 @@ func RegenerateAll(root string) (int, error) {
 	return len(roots), errors.Join(failures...)
 }
 
-// CheckAll validates every managed domain below root without mutating project
-// files and returns the number of discovered domains for workflow reporting.
+// CheckAll validates Domain governance coverage and then validates every
+// managed domain below root without mutating project files. The returned count
+// includes only MANAGED domains; EXEMPT surfaces remain visible through
+// InspectCoverage but are intentionally outside generator ownership.
 func CheckAll(root string) (int, error) {
 	roots, err := managedDomainRoots(root)
 	if err != nil {
@@ -39,33 +39,15 @@ func CheckAll(root string) (int, error) {
 }
 
 func managedDomainRoots(root string) ([]string, error) {
-	root = strings.TrimSpace(root)
-	if root == "" {
-		root = "internal"
-	}
-	absolute, err := filepath.Abs(root)
-	if err != nil {
-		return nil, err
-	}
-	entries, err := os.ReadDir(absolute)
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
+	entries, err := ValidateCoverage(root)
 	if err != nil {
 		return nil, err
 	}
 	roots := make([]string, 0, len(entries))
 	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
-			continue
+		if entry.State == CoverageManaged {
+			roots = append(roots, entry.Root)
 		}
-		domainRoot := filepath.Join(absolute, entry.Name())
-		if _, err := os.Stat(filepath.Join(domainRoot, ManifestName)); os.IsNotExist(err) {
-			continue
-		} else if err != nil {
-			return nil, err
-		}
-		roots = append(roots, domainRoot)
 	}
 	return roots, nil
 }
