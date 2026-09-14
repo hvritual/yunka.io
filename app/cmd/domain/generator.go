@@ -286,6 +286,9 @@ func Check(root string) error {
 	if err != nil {
 		return err
 	}
+	if _, err := ValidateCoverage(absolute); err != nil {
+		return err
+	}
 	entries, err := os.ReadDir(absolute)
 	if os.IsNotExist(err) {
 		return nil

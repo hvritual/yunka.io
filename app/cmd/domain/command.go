@@ -39,12 +39,13 @@ func Command() cli.Command {
 			},
 			{
 				Name:  "check",
-				Usage: "validate PO scan contract, persistence-only Domain Manifest V3, project naming, and generated repository artifacts",
+				Usage: "validate domain ownership coverage, PO scan contract, Domain Manifest V3, project naming, and generated repository artifacts",
 				Flags: []cli.Flag{
 					cli.StringFlag{Name: "root", Usage: "domain root to validate", Value: "internal"},
 				},
 				Action: func(context *cli.Context) error {
-					return Check(context.String("root"))
+					_, err := CheckAll(context.String("root"))
+					return err
 				},
 			},
 		},
