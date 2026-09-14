@@ -10,6 +10,21 @@ Turn the normative engineering-quality baseline into framework capabilities that
 
 The authoritative global rules are in `docs/ENGINEERING_QUALITY_RULES.md`. This plan only decomposes implementation work; it is not a second rule source.
 
+## Issue tracking
+
+- Parent initiative: [#192](https://github.com/hvritual/yunka.io/issues/192)
+- Semantic naming and durable source identity: [#193](https://github.com/hvritual/yunka.io/issues/193)
+- Package purpose and invariant documentation: [#194](https://github.com/hvritual/yunka.io/issues/194)
+- Deterministic code-semantics findings: [#195](https://github.com/hvritual/yunka.io/issues/195)
+- Semantic change map and human review packet: [#196](https://github.com/hvritual/yunka.io/issues/196)
+- Structured semantic architecture review: [#197](https://github.com/hvritual/yunka.io/issues/197)
+- Engineering-quality debt delta and waivers: [#198](https://github.com/hvritual/yunka.io/issues/198)
+- New-project rule propagation: [#199](https://github.com/hvritual/yunka.io/issues/199)
+- Existing-repository bounded migration: [#200](https://github.com/hvritual/yunka.io/issues/200)
+- Related governance coverage closure: [#191](https://github.com/hvritual/yunka.io/issues/191)
+
+Issue numbers identify delivery work only. They must not become production code, package, file, symbol, operation or durable test identities.
+
 ## Work items
 
 ### Semantic naming and durable source identity
