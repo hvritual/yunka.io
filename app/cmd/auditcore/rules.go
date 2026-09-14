@@ -32,7 +32,7 @@ func EvaluateSource(snapshot SourceSnapshot, options RuleOptions) []Finding {
 	domains := stringSet(options.DeclaredDomains)
 	goModule := strings.Trim(strings.TrimSpace(options.GoModule), "/")
 	generatedRoot := cleanSlash(options.GeneratedGoRoot)
-	var findings []Finding
+	findings := evaluateNaming(snapshot)
 	for _, file := range snapshot.Files {
 		if file.Test || file.Generated {
 			continue
