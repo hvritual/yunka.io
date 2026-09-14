@@ -19,6 +19,8 @@ func TestEvaluateNamingRejectsHistoricalDurableIdentities(t *testing.T) {
 			Package: "domain",
 			Declarations: []SourceDeclaration{
 				{Kind: "type", Name: "B12Tenant"},
+				{Kind: "func", Name: "TaskMigrationRunner"},
+				{Kind: "type", Name: "Taskflow"},
 				{Kind: "func", Name: "NewTenant"},
 			},
 		},
@@ -28,6 +30,7 @@ func TestEvaluateNamingRejectsHistoricalDurableIdentities(t *testing.T) {
 			Test:    true,
 			Declarations: []SourceDeclaration{
 				{Kind: "test", Name: "TestCE09Replay"},
+				{Kind: "test", Name: "TestWaveReplay"},
 			},
 		},
 	}}
@@ -39,8 +42,8 @@ func TestEvaluateNamingRejectsHistoricalDurableIdentities(t *testing.T) {
 			historical = append(historical, finding)
 		}
 	}
-	if len(historical) != 3 {
-		t.Fatalf("historical findings = %d, want 3: %#v", len(historical), historical)
+	if len(historical) != 5 {
+		t.Fatalf("historical findings = %d, want 5: %#v", len(historical), historical)
 	}
 	for _, finding := range historical {
 		if finding.Class != FindingProvenViolation {
@@ -51,8 +54,8 @@ func TestEvaluateNamingRejectsHistoricalDurableIdentities(t *testing.T) {
 		}
 	}
 	for _, finding := range historical {
-		if finding.Symbol == "NewTenant" {
-			t.Fatalf("conventional Go constructor must not be treated as delivery history: %#v", finding)
+		if finding.Symbol == "NewTenant" || finding.Symbol == "Taskflow" {
+			t.Fatalf("durable semantic identity must not be treated as delivery history: %#v", finding)
 		}
 	}
 }
