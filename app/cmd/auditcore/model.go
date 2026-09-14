@@ -39,13 +39,17 @@ type Evidence struct {
 }
 
 type Finding struct {
-	ID        string       `json:"id"`
-	Rule      string       `json:"rule"`
-	Class     FindingClass `json:"class"`
-	Subject   string       `json:"subject"`
-	Summary   string       `json:"summary"`
-	Invariant string       `json:"invariant,omitempty"`
-	Evidence  []Evidence   `json:"evidence"`
+	ID          string       `json:"id"`
+	Rule        string       `json:"rule"`
+	Class       FindingClass `json:"class"`
+	Subject     string       `json:"subject"`
+	Summary     string       `json:"summary"`
+	Invariant   string       `json:"invariant,omitempty"`
+	Path        string       `json:"path,omitempty"`
+	Symbol      string       `json:"symbol,omitempty"`
+	Reason      string       `json:"reason,omitempty"`
+	Remediation string       `json:"remediation,omitempty"`
+	Evidence    []Evidence   `json:"evidence"`
 }
 
 type DebtDelta struct {
@@ -112,6 +116,11 @@ func Validate(report Report) error {
 		if file.Package == "" {
 			return fmt.Errorf("audit: source file %s package is required", file.Path)
 		}
+		for _, declaration := range file.Declarations {
+			if declaration.Kind == "" || declaration.Name == "" {
+				return fmt.Errorf("audit: source file %s declaration kind and name are required", file.Path)
+			}
+		}
 	}
 	if err := validateFindings(report.Findings, false); err != nil {
 		return err
@@ -154,6 +163,10 @@ func normalizeFindings(values []Finding) {
 		finding.Subject = strings.TrimSpace(finding.Subject)
 		finding.Summary = strings.TrimSpace(finding.Summary)
 		finding.Invariant = strings.TrimSpace(finding.Invariant)
+		finding.Path = strings.TrimSpace(finding.Path)
+		finding.Symbol = strings.TrimSpace(finding.Symbol)
+		finding.Reason = strings.TrimSpace(finding.Reason)
+		finding.Remediation = strings.TrimSpace(finding.Remediation)
 		finding.Evidence = normalizeEvidence(finding.Evidence)
 	}
 	sort.Slice(values, func(i, j int) bool {
@@ -198,6 +211,14 @@ func validateFindings(values []Finding, provenOnly bool) error {
 			}
 		default:
 			return fmt.Errorf("finding %s class %q is unsupported", finding.ID, finding.Class)
+		}
+		if strings.HasPrefix(finding.Rule, "AUDIT-NAME-") {
+			if finding.Path == "" || finding.Reason == "" || finding.Remediation == "" {
+				return fmt.Errorf("naming finding %s path, reason and remediation are required", finding.ID)
+			}
+			if finding.Rule == RuleHistoricalSourceIdentity && finding.Symbol == "" {
+				return fmt.Errorf("historical naming finding %s symbol is required", finding.ID)
+			}
 		}
 		if len(finding.Evidence) == 0 {
 			return fmt.Errorf("finding %s evidence is required", finding.ID)
@@ -275,6 +296,7 @@ func cloneReport(report Report) Report {
 	for index, file := range report.Source.Files {
 		result.Source.Files[index] = file
 		result.Source.Files[index].Imports = append([]string(nil), file.Imports...)
+		result.Source.Files[index].Declarations = append([]SourceDeclaration(nil), file.Declarations...)
 	}
 	result.Findings = cloneFindings(report.Findings)
 	if report.Debt != nil {
