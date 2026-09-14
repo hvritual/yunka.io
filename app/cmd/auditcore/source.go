@@ -14,11 +14,13 @@ import (
 )
 
 type GoSourceFile struct {
-	Path      string   `json:"path"`
-	Package   string   `json:"package"`
-	Test      bool     `json:"test"`
-	Generated bool     `json:"generated"`
-	Imports   []string `json:"imports"`
+	Path         string              `json:"path"`
+	Package      string              `json:"package"`
+	Test         bool                `json:"test"`
+	Generated    bool                `json:"generated"`
+	Exception    string              `json:"nameException,omitempty"`
+	Imports      []string            `json:"imports"`
+	Declarations []SourceDeclaration `json:"declarations"`
 }
 
 type SourceSnapshot struct {
@@ -53,7 +55,12 @@ func CollectGoSource(projectRoot, sourceRoot string) (SourceSnapshot, error) {
 		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || !strings.EqualFold(filepath.Ext(entry.Name()), ".go") {
 			return nil
 		}
-		file, parseErr := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly|parser.ParseComments)
+		contents, readErr := os.ReadFile(path)
+		if readErr != nil {
+			relative, _ := filepath.Rel(project, path)
+			return fmt.Errorf("audit source: read %s: %w", filepath.ToSlash(relative), readErr)
+		}
+		file, parseErr := parser.ParseFile(token.NewFileSet(), path, contents, parser.ParseComments)
 		if parseErr != nil {
 			relative, _ := filepath.Rel(project, path)
 			return fmt.Errorf("audit source: parse %s: %w", filepath.ToSlash(relative), parseErr)
@@ -66,12 +73,15 @@ func CollectGoSource(projectRoot, sourceRoot string) (SourceSnapshot, error) {
 		if importErr != nil {
 			return fmt.Errorf("audit source: imports %s: %w", filepath.ToSlash(relative), importErr)
 		}
+		testFile := strings.HasSuffix(strings.ToLower(entry.Name()), "_test.go")
 		snapshot.Files = append(snapshot.Files, GoSourceFile{
-			Path:      filepath.ToSlash(relative),
-			Package:   strings.TrimSpace(file.Name.Name),
-			Test:      strings.HasSuffix(strings.ToLower(entry.Name()), "_test.go"),
-			Generated: ast.IsGenerated(file),
-			Imports:   imports,
+			Path:         filepath.ToSlash(relative),
+			Package:      strings.TrimSpace(file.Name.Name),
+			Test:         testFile,
+			Generated:    ast.IsGenerated(file),
+			Exception:    nameException(file.Doc),
+			Imports:      imports,
+			Declarations: collectSourceDeclarations(file, testFile),
 		})
 		return nil
 	})
@@ -91,7 +101,12 @@ func NormalizeSource(snapshot *SourceSnapshot) {
 		file := &snapshot.Files[index]
 		file.Path = cleanSlash(file.Path)
 		file.Package = strings.TrimSpace(file.Package)
+		file.Exception = strings.TrimSpace(file.Exception)
 		file.Imports = uniqueStrings(file.Imports)
+		normalizeDeclarations(file.Declarations)
+		if file.Declarations == nil {
+			file.Declarations = []SourceDeclaration{}
+		}
 	}
 	sort.Slice(snapshot.Files, func(i, j int) bool {
 		if snapshot.Files[i].Path != snapshot.Files[j].Path {
