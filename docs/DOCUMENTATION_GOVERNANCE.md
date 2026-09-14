@@ -19,6 +19,7 @@ This document defines how documentation is classified, which artifact owns each 
 5. **Status is centralized.** [`docs/STATUS.md`](STATUS.md) is the repository documentation authority for the current framework/wave/release/pressure state.
 6. **Durable memory is not a task tracker or status ledger.** `PROJECT_MEMORY.md` records active governance and architecture invariants. It may point to `docs/STATUS.md`, but current HEADs, repository visibility, active PR/task state, current wave progress, and duplicated release/status tables do not belong there.
 7. **Evidence remains scoped to an exact candidate.** Qualification/release evidence proves the exact SHA/tree and consumer pair it names. Later repository state may inherit that evidence only when the relevant semantics are unchanged and the later release record explicitly establishes that relationship.
+8. **Engineering-quality rules have one normative owner.** [`ENGINEERING_QUALITY_RULES.md`](ENGINEERING_QUALITY_RULES.md) owns durable human-reviewability, semantic naming, code-documentation, abstraction, AI review-evidence and engineering-quality debt rules. Implementation plans and Issues may decompose delivery but must not redefine the rule baseline.
 
 ## Document classes
 
@@ -26,7 +27,7 @@ This document defines how documentation is classified, which artifact owns each 
 | --- | --- | --- | --- |
 | `CURRENT` | Current product behavior, developer workflow, authoring guidance | Yes, for its owned subject | `README.md`, current authoring guides |
 | `STATUS` | Current framework/wave/release/pressure and deferred-limit state | Yes, authoritative for status | `docs/STATUS.md` |
-| `DECISION` | Durable governance/architecture invariants and decisions | Yes, while active | `PROJECT_MEMORY.md`, future ADRs |
+| `DECISION` | Durable governance/architecture/engineering-quality invariants and decisions | Yes, while active | `PROJECT_MEMORY.md`, `docs/ENGINEERING_QUALITY_RULES.md`, future ADRs |
 | `HISTORICAL` | Roadmaps, migration plans, implementation-wave records | No, unless an explicit current-status banner says otherwise | most `docs/waves/**` planning records |
 | `EVIDENCE` | Exact qualification, release, CI/consumer proof | Only for the exact evidence scope | release/qualification wave records |
 
@@ -39,6 +40,7 @@ A document may contain historical background while remaining `CURRENT`; the deci
 | Repository/Git workflow | `AGENTS.md` | repository state / Git refs |
 | Current framework/wave/release/pressure status | `docs/STATUS.md` | merged refs, issues/PRs, qualification records |
 | Durable architecture/governance invariants | `PROJECT_MEMORY.md` | code, architecture gates, release evidence |
+| Human-reviewability / semantic code-quality baseline | `docs/ENGINEERING_QUALITY_RULES.md` | deterministic checks, review artifacts, issues/PRs, qualification evidence |
 | Current developer-facing behavior | `README.md` and relevant `CURRENT` authoring docs | CLI/code/tests on current tree |
 | Exact release/qualification result | named `EVIDENCE` record | exact SHA/tree, CI jobs, real-consumer evidence |
 | Original intent, sequencing, migration rationale | `HISTORICAL` roadmap/wave record | Git history, issue/PR discussion |
@@ -68,6 +70,19 @@ When useful, add the qualified head, merge commit, release record, or supersedin
 - use historical wave documents for background, not as the authority for current behavior;
 - be reconciled whenever a release removes or replaces a developer-visible path.
 
+## Engineering-quality rule
+
+`docs/ENGINEERING_QUALITY_RULES.md` is a `DECISION` document. It must:
+
+- define durable code-reviewability and semantic source-quality constraints independently of transient task IDs;
+- distinguish normative rules from planned or partially delivered enforcement;
+- keep deterministic checks and AI semantic review authority separate;
+- require cross-consumer qualification before a mechanism is called generic/cross-project;
+- avoid consumer-specific path lists as the universal rule source;
+- link implementation work to Issues/plans instead of duplicating their delivery status.
+
+Changes that alter this rule baseline are durable governance changes and must be reflected in repository instructions and durable memory as appropriate.
+
 ## Wave and roadmap rule
 
 `docs/waves/**` contains both historical plans and evidence records. The directory name alone does not make a file current.
@@ -96,6 +111,7 @@ Status changes must cite or name the exact Git/qualification evidence in the doc
 - active repository workflow/governance decisions;
 - architecture boundaries that future work must preserve;
 - durable security/execution/ownership rules;
+- durable engineering-quality authority and baseline relationships;
 - durable qualification constraints when they remain architectural inputs;
 - the documentation-governance hierarchy itself.
 
@@ -107,9 +123,10 @@ For a new repository task, after the mandatory repository bootstrap in `AGENTS.m
 
 1. read `PROJECT_MEMORY.md` for durable active invariants;
 2. read `docs/STATUS.md` for the current delivery/release/pressure baseline;
-3. read `README.md` or the relevant `CURRENT` authoring guide for current user-facing behavior;
-4. read relevant `EVIDENCE` records when a qualification/release claim matters;
-5. read `HISTORICAL` roadmap/wave documents for intent, rationale, sequencing, and prior constraints without treating their original status fields as current truth.
+3. read `docs/ENGINEERING_QUALITY_RULES.md` before creating, renaming, refactoring, reviewing or generating source/durable tests;
+4. read `README.md` or the relevant `CURRENT` authoring guide for current user-facing behavior;
+5. read relevant `EVIDENCE` records when a qualification/release claim matters;
+6. read `HISTORICAL` roadmap/wave documents for intent, rationale, sequencing, and prior constraints without treating their original status fields as current truth.
 
 ## Reconciliation checklist
 
@@ -121,6 +138,7 @@ A documentation-governance change is complete only when:
 - `README.md` contains no known contradictory current/migration statements in the touched scope;
 - `docs/STATUS.md` agrees with merged Git state and qualification evidence;
 - `PROJECT_MEMORY.md` contains durable governance/architecture facts rather than independently changing current state;
+- engineering-quality rules are owned by `docs/ENGINEERING_QUALITY_RULES.md` rather than duplicated into delivery plans;
 - links to current authority are valid;
 - the architecture-policy documentation truth gate remains green;
 - no runtime/compiler/security/transaction semantics were changed merely to make documentation consistent.
