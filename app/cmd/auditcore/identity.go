@@ -156,6 +156,20 @@ func hasDocumentation(group *ast.CommentGroup) bool {
 	return false
 }
 
+func hasPackageDocumentation(file *ast.File) bool {
+	if file == nil || file.Name == nil || file.Doc == nil || !hasDocumentation(file.Doc) {
+		return false
+	}
+	prefix := "Package " + strings.TrimSpace(file.Name.Name)
+	for _, line := range strings.Split(file.Doc.Text(), "\n") {
+		line = strings.TrimSpace(line)
+		if line == prefix || strings.HasPrefix(line, prefix+" ") || strings.HasPrefix(line, prefix+".") || strings.HasPrefix(line, prefix+",") {
+			return true
+		}
+	}
+	return false
+}
+
 func receiverIdentity(fields *ast.FieldList) string {
 	if fields == nil || len(fields.List) == 0 {
 		return ""
