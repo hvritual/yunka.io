@@ -137,6 +137,7 @@ func TestQualityMigrationRejectsBehaviorAndScopeDrift(t *testing.T) {
 type Tenant struct{}
 type Membership struct{}
 type Permission struct{}
+type Assignment struct{}
 `)
 	commitQualityMigrationBaseline(t, root)
 	plan, projectRoot, err := BuildQualityMigrationPlan(context.Background(), projectflow.Options{Root: root}, "HEAD", []string{MigrationRecipeGenericContainerSplit}, []string{
@@ -144,6 +145,7 @@ type Permission struct{}
 		"internal/tenant/domain/tenant.go",
 		"internal/tenant/domain/membership.go",
 		"internal/tenant/domain/permission.go",
+		"internal/tenant/domain/assignment.go",
 	}, migrationNarrative("Split the generic container without behavior changes."))
 	if err != nil {
 		t.Fatal(err)
