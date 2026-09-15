@@ -55,6 +55,9 @@ func TestEvaluateSourceProducesOnlyCanonicalDirectImportViolations(t *testing.T)
 		if finding.Class != FindingProvenViolation {
 			t.Fatalf("finding %s class=%s", finding.ID, finding.Class)
 		}
+		if finding.Path == "" || finding.Symbol == "" || finding.Reason == "" || finding.Remediation == "" {
+			t.Fatalf("finding %s lacks actionable fields: %#v", finding.ID, finding)
+		}
 		if len(finding.Evidence) < 2 {
 			t.Fatalf("finding %s missing canonical/source evidence: %#v", finding.ID, finding.Evidence)
 		}
