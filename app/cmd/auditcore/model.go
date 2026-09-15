@@ -220,6 +220,11 @@ func validateFindings(values []Finding, provenOnly bool) error {
 				return fmt.Errorf("historical naming finding %s symbol is required", finding.ID)
 			}
 		}
+		if strings.HasPrefix(finding.Rule, "AUDIT-DOC-") {
+			if finding.Path == "" || finding.Symbol == "" || finding.Reason == "" || finding.Remediation == "" {
+				return fmt.Errorf("documentation finding %s path, symbol, reason and remediation are required", finding.ID)
+			}
+		}
 		if len(finding.Evidence) == 0 {
 			return fmt.Errorf("finding %s evidence is required", finding.ID)
 		}

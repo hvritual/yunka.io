@@ -11,10 +11,12 @@ import (
 const nameExceptionDirective = "yunka:audit-name-exception"
 
 type SourceDeclaration struct {
-	Kind      string `json:"kind"`
-	Name      string `json:"name"`
-	Receiver  string `json:"receiver,omitempty"`
-	Exception string `json:"exception,omitempty"`
+	Kind       string `json:"kind"`
+	Name       string `json:"name"`
+	Receiver   string `json:"receiver,omitempty"`
+	Exception  string `json:"exception,omitempty"`
+	Documented bool   `json:"documented"`
+	Contract   bool   `json:"contract,omitempty"`
 }
 
 func collectSourceDeclarations(file *ast.File, testFile bool) []SourceDeclaration {
@@ -46,10 +48,11 @@ func collectSourceDeclarations(file *ast.File, testFile bool) []SourceDeclaratio
 				continue
 			}
 			declarations = append(declarations, SourceDeclaration{
-				Kind:      kind,
-				Name:      name,
-				Receiver:  receiver,
-				Exception: nameException(value.Doc),
+				Kind:       kind,
+				Name:       name,
+				Receiver:   receiver,
+				Exception:  nameException(value.Doc),
+				Documented: hasDocumentation(value.Doc),
 			})
 		case *ast.GenDecl:
 			kind := ""
@@ -73,17 +76,30 @@ func collectSourceDeclarations(file *ast.File, testFile bool) []SourceDeclaratio
 					if exception == "" {
 						exception = nameException(value.Doc)
 					}
-					declarations = append(declarations, SourceDeclaration{Kind: kind, Name: typed.Name.Name, Exception: exception})
+					_, contract := typed.Type.(*ast.InterfaceType)
+					declarations = append(declarations, SourceDeclaration{
+						Kind:       kind,
+						Name:       typed.Name.Name,
+						Exception:  exception,
+						Documented: hasDocumentation(typed.Doc) || hasDocumentation(value.Doc),
+						Contract:   contract,
+					})
 				case *ast.ValueSpec:
 					exception := nameException(typed.Doc)
 					if exception == "" {
 						exception = nameException(value.Doc)
 					}
+					documented := hasDocumentation(typed.Doc) || hasDocumentation(value.Doc)
 					for _, name := range typed.Names {
 						if name == nil || !ast.IsExported(name.Name) {
 							continue
 						}
-						declarations = append(declarations, SourceDeclaration{Kind: kind, Name: name.Name, Exception: exception})
+						declarations = append(declarations, SourceDeclaration{
+							Kind:       kind,
+							Name:       name.Name,
+							Exception:  exception,
+							Documented: documented,
+						})
 					}
 				}
 			}
@@ -113,6 +129,45 @@ func normalizeDeclarations(values []SourceDeclaration) {
 		}
 		return left.Name < right.Name
 	})
+}
+
+func hasDocumentation(group *ast.CommentGroup) bool {
+	if group == nil {
+		return false
+	}
+	for _, comment := range group.List {
+		if comment == nil {
+			continue
+		}
+		text := strings.TrimSpace(comment.Text)
+		text = strings.TrimSpace(strings.TrimPrefix(text, "//"))
+		text = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(text, "/*"), "*/"))
+		for _, line := range strings.Split(text, "\n") {
+			line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "*"))
+			if line == "" || strings.HasPrefix(line, nameExceptionDirective) || strings.HasPrefix(line, "go:") {
+				continue
+			}
+			if strings.HasPrefix(line, "Code generated ") && strings.Contains(line, " DO NOT EDIT.") {
+				continue
+			}
+			return true
+		}
+	}
+	return false
+}
+
+func hasPackageDocumentation(file *ast.File) bool {
+	if file == nil || file.Name == nil || file.Doc == nil || !hasDocumentation(file.Doc) {
+		return false
+	}
+	prefix := "Package " + strings.TrimSpace(file.Name.Name)
+	for _, line := range strings.Split(file.Doc.Text(), "\n") {
+		line = strings.TrimSpace(line)
+		if line == prefix || strings.HasPrefix(line, prefix+" ") || strings.HasPrefix(line, prefix+".") || strings.HasPrefix(line, prefix+",") {
+			return true
+		}
+	}
+	return false
 }
 
 func receiverIdentity(fields *ast.FieldList) string {

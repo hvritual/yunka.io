@@ -28,7 +28,8 @@ func TestBuildRequestReusesAuditAndRemainsReadOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeAdvisorFile(t, filepath.Join(root, "contracts", "generated", contract.ManifestFilename), string(append(manifestBytes, '\n')))
-	writeAdvisorFile(t, filepath.Join(root, "internal", "tenant", "application", "service.go"), `package application
+	writeAdvisorFile(t, filepath.Join(root, "internal", "tenant", "application", "service.go"), `// Package application owns the tenant application boundary used by this advisor fixture.
+package application
 
 import "github.com/hvritual/yunka.io/framework/platform"
 

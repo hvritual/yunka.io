@@ -163,6 +163,7 @@ func prepareT5AuditProject(t *testing.T, root, service string) string {
 	mustWrite(t, filepath.Join(root, "contracts", "generated", contract.ManifestFilename), string(append(contents, '\n')))
 	servicePath := filepath.Join(root, "internal", "tenant", "application", "service.go")
 	mustWrite(t, servicePath, service)
+	mustWrite(t, filepath.Join(root, "internal", "tenant", "application", "doc.go"), "// Package application is the tenant application boundary used by architecture-debt fixtures.\npackage application\n")
 	return servicePath
 }
 

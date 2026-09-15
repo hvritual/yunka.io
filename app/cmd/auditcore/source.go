@@ -14,13 +14,14 @@ import (
 )
 
 type GoSourceFile struct {
-	Path         string              `json:"path"`
-	Package      string              `json:"package"`
-	Test         bool                `json:"test"`
-	Generated    bool                `json:"generated"`
-	Exception    string              `json:"nameException,omitempty"`
-	Imports      []string            `json:"imports"`
-	Declarations []SourceDeclaration `json:"declarations"`
+	Path              string              `json:"path"`
+	Package           string              `json:"package"`
+	Test              bool                `json:"test"`
+	Generated         bool                `json:"generated"`
+	PackageDocumented bool                `json:"packageDocumented"`
+	Exception         string              `json:"nameException,omitempty"`
+	Imports           []string            `json:"imports"`
+	Declarations      []SourceDeclaration `json:"declarations"`
 }
 
 type SourceSnapshot struct {
@@ -75,13 +76,14 @@ func CollectGoSource(projectRoot, sourceRoot string) (SourceSnapshot, error) {
 		}
 		testFile := strings.HasSuffix(strings.ToLower(entry.Name()), "_test.go")
 		snapshot.Files = append(snapshot.Files, GoSourceFile{
-			Path:         filepath.ToSlash(relative),
-			Package:      strings.TrimSpace(file.Name.Name),
-			Test:         testFile,
-			Generated:    ast.IsGenerated(file),
-			Exception:    nameException(file.Doc),
-			Imports:      imports,
-			Declarations: collectSourceDeclarations(file, testFile),
+			Path:              filepath.ToSlash(relative),
+			Package:           strings.TrimSpace(file.Name.Name),
+			Test:              testFile,
+			Generated:         ast.IsGenerated(file),
+			PackageDocumented: hasPackageDocumentation(file),
+			Exception:         nameException(file.Doc),
+			Imports:           imports,
+			Declarations:      collectSourceDeclarations(file, testFile),
 		})
 		return nil
 	})
