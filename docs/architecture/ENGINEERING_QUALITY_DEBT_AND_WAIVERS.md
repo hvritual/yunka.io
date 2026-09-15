@@ -66,10 +66,12 @@ The `architecture-debt` gate proves that deterministic debt evidence was collect
 
 ## Waiver commands
 
+Waiver operations are nested under `change review` because they are review governance, not mutation authority.
+
 Create a waiver only after inspecting the rendered blocking debt:
 
 ```text
-yunka change waiver create \
+yunka change review waiver create \
   --finding <AUDIT-FINDING-ID> \
   --owner <human-owner> \
   --reason <temporary-acceptance-reason> \
@@ -80,7 +82,7 @@ yunka change waiver create \
 Validate the current Git-private waiver file against the exact candidate:
 
 ```text
-yunka change waiver check
+yunka change review waiver check
 ```
 
 Moving HEAD, changing the baseline, changing the finding evidence, changing rule/path identity, or passing the expiry timestamp invalidates the waiver.
