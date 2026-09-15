@@ -88,6 +88,7 @@ func BuildReviewPacket(ctx context.Context, options projectflow.Options, contrac
 			Conformant: attestation.Conformant,
 			Gates:      append([]GateResult(nil), attestation.Gates...),
 		},
+		QualityDebt:        reviewQualityDebt(attestation.QualityDebt),
 		AffectedInvariants: deriveAffectedInvariants(narrative, semantic.Deltas),
 		Risks:              uniqueSortedReviewText(narrative.Risks),
 		UnresolvedFindings: deriveUnresolvedFindings(narrative, attestation),
@@ -212,6 +213,12 @@ func RenderReviewPacket(packet ReviewPacket, path, format string) (string, error
 		}
 		builder.WriteByte('\n')
 	}
+	if packet.QualityDebt != nil {
+		fmt.Fprintf(&builder, "quality     deterministic(existing=%d new=%d fixed=%d) blocking=%d waived=%d unwaived=%d advisory(existing=%d new=%d resolved=%d)\n",
+			packet.QualityDebt.DeterministicExisting, packet.QualityDebt.DeterministicNew, packet.QualityDebt.DeterministicFixed,
+			packet.QualityDebt.BlockingNew, packet.QualityDebt.WaivedBlocking, packet.QualityDebt.UnwaivedBlocking,
+			packet.QualityDebt.AdvisoryExisting, packet.QualityDebt.AdvisoryNew, packet.QualityDebt.AdvisoryResolved)
+	}
 	fmt.Fprintf(&builder, "invariants %d risks %d unresolved %d\n", len(packet.AffectedInvariants), len(packet.Risks), len(packet.UnresolvedFindings))
 	builder.WriteString("PROOF\n")
 	for _, proof := range packet.Projection.Proof {
@@ -234,6 +241,11 @@ func loadChangeAttestation(root, input string) (ChangeAttestation, []byte, strin
 	}
 	if strings.TrimSpace(value.BaseSHA) == "" || strings.TrimSpace(value.HeadSHA) == "" || strings.TrimSpace(value.OperationID) == "" {
 		return ChangeAttestation{}, nil, "", fmt.Errorf("change review: attestation baseSha, headSha and operationId are required")
+	}
+	if value.QualityDebt != nil {
+		if err := ValidateQualityDebtProof(*value.QualityDebt); err != nil {
+			return ChangeAttestation{}, nil, "", fmt.Errorf("change review: invalid quality debt proof: %w", err)
+		}
 	}
 	return value, contents, display, nil
 }
@@ -262,6 +274,9 @@ func validateReviewEvidencePair(contractValue ChangeContract, attestation Change
 	}
 	if attestation.Semantic.SchemaVersion != SemanticReportSchemaVersion || attestation.Semantic.OperationID != contractValue.Operation.OperationID {
 		return fmt.Errorf("change review: attestation semantic identity is inconsistent with the change contract")
+	}
+	if attestation.QualityDebt != nil && attestation.QualityDebt.Deterministic.BaseSHA != contractValue.BaseSHA {
+		return fmt.Errorf("change review: quality debt baseline is inconsistent with the change contract")
 	}
 	return nil
 }
