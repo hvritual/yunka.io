@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/hvritual/yunka.io/pkg/diagnostic"
 	"github.com/urfave/cli"
@@ -34,6 +35,7 @@ type ChangeAttestation struct {
 	Reconciliation   Reconciliation          `json:"reconciliation"`
 	Semantic         SemanticReport          `json:"semantic"`
 	ArchitectureDebt *auditcore.DebtDelta    `json:"architectureDebt,omitempty"`
+	QualityDebt      *QualityDebtProof        `json:"qualityDebt,omitempty"`
 	Gates            []GateResult            `json:"gates"`
 	Diagnostics      []diagnostic.Diagnostic `json:"diagnostics"`
 	Conformant       bool                    `json:"conformant"`
@@ -49,16 +51,22 @@ func verifyCommand() cli.Command {
 			cli.StringFlag{Name: "output", Value: DefaultChangeAttestationPath, Usage: "attestation output path"},
 			cli.StringFlag{Name: "protoc", EnvVar: "PROTOC", Usage: "protoc binary; defaults to PATH"},
 			cli.StringSliceFlag{Name: "proto-path", Usage: "additional protoc import path; may be repeated"},
+			cli.StringFlag{Name: "quality-waivers", Usage: "optional exact-candidate quality waiver set; default Git-private waiver file is used when present"},
+			cli.StringFlag{Name: "semantic-baseline", Usage: "optional validated semantic-review baseline attestation"},
+			cli.StringFlag{Name: "semantic-current", Usage: "optional validated semantic-review current attestation; must be paired with --semantic-baseline"},
 			cli.BoolFlag{Name: "skip-tests", Usage: "skip the final `go test ./...` gate; resulting attestation is still structural/semantic conformance only"},
 			cli.StringFlag{Name: "format", Value: FormatText, Usage: "output format: text, json, or agent-json"},
 		},
 		Action: func(c *cli.Context) error {
 			attestation, root, err := VerifyChange(context.Background(), VerifyOptions{
-				Root:       c.String("root"),
-				Contract:   c.String("contract"),
-				Protoc:     c.String("protoc"),
-				ProtoPaths: c.StringSlice("proto-path"),
-				SkipTests:  c.Bool("skip-tests"),
+				Root:             c.String("root"),
+				Contract:         c.String("contract"),
+				Protoc:           c.String("protoc"),
+				ProtoPaths:       c.StringSlice("proto-path"),
+				QualityWaivers:   c.String("quality-waivers"),
+				SemanticBaseline: c.String("semantic-baseline"),
+				SemanticCurrent:  c.String("semantic-current"),
+				SkipTests:        c.Bool("skip-tests"),
 			})
 			if err != nil {
 				return printFailure("yunka change verify", c.String("format"), Diagnose(&Failure{Kind: FailureEvidence, Err: err}), 1)
@@ -81,11 +89,15 @@ func verifyCommand() cli.Command {
 }
 
 type VerifyOptions struct {
-	Root       string
-	Contract   string
-	Protoc     string
-	ProtoPaths []string
-	SkipTests  bool
+	Root             string
+	Contract         string
+	Protoc           string
+	ProtoPaths       []string
+	QualityWaivers   string
+	SemanticBaseline string
+	SemanticCurrent  string
+	EvaluationTime   time.Time
+	SkipTests        bool
 }
 
 func VerifyChange(ctx context.Context, options VerifyOptions) (ChangeAttestation, string, error) {
@@ -133,6 +145,7 @@ func VerifyChange(ctx context.Context, options VerifyOptions) (ChangeAttestation
 		attestation.Gates = append(attestation.Gates, GateResult{Name: "yunka-check", Status: "fail", Detail: strings.TrimSpace(workflowErr.Error())})
 		attestation.Diagnostics = append(attestation.Diagnostics, projectflow.Diagnose(workflowErr))
 		attestation.Gates = append(attestation.Gates, GateResult{Name: "architecture-debt", Status: "skipped", Detail: "yunka-check failed; canonical Audit evidence is not trustworthy"})
+		attestation.Gates = append(attestation.Gates, GateResult{Name: "quality-debt", Status: "skipped", Detail: "yunka-check failed; quality debt evidence is not trustworthy"})
 	} else {
 		attestation.Gates = append(attestation.Gates, GateResult{Name: "yunka-check", Status: "pass"})
 		semantic, semanticErr := ReconcileSemanticDelta(descriptor.Root, contractValue)
@@ -154,9 +167,34 @@ func VerifyChange(ctx context.Context, options VerifyOptions) (ChangeAttestation
 		architectureDebt, architectureDebtErr := collectArchitectureDebt(descriptor.Root, contractValue.BaseSHA)
 		if architectureDebtErr != nil {
 			attestation.Gates = append(attestation.Gates, GateResult{Name: "architecture-debt", Status: "fail", Detail: architectureDebtErr.Error()})
+			attestation.Gates = append(attestation.Gates, GateResult{Name: "quality-debt", Status: "skipped", Detail: "deterministic debt evidence failed"})
 			attestation.Diagnostics = append(attestation.Diagnostics, changeDiagnostic("architecture-debt", "", architectureDebtErr.Error()))
 		} else {
 			recordArchitectureDebt(&attestation, architectureDebt)
+			advisory, advisoryErr := loadAdvisoryQualityDebt(descriptor.Root, options.SemanticBaseline, options.SemanticCurrent)
+			if advisoryErr != nil {
+				attestation.Gates = append(attestation.Gates, GateResult{Name: "quality-debt", Status: "fail", Detail: advisoryErr.Error()})
+				attestation.Diagnostics = append(attestation.Diagnostics, changeDiagnostic("quality-debt", "", advisoryErr.Error()))
+			} else {
+				now := options.EvaluationTime
+				if now.IsZero() {
+					now = time.Now().UTC()
+				}
+				blocking := blockingNewFindings(architectureDebt.New)
+				waivers, waiverErr := LoadQualityWaiverSet(descriptor.Root, options.QualityWaivers, contractValue.BaseSHA, headSHA, blocking, now)
+				if waiverErr != nil {
+					attestation.Gates = append(attestation.Gates, GateResult{Name: "quality-debt", Status: "fail", Detail: waiverErr.Error()})
+					attestation.Diagnostics = append(attestation.Diagnostics, changeDiagnostic("quality-debt", "", waiverErr.Error()))
+				} else {
+					proof, proofErr := BuildQualityDebtProof(architectureDebt, advisory, waivers, contractValue.BaseSHA, headSHA, now)
+					if proofErr != nil {
+						attestation.Gates = append(attestation.Gates, GateResult{Name: "quality-debt", Status: "fail", Detail: proofErr.Error()})
+						attestation.Diagnostics = append(attestation.Diagnostics, changeDiagnostic("quality-debt", "", proofErr.Error()))
+					} else {
+						recordQualityDebt(&attestation, proof)
+					}
+				}
+			}
 		}
 	}
 
@@ -253,6 +291,14 @@ func RenderChangeAttestation(value ChangeAttestation, path, format string) (stri
 			fmt.Fprintf(&builder, " — %s", gate.Detail)
 		}
 		builder.WriteByte('\n')
+	}
+	if value.QualityDebt != nil {
+		fmt.Fprintf(&builder, "quality   deterministic(existing=%d new=%d fixed=%d) blocking=%d waived=%d unwaived=%d\n",
+			len(value.QualityDebt.Deterministic.Existing), len(value.QualityDebt.Deterministic.New), len(value.QualityDebt.Deterministic.Fixed),
+			len(value.QualityDebt.BlockingNew), len(value.QualityDebt.WaivedBlocking), len(value.QualityDebt.UnwaivedBlocking))
+		if value.QualityDebt.Advisory != nil {
+			fmt.Fprintf(&builder, "advisory  existing=%d new=%d resolved=%d\n", len(value.QualityDebt.Advisory.Existing), len(value.QualityDebt.Advisory.New), len(value.QualityDebt.Advisory.Resolved))
+		}
 	}
 	fmt.Fprintf(&builder, "conformant %t\n", value.Conformant)
 	return builder.String(), nil
