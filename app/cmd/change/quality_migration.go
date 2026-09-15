@@ -45,6 +45,7 @@ type QualityMigrationFindingRef struct {
 }
 
 type QualityMigrationCoverage struct {
+	ProjectPath     string `json:"projectPath"`
 	PolicyPath      string `json:"policyPath"`
 	PolicySHA256    string `json:"policySha256"`
 	InventorySHA256 string `json:"inventorySha256"`
@@ -82,6 +83,15 @@ type qualityMigrationPlanDigest struct {
 }
 
 func BuildQualityMigrationPlan(ctx context.Context, options projectflow.Options, base string, recipes, touchedPaths []string, narrative ReviewNarrative) (QualityMigrationPlan, string, error) {
+	return BuildQualityMigrationPlanWithCoverage(ctx, options, "", base, recipes, touchedPaths, narrative)
+}
+
+// BuildQualityMigrationPlanWithCoverage allows source-policy inventory to run
+// from an explicit ancestor of the Yunka project root. This is required for
+// consumers whose go.mod intentionally references sibling local modules. The
+// plan stores only the project-relative location inside that source root, never
+// an absolute workstation path.
+func BuildQualityMigrationPlanWithCoverage(ctx context.Context, options projectflow.Options, coverageRoot, base string, recipes, touchedPaths []string, narrative ReviewNarrative) (QualityMigrationPlan, string, error) {
 	if ctx == nil {
 		return QualityMigrationPlan{}, "", fmt.Errorf("quality migration plan: context is required")
 	}
@@ -115,7 +125,11 @@ func BuildQualityMigrationPlan(ctx context.Context, options projectflow.Options,
 		return QualityMigrationPlan{}, "", err
 	}
 
-	sourceReport, err := sourceaudit.Check(ctx, descriptor.Root, ".yunka/source-policy.json")
+	sourceRoot, sourceProjectPath, sourcePolicyPath, err := resolveQualityMigrationCoverage(descriptor.Root, coverageRoot)
+	if err != nil {
+		return QualityMigrationPlan{}, "", err
+	}
+	sourceReport, err := sourceaudit.Check(ctx, sourceRoot, sourcePolicyPath)
 	if err != nil {
 		return QualityMigrationPlan{}, "", fmt.Errorf("quality migration plan: source coverage: %w", err)
 	}
@@ -144,7 +158,8 @@ func BuildQualityMigrationPlan(ctx context.Context, options projectflow.Options,
 		TouchedPaths:     paths,
 		BaselineFindings: findings,
 		Coverage: QualityMigrationCoverage{
-			PolicyPath:      ".yunka/source-policy.json",
+			ProjectPath:     sourceProjectPath,
+			PolicyPath:      sourcePolicyPath,
 			PolicySHA256:    sourceReport.PolicySHA256,
 			InventorySHA256: sourceReport.Inventory.Digest,
 			Status:          sourceReport.Status,
@@ -161,6 +176,88 @@ func BuildQualityMigrationPlan(ctx context.Context, options projectflow.Options,
 		return QualityMigrationPlan{}, "", err
 	}
 	return plan, descriptor.Root, nil
+}
+
+func resolveQualityMigrationCoverage(projectRoot, requestedRoot string) (string, string, string, error) {
+	projectRoot, err := filepath.Abs(projectRoot)
+	if err != nil {
+		return "", "", "", err
+	}
+	sourceRoot := strings.TrimSpace(requestedRoot)
+	if sourceRoot == "" {
+		sourceRoot = projectRoot
+	} else if !filepath.IsAbs(sourceRoot) {
+		sourceRoot = filepath.Join(projectRoot, filepath.FromSlash(sourceRoot))
+	}
+	sourceRoot, err = filepath.Abs(sourceRoot)
+	if err != nil {
+		return "", "", "", err
+	}
+	info, err := os.Stat(sourceRoot)
+	if err != nil {
+		return "", "", "", fmt.Errorf("quality migration plan: coverage root: %w", err)
+	}
+	if !info.IsDir() {
+		return "", "", "", fmt.Errorf("quality migration plan: coverage root %s is not a directory", sourceRoot)
+	}
+	projectPath, err := filepath.Rel(sourceRoot, projectRoot)
+	if err != nil {
+		return "", "", "", err
+	}
+	projectPath = filepath.ToSlash(filepath.Clean(projectPath))
+	if projectPath == ".." || strings.HasPrefix(projectPath, "../") || filepath.IsAbs(filepath.FromSlash(projectPath)) {
+		return "", "", "", fmt.Errorf("quality migration plan: coverage root must contain the project root")
+	}
+	if projectPath == "" {
+		projectPath = "."
+	}
+	policyAbsolute := filepath.Join(projectRoot, ".yunka", "source-policy.json")
+	policyPath, err := filepath.Rel(sourceRoot, policyAbsolute)
+	if err != nil {
+		return "", "", "", err
+	}
+	policyPath = filepath.ToSlash(filepath.Clean(policyPath))
+	if policyPath == ".." || strings.HasPrefix(policyPath, "../") || filepath.IsAbs(filepath.FromSlash(policyPath)) {
+		return "", "", "", fmt.Errorf("quality migration plan: source policy must remain inside the selected coverage root")
+	}
+	return sourceRoot, normalizeQualityMigrationProjectPath(projectPath), cleanProjectPath(policyPath), nil
+}
+
+func qualityMigrationCoverageRoot(projectRoot, projectPath string) (string, error) {
+	projectRoot, err := filepath.Abs(projectRoot)
+	if err != nil {
+		return "", err
+	}
+	projectPath = normalizeQualityMigrationProjectPath(projectPath)
+	if !validQualityMigrationProjectPath(projectPath) {
+		return "", fmt.Errorf("quality migration coverage: invalid projectPath %q", projectPath)
+	}
+	if projectPath == "." {
+		return projectRoot, nil
+	}
+	root := projectRoot
+	parts := strings.Split(projectPath, "/")
+	for range parts {
+		root = filepath.Dir(root)
+	}
+	candidate := filepath.Clean(filepath.Join(root, filepath.FromSlash(projectPath)))
+	if candidate != filepath.Clean(projectRoot) {
+		return "", fmt.Errorf("quality migration coverage: projectPath %q does not resolve to the current project root", projectPath)
+	}
+	return root, nil
+}
+
+func normalizeQualityMigrationProjectPath(value string) string {
+	value = filepath.ToSlash(filepath.Clean(filepath.FromSlash(strings.TrimSpace(value))))
+	if value == "" || value == "." {
+		return "."
+	}
+	return strings.TrimPrefix(value, "./")
+}
+
+func validQualityMigrationProjectPath(value string) bool {
+	value = normalizeQualityMigrationProjectPath(value)
+	return value == "." || (value != "" && value != ".." && !strings.HasPrefix(value, "../") && !filepath.IsAbs(filepath.FromSlash(value)))
 }
 
 func normalizeQualityMigrationRecipes(values []string) ([]string, error) {
@@ -244,7 +341,6 @@ func qualityMigrationFindingRefs(findings []auditcore.Finding, touchedPaths []st
 					path = cleanProjectPath(evidence.Path)
 					break
 				}
-			}
 		}
 		if _, ok := pathSet[path]; !ok {
 			continue
@@ -302,6 +398,7 @@ func normalizeQualityMigrationPlan(plan *QualityMigrationPlan) {
 		item.Summary = strings.TrimSpace(item.Summary)
 	}
 	sort.Slice(plan.BaselineFindings, func(i, j int) bool { return plan.BaselineFindings[i].ID < plan.BaselineFindings[j].ID })
+	plan.Coverage.ProjectPath = normalizeQualityMigrationProjectPath(plan.Coverage.ProjectPath)
 	plan.Coverage.PolicyPath = cleanProjectPath(plan.Coverage.PolicyPath)
 	plan.Coverage.PolicySHA256 = strings.TrimSpace(plan.Coverage.PolicySHA256)
 	plan.Coverage.InventorySHA256 = strings.TrimSpace(plan.Coverage.InventorySHA256)
@@ -319,7 +416,14 @@ func validateQualityMigrationPlan(plan QualityMigrationPlan) error {
 	if plan.BaseSHA == "" || len(plan.Recipes) == 0 || len(plan.TouchedPaths) == 0 {
 		return fmt.Errorf("quality migration plan: baseSha, recipes and touchedPaths are required")
 	}
-	if plan.Coverage.Status != sourceaudit.Pass || plan.Coverage.PolicyPath == "" || !validSHA256(plan.Coverage.PolicySHA256) || !validSHA256(plan.Coverage.InventorySHA256) {
+	if !validQualityMigrationProjectPath(plan.Coverage.ProjectPath) {
+		return fmt.Errorf("quality migration plan: valid source coverage projectPath is required")
+	}
+	expectedPolicyPath := ".yunka/source-policy.json"
+	if plan.Coverage.ProjectPath != "." {
+		expectedPolicyPath = filepath.ToSlash(filepath.Join(filepath.FromSlash(plan.Coverage.ProjectPath), ".yunka", "source-policy.json"))
+	}
+	if plan.Coverage.Status != sourceaudit.Pass || plan.Coverage.PolicyPath != expectedPolicyPath || !validSHA256(plan.Coverage.PolicySHA256) || !validSHA256(plan.Coverage.InventorySHA256) {
 		return fmt.Errorf("quality migration plan: complete PASS source coverage identity is required")
 	}
 	if !validSHA256(plan.BaselineFingerprints.ProductionSHA256) || !validSHA256(plan.BaselineFingerprints.PublicAPISHA256) {
