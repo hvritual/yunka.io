@@ -103,7 +103,11 @@ func CheckQualityMigration(ctx context.Context, options projectflow.Options, pla
 		return QualityMigrationReviewPacket{}, fmt.Errorf("quality migration check: exact candidate digest: %w", err)
 	}
 
-	sourceReport, err := sourceaudit.Check(ctx, descriptor.Root, plan.Coverage.PolicyPath)
+	sourceRoot, err := qualityMigrationCoverageRoot(descriptor.Root, plan.Coverage.ProjectPath)
+	if err != nil {
+		return QualityMigrationReviewPacket{}, err
+	}
+	sourceReport, err := sourceaudit.Check(ctx, sourceRoot, plan.Coverage.PolicyPath)
 	if err != nil {
 		return QualityMigrationReviewPacket{}, fmt.Errorf("quality migration check: source coverage: %w", err)
 	}
@@ -148,7 +152,8 @@ func CheckQualityMigration(ctx context.Context, options projectflow.Options, pla
 		}),
 		QualityDebt: reviewQualityDebt(&qualityProof),
 		Coverage: QualityMigrationCoverage{
-			PolicyPath: plan.Coverage.PolicyPath, PolicySHA256: sourceReport.PolicySHA256,
+			ProjectPath: plan.Coverage.ProjectPath, PolicyPath: plan.Coverage.PolicyPath,
+			PolicySHA256: sourceReport.PolicySHA256,
 			InventorySHA256: sourceReport.Inventory.Digest, Status: sourceReport.Status,
 		},
 		Narrative:   plan.Narrative,
@@ -305,6 +310,11 @@ func normalizeQualityMigrationReview(packet *QualityMigrationReviewPacket) {
 	normalizeReviewDelta(&packet.PersistenceChange)
 	normalizeReviewDelta(&packet.GeneratedCodeChange)
 	normalizeReviewQualityDebt(packet.QualityDebt)
+	packet.Coverage.ProjectPath = normalizeQualityMigrationProjectPath(packet.Coverage.ProjectPath)
+	packet.Coverage.PolicyPath = cleanProjectPath(packet.Coverage.PolicyPath)
+	packet.Coverage.PolicySHA256 = strings.TrimSpace(packet.Coverage.PolicySHA256)
+	packet.Coverage.InventorySHA256 = strings.TrimSpace(packet.Coverage.InventorySHA256)
+	packet.Coverage.Status = strings.TrimSpace(packet.Coverage.Status)
 	_ = normalizeReviewNarrative(&packet.Narrative)
 	packet.Projection.Why = strings.TrimSpace(packet.Projection.Why)
 	packet.Projection.What = strings.TrimSpace(packet.Projection.What)
@@ -320,6 +330,9 @@ func validateQualityMigrationReview(packet QualityMigrationReviewPacket) error {
 	}
 	if packet.BaseSHA == "" || packet.HeadSHA == "" || !validSHA256(packet.CandidateSHA256) || !validSHA256(packet.PlanSHA256) {
 		return fmt.Errorf("quality migration review: exact candidate identity is incomplete")
+	}
+	if !validQualityMigrationProjectPath(packet.Coverage.ProjectPath) || packet.Coverage.PolicyPath == "" || !validSHA256(packet.Coverage.PolicySHA256) || !validSHA256(packet.Coverage.InventorySHA256) {
+		return fmt.Errorf("quality migration review: source coverage identity is incomplete")
 	}
 	if packet.Projection.Why != packet.Narrative.Why || packet.Projection.What != packet.Narrative.What || packet.Projection.Boundary != packet.Narrative.Boundary {
 		return fmt.Errorf("quality migration review: WHY/WHAT/BOUNDARY projection differs from plan narrative")
@@ -407,6 +420,9 @@ func qualityMigrationFingerprints(root string, touchedPaths []string) (QualityMi
 				production[packageKey+":import:"+value] = struct{}{}
 			}
 			for _, declaration := range file.Decls {
+				if group, ok := declaration.(*ast.GenDecl); ok && group.Tok == token.IMPORT {
+					continue
+				}
 				rendered, err := renderMigrationDeclaration(set, declaration, false)
 				if err != nil {
 					return QualityMigrationFingerprints{}, err
