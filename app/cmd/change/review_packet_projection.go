@@ -92,7 +92,7 @@ func deriveAffectedInvariants(narrative ReviewNarrative, values []SemanticDelta)
 			result = append(result, strings.TrimSpace(value.Subject)+":"+strings.TrimSpace(value.Field))
 		}
 	}
-	return uniqueSorted(result)
+	return uniqueSortedReviewText(result)
 }
 
 func deriveUnresolvedFindings(narrative ReviewNarrative, attestation ChangeAttestation) []string {
@@ -108,7 +108,7 @@ func deriveUnresolvedFindings(narrative ReviewNarrative, attestation ChangeAttes
 		result = appendAuditFindingProjections(result, attestation.ArchitectureDebt.Existing)
 		result = appendAuditFindingProjections(result, attestation.ArchitectureDebt.New)
 	}
-	return uniqueSorted(result)
+	return uniqueSortedReviewText(result)
 }
 
 func appendAuditFindingProjections(result []string, values []auditcore.Finding) []string {
@@ -131,7 +131,7 @@ func reviewProof(packet ReviewPacket) []string {
 	for _, gate := range packet.Verification.Gates {
 		proof = append(proof, "gate:"+strings.TrimSpace(gate.Name)+"="+strings.TrimSpace(gate.Status))
 	}
-	return uniqueSorted(proof)
+	return uniqueSortedReviewText(proof)
 }
 
 func digestCandidate(root, baseSHA, headSHA string, changes []FileChange) (string, error) {
