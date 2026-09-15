@@ -1,0 +1,68 @@
+name: engineering-quality-baseline-qualification
+
+on:
+  pull_request:
+    paths:
+      - 'app/cmd/project/**'
+      - 'AGENTS.md'
+      - 'docs/ENGINEERING_QUALITY_RULES.md'
+      - 'docs/architecture/ENGINEERING_QUALITY_DISTRIBUTION.md'
+      - '.github/workflows/engineering-quality-baseline-qualification.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: hvritual/biz
+          ref: 3519e7ee6e51e33984669871e4f32a55a3597d9f
+          path: _consumer/biz
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: hvritual/iot-delivery-system
+          ref: bcd20632b666405c3f7a8fe8d53f591c78450087
+          path: _consumer/iot
+          persist-credentials: false
+      - name: Verify framework bootstrap quality authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'docs/ENGINEERING_QUALITY_RULES.md' AGENTS.md
+      - name: Load locked Go version
+        id: toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          echo "go_version=${GO_VERSION:?}" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: ${{ steps.toolchain.outputs.go_version }}
+          cache-dependency-path: app/go.sum
+      - name: Build and qualify baseline propagation
+        working-directory: app
+        shell: bash
+        env:
+          YUNKA_QUALITY_CONSUMER_BIZ: ${{ github.workspace }}/_consumer/biz
+          YUNKA_QUALITY_CONSUMER_IOT: ${{ github.workspace }}/_consumer/iot
+        run: |
+          set -euo pipefail
+          go build -mod=readonly -o "$RUNNER_TEMP/yunka" ./cmd
+          go test ./cmd/project -run '^TestEngineeringQualityBaseline|^TestInitCommandInstallsEngineeringQualityBaseline$' -count=1 -v
+      - name: Prove qualification did not mutate framework or consumers
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain --untracked-files=all -- ':!_consumer')"
+          test -z "$(git -C _consumer/biz status --porcelain --untracked-files=all)"
+          test -z "$(git -C _consumer/iot status --porcelain --untracked-files=all)"
