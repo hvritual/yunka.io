@@ -23,22 +23,45 @@ func collectArchitectureDebt(root, baseSHA string) (auditcore.DebtDelta, error) 
 	return *report.Debt, nil
 }
 
+// recordArchitectureDebt preserves the canonical deterministic debt delta as
+// evidence. It no longer treats every new deterministic finding as blocking;
+// accepted blocking policy and exact waivers are evaluated by recordQualityDebt.
 func recordArchitectureDebt(attestation *ChangeAttestation, debt auditcore.DebtDelta) {
 	if attestation == nil {
 		return
 	}
 	attestation.ArchitectureDebt = &debt
-	detail := fmt.Sprintf("existing=%d new=%d fixed=%d", len(debt.Existing), len(debt.New), len(debt.Fixed))
-	if len(debt.New) == 0 {
-		attestation.Gates = append(attestation.Gates, GateResult{Name: "architecture-debt", Status: "pass", Detail: detail})
+	detail := fmt.Sprintf("existing=%d new=%d fixed=%d blocking_new=%d", len(debt.Existing), len(debt.New), len(debt.Fixed), len(blockingNewFindings(debt.New)))
+	attestation.Gates = append(attestation.Gates, GateResult{Name: "architecture-debt", Status: "pass", Detail: detail})
+}
+
+func recordQualityDebt(attestation *ChangeAttestation, proof QualityDebtProof) {
+	if attestation == nil {
 		return
 	}
-	attestation.Gates = append(attestation.Gates, GateResult{Name: "architecture-debt", Status: "fail", Detail: detail})
-	for _, finding := range debt.New {
+	attestation.QualityDebt = &proof
+	advisoryExisting, advisoryNew, advisoryResolved := 0, 0, 0
+	if proof.Advisory != nil {
+		advisoryExisting = len(proof.Advisory.Existing)
+		advisoryNew = len(proof.Advisory.New)
+		advisoryResolved = len(proof.Advisory.Resolved)
+	}
+	detail := fmt.Sprintf(
+		"deterministic(existing=%d new=%d fixed=%d blocking=%d waived=%d unwaived=%d) advisory(existing=%d new=%d resolved=%d)",
+		len(proof.Deterministic.Existing), len(proof.Deterministic.New), len(proof.Deterministic.Fixed),
+		len(proof.BlockingNew), len(proof.WaivedBlocking), len(proof.UnwaivedBlocking),
+		advisoryExisting, advisoryNew, advisoryResolved,
+	)
+	if len(proof.UnwaivedBlocking) == 0 {
+		attestation.Gates = append(attestation.Gates, GateResult{Name: "quality-debt", Status: "pass", Detail: detail})
+		return
+	}
+	attestation.Gates = append(attestation.Gates, GateResult{Name: "quality-debt", Status: "fail", Detail: detail})
+	for _, finding := range proof.UnwaivedBlocking {
 		attestation.Diagnostics = append(attestation.Diagnostics, changeDiagnostic(
-			"architecture-debt",
-			architectureDebtFindingPath(finding),
-			fmt.Sprintf("new proven architecture debt %s %s: %s", finding.Rule, finding.Subject, finding.Summary),
+			"quality-debt",
+			qualityFindingPath(finding),
+			fmt.Sprintf("new blocking engineering-quality debt %s %s: %s", finding.Rule, finding.Subject, finding.Summary),
 		))
 	}
 }
