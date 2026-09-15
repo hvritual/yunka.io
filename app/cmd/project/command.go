@@ -34,6 +34,10 @@ func Command() cli.Command {
 			if err != nil {
 				return err
 			}
+			quality, err := EnsureEngineeringQualityBaseline(root)
+			if err != nil {
+				return err
+			}
 			fmt.Printf("yunka project initialized: version=%d db-prefix=%s\n", config.Version, config.Database.TablePrefix)
 			if config.Workflow.Contract.Sources != "" {
 				fmt.Printf("contract: sources=%s generated=%s\n", config.Workflow.Contract.Sources, config.Workflow.Contract.Generated)
@@ -52,6 +56,14 @@ func Command() cli.Command {
 				fmt.Printf("source-policy: %s\n", scaffold.SourcePolicy)
 			} else if scaffold.SourcePolicySkipped != "" {
 				fmt.Printf("source-policy: %s not-created reason=%s\n", SourcePolicyRelativePath, scaffold.SourcePolicySkipped)
+			}
+			if quality.Baseline != "" {
+				fmt.Printf("engineering-quality: baseline=%s version=%s identity=%s rules=%s policy=%s instructions=%s\n", quality.Baseline, quality.PolicyVersion, quality.PolicyIdentity, quality.Rules, quality.Policy, quality.Instructions)
+			} else if quality.Skipped != "" {
+				fmt.Printf("engineering-quality: %s not-created reason=%s\n", EngineeringQualityBaselineRelativePath, quality.Skipped)
+			}
+			if quality.UpgradeRequired != "" {
+				fmt.Printf("engineering-quality-upgrade: %s\n", quality.UpgradeRequired)
 			}
 			if scaffold.BootstrapContract != "" {
 				fmt.Printf("bootstrap-contract: %s\n", scaffold.BootstrapContract)
