@@ -49,6 +49,11 @@ jobs:
           mkdir -p "$install_root"
           unzip -q "$archive" -d "$install_root"
           echo "$install_root/bin" >> "$GITHUB_PATH"
+      - name: Install locked protobuf generators
+        shell: bash
+        run: |
+          set -euo pipefail
+          make rpc-tools rpc-toolchain-check
       - name: Build command and run review packet regressions
         working-directory: app
         shell: bash
