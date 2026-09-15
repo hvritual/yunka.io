@@ -39,6 +39,11 @@ func recordQualityDebt(attestation *ChangeAttestation, proof QualityDebtProof) {
 	if attestation == nil {
 		return
 	}
+	if err := ValidateQualityDebtProof(proof); err != nil {
+		attestation.Gates = append(attestation.Gates, GateResult{Name: "quality-debt", Status: "fail", Detail: err.Error()})
+		attestation.Diagnostics = append(attestation.Diagnostics, changeDiagnostic("quality-debt", "", err.Error()))
+		return
+	}
 	attestation.QualityDebt = &proof
 	advisoryExisting, advisoryNew, advisoryResolved := 0, 0, 0
 	if proof.Advisory != nil {
