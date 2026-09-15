@@ -13,6 +13,7 @@ import (
 func TestBuildWithBaseClassifiesDeclaredBlockingQualityDebt(t *testing.T) {
 	root := t.TempDir()
 	writeAuditProjectFile(t, filepath.Join(root, "go.mod"), "module example.com/demo\n\ngo 1.25.0\n")
+	writeAuditProjectFile(t, filepath.Join(root, "contracts", "proto", "tenant.proto"), "syntax = \"proto3\";\n")
 	manifest := contract.Manifest{
 		SchemaVersion: contract.ManifestVersion,
 		Files: []contract.File{{Name: "tenant.proto", Domain: &contract.DomainDeclaration{Name: "tenant"}}},
