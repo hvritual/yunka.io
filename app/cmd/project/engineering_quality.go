@@ -253,14 +253,14 @@ sources for this project.
 
 ## Local enforcement
 
-- `.yunka/engineering-quality.json` configures accepted deterministic blocking rules and optional review budgets.
-- `yunka audit --base <immutable-ref>` reports deterministic existing/new/fixed debt.
-- `yunka change review` projects exact-candidate WHY / WHAT / BOUNDARY / PROOF and quality debt.
-- `yunka advisor semantic` validates evidence-bound semantic findings as advisory-only.
+- .yunka/engineering-quality.json configures accepted deterministic blocking rules and optional review budgets.
+- yunka audit --base <immutable-ref> reports deterministic existing/new/fixed debt.
+- yunka change review projects exact-candidate WHY / WHAT / BOUNDARY / PROOF and quality debt.
+- yunka advisor semantic validates evidence-bound semantic findings as advisory-only.
 
 ## Ownership and upgrades
 
-Files created by `yunka init` are never silently replaced on a later init. After
+Files created by yunka init are never silently replaced on a later init. After
 creation, project-specific enforcement configuration is developer-owned. A newer
 Yunka policy version requires explicit review/reconciliation; it must not silently
 overwrite project instructions, rule text, or enforcement policy.
@@ -272,12 +272,12 @@ func engineeringQualityAgentInstructionsBytes() []byte {
 
 Before creating, renaming, refactoring, reviewing, or generating source code or durable tests:
 
-1. Read `.yunka/ENGINEERING_QUALITY.md` completely.
-2. Treat `.yunka/engineering-quality-baseline.json` as the policy version/provenance identity.
+1. Read .yunka/ENGINEERING_QUALITY.md completely.
+2. Treat .yunka/engineering-quality-baseline.json as the policy version/provenance identity.
 3. Preserve existing project configuration, source ownership, canonical contracts and generated ownership as enforcement inputs.
 4. Do not infer current project requirements from Yunka framework issue history, release status, delivery waves or task identifiers.
 5. For non-trivial AI changes, make WHY / WHAT / BOUNDARY / PROOF and behavior/API/persistence/generated deltas reviewable before approval.
 
-`.yunka/ENGINEERING_QUALITY.md` is normative engineering guidance for this consumer. Framework implementation history is not consumer policy.
+.yunka/ENGINEERING_QUALITY.md is normative engineering guidance for this consumer. Framework implementation history is not consumer policy.
 `)
 }
