@@ -29,8 +29,8 @@ func Work(v int) {
 		t.Fatal(err)
 	}
 	metrics := measureSource(file, contents)
-	if metrics.Lines != 17 {
-		t.Fatalf("lines=%d want=17", metrics.Lines)
+	if metrics.Lines != 16 {
+		t.Fatalf("lines=%d want=16", metrics.Lines)
 	}
 	if metrics.TopLevelDeclarations != 3 {
 		t.Fatalf("topLevelDeclarations=%d want=3", metrics.TopLevelDeclarations)
