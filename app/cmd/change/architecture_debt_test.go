@@ -6,14 +6,16 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hvritual/yunka.io/pkg/contract"
 	"yunka.io/app/cmd/auditcore"
 )
 
-func TestArchitectureDebtProofRejectsNewProvenDebt(t *testing.T) {
+func TestArchitectureDebtProofDefersBlockingDecisionToQualityPolicy(t *testing.T) {
 	root := t.TempDir()
 	servicePath := prepareT5AuditProject(t, root, "package application\n")
+	mustWrite(t, filepath.Join(root, ".yunka", "engineering-quality.json"), `{"schemaVersion":1,"blockingRules":["AUDIT-AUTH-001"]}`+"\n")
 	baseSHA := commitT5AuditBaseline(t, root)
 
 	mustWrite(t, servicePath, `package application
@@ -29,21 +31,31 @@ var _ authz.Authorizer
 	if len(debt.Existing) != 0 || len(debt.New) != 1 || len(debt.Fixed) != 0 {
 		t.Fatalf("debt=%#v", debt)
 	}
-	if debt.New[0].Rule != auditcore.RuleAuthorizationBypass {
+	if debt.New[0].Rule != auditcore.RuleAuthorizationBypass || !debt.New[0].Blocking {
 		t.Fatalf("new debt=%#v", debt.New)
 	}
 
 	attestation := ChangeAttestation{}
 	recordArchitectureDebt(&attestation, debt)
 	gate, ok := architectureDebtGate(attestation.Gates)
-	if !ok || gate.Status != "fail" || !strings.Contains(gate.Detail, "new=1") {
+	if !ok || gate.Status != "pass" || !strings.Contains(gate.Detail, "new=1") || !strings.Contains(gate.Detail, "blocking_new=1") {
 		t.Fatalf("gate=%#v gates=%#v", gate, attestation.Gates)
 	}
-	if len(attestation.Diagnostics) != 1 || attestation.Diagnostics[0].Stage != "architecture-debt" {
-		t.Fatalf("diagnostics=%#v", attestation.Diagnostics)
+	if len(attestation.Diagnostics) != 0 {
+		t.Fatalf("architecture evidence must not independently block: %#v", attestation.Diagnostics)
 	}
-	if attestation.ArchitectureDebt == nil || len(attestation.ArchitectureDebt.New) != 1 {
-		t.Fatalf("architectureDebt=%#v", attestation.ArchitectureDebt)
+
+	proof, err := BuildQualityDebtProof(debt, nil, nil, baseSHA, strings.Repeat("a", 40), time.Date(2026, 9, 15, 10, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	recordQualityDebt(&attestation, proof)
+	qualityGate, ok := qualityDebtGate(attestation.Gates)
+	if !ok || qualityGate.Status != "fail" || !strings.Contains(qualityGate.Detail, "unwaived=1") {
+		t.Fatalf("quality gate=%#v gates=%#v", qualityGate, attestation.Gates)
+	}
+	if len(attestation.Diagnostics) != 1 || attestation.Diagnostics[0].Stage != "quality-debt" {
+		t.Fatalf("diagnostics=%#v", attestation.Diagnostics)
 	}
 }
 
@@ -198,6 +210,15 @@ func gitT5Output(t *testing.T, root string, args ...string) string {
 func architectureDebtGate(gates []GateResult) (GateResult, bool) {
 	for _, gate := range gates {
 		if gate.Name == "architecture-debt" {
+			return gate, true
+		}
+	}
+	return GateResult{}, false
+}
+
+func qualityDebtGate(gates []GateResult) (GateResult, bool) {
+	for _, gate := range gates {
+		if gate.Name == "quality-debt" {
 			return gate, true
 		}
 	}
