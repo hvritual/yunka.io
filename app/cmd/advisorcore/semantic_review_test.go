@@ -112,7 +112,7 @@ func TestSemanticReviewRejectsTamperedSourceAndChangeIdentity(t *testing.T) {
 		t.Fatalf("mismatched change identity err=%v", err)
 	}
 
-	response := semanticResponseFixture(request, "internal/device/application/get.go", "Get", SemanticCategorySemanticColocation)
+	response := semanticResponseFixture(request, "internal/device/application/get.go", "Get", SemanticCategoryColocation)
 	response.Findings[0].SourceIdentity = strings.Repeat("9", 64)
 	if _, err := ValidateSemanticReviewResponse(request, response); err == nil || !strings.Contains(err.Error(), "sourceIdentity") {
 		t.Fatalf("source identity mismatch err=%v", err)
