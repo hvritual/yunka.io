@@ -29,6 +29,7 @@ type QualityMigrationReviewPacket struct {
 	SchemaVersion       int                          `json:"schemaVersion"`
 	BaseSHA             string                       `json:"baseSha"`
 	HeadSHA             string                       `json:"headSha"`
+	CandidateSHA256     string                       `json:"candidateSha256"`
 	PlanSHA256          string                       `json:"planSha256"`
 	Recipes             []string                     `json:"recipes"`
 	TouchedPaths        []string                     `json:"touchedPaths"`
@@ -51,6 +52,7 @@ type qualityMigrationReviewDigest struct {
 	SchemaVersion       int                          `json:"schemaVersion"`
 	BaseSHA             string                       `json:"baseSha"`
 	HeadSHA             string                       `json:"headSha"`
+	CandidateSHA256     string                       `json:"candidateSha256"`
 	PlanSHA256          string                       `json:"planSha256"`
 	Recipes             []string                     `json:"recipes"`
 	TouchedPaths        []string                     `json:"touchedPaths"`
@@ -96,6 +98,10 @@ func CheckQualityMigration(ctx context.Context, options projectflow.Options, pla
 	if err != nil {
 		return QualityMigrationReviewPacket{}, fmt.Errorf("quality migration check: Git reconciliation: %w", err)
 	}
+	candidateSHA, err := digestCandidate(descriptor.Root, plan.BaseSHA, headSHA, reconciliation.Changes)
+	if err != nil {
+		return QualityMigrationReviewPacket{}, fmt.Errorf("quality migration check: exact candidate digest: %w", err)
+	}
 
 	sourceReport, err := sourceaudit.Check(ctx, descriptor.Root, plan.Coverage.PolicyPath)
 	if err != nil {
@@ -122,6 +128,7 @@ func CheckQualityMigration(ctx context.Context, options projectflow.Options, pla
 		SchemaVersion:    QualityMigrationReviewSchemaVersion,
 		BaseSHA:          plan.BaseSHA,
 		HeadSHA:          headSHA,
+		CandidateSHA256:  candidateSHA,
 		PlanSHA256:       plan.PlanSHA256,
 		Recipes:          append([]string(nil), plan.Recipes...),
 		TouchedPaths:     append([]string(nil), plan.TouchedPaths...),
@@ -137,14 +144,14 @@ func CheckQualityMigration(ctx context.Context, options projectflow.Options, pla
 			return isPersistenceReviewPath(change.Path) || isPersistenceReviewPath(change.PreviousPath)
 		}),
 		GeneratedCodeChange: migrationPathDelta("generated", reconciliation.Changes, func(change FileChange) bool {
-			return strings.EqualFold(strings.TrimSpace(change.Class), "generated") || migrationGeneratedPath(descriptor.GeneratedGoRoot, change.Path) || migrationGeneratedPath(descriptor.GeneratedGoRoot, change.PreviousPath)
+			return strings.EqualFold(strings.TrimSpace(change.Class), "generated")
 		}),
 		QualityDebt: reviewQualityDebt(&qualityProof),
 		Coverage: QualityMigrationCoverage{
 			PolicyPath: plan.Coverage.PolicyPath, PolicySHA256: sourceReport.PolicySHA256,
 			InventorySHA256: sourceReport.Inventory.Digest, Status: sourceReport.Status,
 		},
-		Narrative: plan.Narrative,
+		Narrative:   plan.Narrative,
 		Violations: []string{},
 	}
 
@@ -187,7 +194,7 @@ func CheckQualityMigration(ctx context.Context, options projectflow.Options, pla
 		Why:      plan.Narrative.Why,
 		What:     plan.Narrative.What,
 		Boundary: plan.Narrative.Boundary,
-		Proof: qualityMigrationProofLines(packet, currentFingerprints),
+		Proof:    qualityMigrationProofLines(packet, currentFingerprints),
 	}
 	normalizeQualityMigrationReview(&packet)
 	packet.ProofSHA256, err = qualityMigrationReviewSHA(packet)
@@ -267,16 +274,11 @@ func migrationPathDelta(kind string, values []FileChange, matches func(FileChang
 	return delta
 }
 
-func migrationGeneratedPath(generatedRoot, value string) bool {
-	generatedRoot = cleanProjectPath(generatedRoot)
-	value = cleanProjectPath(value)
-	return generatedRoot != "" && value != "" && (value == generatedRoot || strings.HasPrefix(value, generatedRoot+"/"))
-}
-
 func qualityMigrationProofLines(packet QualityMigrationReviewPacket, current QualityMigrationFingerprints) []string {
 	proof := []string{
 		"base=" + packet.BaseSHA,
 		"head=" + packet.HeadSHA,
+		"candidate-sha256=" + packet.CandidateSHA256,
 		"plan-sha256=" + packet.PlanSHA256,
 		"coverage-policy-sha256=" + packet.Coverage.PolicySHA256,
 		"coverage-inventory-sha256=" + packet.Coverage.InventorySHA256,
@@ -293,6 +295,7 @@ func normalizeQualityMigrationReview(packet *QualityMigrationReviewPacket) {
 	}
 	packet.BaseSHA = strings.TrimSpace(packet.BaseSHA)
 	packet.HeadSHA = strings.TrimSpace(packet.HeadSHA)
+	packet.CandidateSHA256 = strings.TrimSpace(packet.CandidateSHA256)
 	packet.PlanSHA256 = strings.TrimSpace(packet.PlanSHA256)
 	packet.Recipes = uniqueSorted(packet.Recipes)
 	packet.TouchedPaths = uniqueSorted(packet.TouchedPaths)
@@ -315,7 +318,7 @@ func validateQualityMigrationReview(packet QualityMigrationReviewPacket) error {
 	if packet.SchemaVersion != QualityMigrationReviewSchemaVersion {
 		return fmt.Errorf("quality migration review: unsupported schemaVersion %d", packet.SchemaVersion)
 	}
-	if packet.BaseSHA == "" || packet.HeadSHA == "" || !validSHA256(packet.PlanSHA256) {
+	if packet.BaseSHA == "" || packet.HeadSHA == "" || !validSHA256(packet.CandidateSHA256) || !validSHA256(packet.PlanSHA256) {
 		return fmt.Errorf("quality migration review: exact candidate identity is incomplete")
 	}
 	if packet.Projection.Why != packet.Narrative.Why || packet.Projection.What != packet.Narrative.What || packet.Projection.Boundary != packet.Narrative.Boundary {
@@ -345,7 +348,8 @@ func validateQualityMigrationReview(packet QualityMigrationReviewPacket) error {
 func qualityMigrationReviewSHA(packet QualityMigrationReviewPacket) (string, error) {
 	payload := qualityMigrationReviewDigest{
 		SchemaVersion: packet.SchemaVersion, BaseSHA: packet.BaseSHA, HeadSHA: packet.HeadSHA,
-		PlanSHA256: packet.PlanSHA256, Recipes: packet.Recipes, TouchedPaths: packet.TouchedPaths,
+		CandidateSHA256: packet.CandidateSHA256, PlanSHA256: packet.PlanSHA256,
+		Recipes: packet.Recipes, TouchedPaths: packet.TouchedPaths,
 		ChangedPaths: packet.ChangedPaths, BaselineFindings: packet.BaselineFindings,
 		BehaviorChange: packet.BehaviorChange, PublicAPIChange: packet.PublicAPIChange,
 		PersistenceChange: packet.PersistenceChange, GeneratedCodeChange: packet.GeneratedCodeChange,
@@ -365,7 +369,8 @@ func qualityMigrationFingerprints(root string, touchedPaths []string) (QualityMi
 	for _, path := range touchedPaths {
 		directories[filepath.ToSlash(filepath.Dir(cleanProjectPath(path)))] = struct{}{}
 	}
-	var production, publicAPI []string
+	production := map[string]struct{}{}
+	publicAPI := map[string]struct{}{}
 	for directory := range directories {
 		absolute := filepath.Join(root, filepath.FromSlash(directory))
 		entries, err := os.ReadDir(absolute)
@@ -393,32 +398,33 @@ func qualityMigrationFingerprints(root string, touchedPaths []string) (QualityMi
 			if err != nil {
 				return QualityMigrationFingerprints{}, err
 			}
+			packageKey := directory + ":" + file.Name.Name
 			for _, importSpec := range file.Imports {
 				value, err := strconv.Unquote(importSpec.Path.Value)
 				if err != nil {
 					return QualityMigrationFingerprints{}, err
 				}
-				production = append(production, "import:"+value)
+				production[packageKey+":import:"+value] = struct{}{}
 			}
 			for _, declaration := range file.Decls {
 				rendered, err := renderMigrationDeclaration(set, declaration, false)
 				if err != nil {
 					return QualityMigrationFingerprints{}, err
 				}
-				production = append(production, file.Name.Name+":"+rendered)
+				production[packageKey+":"+rendered] = struct{}{}
 				if migrationDeclarationExported(declaration) {
 					signature, err := renderMigrationDeclaration(set, declaration, true)
 					if err != nil {
 						return QualityMigrationFingerprints{}, err
 					}
-					publicAPI = append(publicAPI, file.Name.Name+":"+signature)
+					publicAPI[packageKey+":"+signature] = struct{}{}
 				}
 			}
 		}
 	}
 	return QualityMigrationFingerprints{
-		ProductionSHA256: migrationStringsSHA(production),
-		PublicAPISHA256:  migrationStringsSHA(publicAPI),
+		ProductionSHA256: migrationStringSetSHA(production),
+		PublicAPISHA256:  migrationStringSetSHA(publicAPI),
 	}, nil
 }
 
@@ -455,18 +461,20 @@ func migrationDeclarationExported(declaration ast.Decl) bool {
 					if name != nil && name.IsExported() {
 						return true
 					}
-				}
 			}
 		}
 	}
 	return false
 }
 
-func migrationStringsSHA(values []string) string {
-	values = append([]string(nil), values...)
-	sort.Strings(values)
+func migrationStringSetSHA(values map[string]struct{}) string {
+	ordered := make([]string, 0, len(values))
+	for value := range values {
+		ordered = append(ordered, value)
+	}
+	sort.Strings(ordered)
 	hash := sha256.New()
-	for _, value := range values {
+	for _, value := range ordered {
 		hash.Write([]byte(value))
 		hash.Write([]byte{'\n'})
 	}
