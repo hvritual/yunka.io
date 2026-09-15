@@ -125,15 +125,19 @@ func parseGoSourceBytes(path string, contents []byte) (GoSourceFile, error) {
 		return GoSourceFile{}, fmt.Errorf("audit debt: imports %s: %w", path, err)
 	}
 	testFile := strings.HasSuffix(strings.ToLower(path), "_test.go")
+	metrics := measureSource(file, contents)
 	return GoSourceFile{
-		Path:              cleanSlash(path),
-		Package:           strings.TrimSpace(file.Name.Name),
-		Test:              testFile,
-		Generated:         ast.IsGenerated(file),
-		PackageDocumented: hasPackageDocumentation(file),
-		Exception:         nameException(file.Doc),
-		Imports:           imports,
-		Declarations:      collectSourceDeclarations(file, testFile),
+		Path:                 cleanSlash(path),
+		Package:              strings.TrimSpace(file.Name.Name),
+		Test:                 testFile,
+		Generated:            ast.IsGenerated(file),
+		PackageDocumented:    hasPackageDocumentation(file),
+		Lines:                metrics.Lines,
+		TopLevelDeclarations: metrics.TopLevelDeclarations,
+		BranchPoints:         metrics.BranchPoints,
+		Exception:            nameException(file.Doc),
+		Imports:              imports,
+		Declarations:         collectSourceDeclarations(file, testFile),
 	}, nil
 }
 
