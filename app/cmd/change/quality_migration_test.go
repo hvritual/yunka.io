@@ -167,6 +167,17 @@ func prepareQualityMigrationFixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "go.mod"), "module example.com/demo\n\ngo 1.25.0\n")
+	mustWrite(t, filepath.Join(root, ".yunka", "project.json"), `{
+  "version": 2,
+  "database": {"tablePrefix": "demo"},
+  "workflow": {
+    "contract": {"protoRoot": "contracts/proto", "generated": "contracts/generated"},
+    "modules": {"root": "modules"},
+    "generatedGo": {"root": "internal"},
+    "dev": {"manifest": ".yunka/dev.json"}
+  }
+}
+`)
 	mustWrite(t, filepath.Join(root, "contracts", "proto", "tenant.proto"), "syntax = \"proto3\";\npackage tenant.v1;\n")
 	manifest := map[string]any{
 		"schemaVersion": 1,
