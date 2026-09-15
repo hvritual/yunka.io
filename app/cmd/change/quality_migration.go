@@ -110,7 +110,7 @@ func BuildQualityMigrationPlan(ctx context.Context, options projectflow.Options,
 	if err != nil {
 		return QualityMigrationPlan{}, "", err
 	}
-	paths, err := validateQualityMigrationPaths(descriptor.Root, descriptor.GeneratedGoRoot, touchedPaths)
+	paths, err := validateQualityMigrationPaths(descriptor.Root, touchedPaths)
 	if err != nil {
 		return QualityMigrationPlan{}, "", err
 	}
@@ -187,30 +187,26 @@ func normalizeQualityMigrationRecipes(values []string) ([]string, error) {
 	return result, nil
 }
 
-func validateQualityMigrationPaths(root, generatedRoot string, values []string) ([]string, error) {
+func validateQualityMigrationPaths(root string, values []string) ([]string, error) {
 	paths := uniqueSorted(values)
 	if len(paths) == 0 {
 		return nil, fmt.Errorf("quality migration plan: at least one touched path is required")
 	}
-	generatedRoot = cleanProjectPath(generatedRoot)
 	existingParents := map[string]bool{}
 	for _, path := range paths {
 		path = cleanProjectPath(path)
 		if path == "" || path == "." || strings.HasPrefix(path, "../") || filepath.IsAbs(path) {
 			return nil, fmt.Errorf("quality migration plan: touched path %q is invalid", path)
 		}
-		if generatedRoot != "" && (path == generatedRoot || strings.HasPrefix(path, generatedRoot+"/")) {
-			return nil, fmt.Errorf("quality migration plan: generated path %s cannot be a developer-owned migration target", path)
+		report, ownErr := ownership.Build(root, []string{path})
+		if ownErr != nil || len(report.Decisions) != 1 || !report.Decisions[0].SafeAutoEdit {
+			return nil, fmt.Errorf("quality migration plan: ownership does not prove %s safe for developer editing", path)
 		}
 		absolute := filepath.Join(root, filepath.FromSlash(path))
 		info, err := os.Lstat(absolute)
 		if err == nil {
 			if !info.Mode().IsRegular() {
 				return nil, fmt.Errorf("quality migration plan: existing target %s is not a regular file", path)
-			}
-			report, ownErr := ownership.Build(root, []string{path})
-			if ownErr != nil || len(report.Decisions) != 1 || !report.Decisions[0].SafeAutoEdit {
-				return nil, fmt.Errorf("quality migration plan: ownership does not prove %s safe for developer editing", path)
 			}
 			existingParents[filepath.ToSlash(filepath.Dir(path))] = true
 			continue
@@ -248,7 +244,6 @@ func qualityMigrationFindingRefs(findings []auditcore.Finding, touchedPaths []st
 					path = cleanProjectPath(evidence.Path)
 					break
 				}
-			}
 		}
 		if _, ok := pathSet[path]; !ok {
 			continue
