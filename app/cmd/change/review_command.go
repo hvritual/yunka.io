@@ -12,7 +12,7 @@ func reviewCommand() cli.Command {
 	return cli.Command{
 		Name:        "review",
 		Usage:       "build, reconcile, and govern exact-candidate human review evidence",
-		Subcommands: []cli.Command{reviewBuildCommand(), reviewCheckCommand(), qualityWaiverCommand()},
+		Subcommands: []cli.Command{reviewBuildCommand(), reviewCheckCommand(), qualityWaiverCommand(), qualityMigrationCommand()},
 	}
 }
 
