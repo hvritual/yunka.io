@@ -26,6 +26,7 @@ type RuleOptions struct {
 	GoModule        string
 	GeneratedGoRoot string
 	DeclaredDomains []string
+	Limits          QualityLimits
 }
 
 func EvaluateSource(snapshot SourceSnapshot, options RuleOptions) []Finding {
@@ -34,6 +35,7 @@ func EvaluateSource(snapshot SourceSnapshot, options RuleOptions) []Finding {
 	generatedRoot := cleanSlash(options.GeneratedGoRoot)
 	findings := evaluateNaming(snapshot)
 	findings = append(findings, evaluateDocumentation(snapshot, options)...)
+	findings = append(findings, evaluateDeclaredLimits(snapshot, options.Limits)...)
 	for _, file := range snapshot.Files {
 		if file.Test || file.Generated {
 			continue
@@ -45,13 +47,18 @@ func EvaluateSource(snapshot SourceSnapshot, options RuleOptions) []Finding {
 		for _, importPath := range file.Imports {
 			importPath = strings.TrimSpace(importPath)
 			if targetDomain, boundary, ok := crossDomainRepositoryImport(importPath, goModule, generatedRoot, domains); ok && targetDomain != sourceDomain {
+				reason := "application in domain " + sourceDomain + " imports " + targetDomain + " repository/persistence boundary directly"
 				findings = append(findings, Finding{
-					ID:        findingID(RuleCrossDomainRepositoryBypass, file.Path, importPath),
-					Rule:      RuleCrossDomainRepositoryBypass,
-					Class:     FindingProvenViolation,
-					Subject:   sourceDomain,
-					Summary:   "application imports another declared domain repository/persistence boundary directly",
-					Invariant: "local cross-Application composition must use generated typed child capabilities; direct cross-domain repository access is forbidden",
+					ID:          findingID(RuleCrossDomainRepositoryBypass, file.Path, importPath),
+					Rule:        RuleCrossDomainRepositoryBypass,
+					Class:       FindingProvenViolation,
+					Subject:     sourceDomain,
+					Summary:     "application imports another declared domain repository/persistence boundary directly",
+					Invariant:   "local cross-Application composition must use generated typed child capabilities; direct cross-domain repository access is forbidden",
+					Path:        cleanSlash(file.Path),
+					Symbol:      importPath,
+					Reason:      reason,
+					Remediation: "replace the direct repository/persistence import with the declared generated typed child capability for the target Application boundary",
 					Evidence: []Evidence{
 						{Kind: EvidenceCanonical, Source: "contract.manifest", Detail: "source domain=" + sourceDomain + " target domain=" + targetDomain},
 						{Kind: EvidenceSource, Source: "go.import", Path: file.Path, Detail: importPath + " boundary=" + boundary},
@@ -59,13 +66,18 @@ func EvaluateSource(snapshot SourceSnapshot, options RuleOptions) []Finding {
 				})
 			}
 			if _, ok := frameworkPlatformImports[importPath]; ok {
+				reason := "application imports framework platform provider " + importPath + " directly"
 				findings = append(findings, Finding{
-					ID:        findingID(RulePlatformProviderBypass, file.Path, importPath),
-					Rule:      RulePlatformProviderBypass,
-					Class:     FindingProvenViolation,
-					Subject:   sourceDomain,
-					Summary:   "application imports the framework platform provider directly",
-					Invariant: "process infrastructure is App-owned and business Applications receive declared typed capabilities rather than provider factories",
+					ID:          findingID(RulePlatformProviderBypass, file.Path, importPath),
+					Rule:        RulePlatformProviderBypass,
+					Class:       FindingProvenViolation,
+					Subject:     sourceDomain,
+					Summary:     "application imports the framework platform provider directly",
+					Invariant:   "process infrastructure is App-owned and business Applications receive declared typed capabilities rather than provider factories",
+					Path:        cleanSlash(file.Path),
+					Symbol:      importPath,
+					Reason:      reason,
+					Remediation: "inject the declared typed capability at the Application boundary instead of importing the process-level provider factory",
 					Evidence: []Evidence{
 						{Kind: EvidenceCanonical, Source: "contract.manifest", Detail: "declared application domain=" + sourceDomain},
 						{Kind: EvidenceSource, Source: "go.import", Path: file.Path, Detail: importPath},
@@ -73,13 +85,18 @@ func EvaluateSource(snapshot SourceSnapshot, options RuleOptions) []Finding {
 				})
 			}
 			if _, ok := gatewayAuthorizationImports[importPath]; ok {
+				reason := "application imports canonical authorization implementation " + importPath + " directly"
 				findings = append(findings, Finding{
-					ID:        findingID(RuleAuthorizationBypass, file.Path, importPath),
-					Rule:      RuleAuthorizationBypass,
-					Class:     FindingProvenViolation,
-					Subject:   sourceDomain,
-					Summary:   "application imports the canonical authorization implementation directly",
-					Invariant: "authorization is evaluated at the root execution security boundary and business Applications must not repeat role/permission evaluation",
+					ID:          findingID(RuleAuthorizationBypass, file.Path, importPath),
+					Rule:        RuleAuthorizationBypass,
+					Class:       FindingProvenViolation,
+					Subject:     sourceDomain,
+					Summary:     "application imports the canonical authorization implementation directly",
+					Invariant:   "authorization is evaluated at the root execution security boundary and business Applications must not repeat role/permission evaluation",
+					Path:        cleanSlash(file.Path),
+					Symbol:      importPath,
+					Reason:      reason,
+					Remediation: "remove the direct authorization implementation import and consume the root execution security decision through the declared boundary",
 					Evidence: []Evidence{
 						{Kind: EvidenceCanonical, Source: "contract.manifest", Detail: "declared application domain=" + sourceDomain},
 						{Kind: EvidenceSource, Source: "go.import", Path: file.Path, Detail: importPath},

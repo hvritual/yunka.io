@@ -1,7 +1,6 @@
 package audit
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -41,6 +40,9 @@ func Command() cli.Command {
 				return err
 			}
 			fmt.Print(output)
+			if blocking := auditcore.BlockingNewFindings(report); len(blocking) > 0 {
+				return fmt.Errorf("audit: %d new blocking engineering-quality finding(s); inspect the rendered debt delta", len(blocking))
+			}
 			return nil
 		},
 	}
@@ -61,43 +63,19 @@ func BuildWithBase(root, baseRef string) (auditcore.Report, error) {
 	if err != nil {
 		return auditcore.Report{}, err
 	}
-	if descriptor.GoModule != "" {
-		goMod, err := auditcore.ReadGitFileAtCommit(descriptor.Root, baseSHA, "go.mod")
-		if err != nil {
-			return auditcore.Report{}, fmt.Errorf("audit debt: baseline project identity: %w", err)
-		}
-		baseModule := goModuleIdentity(goMod)
-		if baseModule == "" {
-			return auditcore.Report{}, fmt.Errorf("audit debt: baseline go.mod has no module identity")
-		}
-		if baseModule != descriptor.GoModule {
-			return auditcore.Report{}, fmt.Errorf("audit debt: baseline module %q differs from current module %q; choose a baseline after the module-identity migration", baseModule, descriptor.GoModule)
-		}
-	}
-
-	baseSource, err := auditcore.CollectGoSourceAtCommit(descriptor.Root, descriptor.GeneratedGoRoot, baseSHA)
+	baselineRoot, cleanup, err := auditcore.MaterializeGitCommit(descriptor.Root, baseSHA)
 	if err != nil {
 		return auditcore.Report{}, err
 	}
-	manifestRelative, err := projectRelativePath(descriptor.Root, projectflow.ResolveDescriptorPath(descriptor, filepath.Join(descriptor.ContractGenerated, contract.ManifestFilename)))
+	defer cleanup()
+	baseline, baselineDescriptor, err := buildCurrent(baselineRoot)
 	if err != nil {
-		return auditcore.Report{}, err
+		return auditcore.Report{}, fmt.Errorf("audit debt: evaluate immutable baseline %s: %w", baseSHA, err)
 	}
-	manifestBytes, err := auditcore.ReadGitFileAtCommit(descriptor.Root, baseSHA, manifestRelative)
-	if err != nil {
-		return auditcore.Report{}, fmt.Errorf("audit debt: baseline canonical manifest: %w", err)
+	if descriptor.GoModule != baselineDescriptor.GoModule {
+		return auditcore.Report{}, fmt.Errorf("audit debt: baseline module %q differs from current module %q; choose a baseline after the module-identity migration", baselineDescriptor.GoModule, descriptor.GoModule)
 	}
-	var baseManifest contract.Manifest
-	if err := json.Unmarshal(manifestBytes, &baseManifest); err != nil {
-		return auditcore.Report{}, fmt.Errorf("audit debt: decode baseline canonical manifest %s: %w", manifestRelative, err)
-	}
-	baseManifest.Normalize()
-	baseFindings := auditcore.EvaluateSource(baseSource, auditcore.RuleOptions{
-		GoModule:        descriptor.GoModule,
-		GeneratedGoRoot: descriptor.GeneratedGoRoot,
-		DeclaredDomains: declaredDomains(baseManifest),
-	})
-	debt := auditcore.CompareProvenFindings(baseFindings, current.Findings)
+	debt := auditcore.CompareProvenFindings(baseline.Findings, current.Findings)
 	debt.BaseRef = baseRef
 	debt.BaseSHA = baseSHA
 	current.Debt = &debt
@@ -122,14 +100,26 @@ func buildCurrent(root string) (auditcore.Report, projectflow.ProjectDescriptor,
 	if err != nil {
 		return auditcore.Report{}, projectflow.ProjectDescriptor{}, fmt.Errorf("audit: load canonical manifest %s: %w; run `yunka generate` first", filepath.ToSlash(manifestPath), err)
 	}
+	qualityPolicy, policyEvidence, err := auditcore.LoadQualityPolicy(descriptor.Root)
+	if err != nil {
+		return auditcore.Report{}, projectflow.ProjectDescriptor{}, err
+	}
 
 	report := auditcore.NewReport(auditcore.ProjectIdentity{GoModule: descriptor.GoModule, Profiled: descriptor.Profiled})
+	report.QualityPolicy = policyEvidence
 	report.Source = source
 	report.Findings = auditcore.EvaluateSource(source, auditcore.RuleOptions{
 		GoModule:        descriptor.GoModule,
 		GeneratedGoRoot: descriptor.GeneratedGoRoot,
 		DeclaredDomains: declaredDomains(manifest),
+		Limits:          qualityPolicy.Limits,
 	})
+	generated, err := generatedArtifactFindings(descriptor.Root, descriptor.GeneratedGoRoot)
+	if err != nil {
+		return auditcore.Report{}, projectflow.ProjectDescriptor{}, fmt.Errorf("audit: inspect generated ownership: %w", err)
+	}
+	report.Findings = append(report.Findings, generated...)
+	auditcore.ApplyBlockingPolicy(report.Findings, qualityPolicy)
 	auditcore.Normalize(&report)
 	if err := auditcore.Validate(report); err != nil {
 		return auditcore.Report{}, projectflow.ProjectDescriptor{}, err
@@ -153,15 +143,24 @@ func Render(report auditcore.Report, format string) (string, error) {
 			module = "<unknown>"
 		}
 		fmt.Fprintf(&builder, "PROJECT module=%s profiled=%t\n", module, report.Project.Profiled)
+		fmt.Fprintf(&builder, "POLICY  path=%s present=%t blocking=%d\n", report.QualityPolicy.Path, report.QualityPolicy.Present, len(report.QualityPolicy.BlockingRules))
 		fmt.Fprintf(&builder, "SOURCE  root=%s files=%d\n", report.Source.SourceRoot, len(report.Source.Files))
 		fmt.Fprintf(&builder, "FINDINGS %d\n", len(report.Findings))
 		for _, finding := range report.Findings {
-			fmt.Fprintf(&builder, "  %s %s %s — %s\n", finding.Class, finding.Rule, finding.Subject, finding.Summary)
+			blocking := ""
+			if finding.Blocking {
+				blocking = " BLOCKING"
+			}
+			fmt.Fprintf(&builder, "  %s%s %s %s — %s\n", finding.Class, blocking, finding.Rule, finding.Subject, finding.Summary)
 		}
 		if report.Debt != nil {
-			fmt.Fprintf(&builder, "DEBT base=%s sha=%s existing=%d new=%d fixed=%d\n", report.Debt.BaseRef, report.Debt.BaseSHA, len(report.Debt.Existing), len(report.Debt.New), len(report.Debt.Fixed))
+			fmt.Fprintf(&builder, "DEBT base=%s sha=%s existing=%d new=%d fixed=%d blocking_new=%d\n", report.Debt.BaseRef, report.Debt.BaseSHA, len(report.Debt.Existing), len(report.Debt.New), len(report.Debt.Fixed), len(auditcore.BlockingNewFindings(report)))
 			for _, finding := range report.Debt.New {
-				fmt.Fprintf(&builder, "  NEW   %s %s — %s\n", finding.Rule, finding.Subject, finding.Summary)
+				blocking := ""
+				if finding.Blocking {
+					blocking = " BLOCKING"
+				}
+				fmt.Fprintf(&builder, "  NEW%s %s %s — %s\n", blocking, finding.Rule, finding.Subject, finding.Summary)
 			}
 			for _, finding := range report.Debt.Fixed {
 				fmt.Fprintf(&builder, "  FIXED %s %s — %s\n", finding.Rule, finding.Subject, finding.Summary)

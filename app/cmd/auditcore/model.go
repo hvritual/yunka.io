@@ -42,6 +42,7 @@ type Finding struct {
 	ID          string       `json:"id"`
 	Rule        string       `json:"rule"`
 	Class       FindingClass `json:"class"`
+	Blocking    bool         `json:"blocking,omitempty"`
 	Subject     string       `json:"subject"`
 	Summary     string       `json:"summary"`
 	Invariant   string       `json:"invariant,omitempty"`
@@ -61,17 +62,19 @@ type DebtDelta struct {
 }
 
 type Report struct {
-	SchemaVersion int             `json:"schemaVersion"`
-	Project       ProjectIdentity `json:"project"`
-	Source        SourceSnapshot  `json:"source"`
-	Findings      []Finding       `json:"findings"`
-	Debt          *DebtDelta      `json:"debt,omitempty"`
+	SchemaVersion int                   `json:"schemaVersion"`
+	Project       ProjectIdentity       `json:"project"`
+	QualityPolicy QualityPolicyEvidence `json:"qualityPolicy"`
+	Source        SourceSnapshot        `json:"source"`
+	Findings      []Finding             `json:"findings"`
+	Debt          *DebtDelta            `json:"debt,omitempty"`
 }
 
 func NewReport(project ProjectIdentity) Report {
 	return Report{
 		SchemaVersion: SchemaVersion,
 		Project:       project,
+		QualityPolicy: QualityPolicyEvidence{Path: QualityPolicyRelativePath, BlockingRules: []string{}},
 		Source:        SourceSnapshot{Files: []GoSourceFile{}},
 		Findings:      []Finding{},
 	}
@@ -82,6 +85,9 @@ func Normalize(report *Report) {
 		return
 	}
 	report.Project.GoModule = strings.TrimSpace(report.Project.GoModule)
+	report.QualityPolicy.Path = cleanSlash(report.QualityPolicy.Path)
+	report.QualityPolicy.SHA256 = strings.TrimSpace(report.QualityPolicy.SHA256)
+	report.QualityPolicy.BlockingRules = uniqueStrings(report.QualityPolicy.BlockingRules)
 	NormalizeSource(&report.Source)
 	normalizeFindings(report.Findings)
 	if report.Findings == nil {
@@ -109,12 +115,18 @@ func Validate(report Report) error {
 	if report.SchemaVersion != SchemaVersion {
 		return fmt.Errorf("audit: unsupported schemaVersion %d", report.SchemaVersion)
 	}
+	if report.QualityPolicy.Path == "" {
+		return fmt.Errorf("audit: quality policy path is required")
+	}
 	for _, file := range report.Source.Files {
 		if file.Path == "" {
 			return fmt.Errorf("audit: source file path is required")
 		}
 		if file.Package == "" {
 			return fmt.Errorf("audit: source file %s package is required", file.Path)
+		}
+		if file.Lines < 0 || file.TopLevelDeclarations < 0 || file.BranchPoints < 0 {
+			return fmt.Errorf("audit: source file %s metrics must be non-negative", file.Path)
 		}
 		for _, declaration := range file.Declarations {
 			if declaration.Kind == "" || declaration.Name == "" {
@@ -206,6 +218,9 @@ func validateFindings(values []Finding, provenOnly bool) error {
 				return fmt.Errorf("proven finding %s invariant is required", finding.ID)
 			}
 		case FindingEvidenceObservation:
+			if finding.Blocking {
+				return fmt.Errorf("advisory finding %s cannot be blocking", finding.ID)
+			}
 			if provenOnly {
 				return fmt.Errorf("finding %s class %q cannot participate in debt delta", finding.ID, finding.Class)
 			}
@@ -220,9 +235,9 @@ func validateFindings(values []Finding, provenOnly bool) error {
 				return fmt.Errorf("historical naming finding %s symbol is required", finding.ID)
 			}
 		}
-		if strings.HasPrefix(finding.Rule, "AUDIT-DOC-") {
+		if strings.HasPrefix(finding.Rule, "AUDIT-DOC-") || strings.HasPrefix(finding.Rule, "AUDIT-GEN-") || strings.HasPrefix(finding.Rule, "AUDIT-SIZE-") || strings.HasPrefix(finding.Rule, "AUDIT-COMPLEXITY-") {
 			if finding.Path == "" || finding.Symbol == "" || finding.Reason == "" || finding.Remediation == "" {
-				return fmt.Errorf("documentation finding %s path, symbol, reason and remediation are required", finding.ID)
+				return fmt.Errorf("quality finding %s path, symbol, reason and remediation are required", finding.ID)
 			}
 		}
 		if len(finding.Evidence) == 0 {
@@ -297,6 +312,7 @@ func cloneFindings(values []Finding) []Finding {
 
 func cloneReport(report Report) Report {
 	result := report
+	result.QualityPolicy.BlockingRules = append([]string(nil), report.QualityPolicy.BlockingRules...)
 	result.Source.Files = make([]GoSourceFile, len(report.Source.Files))
 	for index, file := range report.Source.Files {
 		result.Source.Files[index] = file

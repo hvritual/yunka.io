@@ -304,6 +304,99 @@ compatibility-boundary
 
 A category without a non-empty reason is invalid and does not suppress the finding. There is no repository-global keyword allowlist, consumer-specific path exemption or silent waiver. An exception suppresses only the naming check at its declared scope and does not waive architecture, authorization, coverage or other findings.
 
+## Deterministic code-semantics enforcement
+
+The deterministic quality surface reuses the existing `auditcore` Finding identity and existing/new/fixed debt model. It does not create a second architecture finding engine and it does not treat semantic judgment as machine proof.
+
+Every deterministic proven finding exposed by this surface carries a stable finding ID plus exact path, symbol or scope, reason and remediation. Human text and `agent-json` are projections of the same report.
+
+### Objective documentation findings
+
+The governed documentation rules remain objective only where presence and ownership are mechanically decidable:
+
+- `AUDIT-DOC-001` — a canonical manifest-declared domain package has developer-owned production Go source but no discoverable developer-owned package documentation;
+- `AUDIT-DOC-002` — an exported Go interface in governed developer-owned source has no declaration documentation.
+
+Generated-only and test-only source cannot satisfy handwritten package-documentation requirements. These rules prove missing documentation, not whether prose is sufficient, useful or semantically correct.
+
+### Generated ownership and drift findings
+
+Generated-code findings are derived from the canonical Domain compiler contract rather than filename guesses or a second generated-file registry. The checker reuses the same `domain.json`, PO scan, renderer and generated marker used by Domain generate/check:
+
+- `AUDIT-GEN-001` — a canonical generator-owned path contains source without the Domain generated marker, creating an objective generated/manual ownership conflict;
+- `AUDIT-GEN-002` — a framework-generated file remains although it is no longer present in the canonical renderer output;
+- `AUDIT-GEN-003` — a canonical generator-owned file is missing or differs from canonical renderer output.
+
+The audit is read-only. Repair is performed through the canonical generator; generated files are not hand-edited to satisfy the audit.
+
+### Declared structural review budgets
+
+File size and structural complexity are not universal correctness rules. They become deterministic findings only when the repository explicitly declares a review budget in:
+
+```text
+.yunka/engineering-quality.json
+```
+
+Schema version 1 supports:
+
+```json
+{
+  "schemaVersion": 1,
+  "limits": {
+    "maxFileLines": 600,
+    "maxTopLevelDeclarations": 60,
+    "maxBranchPoints": 80
+  },
+  "blockingRules": [
+    "AUDIT-NAME-001",
+    "AUDIT-DOC-001",
+    "AUDIT-GEN-001",
+    "AUDIT-GEN-002",
+    "AUDIT-GEN-003"
+  ]
+}
+```
+
+Omitted or zero limits are disabled. Enabled limits produce:
+
+- `AUDIT-SIZE-001` — physical Go source lines exceed `maxFileLines`;
+- `AUDIT-SIZE-002` — top-level non-import declarations exceed `maxTopLevelDeclarations`;
+- `AUDIT-COMPLEXITY-001` — structural branch points exceed `maxBranchPoints`.
+
+The branch-point metric counts syntax nodes such as `if`, loops, switches/selects and their branch clauses. It is a deterministic review-budget metric, not cyclomatic-complexity or business-complexity truth. Generated and test files are excluded from these production-source budgets.
+
+Exceeding a declared limit proves only that the explicit review budget was exceeded. It does not prove bad DDD, poor cohesion or incorrect business behavior.
+
+### Blocking authority
+
+Only accepted `proven_violation` rules may appear in `blockingRules`. Advisory findings such as `AUDIT-NAME-002` are rejected if configuration attempts to promote them to blocking authority.
+
+Blocking is evaluated against an immutable Git baseline:
+
+```text
+base findings + current findings
+        ↓
+existing / new / fixed
+        ↓
+blocking applies only to new proven findings whose rule is designated blocking
+```
+
+Running `yunka audit` without a baseline remains inspect-only; it does not reinterpret historical debt as new debt. With `--base`, the exact tracked project tree at the resolved commit is materialized into an isolated temporary workspace and evaluated through the same read-only audit path as the current project. The working tree is not used as a baseline mutation target.
+
+This stage does not define waivers. Owner/reason/scope/expiry waiver authority belongs to the separate engineering-quality debt/waiver contract and must not be implemented as a silent `--force` or local suppression here.
+
+### Authority boundary
+
+The deterministic quality surface can prove only mechanically checkable facts. It MUST NOT claim deterministic proof of:
+
+- complete DDD quality;
+- business correctness;
+- semantic cohesion that requires interpretation;
+- whether an abstraction is justified;
+- whether documentation prose is semantically sufficient.
+
+Those concerns remain human or structured advisory semantic review responsibilities.
+
 ## Required change-review contract
 
 For framework and consumer changes, the minimum review contract is:
