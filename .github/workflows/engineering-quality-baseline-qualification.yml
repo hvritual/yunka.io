@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: hvritual/iot-delivery-system
-          ref: bcd20632b666405c3f7a8fe8d53f591c7845
+          ref: bcd20632b666405c3f7a8fe8d53f591c78450087
           path: _consumer/iot
           persist-credentials: false
       - name: Verify framework bootstrap quality authority
