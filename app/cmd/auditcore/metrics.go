@@ -29,7 +29,9 @@ func measureSource(file *ast.File, contents []byte) sourceMetrics {
 	}
 	ast.Inspect(file, func(node ast.Node) bool {
 		switch node.(type) {
-		case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt, *ast.CaseClause, *ast.CommClause:
+		case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt,
+			*ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.SelectStmt,
+			*ast.CaseClause, *ast.CommClause:
 			metrics.BranchPoints++
 		}
 		return true
