@@ -92,11 +92,11 @@ func normalizeReviewNarrative(value *ReviewNarrative) error {
 	value.Why = strings.TrimSpace(value.Why)
 	value.What = strings.TrimSpace(value.What)
 	value.Boundary = strings.TrimSpace(value.Boundary)
-	value.CurrentConcepts = uniqueSorted(value.CurrentConcepts)
-	value.DesiredOwnership = uniqueSorted(value.DesiredOwnership)
-	value.AffectedInvariants = uniqueSorted(value.AffectedInvariants)
-	value.Risks = uniqueSorted(value.Risks)
-	value.UnresolvedFindings = uniqueSorted(value.UnresolvedFindings)
+	value.CurrentConcepts = uniqueSortedReviewText(value.CurrentConcepts)
+	value.DesiredOwnership = uniqueSortedReviewText(value.DesiredOwnership)
+	value.AffectedInvariants = uniqueSortedReviewText(value.AffectedInvariants)
+	value.Risks = uniqueSortedReviewText(value.Risks)
+	value.UnresolvedFindings = uniqueSortedReviewText(value.UnresolvedFindings)
 	if value.Problem == "" || value.Why == "" || value.What == "" || value.Boundary == "" {
 		return fmt.Errorf("change review: problem, why, what and boundary are required")
 	}
@@ -115,13 +115,13 @@ func normalizeReviewPacket(packet *ReviewPacket) {
 	normalizeReviewDelta(&packet.PublicAPIChange)
 	normalizeReviewDelta(&packet.PersistenceChange)
 	normalizeReviewDelta(&packet.GeneratedCodeChange)
-	packet.AffectedInvariants = uniqueSorted(packet.AffectedInvariants)
-	packet.Risks = uniqueSorted(packet.Risks)
-	packet.UnresolvedFindings = uniqueSorted(packet.UnresolvedFindings)
+	packet.AffectedInvariants = uniqueSortedReviewText(packet.AffectedInvariants)
+	packet.Risks = uniqueSortedReviewText(packet.Risks)
+	packet.UnresolvedFindings = uniqueSortedReviewText(packet.UnresolvedFindings)
 	packet.Projection.Why = strings.TrimSpace(packet.Projection.Why)
 	packet.Projection.What = strings.TrimSpace(packet.Projection.What)
 	packet.Projection.Boundary = strings.TrimSpace(packet.Projection.Boundary)
-	packet.Projection.Proof = uniqueSorted(packet.Projection.Proof)
+	packet.Projection.Proof = uniqueSortedReviewText(packet.Projection.Proof)
 	packet.Evidence.BaseSHA = strings.TrimSpace(packet.Evidence.BaseSHA)
 	packet.Evidence.HeadSHA = strings.TrimSpace(packet.Evidence.HeadSHA)
 	packet.Evidence.OperationID = strings.TrimSpace(packet.Evidence.OperationID)
@@ -210,6 +210,27 @@ func validateReviewPacket(packet ReviewPacket) error {
 		return fmt.Errorf("change review: WHY/WHAT/BOUNDARY projection differs from the declared narrative")
 	}
 	return nil
+}
+
+func uniqueSortedReviewText(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	if result == nil {
+		return []string{}
+	}
+	return result
 }
 
 func digestBytes(contents []byte) string {
