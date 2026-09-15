@@ -89,7 +89,7 @@ func BuildReviewPacket(ctx context.Context, options projectflow.Options, contrac
 			Gates:      append([]GateResult(nil), attestation.Gates...),
 		},
 		AffectedInvariants: deriveAffectedInvariants(narrative, semantic.Deltas),
-		Risks:              uniqueSorted(narrative.Risks),
+		Risks:              uniqueSortedReviewText(narrative.Risks),
 		UnresolvedFindings: deriveUnresolvedFindings(narrative, attestation),
 		Evidence: ReviewEvidenceIdentity{
 			BaseSHA:            contractValue.BaseSHA,
