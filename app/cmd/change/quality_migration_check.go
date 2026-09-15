@@ -446,21 +446,28 @@ func renderMigrationDeclaration(set *token.FileSet, declaration ast.Decl, signat
 }
 
 func migrationDeclarationExported(declaration ast.Decl) bool {
-	switch value := declaration.(type) {
-	case *ast.FuncDecl:
-		return value.Name != nil && value.Name.IsExported()
-	case *ast.GenDecl:
-		for _, spec := range value.Specs {
-			switch item := spec.(type) {
-			case *ast.TypeSpec:
-				if item.Name != nil && item.Name.IsExported() {
-					return true
-				}
-			case *ast.ValueSpec:
-				for _, name := range item.Names {
-					if name != nil && name.IsExported() {
-						return true
-					}
+	function, isFunction := declaration.(*ast.FuncDecl)
+	if isFunction {
+		return function.Name != nil && function.Name.IsExported()
+	}
+	group, isGroup := declaration.(*ast.GenDecl)
+	if !isGroup {
+		return false
+	}
+	for _, spec := range group.Specs {
+		if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+			if typeSpec.Name != nil && typeSpec.Name.IsExported() {
+				return true
+			}
+			continue
+		}
+		valueSpec, ok := spec.(*ast.ValueSpec)
+		if !ok {
+			continue
+		}
+		for _, name := range valueSpec.Names {
+			if name != nil && name.IsExported() {
+				return true
 			}
 		}
 	}
