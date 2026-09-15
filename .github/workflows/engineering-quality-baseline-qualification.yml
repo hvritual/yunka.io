@@ -33,6 +33,11 @@ jobs:
           ref: bcd20632b666405c3f7a8fe8d53f591c7845
           path: _consumer/iot
           persist-credentials: false
+      - name: Verify framework bootstrap quality authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'docs/ENGINEERING_QUALITY_RULES.md' AGENTS.md
       - name: Load locked Go version
         id: toolchain
         shell: bash
