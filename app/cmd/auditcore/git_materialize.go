@@ -48,6 +48,9 @@ func MaterializeGitCommit(projectRoot, commitSHA string) (string, func(), error)
 			cleanup()
 			return "", nil, fmt.Errorf("audit debt: read baseline archive: %w", err)
 		}
+		if header.Typeflag == tar.TypeXGlobalHeader || header.Typeflag == tar.TypeXHeader {
+			continue
+		}
 		name := filepath.Clean(filepath.FromSlash(header.Name))
 		if name == "." || filepath.IsAbs(name) || name == ".." || strings.HasPrefix(name, ".."+string(filepath.Separator)) {
 			cleanup()
