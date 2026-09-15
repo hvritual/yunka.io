@@ -117,8 +117,8 @@ func (failure *Failure) Unwrap() error {
 func Command() cli.Command {
 	return cli.Command{
 		Name:        AppName,
-		Usage:       "plan, constrain, and verify evidence-backed bounded changes",
-		Subcommands: []cli.Command{planCommand(), beginCommand(), checkCommand(), verifyCommand(), setCommand()},
+		Usage:       "plan, constrain, verify, and review evidence-backed bounded changes",
+		Subcommands: []cli.Command{planCommand(), beginCommand(), checkCommand(), verifyCommand(), reviewCommand(), setCommand()},
 	}
 }
 
