@@ -77,6 +77,7 @@ type ReviewPacket struct {
 	PersistenceChange   ReviewDelta            `json:"persistenceChange"`
 	GeneratedCodeChange ReviewDelta            `json:"generatedCodeChange"`
 	Verification        ReviewVerification     `json:"verification"`
+	QualityDebt         *ReviewQualityDebt     `json:"qualityDebt,omitempty"`
 	AffectedInvariants  []string               `json:"affectedInvariants"`
 	Risks               []string               `json:"risks"`
 	UnresolvedFindings  []string               `json:"unresolvedFindings"`
@@ -115,6 +116,7 @@ func normalizeReviewPacket(packet *ReviewPacket) {
 	normalizeReviewDelta(&packet.PublicAPIChange)
 	normalizeReviewDelta(&packet.PersistenceChange)
 	normalizeReviewDelta(&packet.GeneratedCodeChange)
+	normalizeReviewQualityDebt(packet.QualityDebt)
 	packet.AffectedInvariants = uniqueSortedReviewText(packet.AffectedInvariants)
 	packet.Risks = uniqueSortedReviewText(packet.Risks)
 	packet.UnresolvedFindings = uniqueSortedReviewText(packet.UnresolvedFindings)
@@ -189,6 +191,9 @@ func validateReviewPacket(packet ReviewPacket) error {
 				return fmt.Errorf("change review: %s delta facts require kind and detail", name)
 			}
 		}
+	}
+	if err := validateReviewQualityDebt(packet.QualityDebt); err != nil {
+		return err
 	}
 	if packet.Evidence.BaseSHA == "" || packet.Evidence.HeadSHA == "" || packet.Evidence.OperationID == "" {
 		return fmt.Errorf("change review: evidence identity is incomplete")
