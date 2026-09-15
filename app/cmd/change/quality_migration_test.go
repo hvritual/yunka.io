@@ -178,6 +178,16 @@ func prepareQualityMigrationFixture(t *testing.T) string {
   }
 }
 `)
+	mustWrite(t, filepath.Join(root, ".yunka", "domain-coverage.json"), `{
+  "schemaVersion": 1,
+  "exemptions": [
+    {
+      "domain": "tenant",
+      "reason": "fixture package is an explicitly developer-owned migration surface"
+    }
+  ]
+}
+`)
 	mustWrite(t, filepath.Join(root, "contracts", "proto", "tenant.proto"), "syntax = \"proto3\";\npackage tenant.v1;\n")
 	manifest := map[string]any{
 		"schemaVersion": 1,
