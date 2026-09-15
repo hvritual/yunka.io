@@ -1,0 +1,45 @@
+name: review-packet-qualification
+
+on:
+  pull_request:
+    paths:
+      - 'app/cmd/change/**'
+      - 'docs/ENGINEERING_QUALITY_RULES.md'
+      - '.github/workflows/review-packet-qualification.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Load locked Go version
+        id: toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          echo "go_version=${GO_VERSION:?}" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: ${{ steps.toolchain.outputs.go_version }}
+          cache-dependency-path: app/go.sum
+      - name: Build command and run review packet regressions
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build -mod=readonly ./cmd
+          go test ./cmd/change -count=1
+          go test ./cmd/change -run '^(TestStructuralRefactorProjectsExplicitZeroSemanticDelta|TestBehaviorChangeSurfacesCanonicalInvariantAPIAndPersistenceFacts|TestCandidateDigestDetectsSamePathContentMutation|TestChangedPathDigestChangesWhenCandidatePathSetChanges|TestReviewPacketValidationRejectsNarrativeOrEvidenceTamper|TestReviewPacketRenderingIsDeterministicAcrossHumanAndAgentSurfaces)$' -count=1 -v
+      - name: Prove qualification did not mutate checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain --untracked-files=all)"
