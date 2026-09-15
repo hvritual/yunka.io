@@ -26,6 +26,7 @@ func qualityMigrationPlanCommand() cli.Command {
 		Usage: "inventory exact baseline debt and declare a bounded structural migration before mutation",
 		Flags: []cli.Flag{
 			cli.StringFlag{Name: "root", Value: ".", Usage: "project root"},
+			cli.StringFlag{Name: "coverage-root", Usage: "optional source-policy root containing the project and any local dependency modules; defaults to project root"},
 			cli.StringFlag{Name: "base", Value: "HEAD", Usage: "clean immutable Git baseline"},
 			cli.StringSliceFlag{Name: "recipe", Usage: "migration recipe; may be repeated"},
 			cli.StringSliceFlag{Name: "path", Usage: "exact existing or planned touched path; may be repeated"},
@@ -42,7 +43,7 @@ func qualityMigrationPlanCommand() cli.Command {
 			cli.StringFlag{Name: "format", Value: FormatText, Usage: "output format: text, json, or agent-json"},
 		},
 		Action: func(c *cli.Context) error {
-			plan, root, err := BuildQualityMigrationPlan(context.Background(), sourceCompilerOptions(c), c.String("base"), c.StringSlice("recipe"), c.StringSlice("path"), ReviewNarrative{
+			plan, root, err := BuildQualityMigrationPlanWithCoverage(context.Background(), sourceCompilerOptions(c), c.String("coverage-root"), c.String("base"), c.StringSlice("recipe"), c.StringSlice("path"), ReviewNarrative{
 				Problem: c.String("problem"), CurrentConcepts: c.StringSlice("current-concept"), DesiredOwnership: c.StringSlice("desired-ownership"),
 				Why: c.String("why"), What: c.String("what"), Boundary: c.String("boundary"),
 				AffectedInvariants: c.StringSlice("invariant"), Risks: c.StringSlice("risk"), UnresolvedFindings: c.StringSlice("unresolved"),
@@ -113,7 +114,7 @@ func RenderQualityMigrationPlan(plan QualityMigrationPlan, path, format string) 
 	fmt.Fprintf(&builder, "recipes   %s\n", strings.Join(plan.Recipes, ","))
 	fmt.Fprintf(&builder, "paths     %d\n", len(plan.TouchedPaths))
 	fmt.Fprintf(&builder, "findings  %d\n", len(plan.BaselineFindings))
-	fmt.Fprintf(&builder, "coverage  %s policy=%s\n", plan.Coverage.Status, plan.Coverage.PolicySHA256)
+	fmt.Fprintf(&builder, "coverage  %s root-project=%s policy=%s\n", plan.Coverage.Status, plan.Coverage.ProjectPath, plan.Coverage.PolicySHA256)
 	fmt.Fprintf(&builder, "plan      %s\n", plan.PlanSHA256)
 	fmt.Fprintf(&builder, "WHY       %s\nWHAT      %s\nBOUNDARY  %s\n", plan.Narrative.Why, plan.Narrative.What, plan.Narrative.Boundary)
 	return builder.String(), nil
