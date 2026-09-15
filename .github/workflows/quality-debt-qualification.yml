@@ -1,0 +1,59 @@
+name: quality-debt-qualification
+
+on:
+  pull_request:
+    paths:
+      - 'app/cmd/change/**'
+      - 'app/cmd/audit/**'
+      - 'app/cmd/auditcore/**'
+      - 'app/cmd/advisorcore/**'
+      - '.github/workflows/quality-debt-qualification.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Load locked Go version
+        id: toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          echo "go_version=${GO_VERSION:?}" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: ${{ steps.toolchain.outputs.go_version }}
+          cache-dependency-path: app/go.sum
+      - name: Clone pinned consumers
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/hvritual/biz.git "$RUNNER_TEMP/biz"
+          git -C "$RUNNER_TEMP/biz" checkout --quiet c89ec471306c91f49fdf265f1766495abb1f4f08
+          git clone --quiet https://github.com/hvritual/iot-delivery-system.git "$RUNNER_TEMP/iot"
+          git -C "$RUNNER_TEMP/iot" checkout --quiet c38ce0efcbe11d8ef9201381f895c7e9a85ddbc0
+      - name: Build and run quality debt regressions
+        working-directory: app
+        shell: bash
+        env:
+          YUNKA_QUALITY_DEBT_BIZ_ROOT: ${{ runner.temp }}/biz
+          YUNKA_QUALITY_DEBT_IOT_ROOT: ${{ runner.temp }}/iot
+        run: |
+          set -euo pipefail
+          go test ./cmd/change -run '^(TestQualityDebt|TestQualityWaiver|TestArchitectureDebtProof|TestReviewQualityDebt)' -count=1 -v
+          go test ./cmd/change -run '^TestQualityDebtConsumerQualification$' -count=1 -v
+      - name: Prove qualification is read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain --untracked-files=all)"
+          test -z "$(git -C "$RUNNER_TEMP/biz" status --porcelain --untracked-files=all)"
+          test -z "$(git -C "$RUNNER_TEMP/iot" status --porcelain --untracked-files=all)"

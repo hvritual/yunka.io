@@ -104,9 +104,32 @@ func deriveUnresolvedFindings(narrative ReviewNarrative, attestation ChangeAttes
 		}
 		result = append(result, strings.TrimSpace(item.Code)+":"+detail)
 	}
-	if attestation.ArchitectureDebt != nil {
+	if attestation.QualityDebt != nil {
+		result = appendAuditFindingProjections(result, attestation.QualityDebt.Deterministic.Existing)
+		result = appendAuditFindingProjections(result, attestation.QualityDebt.Deterministic.New)
+		for _, finding := range attestation.QualityDebt.AdvisoryFindingProjections() {
+			result = append(result, finding)
+		}
+		for _, waiver := range attestation.QualityDebt.WaivedBlocking {
+			result = append(result, fmt.Sprintf("waived:%s owner=%s expires=%s review=%s", waiver.FindingID, waiver.Owner, waiver.ExpiresAt, waiver.ReviewCondition))
+		}
+	} else if attestation.ArchitectureDebt != nil {
 		result = appendAuditFindingProjections(result, attestation.ArchitectureDebt.Existing)
 		result = appendAuditFindingProjections(result, attestation.ArchitectureDebt.New)
+	}
+	return uniqueSortedReviewText(result)
+}
+
+func (proof QualityDebtProof) AdvisoryFindingProjections() []string {
+	if proof.Advisory == nil {
+		return []string{}
+	}
+	result := make([]string, 0, len(proof.Advisory.Existing)+len(proof.Advisory.New))
+	for _, finding := range proof.Advisory.Existing {
+		result = append(result, fmt.Sprintf("advisory-existing:%s:%s:%s", finding.ID, finding.Category, strings.TrimSpace(finding.Reason)))
+	}
+	for _, finding := range proof.Advisory.New {
+		result = append(result, fmt.Sprintf("advisory-new:%s:%s:%s", finding.ID, finding.Category, strings.TrimSpace(finding.Reason)))
 	}
 	return uniqueSortedReviewText(result)
 }
@@ -127,6 +150,9 @@ func reviewProof(packet ReviewPacket) []string {
 		"changed-paths-sha256=" + packet.Evidence.ChangedPathsSHA256,
 		"candidate-sha256=" + packet.Evidence.CandidateSHA256,
 		"evidence-sha256=" + packet.Evidence.EvidenceSHA256,
+	}
+	if packet.QualityDebt != nil {
+		proof = append(proof, "quality-debt-sha256="+packet.QualityDebt.ProofSHA256)
 	}
 	for _, gate := range packet.Verification.Gates {
 		proof = append(proof, "gate:"+strings.TrimSpace(gate.Name)+"="+strings.TrimSpace(gate.Status))

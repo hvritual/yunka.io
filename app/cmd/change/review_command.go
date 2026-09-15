@@ -11,8 +11,8 @@ import (
 func reviewCommand() cli.Command {
 	return cli.Command{
 		Name:        "review",
-		Usage:       "build and reconcile an exact-candidate human review packet",
-		Subcommands: []cli.Command{reviewBuildCommand(), reviewCheckCommand()},
+		Usage:       "build, reconcile, and govern exact-candidate human review evidence",
+		Subcommands: []cli.Command{reviewBuildCommand(), reviewCheckCommand(), qualityWaiverCommand()},
 	}
 }
 
