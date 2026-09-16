@@ -31,7 +31,7 @@
     },
     {
       "path": "google.golang.org/grpc",
-      "version": "v1.82.1"
+      "version": "v1.83.2"
     },
     {
       "path": "google.golang.org/protobuf",
