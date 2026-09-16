@@ -127,7 +127,7 @@ jobs:
           text = path.read_text()
           title = '# Bounded engineering-quality migration\n'
           assert text.startswith(title)
-          text = text.replace(title, title + '\n> Document class: **CURRENT**  \n> Authority: bounded structural-migration protocol  \n> Delivery/status authority: [`../STATUS.md`](../STATUS.md)\n', 1)
+          text = text.replace(title, title + '\n> Document class: **CURRENT**\n>\n> Authority: bounded structural-migration protocol\n>\n> Delivery/status authority: [`../STATUS.md`](../STATUS.md)\n', 1)
           text += '''
           ## Source-root and qualification boundaries
 
