@@ -2,7 +2,10 @@ package change
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"go/ast"
 	"go/format"
 	"go/parser"
@@ -46,7 +49,8 @@ func TestQualityMigrationRealConsumersUseSameContract(t *testing.T) {
 	}
 
 	t.Run("biz-generic-container", func(t *testing.T) {
-		workspace, projectRoot := cloneMigrationConsumerWorkspace(t, bizSource, bizRuntime, false)
+		workspace, projectRoot := cloneMigrationConsumerWorkspace(t, bizSource, bizRuntime)
+		prepareMigrationConsumerDependencies(t, projectRoot)
 		installMigrationConsumerBaseline(t, frameworkRoot, projectRoot, "biz.json")
 		assertMigrationSourceCoverage(t, workspace, projectRoot)
 
@@ -90,12 +94,13 @@ func TestQualityMigrationRealConsumersUseSameContract(t *testing.T) {
 	})
 
 	t.Run("iot-durable-test-identity", func(t *testing.T) {
-		workspace, projectRoot := cloneMigrationConsumerWorkspace(t, iotSource, iotRuntime, true)
+		workspace, projectRoot := cloneFocusedIoTMigrationWorkspace(t, iotSource, iotRuntime)
+		prepareMigrationConsumerDependencies(t, projectRoot)
 		installMigrationConsumerBaseline(t, frameworkRoot, projectRoot, "iot-current.json")
 		assertMigrationSourceCoverage(t, workspace, projectRoot)
 
-		oldPath := "backend-yunka/internal/delivery/ag03_sqlite_startup_test.go"
-		newPath := "backend-yunka/internal/delivery/sqlite_startup_lock_test.go"
+		oldPath := "internal/delivery/ag03_sqlite_startup_test.go"
+		newPath := "internal/delivery/sqlite_startup_lock_test.go"
 		plan, root, err := BuildQualityMigrationPlanWithCoverage(context.Background(), projectflow.Options{Root: projectRoot}, workspace, "HEAD", []string{MigrationRecipeDurableTestRename}, []string{oldPath, newPath}, ReviewNarrative{
 			Problem:            "A durable SQLite startup regression is named after historical delivery identifier AG03 instead of the invariant it protects.",
 			CurrentConcepts:    []string{"task-named SQLite startup regression"},
@@ -126,26 +131,49 @@ func TestQualityMigrationRealConsumersUseSameContract(t *testing.T) {
 		if packet.QualityDebt == nil || packet.QualityDebt.DeterministicFixed == 0 {
 			t.Fatalf("expected historical naming debt to be fixed: %#v", packet.QualityDebt)
 		}
-		runMigrationConsumerTest(t, filepath.Join(projectRoot, "backend-yunka"), "./internal/delivery", "-run", "^TestSQLiteStartupWaitsForExternalLock$")
+		runMigrationConsumerTest(t, projectRoot, "./internal/delivery", "-run", "^TestSQLiteStartupWaitsForExternalLock$")
 	})
 }
 
-func cloneMigrationConsumerWorkspace(t *testing.T, sourceProject, sourceRuntime string, runtimeInsideProject bool) (string, string) {
+func cloneMigrationConsumerWorkspace(t *testing.T, sourceProject, sourceRuntime string) (string, string) {
 	t.Helper()
 	workspace := t.TempDir()
 	projectRoot := filepath.Join(workspace, "project")
 	cloneExactMigrationCheckout(t, sourceProject, projectRoot)
 	runtimeRoot := filepath.Join(workspace, "yunka.io")
-	if runtimeInsideProject {
-		runtimeRoot = filepath.Join(projectRoot, "third_party", "yunka")
-		if err := os.RemoveAll(runtimeRoot); err != nil {
-			t.Fatal(err)
-		}
-	}
 	cloneExactMigrationCheckout(t, sourceRuntime, runtimeRoot)
 	if status := migrationGit(t, projectRoot, "status", "--porcelain", "--untracked-files=all"); status != "" {
 		t.Fatalf("consumer clone is dirty before governance baseline:\n%s", status)
 	}
+	return workspace, projectRoot
+}
+
+func cloneFocusedIoTMigrationWorkspace(t *testing.T, sourceProject, sourceRuntime string) (string, string) {
+	t.Helper()
+	workspace := t.TempDir()
+	gitRoot := filepath.Join(workspace, "project")
+	projectRoot := filepath.Join(gitRoot, "backend-yunka")
+	runtimeRoot := filepath.Join(gitRoot, "third_party", "yunka")
+	sourceBackend := filepath.Join(sourceProject, "backend-yunka")
+
+	copyMigrationQualificationTree(t, sourceBackend, projectRoot)
+	copyMigrationQualificationTree(t, sourceRuntime, runtimeRoot)
+	if got, want := migrationQualificationTreeDigest(t, projectRoot), migrationQualificationTreeDigest(t, sourceBackend); got != want {
+		t.Fatalf("focused IoT backend source digest=%s want=%s", got, want)
+	}
+	if got, want := migrationQualificationTreeDigest(t, runtimeRoot), migrationQualificationTreeDigest(t, sourceRuntime); got != want {
+		t.Fatalf("focused IoT runtime source digest=%s want=%s", got, want)
+	}
+
+	migrationExec(t, "", "git", "init", gitRoot)
+	migrationExec(t, gitRoot, "git", "config", "user.email", "quality-migration@example.invalid")
+	migrationExec(t, gitRoot, "git", "config", "user.name", "Yunka Quality Migration")
+	migrationExec(t, gitRoot, "git", "add", "-A")
+	migrationExec(t, gitRoot, "git", "commit", "-m", "capture exact IoT current-module migration source")
+	if status := migrationGit(t, projectRoot, "status", "--porcelain", "--untracked-files=all"); status != "" {
+		t.Fatalf("focused IoT migration source is dirty before governance baseline:\n%s", status)
+	}
+	t.Logf("IoT focused migration source consumer=%s runtime=%s", migrationGit(t, sourceProject, "rev-parse", "HEAD"), migrationGit(t, sourceRuntime, "rev-parse", "HEAD"))
 	return workspace, projectRoot
 }
 
@@ -164,6 +192,110 @@ func cloneExactMigrationCheckout(t *testing.T, source, destination string) {
 	migrationExec(t, destination, "git", "checkout", "--detach", "FETCH_HEAD")
 	if got := migrationGit(t, destination, "rev-parse", "HEAD"); got != head {
 		t.Fatalf("local clone head=%s want=%s", got, head)
+	}
+}
+
+func copyMigrationQualificationTree(t *testing.T, source, destination string) {
+	t.Helper()
+	if err := filepath.WalkDir(source, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.Name() == ".git" {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		relative, err := filepath.Rel(source, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(destination, relative)
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return os.MkdirAll(target, info.Mode().Perm())
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("non-regular migration qualification source %s", path)
+		}
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
+			return err
+		}
+		return os.WriteFile(target, contents, info.Mode().Perm())
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func migrationQualificationTreeDigest(t *testing.T, root string) string {
+	t.Helper()
+	records := []string{}
+	if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.Name() == ".git" {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("non-regular migration qualification source %s", path)
+		}
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(contents)
+		records = append(records, fmt.Sprintf("%s\x00%04o\x00%s", filepath.ToSlash(relative), info.Mode().Perm(), hex.EncodeToString(sum[:])))
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(records)
+	hash := sha256.New()
+	for _, record := range records {
+		_, _ = hash.Write([]byte(record))
+		_, _ = hash.Write([]byte{'\n'})
+	}
+	return hex.EncodeToString(hash.Sum(nil))
+}
+
+func prepareMigrationConsumerDependencies(t *testing.T, moduleRoot string) {
+	t.Helper()
+	before := migrationGit(t, moduleRoot, "status", "--porcelain", "--untracked-files=all")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	command := exec.CommandContext(ctx, "go", "mod", "download")
+	command.Dir = moduleRoot
+	command.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local")
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("prepare consumer dependency cache: %v\n%s", err, output)
+	}
+	after := migrationGit(t, moduleRoot, "status", "--porcelain", "--untracked-files=all")
+	if after != before {
+		t.Fatalf("dependency preparation mutated consumer source: before=%q after=%q", before, after)
 	}
 }
 
