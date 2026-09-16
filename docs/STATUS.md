@@ -24,6 +24,7 @@
 | Distributed execution trace closure | **Complete / production-qualified / merged** | issue #118 / PR #119; exact candidate `19bed965852d9dc2ef39e91dcadd7fb6bea4c871` passed CI #418 and production #178 and was merged unchanged into `main` |
 | Separately versioned infrastructure extension module | **Complete / production-qualified / merged** | issue #121 / PR #122; exact candidate `fc09f296cccb14ae18891bc43642d5efe43bd484` passed CI #430 and production #190, then merged as `70611d6cee5dd4e37ae6a803bcb38b938acd59c9`; independent `infras/vX.Y.Z` tag surface exists, but no `infras/v0.1.0` release tag is claimed yet |
 | Typed infrastructure capability export / binding | **Complete / production-qualified / merged** | issue #124 / PR #131; exact candidate `c3123fb4a3e7731f0edf5539c3d8003fc0e41bc7` passed CI #475 and production #233 after synchronization with AX6 main, merged as `d06a6330db9093e0bc586decb6bdc00122b4aa99`, and exact-main push CI #476 / production #234 also passed |
+| Engineering-quality global acceptance | **BLOCKED by #220; parent #192 OPEN** | Child mechanisms #193-#200 are delivered; fresh quality/consumer and Production replay passed, but stale advisory evidence was accepted by the active-change debt composition. See the scoped acceptance section below; this is not a production runtime/authz defect |
 | Active numbered Yunka framework wave | **None selected** | new framework work remains pressure-driven rather than roadmap-driven; AX/Terminalization control-plane work does not by itself create a numbered framework wave |
 | Proven open Yunka P0/P1 runtime/compiler/authz/persistence/trace-closure defects | **0 known after #181 closure** | Biz CE-08 proved C9 cross-domain child codegen issue #181; PR #183 closed it with framework PR/main qualification and locked-baseline real-consumer reverse qualification. Do not promote hypotheses into framework defects without executable consumer evidence |
 
@@ -461,6 +462,67 @@ AG-01I main integration was completed at `4dd2a264c73a2ce6b85ad7ae6238046762e7e0
 AG-05 review hardening preserves three independently reproduced constraints: [CGO tool PATH](waves/AG-05-cgo-toolpath-review.md), [GOROOT overrides](waves/AG-05-goroot-review.md), and [writable cache paths](waves/AG-05-cache-path-review.md). Start the checker with GOROOT unset and keep writable cache/home/temp locations outside the audited root. Failure to establish these prerequisites is INCOMPLETE before invoking tools, not an accepted audit followed by worktree pollution. The full frozen IoT legacy-module finding remains INCOMPLETE and is never replaced by its narrower current-module PASS.
 
 These tests characterize the language boundary, including expected examples of insufficient encapsulation. They do not certify arbitrary Go code, all operating systems, consumer root-UoW behavior, or a same-process/OS security sandbox. Canonical tool downloads are disabled inside fixture execution; this is not a network firewall. Unix process-group cleanup has Linux qualification only; non-Unix execution reports INCOMPLETE until its process-tree backend is implemented and qualified.
+
+## Engineering-quality global acceptance — issue #192
+
+**State: BLOCKED by [#220](https://github.com/hvritual/yunka.io/issues/220).
+Parent [#192](https://github.com/hvritual/yunka.io/issues/192) remains OPEN.**
+Reconciled on 2026-09-16. The delivered child mechanisms #193-#200 are not
+reclassified as unimplemented, but their individual acceptance does not prove
+the combined global invariant. The normative rules remain in
+[ENGINEERING_QUALITY_RULES.md](ENGINEERING_QUALITY_RULES.md).
+
+The acceptance source was `2756af5cb23454981eb6496e16cd37046ce94550`, tree
+`81470b1955bc8e979fdcd9e4432dc8875f5cf9fe`. This is an exact historical
+qualification identity, not a duplicated live-main pointer.
+
+### Global acceptance disposition
+
+| Parent requirement | Result at the acceptance source |
+| --- | --- |
+| Mandatory repository quality baseline | PASS as repository-governance policy; not an unbypassable permission boundary |
+| Deterministic read-only objective checks and stable findings | PASS for the documented objective subset |
+| Structured, evidence-bound, advisory-only semantic review | Standalone schema/authority PASS; active-change evidence binding BLOCKED by #220 |
+| WHY / WHAT / BOUNDARY / PROOF and human review packet | Packet mechanism PASS; combined current-change proof requires #220 repair and downstream requalification |
+| Existing/new/fixed debt and exact waiver for new blocking debt | Deterministic/waiver subset PASS; advisory-debt association to the same candidate BLOCKED |
+| New-project default baseline propagation | PASS for supported Go projects, including preservation of developer edits |
+| Biz and independent-consumer generic policy qualification | PASS for the exact pinned rule/distribution/migration scopes |
+| Durable source identity rather than task history | PASS for documented new/touched-source enforcement; not historical repository-wide cleanup |
+
+Fresh replay [35083465702](https://github.com/hvritual/yunka.io/actions/runs/35083465702)
+passed 210 top-level tests across eight quality-related packages, including
+36 explicitly inventoried required tests, with zero test skips. A separate
+job passed unchanged `make verify-production` on MySQL 8.4, followed by
+`make tidy contract` and clean-worktree checks. Framework and the six
+original pinned consumer/runtime checkouts retained their source hashes
+and Git state. The controller explicitly checked out the acceptance SHA;
+its control-branch commit is not the tested source or an actual-main push.
+
+A further composition probe
+[35084597074](https://github.com/hvritual/yunka.io/actions/runs/35084597074)
+reproduced three acceptance failures against unchanged production functions:
+a stale current review head, stale source bytes at the same head, and a
+wrong review baseline were each attached to a validated quality-debt proof
+with a passing quality gate. Matching evidence passed as the control.
+Go tests failed at the exact `STALE_ADVISORY_EVIDENCE_ACCEPTED` assertions;
+the wrapper succeeded only because reproduction of all three failures was
+required. Its green status is not feature acceptance.
+
+The affected composition is semantic-attestation import, QualityDebtProof
+construction/validation and quality-gate recording. Internal digest validity
+is not correspondence to the active immutable baseline and candidate source.
+Advisory-only authority remains intact; this evidence does not demonstrate
+a runtime authorization bypass, automatic merge approval or an executed
+full public-CLI exploit. #220 requires permanent regressions and public
+change-verify/review-packet integration qualification during repair.
+
+The [full acceptance receipt](https://github.com/hvritual/yunka.io/issues/192#issuecomment-5695986032)
+records source pins, commands, test inventories and artifact hashes.
+Repair #220, requalify the exact repair and integrated main, then repeat
+the affected global acceptance. Do not close #192 from the existing green
+suites alone or suppress advisory input to obtain acceptance. No consumer
+refactor publication, runtime/dependency change, production deployment or
+unrelated AG/Service Boundary completion is claimed by this audit.
 
 ## Bounded engineering-quality migration — issue #200
 
