@@ -456,19 +456,61 @@ The user-selected application-organization plan is [APPLICATION-GOVERNANCE-PLAN.
 
 The earlier AG-01 head `7c50680f0381505d9cc55a029a2a92baa6b0a140` passed CI run `34119891295` and production run `34119891325`. AG-01I adds test-policy integrity and documentation reconciliation; it must establish its own exact-head qualification rather than inherit the earlier result by narrative. The delivery worker creates a normal Git commit before testing, runs the new candidate with locked Go/protoc and MySQL, and publishes it only after full qualification. PR discussion and Git/action receipts distinguish candidate, reviewed and integrated states; main must be read back before claiming integration.
 
-AG-01I main integration was completed at `4dd2a264c73a2ce6b85ad7ae6238046762e7e0f7` with exact-main run `34136019602`. AG-02 then used the consumer's existing runtime/generator pin `6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb`; current-main CLI placement checks do not imply a consumer runtime upgrade. Biz #17 is the demonstrated consumer last-owner snapshot defect, not a new Yunka UoW defect. The two relevant Biz workflows now retain the readiness and deterministic snapshot regressions in their recurring gates. AG-03 has separately qualified one IoT Delivery saved-view use-case pair while keeping its existing runtime/generator gitlink. The required SQLite startup fix is a consumer correction, not a Yunka UoW defect. AG-04 implements the bounded opt-in typed audit and persistent read-only Biz/IoT static qualification. Final AG-04 head/main `e844b431c47a8135ba4061773d60e674a343f2f3`, tree `10756708e4c7a382024e0eb722ee28c510fe933b`, passed final PR CI `34294613404`, Production `34294613415`, consumer types `34294613417` and separate actual-main push CI `34295287070`, Production `34295287242`, consumer types `34295286293`. Independent review comment `5593875939` reviewed that exact head without major findings; all eight threads were resolved. PR #174 was merged non-force and issue #173 closed completed after main acceptance. Historical earlier revisions remain qualified only by their own runs. AG-05 implements full-source/build-profile import checks with explicit incomplete evidence. Its final reviewed head, non-force integration and actual-main four-gate acceptance are recorded separately in PR #176/#175; source implementation alone does not establish accepted integration. AG-06.1 is accepted on main at `d6840be86c72ea91b51e7f32f8ed61067bcab643`. AG-06.2 is accepted on behavioral main at `c95034ec54eda2db9e0f87d6090efd91af444cd0`, with docs-only status reconciliation through PR #185 on the subsequent main line. AG-06.3 typed-dependency evolution is the next undelivered increment; later migration/debt work remains undelivered.
+AG-01I main integration was completed at `4dd2a264c73a2ce6b85ad7ae6238046762e7e0f7` with exact-main run `34136019602`. AG-02 then used the consumer's existing runtime/generator pin `6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb`; current-main CLI placement checks do not imply a consumer runtime upgrade. Biz #17 is the demonstrated consumer last-owner snapshot defect, not a new Yunka UoW defect. The two relevant Biz workflows now retain the readiness and deterministic snapshot regressions in their recurring gates. AG-03 has separately qualified one IoT Delivery saved-view use-case pair while keeping its existing runtime/generator gitlink. The required SQLite startup fix is a consumer correction, not a Yunka UoW defect. AG-04 implements the bounded opt-in typed audit and persistent read-only Biz/IoT static qualification. Final AG-04 head/main `e844b431c47a8135ba4061773d60e674a343f2f3`, tree `10756708e4c7a382024e0eb722ee28c510fe933b`, passed final PR CI `34294613404`, Production `34294613415`, consumer types `34294613417` and separate actual-main push CI `34295287070`, Production `34295287242`, consumer types `34295286293`. Independent review comment `5593875939` reviewed that exact head without major findings; all eight threads were resolved. PR #174 was merged non-force and issue #173 closed completed after main acceptance. Historical earlier revisions remain qualified only by their own runs. AG-05 implements full-source/build-profile import checks with explicit incomplete evidence. Its final reviewed head, non-force integration and actual-main four-gate acceptance are recorded separately in PR #176/#175; source implementation alone does not establish accepted integration. AG-06.1 is accepted on main at `d6840be86c72ea91b51e7f32f8ed61067bcab643`. AG-06.2 is accepted on behavioral main at `c95034ec54eda2db9e0f87d6090efd91af444cd0`, with docs-only status reconciliation through PR #185 on the subsequent main line. The AG-series milestones above retain their scoped delivery records. The independent engineering-quality migration contract from #200 is recorded below; it does not imply completion of the remaining AG-series tasks.
 
 AG-05 review hardening preserves three independently reproduced constraints: [CGO tool PATH](waves/AG-05-cgo-toolpath-review.md), [GOROOT overrides](waves/AG-05-goroot-review.md), and [writable cache paths](waves/AG-05-cache-path-review.md). Start the checker with GOROOT unset and keep writable cache/home/temp locations outside the audited root. Failure to establish these prerequisites is INCOMPLETE before invoking tools, not an accepted audit followed by worktree pollution. The full frozen IoT legacy-module finding remains INCOMPLETE and is never replaced by its narrower current-module PASS.
 
 These tests characterize the language boundary, including expected examples of insufficient encapsulation. They do not certify arbitrary Go code, all operating systems, consumer root-UoW behavior, or a same-process/OS security sandbox. Canonical tool downloads are disabled inside fixture execution; this is not a network firewall. Unix process-group cleanup has Linux qualification only; non-Unix execution reports INCOMPLETE until its process-tree backend is implemented and qualified.
 
+## Bounded engineering-quality migration — issue #200
+
+**State: implemented in this tree. Exact-candidate and actual-main acceptance
+are recorded by [PR #216](https://github.com/hvritual/yunka.io/pull/216) and
+[issue #200](https://github.com/hvritual/yunka.io/issues/200).**
+This scope was reconciled on 2026-09-16; it does not reclassify unrelated AG milestones.
+
+`yunka change review migration plan/check` composes explicit source coverage,
+existing Audit findings/debt and exact Git paths. The Git-private plan binds
+a clean immutable base, bounded recipes and WHY/WHAT/BOUNDARY narrative.
+Candidate scope/ownership, unchanged source policy, new blocking debt and
+production/API syntax are rechecked; persistence/generated deltas must also
+remain NONE. The packet is review evidence, never mutation or merge authority.
+
+The same contract qualifies a real Biz access-model split and an independent
+IoT Delivery SQLite test-identity rename. Both run only in disposable copies
+of pinned consumer/runtime sources; this delivery neither publishes consumer
+refactors nor upgrades either consumer runtime. IoT coverage is explicitly
+the current backend-yunka module plus its runtime, not the legacy repository.
+The fixtures check source identity, the structural packet, consumer tests and
+unchanged original checkouts. Required environment inputs and fixed pins are
+documented in [the migration contract](architecture/ENGINEERING_QUALITY_MIGRATION.md).
+
+Earlier exact head `308acc0c15cc24bca413170325cff033c15494a6` passed migration
+qualification run `35053125229`, but CI `35053125246` and Production
+`35053125250` failed at the pre-existing gRPC vulnerability gate. Those failed
+runs are retained. Independent #217 / PR #218 repaired the dependency baseline;
+PR #216 must establish fresh final-head gates after synchronization. Historical
+green results are not substituted for that final acceptance.
+
+This is the bounded migration protocol, not repository-wide cleanup, automatic
+semantic equivalence, a general architecture scanner, or completion of all
+AG-07 through AG-09 batch-migration tasks. Ordinary CI, Production and relevant
+consumer tests remain separate required evidence.
+
 ## gRPC transport security dependency — issue #217
 
-The product dependency candidate repairs the reachable gRPC findings
+The independently integrated dependency update repairs the reachable gRPC findings
 `GO-2026-6443` and `GO-2026-6348` observed in PR #216's exact-head CI and
 Production runs by selecting `google.golang.org/grpc@v1.83.2` and its
 required module graph. This is a separate security prerequisite for #200,
 not a structural-migration-engine change or the devruntime PID issue #213.
+
+PR #218 integrated exact candidate `ce638eef5cb351e14fd8f9e3e258ccaf3f00eebb`
+as `bc6590554b1217313b51d56be3d589545d2fad6d`; both have tree
+`bc66bad8f1cf8e469e712801a60bf6e3bd8f311c`. Candidate CI `35055222498`,
+Production `35055222500`, source policy `35055222476`, template `35055222489`
+and consumer types `35055222496` passed. Actual-main acceptance is recorded
+separately on #217; tree equality is not described as a new test run.
 
 Exact-candidate and actual-main acceptance remain owned by issue #217 and
 its linked PR/run receipts. The security gate, vulnerability database,

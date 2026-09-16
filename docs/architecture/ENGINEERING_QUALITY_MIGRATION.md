@@ -1,5 +1,11 @@
 # Bounded engineering-quality migration
 
+> Document class: **CURRENT**
+>
+> Authority: bounded structural-migration protocol
+>
+> Delivery/status authority: [`../STATUS.md`](../STATUS.md)
+
 ## Purpose
 
 Historical reviewability debt is migrated incrementally. A migration is not permission to rewrite a repository, change business behavior, weaken tests, or move handwritten behavior into generated ownership.
@@ -112,3 +118,43 @@ Qualification must use the same contract without repository-specific checker log
 - IoT Delivery: rename the historical task-named SQLite startup regression in a temporary clone and run the package test plus migration check.
 
 The original consumer checkouts remain read-only. Consumer paths exist only in qualification fixtures; the migration engine itself contains no Biz/IoT path rules.
+
+## Source-root and qualification boundaries
+
+`plan --root <project> --coverage-root <ancestor>` supports a project whose
+local Go dependencies live beside it. A relative coverage root is resolved
+from the project root, and the selected ancestor must contain the project.
+The plan stores project-relative coverage identity, not an absolute runner
+or workstation path. `check --root <project>` reconstructs that same coverage
+root from the plan; it does not accept a replacement coverage policy.
+
+The recurring qualification uses these immutable source pairs:
+
+| Case | Consumer commit | Runtime commit |
+| --- | --- | --- |
+| Biz access-domain aggregate split | `3519e7ee6e51e33984669871e4f32a55a3597d9f` | `6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb` |
+| IoT Delivery SQLite regression rename | `bcd20632b666405c3f7a8fe8d53f591c78450087` | `057ebcf88a87303eb633eb6e604d306f633dfac0` |
+
+Biz uses a disposable exact checkout and sibling runtime. IoT uses an exact
+current-module projection of `backend-yunka` and the pinned runtime at
+`third_party/yunka`, with relative-file/mode/content digests checked against
+the original sources before governance setup. It does not claim full legacy
+IoT repository source-policy PASS. The source policy and explicit domain
+ownership are established and committed before a new migration baseline.
+Dependency-cache preparation also precedes the offline source audit and must
+leave source unchanged.
+
+The workflow `.github/workflows/quality-migration-qualification.yml` supplies
+all five inputs to `TestQualityMigrationRealConsumersUseSameContract`:
+`YUNKA_MIGRATION_FRAMEWORK_ROOT`, `YUNKA_MIGRATION_CONSUMER_BIZ`,
+`YUNKA_MIGRATION_BIZ_RUNTIME`, `YUNKA_MIGRATION_CONSUMER_IOT`, and
+`YUNKA_MIGRATION_IOT_RUNTIME`. Partial configuration fails; an ordinary test
+run with all five unset skips the real-consumer fixture and is not evidence
+of real-consumer qualification. The configured workflow runs
+`go test ./cmd/change -run '^TestQualityMigration' -count=1 -v` from `app`.
+
+Consumer mutations remain inside disposable copies. The engine's NONE syntax
+proof is bounded review evidence, not proof of arbitrary semantic equivalence
+or permission to weaken tests. Relevant consumer tests and original-checkout
+cleanliness are independent assertions, including command failure propagation
+in the workflow's Git readback checks.
