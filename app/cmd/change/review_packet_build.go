@@ -72,6 +72,9 @@ func BuildReviewPacket(ctx context.Context, options projectflow.Options, contrac
 	if err != nil {
 		return ReviewPacket{}, "", err
 	}
+	if err := validateQualityDebtCandidateBinding(attestation.QualityDebt, contractValue.BaseSHA, headSHA, candidateDigest); err != nil {
+		return ReviewPacket{}, "", fmt.Errorf("change review: %w", err)
+	}
 	narrativeDigest, err := digestJSON(narrative)
 	if err != nil {
 		return ReviewPacket{}, "", err
