@@ -462,6 +462,19 @@ AG-05 review hardening preserves three independently reproduced constraints: [CG
 
 These tests characterize the language boundary, including expected examples of insufficient encapsulation. They do not certify arbitrary Go code, all operating systems, consumer root-UoW behavior, or a same-process/OS security sandbox. Canonical tool downloads are disabled inside fixture execution; this is not a network firewall. Unix process-group cleanup has Linux qualification only; non-Unix execution reports INCOMPLETE until its process-tree backend is implemented and qualified.
 
+## gRPC transport security dependency — issue #217
+
+The product dependency candidate repairs the reachable gRPC findings
+`GO-2026-6443` and `GO-2026-6348` observed in PR #216's exact-head CI and
+Production runs by selecting `google.golang.org/grpc@v1.83.2` and its
+required module graph. This is a separate security prerequisite for #200,
+not a structural-migration-engine change or the devruntime PID issue #213.
+
+Exact-candidate and actual-main acceptance remain owned by issue #217 and
+its linked PR/run receipts. The security gate, vulnerability database,
+generated-code checks and consumer runtime pins are not weakened or changed.
+No production deployment or consumer runtime upgrade is claimed.
+
 ## Current pressure frontier
 
 The active real-consumer frontier is **B13 cross-tenant delegation and delegated device access** in `hvritual/biz` issue #11.
