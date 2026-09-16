@@ -13,7 +13,7 @@ import (
 	"yunka.io/app/cmd/auditcore"
 )
 
-func TestAdvisoryDebtEvidenceBinding(t *testing.T) {
+func TestQualityDebtAdvisoryEvidenceBinding(t *testing.T) {
 	root := t.TempDir()
 	runEvidenceGit(t, root, "init")
 	runEvidenceGit(t, root, "config", "user.email", "quality-test@example.invalid")
