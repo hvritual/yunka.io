@@ -19,6 +19,7 @@ import (
 	domaincmd "yunka.io/app/cmd/domain"
 	projectcmd "yunka.io/app/cmd/project"
 	"yunka.io/app/cmd/projectflow"
+	"yunka.io/app/cmd/sourceaudit"
 )
 
 func TestQualityMigrationRealConsumersUseSameContract(t *testing.T) {
@@ -47,6 +48,7 @@ func TestQualityMigrationRealConsumersUseSameContract(t *testing.T) {
 	t.Run("biz-generic-container", func(t *testing.T) {
 		workspace, projectRoot := cloneMigrationConsumerWorkspace(t, bizSource, bizRuntime, false)
 		installMigrationConsumerBaseline(t, frameworkRoot, projectRoot, "biz.json")
+		assertMigrationSourceCoverage(t, workspace, projectRoot)
 
 		touched := []string{
 			"internal/access/domain/model.go",
@@ -58,14 +60,14 @@ func TestQualityMigrationRealConsumersUseSameContract(t *testing.T) {
 			"internal/access/domain/credential.go",
 		}
 		plan, root, err := BuildQualityMigrationPlanWithCoverage(context.Background(), projectflow.Options{Root: projectRoot}, workspace, "HEAD", []string{MigrationRecipeGenericContainerSplit}, touched, ReviewNarrative{
-			Problem: "The access domain model file aggregates tenant, membership, role, permission scope, credential, and error responsibilities.",
-			CurrentConcepts: []string{"single generic access model container"},
-			DesiredOwnership: []string{"tenant lifecycle source", "membership lifecycle source", "role and grant source", "credential source", "data-scope source", "domain error source"},
-			Why: "Make durable domain responsibility visible without changing the access model contract.",
-			What: "Split internal/access/domain/model.go into responsibility-named files inside the same Go package.",
-			Boundary: "No behavior, exported API, persistence path, generated ownership, or package boundary changes.",
+			Problem:            "The access domain model file aggregates tenant, membership, role, permission scope, credential, and error responsibilities.",
+			CurrentConcepts:    []string{"single generic access model container"},
+			DesiredOwnership:   []string{"tenant lifecycle source", "membership lifecycle source", "role and grant source", "credential source", "data-scope source", "domain error source"},
+			Why:                "Make durable domain responsibility visible without changing the access model contract.",
+			What:               "Split internal/access/domain/model.go into responsibility-named files inside the same Go package.",
+			Boundary:           "No behavior, exported API, persistence path, generated ownership, or package boundary changes.",
 			AffectedInvariants: []string{"access domain behavior", "public access-domain API"},
-			Risks: []string{"declaration loss while moving source between files"},
+			Risks:              []string{"declaration loss while moving source between files"},
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -90,18 +92,19 @@ func TestQualityMigrationRealConsumersUseSameContract(t *testing.T) {
 	t.Run("iot-durable-test-identity", func(t *testing.T) {
 		workspace, projectRoot := cloneMigrationConsumerWorkspace(t, iotSource, iotRuntime, true)
 		installMigrationConsumerBaseline(t, frameworkRoot, projectRoot, "iot-current.json")
+		assertMigrationSourceCoverage(t, workspace, projectRoot)
 
 		oldPath := "backend-yunka/internal/delivery/ag03_sqlite_startup_test.go"
 		newPath := "backend-yunka/internal/delivery/sqlite_startup_lock_test.go"
 		plan, root, err := BuildQualityMigrationPlanWithCoverage(context.Background(), projectflow.Options{Root: projectRoot}, workspace, "HEAD", []string{MigrationRecipeDurableTestRename}, []string{oldPath, newPath}, ReviewNarrative{
-			Problem: "A durable SQLite startup regression is named after historical delivery identifier AG03 instead of the invariant it protects.",
-			CurrentConcepts: []string{"task-named SQLite startup regression"},
-			DesiredOwnership: []string{"SQLite startup external-lock invariant regression"},
-			Why: "Keep regression evidence understandable after the delivery task identifier loses context.",
-			What: "Rename the SQLite startup lock regression file and test function by the invariant they prove.",
-			Boundary: "No production behavior, exported API, persistence implementation, or generated ownership changes.",
+			Problem:            "A durable SQLite startup regression is named after historical delivery identifier AG03 instead of the invariant it protects.",
+			CurrentConcepts:    []string{"task-named SQLite startup regression"},
+			DesiredOwnership:   []string{"SQLite startup external-lock invariant regression"},
+			Why:                "Keep regression evidence understandable after the delivery task identifier loses context.",
+			What:               "Rename the SQLite startup lock regression file and test function by the invariant they prove.",
+			Boundary:           "No production behavior, exported API, persistence implementation, or generated ownership changes.",
 			AffectedInvariants: []string{"SQLite startup waits for an external file lock within the existing busy budget"},
-			Risks: []string{"accidental test weakening during rename"},
+			Risks:              []string{"accidental test weakening during rename"},
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -208,7 +211,8 @@ func establishExplicitMigrationDomainCoverage(t *testing.T, projectRoot string) 
 	if len(exemptions) == 0 {
 		return
 	}
-	coveragePath := filepath.Join(projectRoot, filepath.FromSlash(domaincmd.DomainCoverageRelativePath))
+	moduleRoot := migrationOwningModuleRoot(t, projectRoot, domainRoot)
+	coveragePath := filepath.Join(moduleRoot, filepath.FromSlash(domaincmd.DomainCoverageRelativePath))
 	if _, err := os.Stat(coveragePath); err == nil {
 		t.Fatalf("existing domain coverage still contains UNKNOWN entries; qualification will not overwrite %s", coveragePath)
 	} else if !os.IsNotExist(err) {
@@ -221,6 +225,49 @@ func establishExplicitMigrationDomainCoverage(t *testing.T, projectRoot string) 
 	writeMigrationQualificationFile(t, coveragePath, append(contents, '\n'))
 	if _, err := domaincmd.ValidateCoverage(domainRoot); err != nil {
 		t.Fatalf("explicit migration domain coverage: %v", err)
+	}
+}
+
+func migrationOwningModuleRoot(t *testing.T, projectRoot, sourceRoot string) string {
+	t.Helper()
+	projectRoot = filepath.Clean(projectRoot)
+	current := filepath.Clean(sourceRoot)
+	for {
+		if info, err := os.Stat(filepath.Join(current, "go.mod")); err == nil && !info.IsDir() {
+			return current
+		} else if err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		if current == projectRoot {
+			break
+		}
+		parent := filepath.Dir(current)
+		if parent == current || !pathInsideMigrationRoot(projectRoot, parent) {
+			break
+		}
+		current = parent
+	}
+	t.Fatalf("no owning go.mod between %s and project root %s", sourceRoot, projectRoot)
+	return ""
+}
+
+func pathInsideMigrationRoot(root, candidate string) bool {
+	relative, err := filepath.Rel(filepath.Clean(root), filepath.Clean(candidate))
+	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
+}
+
+func assertMigrationSourceCoverage(t *testing.T, workspace, projectRoot string) {
+	t.Helper()
+	policyPath, err := filepath.Rel(workspace, filepath.Join(projectRoot, ".yunka", "source-policy.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := sourceaudit.Check(context.Background(), workspace, filepath.ToSlash(policyPath))
+	if err != nil {
+		t.Fatalf("source coverage check: %v", err)
+	}
+	if report.Status != sourceaudit.Pass || !report.Analysis.Complete || !report.SourceUnchanged {
+		t.Fatalf("source coverage status=%s complete=%t unchanged=%t findings=%#v profiles=%#v", report.Status, report.Analysis.Complete, report.SourceUnchanged, report.Findings, report.Profiles)
 	}
 }
 
@@ -402,10 +449,10 @@ func assertStructuralMigrationPacket(t *testing.T, packet QualityMigrationReview
 		t.Fatalf("migration packet violations=%#v", packet.Violations)
 	}
 	for name, delta := range map[string]ReviewDelta{
-		"behavior": packet.BehaviorChange,
-		"public-api": packet.PublicAPIChange,
+		"behavior":    packet.BehaviorChange,
+		"public-api":  packet.PublicAPIChange,
 		"persistence": packet.PersistenceChange,
-		"generated": packet.GeneratedCodeChange,
+		"generated":   packet.GeneratedCodeChange,
 	} {
 		if delta.State != ReviewDeltaNone {
 			t.Fatalf("%s delta=%#v", name, delta)
