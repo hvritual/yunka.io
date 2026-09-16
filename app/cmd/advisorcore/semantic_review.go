@@ -22,11 +22,11 @@ const (
 	SemanticSeverityMedium = "medium"
 	SemanticSeverityHigh   = "high"
 
-	SemanticActionInvestigate          = "investigate"
-	SemanticActionDiscussDesign        = "discuss_design"
-	SemanticActionConsiderRefactor     = "consider_refactor"
-	SemanticActionConsiderRename       = "consider_rename"
-	SemanticActionDocumentDecision     = "document_decision"
+	SemanticActionInvestigate      = "investigate"
+	SemanticActionDiscussDesign    = "discuss_design"
+	SemanticActionConsiderRefactor = "consider_refactor"
+	SemanticActionConsiderRename   = "consider_rename"
+	SemanticActionDocumentDecision = "document_decision"
 )
 
 type SemanticSource struct {
@@ -45,6 +45,24 @@ type SemanticChangeIdentity struct {
 type SemanticEvidence struct {
 	HeadSHA        string                  `json:"headSha"`
 	Sources        []SemanticSource        `json:"sources"`
+	Change         *SemanticChangeIdentity `json:"change,omitempty"`
+	SourceSHA256   string                  `json:"sourceSha256"`
+	SourceIdentity string                  `json:"sourceIdentity"`
+}
+
+// SemanticSourceBinding preserves the exact path/content identity of reviewed
+// source without copying source contents into downstream attestations.
+type SemanticSourceBinding struct {
+	Path   string `json:"path"`
+	SHA256 string `json:"sha256"`
+}
+
+// SemanticEvidenceBinding is a compact projection of the exact request
+// evidence. Consumers must re-read authoritative source bytes before granting
+// candidate-level meaning to the binding; the digests alone are not authority.
+type SemanticEvidenceBinding struct {
+	HeadSHA        string                  `json:"headSha"`
+	Sources        []SemanticSourceBinding `json:"sources"`
 	Change         *SemanticChangeIdentity `json:"change,omitempty"`
 	SourceSHA256   string                  `json:"sourceSha256"`
 	SourceIdentity string                  `json:"sourceIdentity"`
@@ -84,24 +102,27 @@ type SemanticReviewResponse struct {
 }
 
 type SemanticReviewAttestation struct {
-	SchemaVersion     int               `json:"schemaVersion"`
-	Authority         string            `json:"authority"`
-	RequestDigest     string            `json:"requestDigest"`
-	ResponseDigest    string            `json:"responseDigest"`
-	SourceIdentity    string            `json:"sourceIdentity"`
-	Findings          []SemanticFinding `json:"findings"`
-	Result            string            `json:"result"`
-	AttestationDigest string            `json:"attestationDigest"`
+	SchemaVersion     int                      `json:"schemaVersion"`
+	Authority         string                   `json:"authority"`
+	RequestDigest     string                   `json:"requestDigest"`
+	ResponseDigest    string                   `json:"responseDigest"`
+	SourceIdentity    string                   `json:"sourceIdentity"`
+	Evidence          *SemanticEvidenceBinding `json:"evidence,omitempty"`
+	Findings          []SemanticFinding        `json:"findings"`
+	Result            string                   `json:"result"`
+	AttestationDigest string                   `json:"attestationDigest"`
 }
 
 type SemanticFindingDelta struct {
-	SchemaVersion          int               `json:"schemaVersion"`
-	BaselineSourceIdentity string            `json:"baselineSourceIdentity"`
-	CurrentSourceIdentity  string            `json:"currentSourceIdentity"`
-	Existing               []SemanticFinding `json:"existing"`
-	New                    []SemanticFinding `json:"new"`
-	Resolved               []SemanticFinding `json:"resolved"`
-	DeltaDigest            string            `json:"deltaDigest"`
+	SchemaVersion          int                      `json:"schemaVersion"`
+	BaselineSourceIdentity string                   `json:"baselineSourceIdentity"`
+	CurrentSourceIdentity  string                   `json:"currentSourceIdentity"`
+	BaselineEvidence       *SemanticEvidenceBinding `json:"baselineEvidence,omitempty"`
+	CurrentEvidence        *SemanticEvidenceBinding `json:"currentEvidence,omitempty"`
+	Existing               []SemanticFinding        `json:"existing"`
+	New                    []SemanticFinding        `json:"new"`
+	Resolved               []SemanticFinding        `json:"resolved"`
+	DeltaDigest            string                   `json:"deltaDigest"`
 }
 
 type semanticRequestPayload struct {
@@ -113,22 +134,25 @@ type semanticRequestPayload struct {
 }
 
 type semanticAttestationPayload struct {
-	SchemaVersion  int               `json:"schemaVersion"`
-	Authority      string            `json:"authority"`
-	RequestDigest  string            `json:"requestDigest"`
-	ResponseDigest string            `json:"responseDigest"`
-	SourceIdentity string            `json:"sourceIdentity"`
-	Findings       []SemanticFinding `json:"findings"`
-	Result         string            `json:"result"`
+	SchemaVersion  int                      `json:"schemaVersion"`
+	Authority      string                   `json:"authority"`
+	RequestDigest  string                   `json:"requestDigest"`
+	ResponseDigest string                   `json:"responseDigest"`
+	SourceIdentity string                   `json:"sourceIdentity"`
+	Evidence       *SemanticEvidenceBinding `json:"evidence,omitempty"`
+	Findings       []SemanticFinding        `json:"findings"`
+	Result         string                   `json:"result"`
 }
 
 type semanticDeltaPayload struct {
-	SchemaVersion          int               `json:"schemaVersion"`
-	BaselineSourceIdentity string            `json:"baselineSourceIdentity"`
-	CurrentSourceIdentity  string            `json:"currentSourceIdentity"`
-	Existing               []SemanticFinding `json:"existing"`
-	New                    []SemanticFinding `json:"new"`
-	Resolved               []SemanticFinding `json:"resolved"`
+	SchemaVersion          int                      `json:"schemaVersion"`
+	BaselineSourceIdentity string                   `json:"baselineSourceIdentity"`
+	CurrentSourceIdentity  string                   `json:"currentSourceIdentity"`
+	BaselineEvidence       *SemanticEvidenceBinding `json:"baselineEvidence,omitempty"`
+	CurrentEvidence        *SemanticEvidenceBinding `json:"currentEvidence,omitempty"`
+	Existing               []SemanticFinding        `json:"existing"`
+	New                    []SemanticFinding        `json:"new"`
+	Resolved               []SemanticFinding        `json:"resolved"`
 }
 
 func NewSemanticReviewRequest(headSHA string, sources []SemanticSource, change *SemanticChangeIdentity) (SemanticReviewRequest, error) {
@@ -218,12 +242,14 @@ func ValidateSemanticReviewResponse(request SemanticReviewRequest, response Sema
 	if err != nil {
 		return SemanticReviewAttestation{}, err
 	}
+	evidence := semanticEvidenceBinding(normalizedRequest.Evidence)
 	attestation := SemanticReviewAttestation{
 		SchemaVersion:  SemanticReviewSchemaVersion,
 		Authority:      AuthorityAdvisoryOnly,
 		RequestDigest:  normalizedRequest.RequestDigest,
 		ResponseDigest: digest(responseBytes),
 		SourceIdentity: normalizedRequest.Evidence.SourceIdentity,
+		Evidence:       &evidence,
 		Findings:       append([]SemanticFinding(nil), normalizedResponse.Findings...),
 		Result:         SemanticReviewResultValid,
 	}
@@ -271,6 +297,8 @@ func CompareSemanticReviewAttestations(baseline, current SemanticReviewAttestati
 		SchemaVersion:          SemanticReviewSchemaVersion,
 		BaselineSourceIdentity: left.SourceIdentity,
 		CurrentSourceIdentity:  right.SourceIdentity,
+		BaselineEvidence:       cloneSemanticEvidenceBinding(left.Evidence),
+		CurrentEvidence:        cloneSemanticEvidenceBinding(right.Evidence),
 	}
 	for _, finding := range right.Findings {
 		if _, ok := leftIndex[finding.ID]; ok {
@@ -322,11 +350,11 @@ func canonicalSemanticRequest(request SemanticReviewRequest, verifyDigests bool)
 	}
 	request.Evidence = evidence
 	payloadBytes, err := json.Marshal(semanticRequestPayload{
-		SchemaVersion: request.SchemaVersion,
-		Authority: request.Authority,
+		SchemaVersion:      request.SchemaVersion,
+		Authority:          request.Authority,
 		MutationAuthorized: request.MutationAuthorized,
-		MergeAuthorized: request.MergeAuthorized,
-		Evidence: request.Evidence,
+		MergeAuthorized:    request.MergeAuthorized,
+		Evidence:           request.Evidence,
 	})
 	if err != nil {
 		return SemanticReviewRequest{}, err
@@ -489,6 +517,16 @@ func canonicalSemanticAttestation(attestation SemanticReviewAttestation, verifyD
 	if !validSHA256Digest(attestation.RequestDigest) || !validSHA256Digest(attestation.ResponseDigest) || !validSHA256Digest(attestation.SourceIdentity) {
 		return SemanticReviewAttestation{}, fmt.Errorf("semantic review attestation: request/response/source identities must be SHA-256 values")
 	}
+	if attestation.Evidence != nil {
+		evidence, err := canonicalSemanticEvidenceBinding(*attestation.Evidence)
+		if err != nil {
+			return SemanticReviewAttestation{}, err
+		}
+		if evidence.SourceIdentity != attestation.SourceIdentity {
+			return SemanticReviewAttestation{}, fmt.Errorf("semantic review attestation: evidence sourceIdentity mismatch")
+		}
+		attestation.Evidence = &evidence
+	}
 	for index := range attestation.Findings {
 		finding, err := canonicalSemanticFinding(attestation.Findings[index])
 		if err != nil {
@@ -504,13 +542,14 @@ func canonicalSemanticAttestation(attestation SemanticReviewAttestation, verifyD
 		attestation.Findings = []SemanticFinding{}
 	}
 	payloadBytes, err := json.Marshal(semanticAttestationPayload{
-		SchemaVersion: attestation.SchemaVersion,
-		Authority: attestation.Authority,
-		RequestDigest: attestation.RequestDigest,
+		SchemaVersion:  attestation.SchemaVersion,
+		Authority:      attestation.Authority,
+		RequestDigest:  attestation.RequestDigest,
 		ResponseDigest: attestation.ResponseDigest,
 		SourceIdentity: attestation.SourceIdentity,
-		Findings: attestation.Findings,
-		Result: attestation.Result,
+		Evidence:       attestation.Evidence,
+		Findings:       attestation.Findings,
+		Result:         attestation.Result,
 	})
 	if err != nil {
 		return SemanticReviewAttestation{}, err
@@ -530,6 +569,31 @@ func canonicalSemanticDelta(delta SemanticFindingDelta, verifyDigest bool) (Sema
 	if delta.SchemaVersion != SemanticReviewSchemaVersion || !validSHA256Digest(delta.BaselineSourceIdentity) || !validSHA256Digest(delta.CurrentSourceIdentity) {
 		return SemanticFindingDelta{}, fmt.Errorf("semantic review delta: invalid schema or source identity")
 	}
+	if delta.BaselineEvidence != nil {
+		evidence, err := canonicalSemanticEvidenceBinding(*delta.BaselineEvidence)
+		if err != nil {
+			return SemanticFindingDelta{}, fmt.Errorf("semantic review delta: baseline evidence: %w", err)
+		}
+		if evidence.SourceIdentity != delta.BaselineSourceIdentity {
+			return SemanticFindingDelta{}, fmt.Errorf("semantic review delta: baseline evidence sourceIdentity mismatch")
+		}
+		delta.BaselineEvidence = &evidence
+	}
+	if delta.CurrentEvidence != nil {
+		evidence, err := canonicalSemanticEvidenceBinding(*delta.CurrentEvidence)
+		if err != nil {
+			return SemanticFindingDelta{}, fmt.Errorf("semantic review delta: current evidence: %w", err)
+		}
+		if evidence.SourceIdentity != delta.CurrentSourceIdentity {
+			return SemanticFindingDelta{}, fmt.Errorf("semantic review delta: current evidence sourceIdentity mismatch")
+		}
+		delta.CurrentEvidence = &evidence
+	}
+	if delta.BaselineEvidence != nil && delta.CurrentEvidence != nil && delta.CurrentEvidence.Change != nil {
+		if delta.CurrentEvidence.Change.BaseSHA != delta.BaselineEvidence.HeadSHA || delta.CurrentEvidence.Change.HeadSHA != delta.CurrentEvidence.HeadSHA {
+			return SemanticFindingDelta{}, fmt.Errorf("semantic review delta: current change identity does not bind the baseline/current review heads")
+		}
+	}
 	for _, group := range []*[]SemanticFinding{&delta.Existing, &delta.New, &delta.Resolved} {
 		for index := range *group {
 			finding, err := canonicalSemanticFinding((*group)[index])
@@ -544,12 +608,14 @@ func canonicalSemanticDelta(delta SemanticFindingDelta, verifyDigest bool) (Sema
 		}
 	}
 	payloadBytes, err := json.Marshal(semanticDeltaPayload{
-		SchemaVersion: delta.SchemaVersion,
+		SchemaVersion:          delta.SchemaVersion,
 		BaselineSourceIdentity: delta.BaselineSourceIdentity,
-		CurrentSourceIdentity: delta.CurrentSourceIdentity,
-		Existing: delta.Existing,
-		New: delta.New,
-		Resolved: delta.Resolved,
+		CurrentSourceIdentity:  delta.CurrentSourceIdentity,
+		BaselineEvidence:       delta.BaselineEvidence,
+		CurrentEvidence:        delta.CurrentEvidence,
+		Existing:               delta.Existing,
+		New:                    delta.New,
+		Resolved:               delta.Resolved,
 	})
 	if err != nil {
 		return SemanticFindingDelta{}, err
@@ -560,6 +626,71 @@ func canonicalSemanticDelta(delta SemanticFindingDelta, verifyDigest bool) (Sema
 	}
 	delta.DeltaDigest = deltaDigest
 	return delta, nil
+}
+
+func semanticEvidenceBinding(evidence SemanticEvidence) SemanticEvidenceBinding {
+	binding := SemanticEvidenceBinding{
+		HeadSHA:        evidence.HeadSHA,
+		Change:         cloneSemanticChangeIdentity(evidence.Change),
+		SourceSHA256:   evidence.SourceSHA256,
+		SourceIdentity: evidence.SourceIdentity,
+		Sources:        make([]SemanticSourceBinding, 0, len(evidence.Sources)),
+	}
+	for _, source := range evidence.Sources {
+		binding.Sources = append(binding.Sources, SemanticSourceBinding{Path: source.Path, SHA256: source.SHA256})
+	}
+	return binding
+}
+
+func canonicalSemanticEvidenceBinding(binding SemanticEvidenceBinding) (SemanticEvidenceBinding, error) {
+	binding.HeadSHA = strings.TrimSpace(binding.HeadSHA)
+	binding.SourceSHA256 = strings.TrimSpace(binding.SourceSHA256)
+	binding.SourceIdentity = strings.TrimSpace(binding.SourceIdentity)
+	if !validGitIdentity(binding.HeadSHA) || !validSHA256Digest(binding.SourceSHA256) || !validSHA256Digest(binding.SourceIdentity) {
+		return SemanticEvidenceBinding{}, fmt.Errorf("semantic review evidence binding: invalid head/source identity")
+	}
+	if len(binding.Sources) == 0 {
+		return SemanticEvidenceBinding{}, fmt.Errorf("semantic review evidence binding: at least one exact source identity is required")
+	}
+	seen := make(map[string]struct{}, len(binding.Sources))
+	for index := range binding.Sources {
+		source := &binding.Sources[index]
+		source.Path = cleanSemanticPath(source.Path)
+		source.SHA256 = strings.TrimSpace(source.SHA256)
+		if source.Path == "" || !validSHA256Digest(source.SHA256) {
+			return SemanticEvidenceBinding{}, fmt.Errorf("semantic review evidence binding: source path/hash is invalid")
+		}
+		if _, duplicate := seen[source.Path]; duplicate {
+			return SemanticEvidenceBinding{}, fmt.Errorf("semantic review evidence binding: duplicate source path %q", source.Path)
+		}
+		seen[source.Path] = struct{}{}
+	}
+	sort.Slice(binding.Sources, func(i, j int) bool { return binding.Sources[i].Path < binding.Sources[j].Path })
+	if binding.Change != nil {
+		change := cloneSemanticChangeIdentity(binding.Change)
+		change.BaseSHA = strings.TrimSpace(change.BaseSHA)
+		change.HeadSHA = strings.TrimSpace(change.HeadSHA)
+		change.CandidateSHA256 = strings.TrimSpace(change.CandidateSHA256)
+		change.EvidenceSHA256 = strings.TrimSpace(change.EvidenceSHA256)
+		if !validGitIdentity(change.BaseSHA) || !validGitIdentity(change.HeadSHA) || change.HeadSHA != binding.HeadSHA {
+			return SemanticEvidenceBinding{}, fmt.Errorf("semantic review evidence binding: change identity does not bind the evidence head")
+		}
+		if !validSHA256Digest(change.CandidateSHA256) || !validSHA256Digest(change.EvidenceSHA256) {
+			return SemanticEvidenceBinding{}, fmt.Errorf("semantic review evidence binding: change candidate/evidence digest is invalid")
+		}
+		binding.Change = change
+	}
+	return binding, nil
+}
+
+func cloneSemanticEvidenceBinding(value *SemanticEvidenceBinding) *SemanticEvidenceBinding {
+	if value == nil {
+		return nil
+	}
+	copyValue := *value
+	copyValue.Change = cloneSemanticChangeIdentity(value.Change)
+	copyValue.Sources = append([]SemanticSourceBinding(nil), value.Sources...)
+	return &copyValue
 }
 
 func semanticFindingID(sourcePath, symbolOrScope, category string) string {
