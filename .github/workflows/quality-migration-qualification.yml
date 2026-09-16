@@ -74,8 +74,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -z "$(git status --porcelain --untracked-files=all -- ':!_consumer')"
-          test -z "$(git -C _consumer/biz status --porcelain --untracked-files=all)"
-          test -z "$(git -C _consumer/biz-runtime status --porcelain --untracked-files=all)"
-          test -z "$(git -C _consumer/iot status --porcelain --untracked-files=all)"
-          test -z "$(git -C _consumer/iot-runtime status --porcelain --untracked-files=all)"
+          framework_status="$(git status --porcelain --untracked-files=all -- . ':(exclude)_consumer/**')"
+          test -z "$framework_status"
+          biz_status="$(git -C _consumer/biz status --porcelain --untracked-files=all)"
+          test -z "$biz_status"
+          biz_runtime_status="$(git -C _consumer/biz-runtime status --porcelain --untracked-files=all)"
+          test -z "$biz_runtime_status"
+          iot_status="$(git -C _consumer/iot status --porcelain --untracked-files=all)"
+          test -z "$iot_status"
+          iot_runtime_status="$(git -C _consumer/iot-runtime status --porcelain --untracked-files=all)"
+          test -z "$iot_runtime_status"
