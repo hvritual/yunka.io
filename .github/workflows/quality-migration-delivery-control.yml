@@ -1,0 +1,214 @@
+name: quality-migration-delivery-control
+
+on:
+  push:
+    branches: ['control/quality-migration-delivery-20260916']
+    paths: ['.github/workflows/quality-migration-delivery-control.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: quality-migration-delivery-control
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    if: github.repository == 'hvritual/yunka.io'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ORIGINAL_HEAD: 308acc0c15cc24bca413170325cff033c15494a6
+      SECURITY_MAIN: bc6590554b1217313b51d56be3d589545d2fad6d
+      SOURCE_BRANCH: fix/200-bounded-quality-migration
+      CANDIDATE_BRANCH: delivery/quality-migration-final-candidate
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 308acc0c15cc24bca413170325cff033c15494a6
+          fetch-depth: 0
+      - name: Read locked toolchain
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          echo "go_version=${GO_VERSION:?}" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache-dependency-path: |
+            pkg/go.sum
+            framework/go.sum
+            gateway/go.sum
+            infras/go.sum
+            app/go.sum
+      - name: Reconcile exact refs without rewriting migration source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$ORIGINAL_HEAD"
+          status="$(git status --porcelain --untracked-files=all)"
+          test -z "$status"
+          git fetch origin main "$SOURCE_BRANCH"
+          test "$(git rev-parse origin/main)" = "$SECURITY_MAIN"
+          test "$(git rev-parse "origin/$SOURCE_BRANCH")" = "$ORIGINAL_HEAD"
+          test "$(git rev-parse "$SECURITY_MAIN^{tree}")" = bc66bad8f1cf8e469e712801a60bf6e3bd8f311c
+          existing="$(git ls-remote --heads origin "refs/heads/$CANDIDATE_BRANCH")"
+          test -z "$existing"
+          git config user.name 'Yunka Delivery'
+          git config user.email 'quality-delivery@example.invalid'
+          git switch -c "$CANDIDATE_BRANCH" "$ORIGINAL_HEAD"
+          git merge --no-ff "$SECURITY_MAIN" -m 'Merge verified gRPC security baseline into bounded migration'
+          python3 - <<'PY'
+          from pathlib import Path
+          status = Path('docs/STATUS.md')
+          text = status.read_text()
+          heading = '## Bounded engineering-quality migration — issue #200'
+          assert heading not in text
+          old = 'AG-06.3 typed-dependency evolution is the next undelivered increment; later migration/debt work remains undelivered.'
+          assert old in text
+          text = text.replace(old, 'The AG-series milestones above retain their scoped delivery records. The independent engineering-quality migration contract from #200 is recorded below; it does not imply completion of the remaining AG-series tasks.', 1)
+          section = '''## Bounded engineering-quality migration — issue #200
+
+          **State: implemented in this tree. Exact-candidate and actual-main acceptance
+          are recorded by [PR #216](https://github.com/hvritual/yunka.io/pull/216) and
+          [issue #200](https://github.com/hvritual/yunka.io/issues/200).**
+          This scope was reconciled on 2026-09-16; it does not reclassify unrelated AG milestones.
+
+          `yunka change review migration plan/check` composes explicit source coverage,
+          existing Audit findings/debt and exact Git paths. The Git-private plan binds
+          a clean immutable base, bounded recipes and WHY/WHAT/BOUNDARY narrative.
+          Candidate scope/ownership, unchanged source policy, new blocking debt and
+          production/API syntax are rechecked; persistence/generated deltas must also
+          remain NONE. The packet is review evidence, never mutation or merge authority.
+
+          The same contract qualifies a real Biz access-model split and an independent
+          IoT Delivery SQLite test-identity rename. Both run only in disposable copies
+          of pinned consumer/runtime sources; this delivery neither publishes consumer
+          refactors nor upgrades either consumer runtime. IoT coverage is explicitly
+          the current backend-yunka module plus its runtime, not the legacy repository.
+          The fixtures check source identity, the structural packet, consumer tests and
+          unchanged original checkouts. Required environment inputs and fixed pins are
+          documented in [the migration contract](architecture/ENGINEERING_QUALITY_MIGRATION.md).
+
+          Earlier exact head `308acc0c15cc24bca413170325cff033c15494a6` passed migration
+          qualification run `35053125229`, but CI `35053125246` and Production
+          `35053125250` failed at the pre-existing gRPC vulnerability gate. Those failed
+          runs are retained. Independent #217 / PR #218 repaired the dependency baseline;
+          PR #216 must establish fresh final-head gates after synchronization. Historical
+          green results are not substituted for that final acceptance.
+
+          This is the bounded migration protocol, not repository-wide cleanup, automatic
+          semantic equivalence, a general architecture scanner, or completion of all
+          AG-07 through AG-09 batch-migration tasks. Ordinary CI, Production and relevant
+          consumer tests remain separate required evidence.
+
+          '''
+          anchor = '## gRPC transport security dependency — issue #217\n'
+          assert anchor in text
+          text = text.replace(anchor, section + anchor, 1)
+          text = text.replace('The product dependency candidate repairs the reachable gRPC findings', 'The independently integrated dependency update repairs the reachable gRPC findings', 1)
+          receipt = '''PR #218 integrated exact candidate `ce638eef5cb351e14fd8f9e3e258ccaf3f00eebb`
+          as `bc6590554b1217313b51d56be3d589545d2fad6d`; both have tree
+          `bc66bad8f1cf8e469e712801a60bf6e3bd8f311c`. Candidate CI `35055222498`,
+          Production `35055222500`, source policy `35055222476`, template `35055222489`
+          and consumer types `35055222496` passed. Actual-main acceptance is recorded
+          separately on #217; tree equality is not described as a new test run.
+
+          '''
+          anchor = 'Exact-candidate and actual-main acceptance remain owned by issue #217 and\n'
+          assert anchor in text
+          text = text.replace(anchor, receipt + anchor, 1)
+          status.write_text(text)
+
+          path = Path('docs/architecture/ENGINEERING_QUALITY_MIGRATION.md')
+          text = path.read_text()
+          title = '# Bounded engineering-quality migration\n'
+          assert text.startswith(title)
+          text = text.replace(title, title + '\n> Document class: **CURRENT**  \n> Authority: bounded structural-migration protocol  \n> Delivery/status authority: [`../STATUS.md`](../STATUS.md)\n', 1)
+          text += '''
+          ## Source-root and qualification boundaries
+
+          `plan --root <project> --coverage-root <ancestor>` supports a project whose
+          local Go dependencies live beside it. A relative coverage root is resolved
+          from the project root, and the selected ancestor must contain the project.
+          The plan stores project-relative coverage identity, not an absolute runner
+          or workstation path. `check --root <project>` reconstructs that same coverage
+          root from the plan; it does not accept a replacement coverage policy.
+
+          The recurring qualification uses these immutable source pairs:
+
+          | Case | Consumer commit | Runtime commit |
+          | --- | --- | --- |
+          | Biz access-domain aggregate split | `3519e7ee6e51e33984669871e4f32a55a3597d9f` | `6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb` |
+          | IoT Delivery SQLite regression rename | `bcd20632b666405c3f7a8fe8d53f591c78450087` | `057ebcf88a87303eb633eb6e604d306f633dfac0` |
+
+          Biz uses a disposable exact checkout and sibling runtime. IoT uses an exact
+          current-module projection of `backend-yunka` and the pinned runtime at
+          `third_party/yunka`, with relative-file/mode/content digests checked against
+          the original sources before governance setup. It does not claim full legacy
+          IoT repository source-policy PASS. The source policy and explicit domain
+          ownership are established and committed before a new migration baseline.
+          Dependency-cache preparation also precedes the offline source audit and must
+          leave source unchanged.
+
+          The workflow `.github/workflows/quality-migration-qualification.yml` supplies
+          all five inputs to `TestQualityMigrationRealConsumersUseSameContract`:
+          `YUNKA_MIGRATION_FRAMEWORK_ROOT`, `YUNKA_MIGRATION_CONSUMER_BIZ`,
+          `YUNKA_MIGRATION_BIZ_RUNTIME`, `YUNKA_MIGRATION_CONSUMER_IOT`, and
+          `YUNKA_MIGRATION_IOT_RUNTIME`. Partial configuration fails; an ordinary test
+          run with all five unset skips the real-consumer fixture and is not evidence
+          of real-consumer qualification. The configured workflow runs
+          `go test ./cmd/change -run '^TestQualityMigration' -count=1 -v` from `app`.
+
+          Consumer mutations remain inside disposable copies. The engine's NONE syntax
+          proof is bounded review evidence, not proof of arbitrary semantic equivalence
+          or permission to weaken tests. Relevant consumer tests and original-checkout
+          cleanliness are independent assertions, including command failure propagation
+          in the workflow's Git readback checks.
+          '''
+          path.write_text(text)
+          PY
+          git diff --check
+          git add docs/STATUS.md docs/architecture/ENGINEERING_QUALITY_MIGRATION.md
+          git commit -m 'docs(change): reconcile migration acceptance and consumer scope'
+          git merge-base --is-ancestor "$ORIGINAL_HEAD" HEAD
+          git merge-base --is-ancestor "$SECURITY_MAIN" HEAD
+          git diff --exit-code "$ORIGINAL_HEAD" HEAD -- app/cmd/change
+          git diff --exit-code "$SECURITY_MAIN" HEAD -- go.work go.work.sum pkg/go.mod pkg/go.sum framework/go.mod framework/go.sum gateway/go.mod gateway/go.sum infras/go.mod infras/go.sum app/go.mod app/go.sum tools/dependency-policy.json server
+          python3 - <<'PY'
+          import os, subprocess
+          expected = {
+            '.github/workflows/quality-migration-qualification.yml',
+            'app/cmd/change/quality_migration.go',
+            'app/cmd/change/quality_migration_check.go',
+            'app/cmd/change/quality_migration_command.go',
+            'app/cmd/change/quality_migration_consumer_qualification_test.go',
+            'app/cmd/change/quality_migration_test.go',
+            'app/cmd/change/review_command.go',
+            'docs/architecture/ENGINEERING_QUALITY_MIGRATION.md',
+            'docs/STATUS.md',
+          }
+          actual = set(subprocess.check_output(['git','diff','--name-only',os.environ['SECURITY_MAIN'],'HEAD'], text=True).splitlines())
+          assert actual == expected, (sorted(actual - expected), sorted(expected - actual))
+          PY
+          make dependency-check
+          (cd app && go build -mod=readonly -o "$RUNNER_TEMP/yunka" ./cmd)
+          status="$(git status --porcelain --untracked-files=all)"
+          test -z "$status"
+          git show --stat --oneline HEAD
+      - name: Publish staging candidate without moving the open PR
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main "$SOURCE_BRANCH"
+          test "$(git rev-parse origin/main)" = "$SECURITY_MAIN"
+          test "$(git rev-parse "origin/$SOURCE_BRANCH")" = "$ORIGINAL_HEAD"
+          git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          candidate="$(git rev-parse HEAD)"
+          remote="$(git ls-remote --heads origin "refs/heads/$CANDIDATE_BRANCH" | cut -f1)"
+          test "$remote" = "$candidate"
+          printf 'candidate=%s\ntree=%s\n' "$candidate" "$(git rev-parse HEAD^{tree})"
+          printf 'Staged `%s`, tree `%s`. Original migration source unchanged; dependency graph equals security main. The open PR ref has NOT been moved and requires explicit non-force publication and fresh gates.\n' "$candidate" "$(git rev-parse HEAD^{tree})" >> "$GITHUB_STEP_SUMMARY"
