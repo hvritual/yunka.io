@@ -30,9 +30,21 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          repository: hvritual/yunka.io
+          ref: 6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb
+          path: _consumer/biz-runtime
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
           repository: hvritual/iot-delivery-system
           ref: bcd20632b666405c3f7a8fe8d53f591c78450087
           path: _consumer/iot
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: hvritual/yunka.io
+          ref: 057ebcf88a87303eb633eb6e604d306f633dfac0
+          path: _consumer/iot-runtime
           persist-credentials: false
       - name: Load locked Go version
         id: toolchain
@@ -50,7 +62,9 @@ jobs:
         shell: bash
         env:
           YUNKA_MIGRATION_CONSUMER_BIZ: ${{ github.workspace }}/_consumer/biz
-          YUNKA_MIGRATION_CONSUMER_IOT: ${{ github.workspace }}/_consumer/iot/backend-yunka
+          YUNKA_MIGRATION_BIZ_RUNTIME: ${{ github.workspace }}/_consumer/biz-runtime
+          YUNKA_MIGRATION_CONSUMER_IOT: ${{ github.workspace }}/_consumer/iot
+          YUNKA_MIGRATION_IOT_RUNTIME: ${{ github.workspace }}/_consumer/iot-runtime
           YUNKA_MIGRATION_FRAMEWORK_ROOT: ${{ github.workspace }}
         run: |
           set -euo pipefail
@@ -62,4 +76,6 @@ jobs:
           set -euo pipefail
           test -z "$(git status --porcelain --untracked-files=all -- ':!_consumer')"
           test -z "$(git -C _consumer/biz status --porcelain --untracked-files=all)"
+          test -z "$(git -C _consumer/biz-runtime status --porcelain --untracked-files=all)"
           test -z "$(git -C _consumer/iot status --porcelain --untracked-files=all)"
+          test -z "$(git -C _consumer/iot-runtime status --porcelain --untracked-files=all)"
