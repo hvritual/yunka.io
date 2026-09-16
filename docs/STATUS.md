@@ -464,9 +464,15 @@ These tests characterize the language boundary, including expected examples of i
 
 ## Bounded engineering-quality migration — issue #200
 
-**State: implemented in this tree. Exact-candidate and actual-main acceptance
-are recorded by [PR #216](https://github.com/hvritual/yunka.io/pull/216) and
-[issue #200](https://github.com/hvritual/yunka.io/issues/200).**
+**State: COMPLETE / QUALIFIED / MERGED through PR #216.**
+Final candidate `6823b8513b4981516708f4f20794416c0c03af4b` and accepted
+main `061f35e1aed8cc86b2173cbe067c6f01ee21d3d3` share tree
+`ea0b3d336ef4a21cae254894e4d899d9673d9bc3`. All seven applicable candidate
+workflows passed. Separate main CI `35057115771`, Production `35057115818`,
+source-policy `35057115779` and template `35057115791` passed.
+[The acceptance receipt](https://github.com/hvritual/yunka.io/issues/200#issuecomment-5692278959)
+records the exact scope and completed issue readback; it is historical
+qualification evidence, not a claim about every later commit.
 This scope was reconciled on 2026-09-16; it does not reclassify unrelated AG milestones.
 
 `yunka change review migration plan/check` composes explicit source coverage,
@@ -489,8 +495,9 @@ Earlier exact head `308acc0c15cc24bca413170325cff033c15494a6` passed migration
 qualification run `35053125229`, but CI `35053125246` and Production
 `35053125250` failed at the pre-existing gRPC vulnerability gate. Those failed
 runs are retained. Independent #217 / PR #218 repaired the dependency baseline;
-PR #216 must establish fresh final-head gates after synchronization. Historical
-green results are not substituted for that final acceptance.
+PR #216 subsequently established fresh final-head and actual-main acceptance
+as recorded above. The original failure remains historical evidence rather
+than a current unresolved security blocker.
 
 This is the bounded migration protocol, not repository-wide cleanup, automatic
 semantic equivalence, a general architecture scanner, or completion of all
@@ -516,6 +523,26 @@ Exact-candidate and actual-main acceptance remain owned by issue #217 and
 its linked PR/run receipts. The security gate, vulnerability database,
 generated-code checks and consumer runtime pins are not weakened or changed.
 No production deployment or consumer runtime upgrade is claimed.
+
+## Descendant PID fixture reliability — issue #213
+
+The process-group shutdown fixture now waits for a complete newline-terminated,
+positive PID record rather than treating file existence as readiness. The
+helper registers SIGTERM handling before publishing that record. Early failure
+cancels and joins the owned runtime; the real descendant-shutdown assertion
+remains in place. Production process signaling and timeout behavior are unchanged.
+
+`TestWaitForDescendantPIDRequiresCompletePublication` uses fake time to expose
+absent, empty and partially written PID records deterministically. Companion
+tests cover malformed/non-positive records, bounded waiting, cancellation and
+read-error propagation. Existing standard test/race gates execute these tests;
+no verifier, dependency, generated source or consumer pin is changed.
+
+Exact candidate, repetition/negative-control results, integration identity and
+actual-main acceptance are recorded separately on
+[issue #213](https://github.com/hvritual/yunka.io/issues/213) and its linked PR.
+Source presence alone is not a claim that those delivery gates have passed.
+This repair does not close unrelated AG work or other repository issues.
 
 ## Current pressure frontier
 
