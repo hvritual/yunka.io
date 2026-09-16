@@ -1,0 +1,149 @@
+name: engineering-quality-acceptance-status-control
+
+on:
+  push:
+    branches: ['control/engineering-quality-global-acceptance-20260916']
+    paths: ['.github/workflows/engineering-quality-acceptance-status-control.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: engineering-quality-acceptance-status-control
+  cancel-in-progress: false
+
+jobs:
+  publish-status:
+    if: github.repository == 'hvritual/yunka.io'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BASE_SHA: 2756af5cb23454981eb6496e16cd37046ce94550
+      BASE_TREE: 81470b1955bc8e979fdcd9e4432dc8875f5cf9fe
+      TASK_BRANCH: docs/engineering-quality-global-acceptance
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 2756af5cb23454981eb6496e16cd37046ce94550
+          fetch-depth: 0
+      - name: Bootstrap exact main and create documentation commit with Git
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$BASE_TREE"
+          git status --short --branch
+          git branch --show-current
+          git remote -v
+          for file in AGENTS.md PROJECT_MEMORY.md docs/STATUS.md docs/ENGINEERING_QUALITY_RULES.md docs/DOCUMENTATION_GOVERNANCE.md; do cat "$file"; done
+          status="$(git status --porcelain --untracked-files=all)"
+          test -z "$status"
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$BASE_SHA"
+          existing="$(git ls-remote --heads origin "refs/heads/$TASK_BRANCH")"
+          test -z "$existing"
+          test "$(git hash-object docs/STATUS.md)" = b4249d5fefc69f2d9199cfd5e6fe271eeab56940
+          git config user.name 'Yunka Delivery'
+          git config user.email 'quality-delivery@example.invalid'
+          git switch -c "$TASK_BRANCH" "$BASE_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('docs/STATUS.md')
+          text = path.read_text()
+          row_anchor = '| Active numbered Yunka framework wave |'
+          assert text.count(row_anchor) == 1
+          row = '| Engineering-quality global acceptance | **BLOCKED by #220; parent #192 OPEN** | Child mechanisms #193-#200 are delivered; fresh quality/consumer and Production replay passed, but stale advisory evidence was accepted by the active-change debt composition. See the scoped acceptance section below; this is not a production runtime/authz defect |\n'
+          text = text.replace(row_anchor, row + row_anchor, 1)
+          anchor = '## Bounded engineering-quality migration — issue #200\n'
+          assert text.count(anchor) == 1
+          section = '''## Engineering-quality global acceptance — issue #192
+
+          **State: BLOCKED by [#220](https://github.com/hvritual/yunka.io/issues/220).
+          Parent [#192](https://github.com/hvritual/yunka.io/issues/192) remains OPEN.**
+          Reconciled on 2026-09-16. The delivered child mechanisms #193-#200 are not
+          reclassified as unimplemented, but their individual acceptance does not prove
+          the combined global invariant. The normative rules remain in
+          [ENGINEERING_QUALITY_RULES.md](ENGINEERING_QUALITY_RULES.md).
+
+          The acceptance source was `2756af5cb23454981eb6496e16cd37046ce94550`, tree
+          `81470b1955bc8e979fdcd9e4432dc8875f5cf9fe`. This is an exact historical
+          qualification identity, not a duplicated live-main pointer.
+
+          ### Global acceptance disposition
+
+          | Parent requirement | Result at the acceptance source |
+          | --- | --- |
+          | Mandatory repository quality baseline | PASS as repository-governance policy; not an unbypassable permission boundary |
+          | Deterministic read-only objective checks and stable findings | PASS for the documented objective subset |
+          | Structured, evidence-bound, advisory-only semantic review | Standalone schema/authority PASS; active-change evidence binding BLOCKED by #220 |
+          | WHY / WHAT / BOUNDARY / PROOF and human review packet | Packet mechanism PASS; combined current-change proof requires #220 repair and downstream requalification |
+          | Existing/new/fixed debt and exact waiver for new blocking debt | Deterministic/waiver subset PASS; advisory-debt association to the same candidate BLOCKED |
+          | New-project default baseline propagation | PASS for supported Go projects, including preservation of developer edits |
+          | Biz and independent-consumer generic policy qualification | PASS for the exact pinned rule/distribution/migration scopes |
+          | Durable source identity rather than task history | PASS for documented new/touched-source enforcement; not historical repository-wide cleanup |
+
+          Fresh replay [35083465702](https://github.com/hvritual/yunka.io/actions/runs/35083465702)
+          passed 210 top-level tests across eight quality-related packages, including
+          36 explicitly inventoried required tests, with zero test skips. A separate
+          job passed unchanged `make verify-production` on MySQL 8.4, followed by
+          `make tidy contract` and clean-worktree checks. Framework and the six
+          original pinned consumer/runtime checkouts retained their source hashes
+          and Git state. The controller explicitly checked out the acceptance SHA;
+          its control-branch commit is not the tested source or an actual-main push.
+
+          A further composition probe
+          [35084597074](https://github.com/hvritual/yunka.io/actions/runs/35084597074)
+          reproduced three acceptance failures against unchanged production functions:
+          a stale current review head, stale source bytes at the same head, and a
+          wrong review baseline were each attached to a validated quality-debt proof
+          with a passing quality gate. Matching evidence passed as the control.
+          Go tests failed at the exact `STALE_ADVISORY_EVIDENCE_ACCEPTED` assertions;
+          the wrapper succeeded only because reproduction of all three failures was
+          required. Its green status is not feature acceptance.
+
+          The affected composition is semantic-attestation import, QualityDebtProof
+          construction/validation and quality-gate recording. Internal digest validity
+          is not correspondence to the active immutable baseline and candidate source.
+          Advisory-only authority remains intact; this evidence does not demonstrate
+          a runtime authorization bypass, automatic merge approval or an executed
+          full public-CLI exploit. #220 requires permanent regressions and public
+          change-verify/review-packet integration qualification during repair.
+
+          The [full acceptance receipt](https://github.com/hvritual/yunka.io/issues/192#issuecomment-5695986032)
+          records source pins, commands, test inventories and artifact hashes.
+          Repair #220, requalify the exact repair and integrated main, then repeat
+          the affected global acceptance. Do not close #192 from the existing green
+          suites alone or suppress advisory input to obtain acceptance. No consumer
+          refactor publication, runtime/dependency change, production deployment or
+          unrelated AG/Service Boundary completion is claimed by this audit.
+
+          '''
+          text = text.replace(anchor, section + anchor, 1)
+          assert 'Fixes #192' not in section and 'Fixes #220' not in section
+          path.write_text(text)
+          PY
+          git diff --check
+          python3 - <<'PY'
+          import os, subprocess
+          paths = subprocess.check_output(['git','diff','--name-only',os.environ['BASE_SHA']],text=True).splitlines()
+          assert paths == ['docs/STATUS.md'], paths
+          PY
+          git add docs/STATUS.md
+          git commit -m 'docs: record blocked engineering-quality global acceptance' -m 'Refs #192 and #220. Preserve successful bounded mechanisms and fresh replay evidence while recording the demonstrated cross-contract evidence-binding blocker. No product behavior, tests, dependency or normal CI change.'
+          git show --stat --oneline HEAD
+          git diff --exit-code "$BASE_SHA" HEAD -- . ':(exclude)docs/STATUS.md'
+          state="$(git status --porcelain --untracked-files=all)"
+          test -z "$state"
+          printf 'candidate=%s\ntree=%s\nparent=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" "$(git rev-parse HEAD^)"
+      - name: Publish one-file status candidate without moving main
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_main="$(git ls-remote --heads origin refs/heads/main | cut -f1)"
+          test "$remote_main" = "$BASE_SHA"
+          existing="$(git ls-remote --heads origin "refs/heads/$TASK_BRANCH")"
+          test -z "$existing"
+          git merge-base --is-ancestor "$BASE_SHA" HEAD
+          git push origin "HEAD:refs/heads/$TASK_BRANCH"
+          test "$(git ls-remote --heads origin "refs/heads/$TASK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
+          echo 'Documentation candidate published; normal exact-candidate PR gates and separate actual-main acceptance remain required. Parent #192 and blocker #220 must remain open.'
