@@ -20,6 +20,18 @@ func ValidateQualityDebtProof(proof QualityDebtProof) error {
 		if _, err := advisorcore.MarshalSemanticFindingDelta(*proof.Advisory); err != nil {
 			return fmt.Errorf("quality debt proof: advisory delta: %w", err)
 		}
+		if proof.Advisory.BaselineEvidence == nil || proof.Advisory.CurrentEvidence == nil {
+			return fmt.Errorf("quality debt proof: advisory evidence is not bound to exact baseline/current source")
+		}
+		if proof.Advisory.BaselineEvidence.HeadSHA != proof.Deterministic.BaseSHA {
+			return fmt.Errorf("quality debt proof: advisory baseline %s differs from deterministic baseline %s", proof.Advisory.BaselineEvidence.HeadSHA, proof.Deterministic.BaseSHA)
+		}
+		if proof.Advisory.CurrentEvidence.Change == nil {
+			return fmt.Errorf("quality debt proof: advisory current evidence is not bound to a Change candidate")
+		}
+		if proof.Advisory.CurrentEvidence.Change.BaseSHA != proof.Deterministic.BaseSHA || proof.Advisory.CurrentEvidence.Change.HeadSHA != proof.Advisory.CurrentEvidence.HeadSHA {
+			return fmt.Errorf("quality debt proof: advisory Change identity is inconsistent with the deterministic baseline/current review")
+		}
 	}
 	expectedBlocking := blockingNewFindings(proof.Deterministic.New)
 	if !sameAuditFindingIDs(expectedBlocking, proof.BlockingNew) {
