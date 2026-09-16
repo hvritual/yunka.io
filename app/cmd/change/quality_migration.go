@@ -342,6 +342,7 @@ func qualityMigrationFindingRefs(findings []auditcore.Finding, touchedPaths []st
 					break
 				}
 		}
+		}
 		if _, ok := pathSet[path]; !ok {
 			continue
 		}
