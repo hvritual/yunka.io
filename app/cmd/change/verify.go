@@ -171,27 +171,37 @@ func VerifyChange(ctx context.Context, options VerifyOptions) (ChangeAttestation
 			attestation.Diagnostics = append(attestation.Diagnostics, changeDiagnostic("architecture-debt", "", architectureDebtErr.Error()))
 		} else {
 			recordArchitectureDebt(&attestation, architectureDebt)
-			advisory, advisoryErr := loadAdvisoryQualityDebt(descriptor.Root, options.SemanticBaseline, options.SemanticCurrent)
-			if advisoryErr != nil {
-				attestation.Gates = append(attestation.Gates, GateResult{Name: "quality-debt", Status: "fail", Detail: advisoryErr.Error()})
-				attestation.Diagnostics = append(attestation.Diagnostics, changeDiagnostic("quality-debt", "", advisoryErr.Error()))
+			candidateSHA := ""
+			var candidateErr error
+			if strings.TrimSpace(options.SemanticBaseline) != "" || strings.TrimSpace(options.SemanticCurrent) != "" {
+				candidateSHA, candidateErr = digestCandidate(descriptor.Root, contractValue.BaseSHA, headSHA, reconciliation.Changes)
+			}
+			if candidateErr != nil {
+				attestation.Gates = append(attestation.Gates, GateResult{Name: "quality-debt", Status: "fail", Detail: candidateErr.Error()})
+				attestation.Diagnostics = append(attestation.Diagnostics, changeDiagnostic("quality-debt", "", candidateErr.Error()))
 			} else {
-				now := options.EvaluationTime
-				if now.IsZero() {
-					now = time.Now().UTC()
-				}
-				blocking := blockingNewFindings(architectureDebt.New)
-				waivers, waiverErr := LoadQualityWaiverSet(descriptor.Root, options.QualityWaivers, contractValue.BaseSHA, headSHA, blocking, now)
-				if waiverErr != nil {
-					attestation.Gates = append(attestation.Gates, GateResult{Name: "quality-debt", Status: "fail", Detail: waiverErr.Error()})
-					attestation.Diagnostics = append(attestation.Diagnostics, changeDiagnostic("quality-debt", "", waiverErr.Error()))
+				advisory, advisoryErr := loadAdvisoryQualityDebt(ctx, descriptor.Root, options.SemanticBaseline, options.SemanticCurrent, contractValue.BaseSHA, headSHA, candidateSHA)
+				if advisoryErr != nil {
+					attestation.Gates = append(attestation.Gates, GateResult{Name: "quality-debt", Status: "fail", Detail: advisoryErr.Error()})
+					attestation.Diagnostics = append(attestation.Diagnostics, changeDiagnostic("quality-debt", "", advisoryErr.Error()))
 				} else {
-					proof, proofErr := BuildQualityDebtProof(architectureDebt, advisory, waivers, contractValue.BaseSHA, headSHA, now)
-					if proofErr != nil {
-						attestation.Gates = append(attestation.Gates, GateResult{Name: "quality-debt", Status: "fail", Detail: proofErr.Error()})
-						attestation.Diagnostics = append(attestation.Diagnostics, changeDiagnostic("quality-debt", "", proofErr.Error()))
+					now := options.EvaluationTime
+					if now.IsZero() {
+						now = time.Now().UTC()
+					}
+					blocking := blockingNewFindings(architectureDebt.New)
+					waivers, waiverErr := LoadQualityWaiverSet(descriptor.Root, options.QualityWaivers, contractValue.BaseSHA, headSHA, blocking, now)
+					if waiverErr != nil {
+						attestation.Gates = append(attestation.Gates, GateResult{Name: "quality-debt", Status: "fail", Detail: waiverErr.Error()})
+						attestation.Diagnostics = append(attestation.Diagnostics, changeDiagnostic("quality-debt", "", waiverErr.Error()))
 					} else {
-						recordQualityDebt(&attestation, proof)
+						proof, proofErr := BuildQualityDebtProof(architectureDebt, advisory, waivers, contractValue.BaseSHA, headSHA, now)
+						if proofErr != nil {
+							attestation.Gates = append(attestation.Gates, GateResult{Name: "quality-debt", Status: "fail", Detail: proofErr.Error()})
+							attestation.Diagnostics = append(attestation.Diagnostics, changeDiagnostic("quality-debt", "", proofErr.Error()))
+						} else {
+							recordQualityDebt(&attestation, proof)
+						}
 					}
 				}
 			}
