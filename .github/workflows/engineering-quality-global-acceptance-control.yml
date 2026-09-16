@@ -1,0 +1,255 @@
+name: engineering-quality-global-acceptance-control
+
+on:
+  push:
+    branches: ['control/engineering-quality-global-acceptance-20260916']
+    paths: ['.github/workflows/engineering-quality-global-acceptance-control.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [contracts, production]
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      ACCEPTANCE_SHA: 2756af5cb23454981eb6496e16cd37046ce94550
+      ACCEPTANCE_TREE: 81470b1955bc8e979fdcd9e4432dc8875f5cf9fe
+      GOTOOLCHAIN: local
+      YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?charset=utf8mb4&parseTime=true&loc=UTC&multiStatements=true
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 2756af5cb23454981eb6496e16cd37046ce94550
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Read authority and record immutable source
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$ACCEPTANCE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$ACCEPTANCE_TREE"
+          git status --short --branch
+          git branch --show-current
+          git remote -v
+          mkdir -p "$RUNNER_TEMP/acceptance-evidence"
+          for file in AGENTS.md PROJECT_MEMORY.md docs/STATUS.md docs/ENGINEERING_QUALITY_RULES.md docs/architecture/HUMAN-REVIEWABLE-AI-CODE-PLAN.md docs/architecture/HUMAN-REVIEWABLE-AI-CODE-RULE-MAP.md; do
+            cat "$file"
+            sha256sum "$file" >> "$RUNNER_TEMP/acceptance-evidence/authority.sha256"
+          done
+          source tools/toolchain.env
+          echo "go_version=${GO_VERSION:?}" >> "$GITHUB_OUTPUT"
+          echo "protoc_release=${PROTOC_RELEASE:?}" >> "$GITHUB_OUTPUT"
+          echo "protoc_sha256=${PROTOC_LINUX_X86_64_SHA256:?}" >> "$GITHUB_OUTPUT"
+          printf 'source=%s\ntree=%s\ncontrol=%s\nmode=%s\n' "$ACCEPTANCE_SHA" "$ACCEPTANCE_TREE" "$GITHUB_SHA" '${{ matrix.mode }}' | tee "$RUNNER_TEMP/acceptance-evidence/identity.txt"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache-dependency-path: |
+            app/go.sum
+            framework/go.sum
+            gateway/go.sum
+            infras/go.sum
+            pkg/go.sum
+      - name: Install locked protobuf tools
+        shell: bash
+        env:
+          PROTOC_RELEASE: ${{ steps.lock.outputs.protoc_release }}
+          PROTOC_SHA256: ${{ steps.lock.outputs.protoc_sha256 }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" --output "$RUNNER_TEMP/protoc.zip"
+          echo "${PROTOC_SHA256}  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/acceptance-protoc"
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/acceptance-protoc"
+          export PATH="$RUNNER_TEMP/acceptance-protoc/bin:$PATH"
+          echo "$RUNNER_TEMP/acceptance-protoc/bin" >> "$GITHUB_PATH"
+          make rpc-tools rpc-toolchain-check
+          go version | tee "$RUNNER_TEMP/acceptance-evidence/toolchain.txt"
+          protoc --version | tee -a "$RUNNER_TEMP/acceptance-evidence/toolchain.txt"
+          git --version | tee -a "$RUNNER_TEMP/acceptance-evidence/toolchain.txt"
+      - name: Read-only source inspection and pinned consumer setup
+        if: matrix.mode == 'contracts'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          evidence = pathlib.Path(os.environ['RUNNER_TEMP'])/'acceptance-evidence'
+          pins = {
+            'biz-rules': ('hvritual/biz','c89ec471306c91f49fdf265f1766495abb1f4f08'),
+            'iot-rules': ('hvritual/iot-delivery-system','c38ce0efcbe11d8ef9201381f895c7e9a85ddbc0'),
+            'biz-migration': ('hvritual/biz','3519e7ee6e51e33984669871e4f32a55a3597d9f'),
+            'iot-migration': ('hvritual/iot-delivery-system','bcd20632b666405c3f7a8fe8d53f591c78450087'),
+            'biz-runtime': ('hvritual/yunka.io','6ba99c1440dc6c9416f6afd08f3282e35fa5a3fb'),
+            'iot-runtime': ('hvritual/yunka.io','057ebcf88a87303eb633eb6e604d306f633dfac0'),
+          }
+          roots = {'framework': str(pathlib.Path.cwd())}
+          for name,(repo,sha) in pins.items():
+            root = pathlib.Path(os.environ['RUNNER_TEMP'])/name
+            subprocess.run(['git','init','-q',str(root)], check=True)
+            subprocess.run(['git','-C',str(root),'fetch','-q','--depth=1','--no-tags','https://github.com/'+repo+'.git',sha], check=True)
+            subprocess.run(['git','-C',str(root),'checkout','-q','--detach','FETCH_HEAD'], check=True)
+            actual = subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()
+            assert actual == sha, (name,actual,sha)
+            roots[name] = str(root)
+            print('PIN',name,repo,sha)
+          def snapshot(root):
+            files = subprocess.check_output(['git','-C',root,'ls-files','-z']).decode().split('\0')
+            entries = {}
+            for name in files:
+              if not name: continue
+              path = pathlib.Path(root)/name
+              if path.is_symlink(): entries[name] = ['link',os.readlink(path)]
+              elif path.is_file(): entries[name] = ['file',hashlib.sha256(path.read_bytes()).hexdigest()]
+              elif path.is_dir(): entries[name] = ['gitlink']
+              else: entries[name] = ['absent']
+            return {'head':subprocess.check_output(['git','-C',root,'rev-parse','HEAD'],text=True).strip(),'files':entries,'status':subprocess.check_output(['git','-C',root,'status','--porcelain','--untracked-files=all'],text=True)}
+          (evidence/'roots.json').write_text(json.dumps(roots,indent=2))
+          (evidence/'source-before.json').write_text(json.dumps({k:snapshot(v) for k,v in roots.items()},sort_keys=True))
+          inventory=[]
+          for directory in ['app/cmd/auditcore','app/cmd/audit','app/cmd/advisorcore','app/cmd/advisor','app/cmd/change','app/cmd/project','app/cmd/sourceaudit']:
+            for path in sorted(pathlib.Path(directory).glob('*.go')):
+              name=path.name
+              if any(term in name for term in ['quality','semantic','naming','documentation','review','debt','waiver','verify','baseline']):
+                inventory.append({'path':str(path),'sha256':hashlib.sha256(path.read_bytes()).hexdigest()})
+                print('SOURCE',str(path),len(path.read_bytes()))
+          (evidence/'implementation-inventory.json').write_text(json.dumps(inventory,indent=2))
+          PY
+      - name: Execute integrated engineering-quality and real-consumer matrix
+        if: matrix.mode == 'contracts'
+        working-directory: app
+        shell: bash
+        env:
+          YUNKA_QUALIFY_BIZ_ROOT: ${{ runner.temp }}/biz-rules
+          YUNKA_QUALIFY_IOT_ROOT: ${{ runner.temp }}/iot-rules
+          YUNKA_QUALITY_DEBT_BIZ_ROOT: ${{ runner.temp }}/biz-rules
+          YUNKA_QUALITY_DEBT_IOT_ROOT: ${{ runner.temp }}/iot-rules
+          YUNKA_QUALITY_CONSUMER_BIZ: ${{ runner.temp }}/biz-migration
+          YUNKA_QUALITY_CONSUMER_IOT: ${{ runner.temp }}/iot-migration
+          YUNKA_MIGRATION_CONSUMER_BIZ: ${{ runner.temp }}/biz-migration
+          YUNKA_MIGRATION_BIZ_RUNTIME: ${{ runner.temp }}/biz-runtime
+          YUNKA_MIGRATION_CONSUMER_IOT: ${{ runner.temp }}/iot-migration
+          YUNKA_MIGRATION_IOT_RUNTIME: ${{ runner.temp }}/iot-runtime
+          YUNKA_MIGRATION_FRAMEWORK_ROOT: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          go build -mod=readonly -o "$RUNNER_TEMP/yunka" ./cmd
+          python3 - <<'PY'
+          import json, os, pathlib, re, subprocess, sys
+          out=pathlib.Path(os.environ['RUNNER_TEMP'])/'acceptance-evidence'
+          packages=['./cmd/auditcore','./cmd/audit','./cmd/domain','./cmd/advisorcore','./cmd/advisor','./cmd/change','./cmd/project','./cmd/sourceaudit']
+          inventory={}
+          for package in packages:
+            output=subprocess.check_output(['go','test',package,'-list','^Test'],text=True)
+            inventory[package]=[s for s in output.splitlines() if re.fullmatch(r'Test\w+',s)]
+            assert inventory[package], ('empty inventory',package)
+          required_patterns=[r'^TestConsumerNamingQualification$',r'^TestConsumerDocumentationQualification$',r'^TestConsumerCodeSemanticsQualification$',r'^TestSemanticReview',r'^TestQualityDebt',r'^TestQualityWaiver',r'^TestReviewQualityDebt',r'^TestEngineeringQualityBaseline',r'^TestInitCommandInstallsEngineeringQualityBaseline$',r'^TestQualityMigration',r'^TestStructuralRefactorProjectsExplicitZeroSemanticDelta$',r'^TestBehaviorChangeSurfacesCanonicalInvariantAPIAndPersistenceFacts$',r'^TestCandidateDigestDetectsSamePathContentMutation$',r'^TestChangedPathDigestChangesWhenCandidatePathSetChanges$',r'^TestReviewPacketValidationRejectsNarrativeOrEvidenceTamper$',r'^TestReviewPacketRenderingIsDeterministicAcrossHumanAndAgentSurfaces$']
+          required={}
+          for pattern in required_patterns:
+            matches=[(p,t) for p,tests in inventory.items() for t in tests if re.search(pattern,t)]
+            assert matches, ('missing required test definition',pattern)
+            required[pattern]=matches
+          (out/'test-inventory.json').write_text(json.dumps({'all':inventory,'required':required},indent=2))
+          command=['go','test','-json',*packages,'-count=1','-timeout=20m']
+          (out/'command.json').write_text(json.dumps(command))
+          with (out/'tests.jsonl').open('w') as log:
+            process=subprocess.run(command,stdout=log,stderr=subprocess.STDOUT)
+          events=[]
+          for line in (out/'tests.jsonl').read_text().splitlines():
+            try: events.append(json.loads(line))
+            except json.JSONDecodeError: print('NON_JSON',line)
+          terminal={}
+          skips=[]
+          for event in events:
+            action=event.get('Action')
+            if action in ['pass','fail','skip']:
+              terminal[(event.get('Package',''),event.get('Test',''))]=action
+              if action=='skip': skips.append(event)
+          failures=[]
+          checked=[]
+          for matches in required.values():
+            for package,test in matches:
+              full='yunka.io/app/'+package.removeprefix('./')
+              result=terminal.get((full,test),'missing')
+              nested_bad=[(t,a) for (p,t),a in terminal.items() if p==full and t.startswith(test+'/') and a!='pass']
+              checked.append({'package':full,'test':test,'result':result,'nested_bad':nested_bad})
+              if result!='pass' or nested_bad: failures.append(checked[-1])
+          summary={'source_sha':os.environ['ACCEPTANCE_SHA'],'source_tree':os.environ['ACCEPTANCE_TREE'],'exit_code':process.returncode,'top_level_tests':sum(bool(t) and '/' not in t for p,t in terminal),'required':checked,'skips':skips,'failures':failures}
+          (out/'test-summary.json').write_text(json.dumps(summary,indent=2))
+          print('ACCEPTANCE_TEST_SUMMARY',json.dumps(summary))
+          for event in events:
+            if event.get('Action')=='output' and (process.returncode or '--- FAIL:' in event.get('Output','')):
+              print(event.get('Output','').rstrip())
+          if process.returncode or failures: sys.exit(1)
+          PY
+      - name: Execute unchanged canonical production gate
+        if: matrix.mode == 'production'
+        shell: bash
+        run: |
+          set -euo pipefail
+          make verify-production 2>&1 | tee "$RUNNER_TEMP/acceptance-evidence/verify-production.log"
+          make tidy contract 2>&1 | tee "$RUNNER_TEMP/acceptance-evidence/determinism.log"
+      - name: Read back framework and consumer source without accepting command errors
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$ACCEPTANCE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$ACCEPTANCE_TREE"
+          git diff --exit-code
+          state="$(git status --porcelain --untracked-files=all)"
+          test -z "$state"
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          out=pathlib.Path(os.environ['RUNNER_TEMP'])/'acceptance-evidence'
+          if (out/'roots.json').exists():
+            roots=json.loads((out/'roots.json').read_text())
+            before=json.loads((out/'source-before.json').read_text())
+            after={}
+            for key,root in roots.items():
+              files=subprocess.check_output(['git','-C',root,'ls-files','-z']).decode().split('\0')
+              entries={}
+              for name in files:
+                if not name: continue
+                path=pathlib.Path(root)/name
+                if path.is_symlink(): entries[name]=['link',os.readlink(path)]
+                elif path.is_file(): entries[name]=['file',hashlib.sha256(path.read_bytes()).hexdigest()]
+                elif path.is_dir(): entries[name]=['gitlink']
+                else: entries[name]=['absent']
+              after[key]={'head':subprocess.check_output(['git','-C',root,'rev-parse','HEAD'],text=True).strip(),'files':entries,'status':subprocess.check_output(['git','-C',root,'status','--porcelain','--untracked-files=all'],text=True)}
+              assert after[key]==before[key], ('source mutation',key)
+              assert not after[key]['status'], ('dirty original source',key)
+              print('SOURCE_UNCHANGED',key,after[key]['head'],len(entries))
+            (out/'source-after.json').write_text(json.dumps(after,sort_keys=True))
+          (out/'source-readback.txt').write_text('PASS: exact source identity and clean tracked/untracked readback\n')
+          PY
+      - name: Hash acceptance evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/acceptance-evidence"
+          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          cat SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: engineering-quality-global-acceptance-${{ matrix.mode }}
+          path: ${{ runner.temp }}/acceptance-evidence
+          if-no-files-found: error
