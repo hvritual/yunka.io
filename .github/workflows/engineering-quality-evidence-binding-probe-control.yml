@@ -1,0 +1,221 @@
+name: engineering-quality-evidence-binding-probe-control
+
+on:
+  push:
+    branches: ['control/engineering-quality-global-acceptance-20260916']
+    paths: ['.github/workflows/engineering-quality-evidence-binding-probe-control.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ACCEPTANCE_SHA: 2756af5cb23454981eb6496e16cd37046ce94550
+      ACCEPTANCE_TREE: 81470b1955bc8e979fdcd9e4432dc8875f5cf9fe
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 2756af5cb23454981eb6496e16cd37046ce94550
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source and load toolchain
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$ACCEPTANCE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$ACCEPTANCE_TREE"
+          git status --short --branch
+          git branch --show-current
+          git remote -v
+          for file in AGENTS.md PROJECT_MEMORY.md docs/STATUS.md docs/ENGINEERING_QUALITY_RULES.md; do cat "$file"; done
+          source tools/toolchain.env
+          echo "go_version=${GO_VERSION:?}" >> "$GITHUB_OUTPUT"
+          mkdir -p "$RUNNER_TEMP/binding-evidence"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache-dependency-path: app/go.sum
+      - name: Add acceptance-only probe in a disposable worktree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/binding-probe" "$ACCEPTANCE_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          test = r'''package change
+
+          import (
+              "encoding/json"
+              "os"
+              "path/filepath"
+              "testing"
+              "time"
+
+              "yunka.io/app/cmd/advisorcore"
+          )
+
+          // This acceptance probe invokes the same importer, proof constructor and
+          // gate recorder as VerifyChange, with real Git commits and valid reviews.
+          // It does not modify the production implementation or forge its digests.
+          func TestAdvisoryDebtEvidenceBinding(t *testing.T) {
+              for _, scenario := range []string{"matching", "stale-current-head", "same-head-stale-source", "wrong-baseline"} {
+                  t.Run(scenario, func(t *testing.T) {
+                      root := t.TempDir()
+                      before := "package application\n\n// Service owns the original operation.\ntype Service struct{}\n"
+                      after := "package application\n\n// Service now owns the revised operation.\ntype Service struct{}\n"
+                      path := prepareT5AuditProject(t, root, before)
+                      baseSHA := commitT5AuditBaseline(t, root)
+                      if err := os.WriteFile(path, []byte(after), 0o600); err != nil { t.Fatal(err) }
+                      gitT5(t, root, "add", ".")
+                      gitT5(t, root, "commit", "-m", "revise service responsibility")
+                      headSHA := gitT5Output(t, root, "rev-parse", "HEAD")
+                      if baseSHA == headSHA { t.Fatal("fixture must contain distinct committed identities") }
+                      debt, err := collectArchitectureDebt(root, baseSHA)
+                      if err != nil { t.Fatal(err) }
+
+                      reviewBase, baselineContent := baseSHA, before
+                      reviewHead, currentContent := headSHA, after
+                      switch scenario {
+                      case "stale-current-head": reviewHead, currentContent = baseSHA, before
+                      case "same-head-stale-source": currentContent = before
+                      case "wrong-baseline": reviewBase, baselineContent = headSHA, after
+                      }
+                      baseline := debtEvidenceAttestation(t, reviewBase, baselineContent, false)
+                      current := debtEvidenceAttestation(t, reviewHead, currentContent, true)
+                      dir := filepath.Join(root, ".git", "yunka")
+                      if err := os.MkdirAll(dir, 0o700); err != nil { t.Fatal(err) }
+                      for name, value := range map[string]advisorcore.SemanticReviewAttestation{"baseline.json": baseline, "current.json": current} {
+                          data, err := json.Marshal(value)
+                          if err != nil { t.Fatal(err) }
+                          if _, err := advisorcore.DecodeSemanticReviewAttestation(data); err != nil { t.Fatal(err) }
+                          if err := os.WriteFile(filepath.Join(dir, name), data, 0o600); err != nil { t.Fatal(err) }
+                      }
+                      delta, err := loadAdvisoryQualityDebt(root, ".git/yunka/baseline.json", ".git/yunka/current.json")
+                      if err != nil {
+                          if scenario == "matching" { t.Fatal(err) }
+                          t.Logf("REJECTED at importer: %v", err)
+                          return
+                      }
+                      proof, err := BuildQualityDebtProof(debt, delta, nil, baseSHA, headSHA, time.Date(2026, 9, 16, 10, 0, 0, 0, time.UTC))
+                      if err != nil {
+                          if scenario == "matching" { t.Fatal(err) }
+                          t.Logf("REJECTED at proof: %v", err)
+                          return
+                      }
+                      if err := ValidateQualityDebtProof(proof); err != nil {
+                          if scenario == "matching" { t.Fatal(err) }
+                          t.Logf("REJECTED at validation: %v", err)
+                          return
+                      }
+                      attestation := ChangeAttestation{}
+                      recordQualityDebt(&attestation, proof)
+                      gate, ok := qualityDebtGate(attestation.Gates)
+                      if !ok || gate.Status != "pass" || proof.Advisory == nil || len(proof.Advisory.New) != 1 {
+                          t.Fatalf("unexpected fixture/gate result: gate=%#v proof=%#v", gate, proof)
+                      }
+                      if len(proof.BlockingNew) != 0 || len(proof.UnwaivedBlocking) != 0 {
+                          t.Fatal("advisory authority changed; this probe must not promote advice to blocking")
+                      }
+                      currentSource, err := os.ReadFile(path)
+                      if err != nil { t.Fatal(err) }
+                      if string(currentSource) != after || gitT5Output(t, root, "status", "--porcelain", "--untracked-files=all") != "" {
+                          t.Fatal("checking evidence mutated the fixture checkout")
+                      }
+                      t.Logf("BINDING_OBSERVATION scenario=%s change_base=%s change_head=%s review_base=%s review_head=%s source_equal=%t proof=%s gate=%s advisory_new=%d", scenario, baseSHA, headSHA, reviewBase, reviewHead, currentContent == after, proof.ProofSHA256, gate.Status, len(proof.Advisory.New))
+                      if scenario != "matching" {
+                          t.Fatalf("STALE_ADVISORY_EVIDENCE_ACCEPTED: %s reached a validated quality-debt proof and passing gate for another baseline/candidate source", scenario)
+                      }
+                  })
+              }
+          }
+
+          func debtEvidenceAttestation(t *testing.T, headSHA, content string, finding bool) advisorcore.SemanticReviewAttestation {
+              t.Helper()
+              request := semanticQualityRequest(t, headSHA, content)
+              response := advisorcore.SemanticReviewResponse{SchemaVersion: advisorcore.SemanticReviewSchemaVersion, Authority: advisorcore.AuthorityAdvisoryOnly, RequestDigest: request.RequestDigest, Findings: []advisorcore.SemanticFinding{}}
+              if finding {
+                  response.Findings = []advisorcore.SemanticFinding{{
+                      Path: "internal/tenant/application/service.go", SymbolOrScope: "Service",
+                      Category: advisorcore.SemanticCategoryAmbiguousResponsibility,
+                      Severity: advisorcore.SemanticSeverityHigh,
+                      Reason: "The reviewed service responsibility needs clarification.",
+                      RecommendedAction: advisorcore.SemanticRecommendedAction{Kind: advisorcore.SemanticActionDiscussDesign, Detail: "Review the responsibility before changing source."},
+                      BehaviorChangeRequired: false, SourceIdentity: request.Evidence.SourceIdentity,
+                  }}
+              }
+              attestation, err := advisorcore.ValidateSemanticReviewResponse(request, response)
+              if err != nil { t.Fatal(err) }
+              return attestation
+          }
+          '''
+          path = Path(os.environ['RUNNER_TEMP'])/'binding-probe/app/cmd/change/quality_evidence_binding_acceptance_test.go'
+          path.write_text(test)
+          PY
+          gofmt -w "$RUNNER_TEMP/binding-probe/app/cmd/change/quality_evidence_binding_acceptance_test.go"
+          cp "$RUNNER_TEMP/binding-probe/app/cmd/change/quality_evidence_binding_acceptance_test.go" "$RUNNER_TEMP/binding-evidence/"
+      - name: Require positive control and exact negative failure signatures
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess, sys
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'binding-probe'
+          out=pathlib.Path(os.environ['RUNNER_TEMP'])/'binding-evidence'
+          command=['go','test','-json','./cmd/change','-run','^TestAdvisoryDebtEvidenceBinding$','-count=1','-timeout=3m']
+          with (out/'probe.jsonl').open('w') as log:
+              result=subprocess.run(command,cwd=root/'app',stdout=log,stderr=subprocess.STDOUT)
+          terminals={}
+          messages={}
+          for line in (out/'probe.jsonl').read_text().splitlines():
+              try: event=json.loads(line)
+              except json.JSONDecodeError:
+                  print(line)
+                  continue
+              name=event.get('Test','')
+              if event.get('Action') in ['pass','fail','skip']: terminals[name]=event['Action']
+              if event.get('Action')=='output':
+                  messages[name]=messages.get(name,'')+event.get('Output','')
+                  print(event.get('Output','').rstrip())
+          parent='TestAdvisoryDebtEvidenceBinding'
+          assert terminals.get(parent+'/matching')=='pass', ('positive control did not pass',terminals)
+          negative=['stale-current-head','same-head-stale-source','wrong-baseline']
+          for case in negative:
+              name=parent+'/'+case
+              assert terminals.get(name)=='fail', ('missing expected acceptance failure',case,terminals)
+              assert 'STALE_ADVISORY_EVIDENCE_ACCEPTED: '+case in messages.get(name,''), ('wrong failure',case)
+          assert result.returncode!=0, 'negative acceptance expectations unexpectedly passed'
+          assert not any(v=='skip' for v in terminals.values()), 'probe skipped evidence'
+          expected=['?? app/cmd/change/quality_evidence_binding_acceptance_test.go']
+          status=subprocess.check_output(['git','status','--porcelain','--untracked-files=all'],cwd=root,text=True).splitlines()
+          assert status==expected, ('probe changed production source',status)
+          subprocess.run(['git','diff','--exit-code'],cwd=root,check=True)
+          summary={'tested_main':os.environ['ACCEPTANCE_SHA'],'tested_tree':os.environ['ACCEPTANCE_TREE'],'command':command,'test_exit_code':result.returncode,'positive_control':'pass','negative_acceptance_cases':negative,'terminals':terminals,'conclusion':'REPRODUCED: valid but unrelated/stale semantic evidence reaches quality-debt proof and passing gate','scope':'production importer -> proof -> validation -> gate composition with real Git fixture; not full CLI/runtime qualification'}
+          (out/'reproduction-summary.json').write_text(json.dumps(summary,indent=2))
+          print('REPRODUCTION_CONFIRMED',json.dumps(summary))
+          PY
+      - name: Prove original checkout unchanged and hash evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$ACCEPTANCE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$ACCEPTANCE_TREE"
+          git diff --exit-code
+          status="$(git status --porcelain --untracked-files=all)"
+          test -z "$status"
+          printf 'main=%s\ntree=%s\noriginal_checkout=unchanged\n' "$ACCEPTANCE_SHA" "$ACCEPTANCE_TREE" > "$RUNNER_TEMP/binding-evidence/source-identity.txt"
+          cd "$RUNNER_TEMP/binding-evidence"
+          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          cat SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: engineering-quality-evidence-binding-probe
+          path: ${{ runner.temp }}/binding-evidence
+          if-no-files-found: error
