@@ -1,0 +1,134 @@
+name: grpc-security-delivery-control
+
+on:
+  push:
+    branches: ['control/grpc-security-delivery-20260916']
+    paths: ['.github/workflows/grpc-security-delivery-control.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: grpc-security-delivery-control
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.repository == 'hvritual/yunka.io'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BASE_SHA: 6160f1ae12ba2372bf614aa39fa61c36fba4e888
+      PRODUCT_BRANCH: fix/grpc-security-runtime
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 6160f1ae12ba2372bf614aa39fa61c36fba4e888
+          fetch-depth: 0
+      - name: Read locked toolchain
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          echo "go_version=${GO_VERSION:?}" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache-dependency-path: |
+            pkg/go.sum
+            framework/go.sum
+            gateway/go.sum
+            infras/go.sum
+            app/go.sum
+      - name: Prepare bounded dependency candidate with Runner-local Git
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          status="$(git status --porcelain --untracked-files=all)"
+          test -z "$status"
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$BASE_SHA"
+          existing="$(git ls-remote --heads origin "refs/heads/$PRODUCT_BRANCH")"
+          test -z "$existing"
+          git switch -c "$PRODUCT_BRANCH" "$BASE_SHA"
+          git config user.name 'Yunka Delivery'
+          git config user.email 'quality-delivery@example.invalid'
+          for module in pkg framework gateway infras app; do
+            if grep -Eq '^[[:space:]]*google\.golang\.org/grpc[[:space:]]' "$module/go.mod"; then
+              (cd "$module" && GOWORK=off go get google.golang.org/grpc@v1.83.2)
+            fi
+          done
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('tools/dependency-policy.json')
+          policy = json.loads(path.read_text())
+          entries = [item for item in policy['requiredModules'] if item['path'] == 'google.golang.org/grpc']
+          assert len(entries) == 1 and entries[0]['version'] == 'v1.82.1'
+          entries[0]['version'] = 'v1.83.2'
+          path.write_text(json.dumps(policy, indent=2) + '\n')
+          status = Path('docs/STATUS.md')
+          text = status.read_text()
+          heading = '## gRPC transport security dependency — issue #217'
+          assert heading not in text
+          note = '''## gRPC transport security dependency — issue #217
+
+          The product dependency candidate repairs the reachable gRPC findings
+          `GO-2026-6443` and `GO-2026-6348` observed in PR #216's exact-head CI and
+          Production runs by selecting `google.golang.org/grpc@v1.83.2` and its
+          required module graph. This is a separate security prerequisite for #200,
+          not a structural-migration-engine change or the devruntime PID issue #213.
+
+          Exact-candidate and actual-main acceptance remain owned by issue #217 and
+          its linked PR/run receipts. The security gate, vulnerability database,
+          generated-code checks and consumer runtime pins are not weakened or changed.
+          No production deployment or consumer runtime upgrade is claimed.
+
+          '''
+          text = text.replace('## Current pressure frontier\n', note + '## Current pressure frontier\n', 1)
+          assert heading in text
+          status.write_text(text)
+          PY
+          make tidy
+          make dependency-check
+          test "$(go list -m -f '{{.Version}}' google.golang.org/grpc)" = v1.83.2
+          python3 - <<'PY'
+          import subprocess
+          allowed = {'tools/dependency-policy.json', 'go.work.sum', 'docs/STATUS.md'}
+          allowed.update(f'{module}/go.{extension}' for module in ('pkg','framework','gateway','infras','app') for extension in ('mod','sum'))
+          changed = set(subprocess.check_output(['git','diff','--name-only'], text=True).splitlines())
+          assert changed and changed <= allowed, sorted(changed - allowed)
+          assert not subprocess.check_output(['git','ls-files','--others','--exclude-standard'], text=True).strip()
+          PY
+          git diff --check
+          git add pkg/go.mod pkg/go.sum framework/go.mod framework/go.sum gateway/go.mod gateway/go.sum infras/go.mod infras/go.sum app/go.mod app/go.sum tools/dependency-policy.json docs/STATUS.md
+          if git ls-files --error-unmatch go.work.sum >/dev/null 2>&1; then git add go.work.sum; fi
+          git commit -m 'fix(deps): upgrade gRPC transport security baseline' -m 'Fixes #217. Separate security prerequisite for #200; preserve framework APIs, persistence, generators and migration rules.'
+          make tidy
+          status="$(git status --porcelain --untracked-files=all)"
+          test -z "$status"
+          git show --stat --oneline HEAD
+      - name: Verify full vulnerability scan before publishing candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          make vuln
+          make dependency-check
+          status="$(git status --porcelain --untracked-files=all)"
+          test -z "$status"
+      - name: Publish only the isolated formal candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$BASE_SHA"
+          git diff --exit-code "$BASE_SHA" HEAD -- .github/workflows server
+          git push origin "HEAD:refs/heads/$PRODUCT_BRANCH"
+          candidate="$(git rev-parse HEAD)"
+          remote="$(git ls-remote --heads origin "refs/heads/$PRODUCT_BRANCH" | cut -f1)"
+          test "$remote" = "$candidate"
+          printf 'candidate=%s\ntree=%s\n' "$candidate" "$(git rev-parse HEAD^{tree})"
+          printf 'Formal candidate `%s`, tree `%s`; full vulnerability preflight and dependency checks passed. Standard PR CI/Production acceptance still required.\n' "$candidate" "$(git rev-parse HEAD^{tree})" >> "$GITHUB_STEP_SUMMARY"
