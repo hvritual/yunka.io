@@ -1,0 +1,390 @@
+name: devruntime-pid-delivery-control
+
+on:
+  push:
+    branches: ['control/devruntime-pid-delivery-20260916']
+    paths: ['.github/workflows/devruntime-pid-delivery-control.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: devruntime-pid-delivery-control
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.repository == 'hvritual/yunka.io'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BASE_SHA: 061f35e1aed8cc86b2173cbe067c6f01ee21d3d3
+      TASK_BRANCH: fix/devruntime-pid-publication
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 061f35e1aed8cc86b2173cbe067c6f01ee21d3d3
+          fetch-depth: 0
+      - name: Bootstrap and load locked Go
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          git status --short --branch
+          git branch --show-current
+          git remote -v
+          for file in AGENTS.md PROJECT_MEMORY.md docs/STATUS.md docs/ENGINEERING_QUALITY_RULES.md; do
+            cat "$file"
+          done
+          source tools/toolchain.env
+          echo "go_version=${GO_VERSION:?}" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache-dependency-path: |
+            pkg/go.sum
+            framework/go.sum
+            gateway/go.sum
+            infras/go.sum
+            app/go.sum
+      - name: Create test-only repair with Runner-local Git
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(git status --porcelain --untracked-files=all)"
+          test -z "$status"
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$BASE_SHA"
+          existing="$(git ls-remote --heads origin "refs/heads/$TASK_BRANCH")"
+          test -z "$existing"
+          test "$(git hash-object pkg/devruntime/process_group_unix_test.go)" = aef2fda3efab727123f688c1b9dd459c56d4c2a9
+          git config user.name 'Yunka Delivery'
+          git config user.email 'quality-delivery@example.invalid'
+          git switch -c "$TASK_BRANCH" "$BASE_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('pkg/devruntime/process_group_unix_test.go')
+          source = path.read_text()
+          source = source.replace('c117ProcessGroupHelperEnv', 'processGroupHelperEnv')
+          source = source.replace('GO_WANT_C117_PROCESS_GROUP_HELPER', 'GO_WANT_PROCESS_GROUP_HELPER')
+          source = source.replace('c117ProcessGroupHelperCommand', 'processGroupHelperCommand')
+          source = source.replace('TestC117ProcessGroupHelper', 'TestProcessGroupHelper')
+          source = source.replace('"-test.run=TestProcessGroupHelper"', '"-test.run=^TestProcessGroupHelper$"')
+          source = source.replace('\t"context"\n', '\t"context"\n\t"errors"\n\t"fmt"\n', 1)
+          source = source.replace('\t"strconv"\n', '\t"strconv"\n\t"strings"\n', 1)
+          source = source.replace('\t"testing"\n', '\t"testing"\n\t"testing/synctest"\n', 1)
+          before = '''\tresult := make(chan error, 1)
+          \tgo func() {
+          \t\tresult <- Run(ctx, plan, RunOptions{Root: root, Environ: append(os.Environ(), processGroupHelperEnv+"=1")})
+          \t}()
+          \twaitForRuntimeStates(t, root, []string{"tree"}, ProcessRunning)
+          \twaitForC5HelperFiles(t, parentReady, childPID)
+
+          \tpidBytes, err := os.ReadFile(childPID)
+          \tif err != nil {
+          \t\tt.Fatal(err)
+          \t}
+          \tchild, err := strconv.Atoi(string(pidBytes))
+          \tif err != nil {
+          \t\tt.Fatal(err)
+          \t}'''
+          after = '''\tresult := make(chan error, 1)
+          \tfinished := make(chan struct{})
+          \tgo func() {
+          \t\tdefer close(finished)
+          \t\tresult <- Run(ctx, plan, RunOptions{Root: root, Environ: append(os.Environ(), processGroupHelperEnv+"=1")})
+          \t}()
+          \t// Readiness failures must not leave the owned process tree running.
+          \tt.Cleanup(func() {
+          \t\tcancel()
+          \t\tselect {
+          \t\tcase <-finished:
+          \t\tcase <-time.After(5 * time.Second):
+          \t\t\tt.Error("runtime cleanup did not finish")
+          \t\t}
+          \t})
+          \twaitForRuntimeStates(t, root, []string{"tree"}, ProcessRunning)
+          \twaitForC5HelperFiles(t, parentReady)
+
+          \tpublication, stopPublication := context.WithTimeout(ctx, 5*time.Second)
+          \tdefer stopPublication()
+          \tchild, err := waitForDescendantPID(publication, childPID)
+          \tif err != nil {
+          \t\tt.Fatal(err)
+          \t}'''
+          assert source.count(before) == 1
+          source = source.replace(before, after, 1)
+          before = '''\t\tif err := os.WriteFile(args[1], []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
+          \t\t\tos.Exit(3)
+          \t\t}
+          \t\tchannel := make(chan os.Signal, 1)
+          \t\tsignal.Notify(channel, syscall.SIGTERM)'''
+          after = '''\t\tchannel := make(chan os.Signal, 1)
+          \t\tsignal.Notify(channel, syscall.SIGTERM)
+          \t\t// A complete PID record also promises that SIGTERM can be received.
+          \t\t// The final newline is the publication marker, not file creation.
+          \t\tif err := os.WriteFile(args[1], []byte(strconv.Itoa(os.Getpid())+"\\n"), 0o600); err != nil {
+          \t\t\tos.Exit(3)
+          \t\t}'''
+          assert source.count(before) == 1
+          source = source.replace(before, after, 1)
+          source += r'''
+          // waitForDescendantPID accepts only a completed record from the helper.
+          // File creation and even a numeric prefix can be observed before a write
+          // finishes. Invalid completed records fail instead of becoming signal targets.
+          func waitForDescendantPID(ctx context.Context, path string) (int, error) {
+          	ticker := time.NewTicker(10 * time.Millisecond)
+          	defer ticker.Stop()
+          	for {
+          		if err := ctx.Err(); err != nil {
+          			return 0, fmt.Errorf("wait for descendant PID %s: %w", path, err)
+          		}
+          		data, err := os.ReadFile(path)
+          		if err != nil && !errors.Is(err, os.ErrNotExist) {
+          			return 0, fmt.Errorf("read descendant PID %s: %w", path, err)
+          		}
+          		if err == nil && strings.HasSuffix(string(data), "\n") {
+          			record := strings.TrimSuffix(string(data), "\n")
+          			pid, parseErr := strconv.Atoi(record)
+          			if parseErr != nil || pid <= 0 || strconv.Itoa(pid) != record {
+          				return 0, fmt.Errorf("invalid descendant PID record %q in %s", data, path)
+          			}
+          			return pid, nil
+          		}
+          		select {
+          		case <-ctx.Done():
+          			return 0, fmt.Errorf("wait for descendant PID %s, last record %q: %w", path, data, ctx.Err())
+          		case <-ticker.C:
+          		}
+          	}
+          }
+
+          func TestWaitForDescendantPIDRequiresCompletePublication(t *testing.T) {
+          	synctest.Test(t, func(t *testing.T) {
+          		path := filepath.Join(t.TempDir(), "child.pid")
+          		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+          		defer cancel()
+          		var pid int
+          		var err error
+          		done := make(chan struct{})
+          		go func() {
+          			defer close(done)
+          			pid, err = waitForDescendantPID(ctx, path)
+          		}()
+          		synctest.Wait()
+          		select {
+          		case <-done:
+          			t.Fatalf("returned before PID file existed: pid=%d err=%v", pid, err)
+          		default:
+          		}
+          		for _, incomplete := range []string{"", "12", "12345"} {
+          			if err := os.WriteFile(path, []byte(incomplete), 0o600); err != nil {
+          				t.Fatal(err)
+          			}
+          			// Fake time advances the reader; Wait makes the assertion independent
+          			// of OS scheduling rather than hoping a wall-clock sleep is long enough.
+          			time.Sleep(20 * time.Millisecond)
+          			synctest.Wait()
+          			select {
+          			case <-done:
+          				t.Fatalf("returned before PID publication completed: record=%q pid=%d err=%v", incomplete, pid, err)
+          			default:
+          			}
+          		}
+          		if err := os.WriteFile(path, []byte("12345\n"), 0o600); err != nil {
+          			t.Fatal(err)
+          		}
+          		time.Sleep(20 * time.Millisecond)
+          		synctest.Wait()
+          		select {
+          		case <-done:
+          			if err != nil || pid != 12345 {
+          				t.Fatalf("completed PID: pid=%d err=%v", pid, err)
+          			}
+          		default:
+          			t.Fatal("complete PID publication was not observed")
+          		}
+          	})
+          }
+
+          func TestWaitForDescendantPIDRejectsInvalidRecords(t *testing.T) {
+          	for _, record := range []string{"\n", "0\n", "-1\n", "+12\n", " 12\n", "012\n", "bad\n", "12\n34\n"} {
+          		t.Run(strconv.Quote(record), func(t *testing.T) {
+          			synctest.Test(t, func(t *testing.T) {
+          				path := filepath.Join(t.TempDir(), "child.pid")
+          				if err := os.WriteFile(path, []byte(record), 0o600); err != nil {
+          					t.Fatal(err)
+          				}
+          				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+          				defer cancel()
+          				pid, err := waitForDescendantPID(ctx, path)
+          				if pid != 0 || err == nil || !strings.Contains(err.Error(), "invalid descendant PID record") {
+          					t.Fatalf("invalid record was not rejected: pid=%d err=%v", pid, err)
+          				}
+          			})
+          		})
+          	}
+          }
+
+          func TestWaitForDescendantPIDBoundsIncompletePublication(t *testing.T) {
+          	for _, record := range []string{"absent", "", "12345"} {
+          		t.Run(strconv.Quote(record), func(t *testing.T) {
+          			synctest.Test(t, func(t *testing.T) {
+          				path := filepath.Join(t.TempDir(), "child.pid")
+          				if record != "absent" {
+          					if err := os.WriteFile(path, []byte(record), 0o600); err != nil {
+          						t.Fatal(err)
+          					}
+          				}
+          				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+          				defer cancel()
+          				start := time.Now()
+          				pid, err := waitForDescendantPID(ctx, path)
+          				if pid != 0 || !errors.Is(err, context.DeadlineExceeded) || time.Since(start) != 50*time.Millisecond {
+          					t.Fatalf("unbounded or accepted incomplete PID: pid=%d err=%v elapsed=%v", pid, err, time.Since(start))
+          				}
+          			})
+          		})
+          	}
+          }
+
+          func TestWaitForDescendantPIDPropagatesReadErrors(t *testing.T) {
+          	synctest.Test(t, func(t *testing.T) {
+          		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+          		defer cancel()
+          		pid, err := waitForDescendantPID(ctx, t.TempDir())
+          		var pathError *os.PathError
+          		if pid != 0 || !errors.As(err, &pathError) || errors.Is(err, context.DeadlineExceeded) {
+          			t.Fatalf("read error was not propagated: pid=%d err=%v", pid, err)
+          		}
+          	})
+          }
+
+          func TestWaitForDescendantPIDHonorsCancellation(t *testing.T) {
+          	path := filepath.Join(t.TempDir(), "child.pid")
+          	if err := os.WriteFile(path, []byte("12345\n"), 0o600); err != nil {
+          		t.Fatal(err)
+          	}
+          	ctx, cancel := context.WithCancel(context.Background())
+          	cancel()
+          	pid, err := waitForDescendantPID(ctx, path)
+          	if pid != 0 || !errors.Is(err, context.Canceled) {
+          		t.Fatalf("canceled wait was not stopped: pid=%d err=%v", pid, err)
+          	}
+          }
+          '''
+          path.write_text(source)
+          status = Path('docs/STATUS.md')
+          text = status.read_text()
+          before = '''**State: implemented in this tree. Exact-candidate and actual-main acceptance
+          are recorded by [PR #216](https://github.com/hvritual/yunka.io/pull/216) and
+          [issue #200](https://github.com/hvritual/yunka.io/issues/200).**'''
+          after = '''**State: COMPLETE / QUALIFIED / MERGED through PR #216.**
+          Final candidate `6823b8513b4981516708f4f20794416c0c03af4b` and accepted
+          main `061f35e1aed8cc86b2173cbe067c6f01ee21d3d3` share tree
+          `ea0b3d336ef4a21cae254894e4d899d9673d9bc3`. All seven applicable candidate
+          workflows passed. Separate main CI `35057115771`, Production `35057115818`,
+          source-policy `35057115779` and template `35057115791` passed.
+          [The acceptance receipt](https://github.com/hvritual/yunka.io/issues/200#issuecomment-5692278959)
+          records the exact scope and completed issue readback; it is historical
+          qualification evidence, not a claim about every later commit.'''
+          assert text.count(before) == 1
+          text = text.replace(before, after, 1)
+          before = '''PR #216 must establish fresh final-head gates after synchronization. Historical
+          green results are not substituted for that final acceptance.'''
+          after = '''PR #216 subsequently established fresh final-head and actual-main acceptance
+          as recorded above. The original failure remains historical evidence rather
+          than a current unresolved security blocker.'''
+          assert text.count(before) == 1
+          text = text.replace(before, after, 1)
+          anchor = '## Current pressure frontier\n'
+          assert text.count(anchor) == 1
+          section = '''## Descendant PID fixture reliability — issue #213
+
+          The process-group shutdown fixture now waits for a complete newline-terminated,
+          positive PID record rather than treating file existence as readiness. The
+          helper registers SIGTERM handling before publishing that record. Early failure
+          cancels and joins the owned runtime; the real descendant-shutdown assertion
+          remains in place. Production process signaling and timeout behavior are unchanged.
+
+          `TestWaitForDescendantPIDRequiresCompletePublication` uses fake time to expose
+          absent, empty and partially written PID records deterministically. Companion
+          tests cover malformed/non-positive records, bounded waiting, cancellation and
+          read-error propagation. Existing standard test/race gates execute these tests;
+          no verifier, dependency, generated source or consumer pin is changed.
+
+          Exact candidate, repetition/negative-control results, integration identity and
+          actual-main acceptance are recorded separately on
+          [issue #213](https://github.com/hvritual/yunka.io/issues/213) and its linked PR.
+          Source presence alone is not a claim that those delivery gates have passed.
+          This repair does not close unrelated AG work or other repository issues.
+
+          '''
+          text = text.replace(anchor, section + anchor, 1)
+          status.write_text(text)
+          PY
+          gofmt -w pkg/devruntime/process_group_unix_test.go
+          git diff --check
+          python3 - <<'PY'
+          import os, subprocess
+          expected = {'pkg/devruntime/process_group_unix_test.go', 'docs/STATUS.md'}
+          actual = set(subprocess.check_output(['git','diff','--name-only',os.environ['BASE_SHA']], text=True).splitlines())
+          assert actual == expected, actual
+          PY
+          git add pkg/devruntime/process_group_unix_test.go docs/STATUS.md
+          git commit -m 'test(devruntime): wait for complete descendant PID publication' -m 'Fixes #213. Test-only readiness protocol and deterministic regressions; preserve production shutdown semantics. Reconcile accepted #200 status from its existing receipt.'
+          git show --stat --oneline HEAD
+          echo "candidate=$(git rev-parse HEAD) tree=$(git rev-parse HEAD^{tree})"
+      - name: Deterministic regressions and real process-group stress
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd pkg
+          go test ./devruntime -run '^TestWaitForDescendantPID' -count=1 -v
+          go test ./devruntime -run '^TestRunShutdownTerminatesDescendantProcessGroup$' -count=100 -timeout=10m
+          go test -race ./devruntime -run '^Test(RunShutdownTerminatesDescendantProcessGroup|WaitForDescendantPID)' -count=20 -timeout=10m
+          go test ./devruntime -count=1
+          go vet ./devruntime
+      - name: Prove regression rejects existence-only PID readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          negative="$RUNNER_TEMP/pid-readiness-negative"
+          git worktree add --detach "$negative" HEAD
+          NEGATIVE_ROOT="$negative" python3 - <<'PY'
+          import os
+          from pathlib import Path
+          path = Path(os.environ['NEGATIVE_ROOT']) / 'pkg/devruntime/process_group_unix_test.go'
+          source = path.read_text()
+          before = 'if err == nil && strings.HasSuffix(string(data), "\\n") {'
+          assert source.count(before) == 1
+          path.write_text(source.replace(before, 'if err == nil {', 1))
+          PY
+          set +e
+          (cd "$negative/pkg" && go test ./devruntime -run '^TestWaitForDescendantPIDRequiresCompletePublication$' -count=1 -v) > "$RUNNER_TEMP/pid-readiness-negative.log" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/pid-readiness-negative.log"
+          test "$status" -ne 0
+          grep -F -- 'returned before PID publication completed' "$RUNNER_TEMP/pid-readiness-negative.log"
+          grep -F -- '--- FAIL: TestWaitForDescendantPIDRequiresCompletePublication' "$RUNNER_TEMP/pid-readiness-negative.log"
+          echo 'PASS: existence-only readiness mutant rejected by the permanent regression; candidate worktree was not modified'
+      - name: Publish exact clean candidate without moving main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          status="$(git status --porcelain --untracked-files=all)"
+          test -z "$status"
+          remote_main="$(git ls-remote --heads origin refs/heads/main | cut -f1)"
+          test "$remote_main" = "$BASE_SHA"
+          existing="$(git ls-remote --heads origin "refs/heads/$TASK_BRANCH")"
+          test -z "$existing"
+          git merge-base --is-ancestor "$BASE_SHA" HEAD
+          git diff --exit-code "$BASE_SHA" HEAD -- . ':!pkg/devruntime/process_group_unix_test.go' ':!docs/STATUS.md'
+          git push origin "HEAD:refs/heads/$TASK_BRANCH"
+          test "$(git ls-remote --heads origin "refs/heads/$TASK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
+          echo "candidate=$(git rev-parse HEAD) tree=$(git rev-parse HEAD^{tree})"
+          echo 'Formal candidate published; normal PR gates and actual-main acceptance remain required.'
