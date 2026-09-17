@@ -3,6 +3,7 @@ package add
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -219,7 +220,22 @@ func scaffoldProject(t *testing.T, files map[string]string) string {
 	for relative, contents := range files {
 		mustWriteFile(t, filepath.Join(root, filepath.FromSlash(relative)), contents)
 	}
+	mustGit(t, root, "init", "-q")
+	mustGit(t, root, "config", "user.name", "Yunka Test")
+	mustGit(t, root, "config", "user.email", "yunka-test@example.invalid")
+	mustGit(t, root, "add", "-A")
+	mustGit(t, root, "commit", "-q", "-m", "baseline")
 	return root
+}
+
+func mustGit(t *testing.T, root string, args ...string) string {
+	t.Helper()
+	command := exec.Command("git", append([]string{"-C", root}, args...)...)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s: %v: %s", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
+	}
+	return strings.TrimSpace(string(output))
 }
 
 func typedDomainProto(domain, pkg string) string {

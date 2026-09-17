@@ -138,6 +138,11 @@ func newPressureFixture(t *testing.T) pressureFixture {
 	if _, err := add.AddApplication(add.ApplicationOptions{Root: root, Key: "tenant/lifecycle"}); err != nil {
 		t.Fatalf("add application: %v", err)
 	}
+	gitPressure(t, root, "init")
+	gitPressure(t, root, "config", "user.email", "ax7-pressure@example.invalid")
+	gitPressure(t, root, "config", "user.name", "AX7 Pressure")
+	gitPressure(t, root, "add", "-A")
+	gitPressure(t, root, "commit", "-m", "AX7 pressure authoring seed")
 	for _, operation := range []struct {
 		id, useCase string
 	}{
@@ -159,9 +164,6 @@ func newPressureFixture(t *testing.T) pressureFixture {
 
 	fixture := pressureFixture{Root: root, ProtoPath: protoPath, ContractPath: DefaultChangeContractPath}
 	generatePressureProject(t, fixture)
-	gitPressure(t, root, "init")
-	gitPressure(t, root, "config", "user.email", "ax7-pressure@example.invalid")
-	gitPressure(t, root, "config", "user.name", "AX7 Pressure")
 	gitPressure(t, root, "add", "-A")
 	gitPressure(t, root, "commit", "-m", "AX7 pressure baseline")
 

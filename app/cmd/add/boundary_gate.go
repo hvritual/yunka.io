@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os/exec"
 	"strings"
 
 	"github.com/hvritual/yunka.io/pkg/contract"
@@ -27,6 +28,10 @@ func operationBoundaryIntent(options OperationOptions) *contract.BoundaryIntent 
 }
 
 func evaluateOperationBoundary(root, sourcePath, domain, application, packageName, rpcName, requestType, responseType string, options OperationOptions) (*OperationBoundaryDecision, error) {
+	baseSHA, err := resolveBoundaryBaseSHA(root)
+	if err != nil {
+		return nil, fmt.Errorf("add operation: bind boundary decision to Git HEAD: %w", err)
+	}
 	snapshot, err := projectflow.DescribeContractSourceSnapshot(context.Background(), projectflow.Options{Root: root, ProtoPaths: append([]string(nil), options.ProtoPaths...)})
 	if err != nil {
 		return nil, fmt.Errorf("add operation: compile current canonical boundary facts: %w", err)
@@ -102,11 +107,50 @@ func evaluateOperationBoundary(root, sourcePath, domain, application, packageNam
 	}
 	after.Normalize()
 
-	decision, err := boundarycore.EvaluateAddition(boundarycore.AdditionRequest{Application: applicationKey, OperationID: options.OperationID}, before, after)
+	currentSHA, err := resolveBoundaryBaseSHA(root)
+	if err != nil {
+		return nil, fmt.Errorf("add operation: re-read Git HEAD before boundary decision: %w", err)
+	}
+	if currentSHA != baseSHA {
+		return nil, fmt.Errorf("add operation: Git HEAD changed while boundary evidence was being evaluated; base=%s current=%s", baseSHA, currentSHA)
+	}
+	decision, err := boundarycore.EvaluateAddition(boundarycore.AdditionRequest{BaseSHA: baseSHA, Application: applicationKey, OperationID: options.OperationID}, before, after)
 	if err != nil {
 		return nil, err
 	}
 	return &decision, nil
+}
+
+func resolveBoundaryBaseSHA(root string) (string, error) {
+	command := exec.Command("git", "-C", root, "rev-parse", "--verify", "HEAD^{commit}")
+	output, err := command.CombinedOutput()
+	if err != nil {
+		detail := strings.TrimSpace(string(output))
+		if detail == "" {
+			detail = err.Error()
+		}
+		return "", fmt.Errorf("resolve exact Git HEAD: %s", detail)
+	}
+	sha := strings.TrimSpace(string(output))
+	if !exactBoundaryCommitSHA(sha) {
+		return "", fmt.Errorf("Git HEAD is not an exact lowercase commit SHA: %q", sha)
+	}
+	return sha, nil
+}
+
+func exactBoundaryCommitSHA(value string) bool {
+	if len(value) != 40 && len(value) != 64 {
+		return false
+	}
+	if strings.Trim(value, "0") == "" {
+		return false
+	}
+	for _, c := range value {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func boundaryAllowsMutation(value *OperationBoundaryDecision) bool {

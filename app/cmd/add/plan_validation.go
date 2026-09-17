@@ -15,6 +15,16 @@ func RevalidateOperationPlan(root string, candidate Report) (Report, error) {
 	if candidate.ExplicitSemantics == nil {
 		return Report{}, fmt.Errorf("add operation plan: explicitSemantics are required")
 	}
+	if candidate.BoundaryDecision == nil {
+		return Report{}, fmt.Errorf("add operation plan: boundaryDecision is required")
+	}
+	currentSHA, err := resolveBoundaryBaseSHA(root)
+	if err != nil {
+		return Report{}, fmt.Errorf("add operation plan: resolve current Git HEAD: %w", err)
+	}
+	if candidate.BoundaryDecision.BaseSHA != currentSHA {
+		return Report{}, fmt.Errorf("add operation plan: stale boundary decision base; plan=%s current=%s", candidate.BoundaryDecision.BaseSHA, currentSHA)
+	}
 	identity := candidate.Identity
 	for _, key := range []string{"domain", "application", "operationId", "useCase", "rpc", "requestType", "responseType"} {
 		if strings.TrimSpace(identity[key]) == "" {
