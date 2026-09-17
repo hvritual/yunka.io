@@ -1,208 +1,202 @@
-run=35202554215
+run=35202770663
 product_expected=01cf8157d8660e816cdc40cd5d36a2ff618a3dc8
 
-== native materialization ==
+== tools/operation_growth_native_last.log ==
 operation-growth native patch prepared
+boundary validation compatibility fixes prepared
 
-== focused qualification ==
+== tools/operation_growth_native_qualification.log ==
 toolchain-check: go=1.25.13 protoc=3.21.12 govulncheck=v1.7.0
---- FAIL: TestIssue161BoundaryIntentGeneratedWireAndValidation (0.00s)
-    boundary_intent_test.go:117: singular message merge lost: (*contract.OperationDeclaration)(nil) boundary intent: exactly one of aggregate or aggregate_not_applicable_reason is required
---- FAIL: TestIssue161BoundaryIntentLegacyAndInvalidManifest (0.00s)
-    boundary_intent_test.go:161: invalid load=<nil>
---- FAIL: TestIssue160InventorySharedClosureMoveAndDeterminism (0.01s)
-    inventory_provenance_test.go:109: typed manifest not v4: {
-          "schemaVersion": 5,
-          "files": [
-            {
-              "name": "alpha/common.proto",
-              "package": "alpha.v1",
-              "syntax": "proto3",
-              "dependencies": [
-                "shared/model.proto"
-              ]
-            },
-            {
-              "name": "alpha/service.proto",
-              "package": "alpha.v1",
-              "syntax": "proto3",
-              "dependencies": [
-                "alpha/common.proto"
-              ],
-              "externalDependencies": [
-                "yunka/dsl/v1/options.proto"
-              ],
-              "domain": {
-                "name": "alpha",
-                "version": "v1"
-              }
-            },
-            {
-              "name": "beta/common.proto",
-              "package": "beta.v1",
-              "syntax": "proto3"
-            },
-            {
-              "name": "beta/service.proto",
-              "package": "beta.v1",
-              "syntax": "proto3",
-              "dependencies": [
-                "beta/common.proto"
-              ],
-              "externalDependencies": [
-                "yunka/dsl/v1/options.proto"
-              ],
-              "domain": {
-                "name": "beta",
-                "version": "v1"
-              }
-            },
-            {
-              "name": "shared/model.proto",
-              "package": "shared.v1",
-              "syntax": "proto3"
-            }
-          ],
-          "messages": [
-            {
-              "name": "Request",
-              "fullName": "alpha.v1.Request",
-              "sourceFile": "alpha/common.proto",
-              "fields": [
-                {
-                  "name": "metadata",
-                  "jsonName": "metadata",
-                  "number": 1,
-                  "kind": "map",
-                  "type": "map",
-                  "map": true,
-                  "mapKeyType": "string",
-                  "mapValueKind": "message",
-                  "mapValueType": "shared.v1.Metadata"
-                }
-              ],
-              "dto": {
-                "kind": "input"
-              }
-            },
-            {
-              "name": "Response",
-              "fullName": "alpha.v1.Response",
-              "sourceFile": "alpha/common.proto",
-              "fields": [
-                {
-                  "name": "kind",
-                  "jsonName": "kind",
-                  "number": 1,
-                  "kind": "enum",
-                  "type": "shared.v1.Metadata.Kind"
-                }
-              ],
-              "dto": {
-                "kind": "output"
-              }
-            },
-            {
-              "name": "Request",
-              "fullName": "beta.v1.Request",
-              "sourceFile": "beta/common.proto",
-              "fields": null,
-              "dto": {
-                "kind": "input"
-              }
-            },
-            {
-              "name": "Response",
-              "fullName": "beta.v1.Response",
-              "sourceFile": "beta/common.proto",
-              "fields": null,
-              "dto": {
-                "kind": "output"
-              }
-            },
-            {
-              "name": "Metadata",
-              "fullName": "shared.v1.Metadata",
-              "sourceFile": "shared/model.proto",
-              "fields": [
-                {
-                  "name": "kind",
-                  "jsonName": "kind",
-                  "number": 1,
-                  "kind": "enum",
-                  "type": "shared.v1.Metadata.Kind"
-                }
-              ]
-            }
-          ],
-          "enums": [
-            {
-              "name": "Kind",
-              "fullName": "shared.v1.Metadata.Kind",
-              "sourceFile": "shared/model.proto",
-              "values": [
-                {
-                  "name": "UNKNOWN",
-                  "number": 0
-                },
-                {
-                  "name": "TEXT",
-                  "number": 1
-                }
-              ]
-            }
-          ],
-          "services": [
-            {
-              "name": "API",
-              "fullName": "alpha.v1.API",
-              "sourceFile": "alpha/service.proto",
-              "domain": "alpha",
-              "application": {
-                "name": "management"
-              },
-              "methods": [
-                {
-                  "name": "Echo",
-                  "fullName": "alpha.v1.API.Echo",
-                  "sourceFile": "alpha/service.proto",
-                  "request": "alpha.v1.Request",
-                  "response": "alpha.v1.Response",
-                  "operation": {
-                    "id": "alpha.echo",
-                    "useCase": "echo",
-                    "permissionMode": "all",
-                    "public": true
-                  }
-                }
-              ]
-            },
-            {
-              "name": "API",
-              "fullName": "beta.v1.API",
-              "sourceFile": "beta/service.proto",
-              "domain": "beta",
-              "application": {
-                "name": "management"
-              },
-              "methods": [
-                {
-                  "name": "Echo",
-                  "fullName": "beta.v1.API.Echo",
-                  "sourceFile": "beta/service.proto",
-                  "request": "beta.v1.Request",
-                  "response": "beta.v1.Response",
-                  "operation": {
-                    "id": "beta.echo",
-                    "useCase": "echo",
-                    "permissionMode": "all",
-                    "public": true
-                  }
-                }
-              ]
-            }
-          ]
-        }
+ok  	github.com/hvritual/yunka.io/pkg/contract	0.189s
+ok  	yunka.io/app/cmd/boundarycore	0.021s
+ok  	yunka.io/app/cmd/add	0.419s
+--- FAIL: TestC114QualificationRealBinaryFastFeedback (0.01s)
+    fast_feedback_qualification_test.go:69: C11.4 qualification requires a clean tracked worktree before build:
+        M app/cmd/add/command.go
+         M app/cmd/add/helpers.go
+         M app/cmd/add/main_test.go
+         M app/cmd/add/operation.go
+         M app/cmd/add/plan_semantics.go
+         M app/cmd/add/plan_validation.go
+         M app/cmd/add/semantics.go
+         M app/cmd/audit/command.go
+         M app/cmd/audit/quality_integration_test.go
+         M app/cmd/change/changeset.go
+         M app/cmd/change/changeset_reconcile.go
+         M app/cmd/change/git_private_state_test.go
+         M app/cmd/change/quality_debt.go
+         M app/cmd/change/quality_debt_consumer_qualification_test.go
+         M app/cmd/change/quality_debt_test.go
+         M app/cmd/change/quality_migration.go
+         M app/cmd/change/quality_migration_check.go
+         M app/cmd/change/quality_migration_test.go
+         M app/cmd/change/quality_waiver_command.go
+         M app/cmd/change/reconcile_regression_test.go
+         M app/cmd/change/review_quality_debt.go
+         M app/cmd/change/semantic.go
+         M app/cmd/change/verify.go
+         M contracts/proto/yunka/dsl/v1/options.proto
+         M pkg/contract/artifact.go
+         M pkg/contract/assembly_codegen.go
+         M pkg/contract/assembly_module_codegen_test.go
+         M pkg/contract/c10_2_runtime_test.go
+         M pkg/contract/c9_custom_verb_codegen_test.go
+         M pkg/contract/c9_edge_owned_capability_test.go
+         M pkg/contract/diff_test.go
+         M pkg/contract/dsl_descriptor.go
+         M pkg/contract/inventory_provenance_test.go
+         M pkg/contract/lint.go
+         M pkg/contract/model.go
+         M pkg/contract/operation_plan.go
+         M pkg/contractdsl/v1/options.pb.go
 FAIL
-FAIL	github.com/hvritual/yunka.io/pkg/contract	0.148s
+FAIL	yunka.io/app/cmd/projectflow	2.462s
+--- FAIL: TestT4CreateChangeSetBindsLegacyProtobufOutputsAndNormalizesAPIKey (0.00s)
+    changeset_biz_regression_test.go:13: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestT4CreateChangeSetCanonicalizesServiceAuthenticationEndToEnd (0.00s)
+    changeset_biz_regression_test.go:44: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestT4CreateChangeSetRejectsSpoofedLegacyProtobufOutput (0.00s)
+    changeset_biz_regression_test.go:70: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestT4CreateChangeSetStrictManifestBindsOnlyCurrentSourceOutputs (0.01s)
+    changeset_biz_regression_test.go:83: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestReconcileChangeSetAcceptsMatchingExistingAndCreateSubjects (0.01s)
+    changeset_reconcile_test.go:11: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestReconcileChangeSetRejectsCreateSemanticDriftFromPlannedIntent (0.01s)
+    changeset_reconcile_test.go:32: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestReconcileChangeSetRejectsUndeclaredOperationDrift (0.00s)
+    changeset_reconcile_test.go:56: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestT4RemediationBindingRejectsUnknownFinding (0.01s)
+    changeset_remediation_test.go:14: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestT4RemediationCheckRejectsRemainingTarget (0.00s)
+    changeset_remediation_test.go:22: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestT4RemediationCheckRejectsReplacementWithNewDebt (0.01s)
+    changeset_remediation_test.go:36: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestT4RemediationCheckPassesOnlyWhenFindingIsActuallyFixed (0.01s)
+    changeset_remediation_test.go:56: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestT4RemediationBindingIsDigestBoundAndStrict (0.00s)
+    changeset_remediation_test.go:74: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestBuildChangeSetComposesExistingV1AndCreatePlanOnOneBase (0.00s)
+    changeset_test.go:14: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestBuildChangeSetRejectsDuplicateSubjectOperation (0.00s)
+    changeset_test.go:64: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestBuildChangeSetRejectsTamperedCreatePlanShape (0.00s)
+    changeset_test.go:72: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestIssue160SourceScopeReadsFreshSemanticAndImmutableBase (0.39s)
+    --- FAIL: TestIssue160SourceScopeReadsFreshSemanticAndImmutableBase/relative-external-include (0.00s)
+        contract_sources_test.go:211: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+            tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestIssue160SourceScopeMultiSubjectAndCreate (0.21s)
+    --- FAIL: TestIssue160SourceScopeMultiSubjectAndCreate/create-with-unrelated-edit (0.09s)
+        contract_sources_test.go:285: change set begin: revalidate create plan /tmp/TestIssue160SourceScopeMultiSubjectAndCreatecreate-with-unrelat3456748062/001/.git/create.json: add operation plan: add operation: Operation Growth boundary outcome=architecture_review_required; review the plan boundaryDecision before changing the Service
+{
+  "schemaVersion": 2,
+  "baseSha": "33246b8fbf5cb76e1bd15d81aedb6d28f24997f6",
+  "reconciliation": {
+    "schemaVersion": 2,
+    "baseSha": "33246b8fbf5cb76e1bd15d81aedb6d28f24997f6",
+    "operationId": "change-set",
+    "changes": [
+      {
+        "status": "M",
+        "path": "contracts/proto/other.proto",
+        "class": "outside"
+      }
+    ],
+    "violations": [
+      {
+        "kind": "contract-declaration",
+        "path": "contracts/proto/other.proto",
+        "detail": "message scope.v1.OtherRequest is outside declared Operation DTO references"
+      },
+      {
+        "kind": "contract-source",
+        "path": "contracts/proto/other.proto",
+        "detail": "protobuf file is not a source of the declared base Operation/DTO graph; imports, explicit path-array edits and current new references do not widen this bound"
+      },
+      {
+        "kind": "scope",
+        "path": "contracts/proto/other.proto",
+        "detail": "actual Git delta is outside the declared change contract"
+      }
+    ]
+  },
+  "semantic": {
+    "schemaVersion": 1,
+    "deltas": [],
+    "violations": []
+  },
+  "contractSources": {
+    "policy": "operation-declaration-sources/v1",
+    "baseSha": "33246b8fbf5cb76e1bd15d81aedb6d28f24997f6",
+    "evidence": "canonical_base_and_current_source_compilation",
+    "subjects": [
+      {
+        "operationId": "scope.update",
+        "sourceFiles": [
+          "contracts/proto/common.proto",
+          "contracts/proto/dto.proto",
+          "contracts/proto/service.proto"
+        ],
+        "messageTypes": [
+          "scope.v1.Label",
+          "scope.v1.Metadata",
+          "scope.v1.UpdateRequest",
+          "scope.v1.UpdateResponse"
+        ],
+        "enumTypes": [
+          "scope.v1.State"
+        ]
+      }
+    ],
+    "violations": [
+      {
+        "kind": "contract-declaration",
+        "path": "contracts/proto/other.proto",
+        "detail": "message scope.v1.OtherRequest is outside declared Operation DTO references"
+      },
+      {
+        "kind": "contract-source",
+        "path": "contracts/proto/other.proto",
+        "detail": "protobuf file is not a source of the declared base Operation/DTO graph; imports, explicit path-array edits and current new references do not widen this bound"
+      }
+    ],
+    "semantic": {
+      "schemaVersion": 1,
+      "deltas": [],
+      "violations": []
+    }
+  },
+  "conformant": false
+}
+--- FAIL: TestIssue151DefaultProtocolWithoutIgnore (0.00s)
+    default_control_state_test.go:21: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestAX7PlacementPressureRequiresExplicitNewHandwrittenPath (0.00s)
+    placement_pressure_test.go:13: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestAX7PlacementPressureAllowsExplicitExactNewHandwrittenPath (0.00s)
+    placement_pressure_test.go:31: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestAX7RealConsumerAdversarialPressure (0.00s)
+    pressure_qualification_test.go:24: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+FAIL
+FAIL	yunka.io/app/cmd/change	3.191s
+ok  	yunka.io/app/cmd/audit	0.599s
+ok  	yunka.io/app/cmd/auditcore	0.184s
 FAIL
