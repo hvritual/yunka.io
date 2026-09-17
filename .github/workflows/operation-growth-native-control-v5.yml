@@ -80,6 +80,7 @@ jobs:
             python3 ../controller/tools/operation_growth_native_fix2.py
             python3 ../controller/tools/operation_growth_native_fix3.py
             python3 ../controller/tools/operation_growth_native_fix4.py
+            python3 ../controller/tools/operation_growth_native_fix5.py
           } 2>&1 | tee ../controller/tools/operation_growth_native_last.log
       - name: Regenerate and format owned changes
         shell: bash
@@ -98,7 +99,8 @@ jobs:
             app/cmd/add/operation.go app/cmd/add/plan_semantics.go app/cmd/add/plan_validation.go app/cmd/add/semantics.go \
             app/cmd/audit/boundary_growth.go app/cmd/audit/boundary_growth_test.go app/cmd/audit/command.go \
             app/cmd/change/architecture_debt.go app/cmd/change/verify.go app/cmd/change/operation_growth.go \
-            app/cmd/change/changeset_reconcile.go app/cmd/change/pressure_qualification_test.go app/cmd/change/changeset_test.go \
+            app/cmd/change/changeset_reconcile.go app/cmd/change/changeset_remediation.go app/cmd/change/changeset_command.go \
+            app/cmd/change/changeset_remediation_test.go app/cmd/change/pressure_qualification_test.go app/cmd/change/changeset_test.go \
             app/cmd/change/changeset_reconcile_test.go app/cmd/change/changeset_biz_regression_test.go \
             app/cmd/change/contract_sources_test.go
           make contract
@@ -160,7 +162,7 @@ jobs:
               if [ -f "$file" ]; then
                 echo
                 echo "== $file =="
-                tail -n 1200 "$file"
+                tail -n 1400 "$file"
               fi
             done
           } > tools/operation_growth_native_last_failure.log
