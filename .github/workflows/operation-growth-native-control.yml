@@ -109,18 +109,21 @@ jobs:
         run: |
           set -euo pipefail
           cd product
-          make toolchain-check
-          (cd pkg && go test -count=1 ./contract)
-          (cd app && go test -count=1 \
-            ./cmd/boundarycore \
-            ./cmd/add \
-            ./cmd/projectflow \
-            ./cmd/change \
-            ./cmd/audit \
-            ./cmd/auditcore)
-          make contract-check
-          git diff --check
-          git status --short | tee ../controller/tools/operation_growth_native_status.log
+          set -o pipefail
+          {
+            make toolchain-check
+            (cd pkg && go test -count=1 ./contract)
+            (cd app && go test -count=1 \
+              ./cmd/boundarycore \
+              ./cmd/add \
+              ./cmd/projectflow \
+              ./cmd/change \
+              ./cmd/audit \
+              ./cmd/auditcore)
+            make contract-check
+            git diff --check
+            git status --short
+          } 2>&1 | tee ../controller/tools/operation_growth_native_qualification.log
 
       - name: Publish qualified current-main candidate
         shell: bash
@@ -155,10 +158,10 @@ jobs:
               echo "== native materialization =="
               tail -n 300 tools/operation_growth_native_last.log
             fi
-            if [ -f tools/operation_growth_native_status.log ]; then
+            if [ -f tools/operation_growth_native_qualification.log ]; then
               echo
-              echo "== status =="
-              cat tools/operation_growth_native_status.log
+              echo "== focused qualification =="
+              tail -n 500 tools/operation_growth_native_qualification.log
             fi
           } > tools/operation_growth_native_last_failure.log
           git config user.name "Yunka Control"
