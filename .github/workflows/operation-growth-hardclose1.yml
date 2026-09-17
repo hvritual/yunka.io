@@ -67,19 +67,29 @@ jobs:
           mkdir -p "$install_root"
           unzip -q "$archive" -d "$install_root"
           echo "$install_root/bin" >> "$GITHUB_PATH"
+      - name: Prime locked RPC generator tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd product
+          make rpc-generate
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
       - name: Apply hard closure 1
         shell: bash
         run: |
           set -euo pipefail
           cd product
           python3 ../controller/tools/operation_growth_hardclose1.py
+          python3 ../controller/tools/operation_growth_hardclose1_fix.py
           gofmt -w \
             app/cmd/add/boundary_gate.go \
             app/cmd/add/plan_validation.go \
             app/cmd/add/main_test.go \
             app/cmd/add/boundary_gate_test.go \
             app/cmd/change/changeset.go \
-            app/cmd/change/changeset_test.go
+            app/cmd/change/changeset_test.go \
+            app/cmd/change/pressure_qualification_test.go
           git diff --check
       - name: Create unpushed hardclose candidate
         shell: bash
