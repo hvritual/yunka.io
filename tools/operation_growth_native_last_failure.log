@@ -1,114 +1,58 @@
-run=35202770663
+run=35205555827
 product_expected=01cf8157d8660e816cdc40cd5d36a2ff618a3dc8
 
 == tools/operation_growth_native_last.log ==
 operation-growth native patch prepared
 boundary validation compatibility fixes prepared
+semantic boundary v2 and fixture alignment prepared
+
+== tools/operation_growth_native_candidate.log ==
+candidate=a45cb666043ba18c43a38a0f1338551bdb096beb
+tree=c0ce9246705e8c2e97cf8fcfba234650cedc1237
 
 == tools/operation_growth_native_qualification.log ==
 toolchain-check: go=1.25.13 protoc=3.21.12 govulncheck=v1.7.0
-ok  	github.com/hvritual/yunka.io/pkg/contract	0.189s
-ok  	yunka.io/app/cmd/boundarycore	0.021s
-ok  	yunka.io/app/cmd/add	0.419s
---- FAIL: TestC114QualificationRealBinaryFastFeedback (0.01s)
-    fast_feedback_qualification_test.go:69: C11.4 qualification requires a clean tracked worktree before build:
-        M app/cmd/add/command.go
-         M app/cmd/add/helpers.go
-         M app/cmd/add/main_test.go
-         M app/cmd/add/operation.go
-         M app/cmd/add/plan_semantics.go
-         M app/cmd/add/plan_validation.go
-         M app/cmd/add/semantics.go
-         M app/cmd/audit/command.go
-         M app/cmd/audit/quality_integration_test.go
-         M app/cmd/change/changeset.go
-         M app/cmd/change/changeset_reconcile.go
-         M app/cmd/change/git_private_state_test.go
-         M app/cmd/change/quality_debt.go
-         M app/cmd/change/quality_debt_consumer_qualification_test.go
-         M app/cmd/change/quality_debt_test.go
-         M app/cmd/change/quality_migration.go
-         M app/cmd/change/quality_migration_check.go
-         M app/cmd/change/quality_migration_test.go
-         M app/cmd/change/quality_waiver_command.go
-         M app/cmd/change/reconcile_regression_test.go
-         M app/cmd/change/review_quality_debt.go
-         M app/cmd/change/semantic.go
-         M app/cmd/change/verify.go
-         M contracts/proto/yunka/dsl/v1/options.proto
-         M pkg/contract/artifact.go
-         M pkg/contract/assembly_codegen.go
-         M pkg/contract/assembly_module_codegen_test.go
-         M pkg/contract/c10_2_runtime_test.go
-         M pkg/contract/c9_custom_verb_codegen_test.go
-         M pkg/contract/c9_edge_owned_capability_test.go
-         M pkg/contract/diff_test.go
-         M pkg/contract/dsl_descriptor.go
-         M pkg/contract/inventory_provenance_test.go
-         M pkg/contract/lint.go
-         M pkg/contract/model.go
-         M pkg/contract/operation_plan.go
-         M pkg/contractdsl/v1/options.pb.go
+ok  	github.com/hvritual/yunka.io/pkg/contract	1.075s
+ok  	yunka.io/app/cmd/boundarycore	0.007s
+--- FAIL: TestAG062AddOperationPreservesExistingSealedStarter (0.06s)
+    ag06_2_test.go:30: add operation: Operation Growth boundary outcome=architecture_review_required; review the plan boundaryDecision before changing the Service
+--- FAIL: TestAX5ScaffoldCompilesThroughCanonicalContractChain (0.07s)
+    compile_test.go:24: add operation: Operation Growth boundary outcome=architecture_review_required; review the plan boundaryDecision before changing the Service
+--- FAIL: TestAddOperationRequiresExplicitSemanticsAndCreatesLandingFile (0.08s)
+    main_test.go:68: add operation: Operation Growth boundary outcome=architecture_review_required; review the plan boundaryDecision before changing the Service
+--- FAIL: TestPlanOperationIsReadOnlyDeterministicAndMatchesApply (0.13s)
+    plan_test.go:83: add operation: Operation Growth boundary outcome=architecture_review_required; review the plan boundaryDecision before changing the Service
+--- FAIL: TestPlanOperationCanonicalizesAuthenticationVocabulary (0.02s)
+    plan_test.go:137: add operation: Operation Growth boundary outcome=architecture_review_required; review the plan boundaryDecision before changing the Service
 FAIL
-FAIL	yunka.io/app/cmd/projectflow	2.462s
---- FAIL: TestT4CreateChangeSetBindsLegacyProtobufOutputsAndNormalizesAPIKey (0.00s)
-    changeset_biz_regression_test.go:13: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+FAIL	yunka.io/app/cmd/add	0.859s
+ok  	yunka.io/app/cmd/projectflow	2.794s
+--- FAIL: TestReconcileChangeSetRejectsCreateSemanticDriftFromPlannedIntent (0.08s)
+    changeset_reconcile_test.go:39: apply drifted create operation: add operation: Operation Growth boundary outcome=architecture_review_required; review the plan boundaryDecision before changing the Service
+--- FAIL: TestT4RemediationBindingRejectsUnknownFinding (0.10s)
+    changeset_remediation_test.go:14: bind remediation finding: change remediation bind: audit baseline: audit boundary growth: compile immutable baseline 5e4d66a1d9640eabf4dc71f64bafced1ea301eaf: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
         tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
---- FAIL: TestT4CreateChangeSetCanonicalizesServiceAuthenticationEndToEnd (0.00s)
-    changeset_biz_regression_test.go:44: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+--- FAIL: TestT4RemediationCheckRejectsRemainingTarget (0.10s)
+    changeset_remediation_test.go:22: bind remediation finding: change remediation bind: audit baseline: audit boundary growth: compile immutable baseline 5e4d66a1d9640eabf4dc71f64bafced1ea301eaf: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
         tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
---- FAIL: TestT4CreateChangeSetRejectsSpoofedLegacyProtobufOutput (0.00s)
-    changeset_biz_regression_test.go:70: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+--- FAIL: TestT4RemediationCheckRejectsReplacementWithNewDebt (0.09s)
+    changeset_remediation_test.go:36: bind remediation finding: change remediation bind: audit baseline: audit boundary growth: compile immutable baseline 5e4d66a1d9640eabf4dc71f64bafced1ea301eaf: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
         tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
---- FAIL: TestT4CreateChangeSetStrictManifestBindsOnlyCurrentSourceOutputs (0.01s)
-    changeset_biz_regression_test.go:83: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+--- FAIL: TestT4RemediationCheckPassesOnlyWhenFindingIsActuallyFixed (0.08s)
+    changeset_remediation_test.go:56: bind remediation finding: change remediation bind: audit baseline: audit boundary growth: compile immutable baseline 5e4d66a1d9640eabf4dc71f64bafced1ea301eaf: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
         tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
---- FAIL: TestReconcileChangeSetAcceptsMatchingExistingAndCreateSubjects (0.01s)
-    changeset_reconcile_test.go:11: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+--- FAIL: TestT4RemediationBindingIsDigestBoundAndStrict (0.10s)
+    changeset_remediation_test.go:74: bind remediation finding: change remediation bind: audit baseline: audit boundary growth: compile immutable baseline 927426bab2063802655aafd7f5f2d6af5c478bb6: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
         tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
---- FAIL: TestReconcileChangeSetRejectsCreateSemanticDriftFromPlannedIntent (0.01s)
-    changeset_reconcile_test.go:32: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
-        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
---- FAIL: TestReconcileChangeSetRejectsUndeclaredOperationDrift (0.00s)
-    changeset_reconcile_test.go:56: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
-        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
---- FAIL: TestT4RemediationBindingRejectsUnknownFinding (0.01s)
-    changeset_remediation_test.go:14: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
-        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
---- FAIL: TestT4RemediationCheckRejectsRemainingTarget (0.00s)
-    changeset_remediation_test.go:22: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
-        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
---- FAIL: TestT4RemediationCheckRejectsReplacementWithNewDebt (0.01s)
-    changeset_remediation_test.go:36: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
-        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
---- FAIL: TestT4RemediationCheckPassesOnlyWhenFindingIsActuallyFixed (0.01s)
-    changeset_remediation_test.go:56: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
-        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
---- FAIL: TestT4RemediationBindingIsDigestBoundAndStrict (0.00s)
-    changeset_remediation_test.go:74: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
-        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
---- FAIL: TestBuildChangeSetComposesExistingV1AndCreatePlanOnOneBase (0.00s)
-    changeset_test.go:14: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
-        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
---- FAIL: TestBuildChangeSetRejectsDuplicateSubjectOperation (0.00s)
-    changeset_test.go:64: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
-        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
---- FAIL: TestBuildChangeSetRejectsTamperedCreatePlanShape (0.00s)
-    changeset_test.go:72: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
-        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
---- FAIL: TestIssue160SourceScopeReadsFreshSemanticAndImmutableBase (0.39s)
-    --- FAIL: TestIssue160SourceScopeReadsFreshSemanticAndImmutableBase/relative-external-include (0.00s)
-        contract_sources_test.go:211: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
-            tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
---- FAIL: TestIssue160SourceScopeMultiSubjectAndCreate (0.21s)
-    --- FAIL: TestIssue160SourceScopeMultiSubjectAndCreate/create-with-unrelated-edit (0.09s)
-        contract_sources_test.go:285: change set begin: revalidate create plan /tmp/TestIssue160SourceScopeMultiSubjectAndCreatecreate-with-unrelat3456748062/001/.git/create.json: add operation plan: add operation: Operation Growth boundary outcome=architecture_review_required; review the plan boundaryDecision before changing the Service
+--- FAIL: TestIssue160SourceScopeMultiSubjectAndCreate (0.16s)
+    --- FAIL: TestIssue160SourceScopeMultiSubjectAndCreate/create-with-unrelated-edit (0.07s)
+        contract_sources_test.go:285: change set begin: revalidate create plan /tmp/TestIssue160SourceScopeMultiSubjectAndCreatecreate-with-unrelat488733546/001/.git/create.json: add operation plan: add operation: Operation Growth boundary outcome=architecture_review_required; review the plan boundaryDecision before changing the Service
 {
   "schemaVersion": 2,
-  "baseSha": "33246b8fbf5cb76e1bd15d81aedb6d28f24997f6",
+  "baseSha": "b97f08e12691e7fd6a42b7ccc6c861f5be4dc2d9",
   "reconciliation": {
     "schemaVersion": 2,
-    "baseSha": "33246b8fbf5cb76e1bd15d81aedb6d28f24997f6",
+    "baseSha": "b97f08e12691e7fd6a42b7ccc6c861f5be4dc2d9",
     "operationId": "change-set",
     "changes": [
       {
@@ -142,7 +86,7 @@ FAIL	yunka.io/app/cmd/projectflow	2.462s
   },
   "contractSources": {
     "policy": "operation-declaration-sources/v1",
-    "baseSha": "33246b8fbf5cb76e1bd15d81aedb6d28f24997f6",
+    "baseSha": "b97f08e12691e7fd6a42b7ccc6c861f5be4dc2d9",
     "evidence": "canonical_base_and_current_source_compilation",
     "subjects": [
       {
@@ -183,20 +127,97 @@ FAIL	yunka.io/app/cmd/projectflow	2.462s
   },
   "conformant": false
 }
---- FAIL: TestIssue151DefaultProtocolWithoutIgnore (0.00s)
-    default_control_state_test.go:21: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
-        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
---- FAIL: TestAX7PlacementPressureRequiresExplicitNewHandwrittenPath (0.00s)
-    placement_pressure_test.go:13: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
-        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
---- FAIL: TestAX7PlacementPressureAllowsExplicitExactNewHandwrittenPath (0.00s)
-    placement_pressure_test.go:31: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
-        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
---- FAIL: TestAX7RealConsumerAdversarialPressure (0.00s)
-    pressure_qualification_test.go:24: add operation tenant.suspend: add operation: compile current canonical boundary facts: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
-        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+change contract .git/yunka/change-contract.json
+base            b40550ac7e08369f5c7daf84acefae5fbeab70d5
+operation       tenant.suspend
+intent          both
+editable paths  1
+editable scopes 1
+allowed semantic 
+next            yunka change check
+{
+  "schemaVersion": 2,
+  "baseSha": "b40550ac7e08369f5c7daf84acefae5fbeab70d5",
+  "operationId": "tenant.suspend",
+  "changes": [],
+  "violations": []
+}
+{
+  "path": ".git/yunka/change-attestation.json",
+  "attestation": {
+    "schemaVersion": 2,
+    "baseSha": "b40550ac7e08369f5c7daf84acefae5fbeab70d5",
+    "headSha": "b40550ac7e08369f5c7daf84acefae5fbeab70d5",
+    "operationId": "tenant.suspend",
+    "reconciliation": {
+      "schemaVersion": 2,
+      "baseSha": "b40550ac7e08369f5c7daf84acefae5fbeab70d5",
+      "operationId": "tenant.suspend",
+      "changes": [],
+      "violations": []
+    },
+    "semantic": {
+      "schemaVersion": 1,
+      "operationId": "tenant.suspend",
+      "deltas": [],
+      "violations": []
+    },
+    "gates": [
+      {
+        "name": "git-delta",
+        "status": "pass"
+      },
+      {
+        "name": "yunka-check",
+        "status": "pass"
+      },
+      {
+        "name": "semantic-delta",
+        "status": "pass"
+      },
+      {
+        "name": "architecture-debt",
+        "status": "fail",
+        "detail": "architecture debt proof: audit boundary growth: compile immutable baseline b40550ac7e08369f5c7daf84acefae5fbeab70d5: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.\ntenant.proto:3:1: Import \"yunka/dsl/v1/options.proto\" was not found or had errors."
+      },
+      {
+        "name": "quality-debt",
+        "status": "skipped",
+        "detail": "deterministic debt evidence failed"
+      },
+      {
+        "name": "go-test",
+        "status": "pass"
+      }
+    ],
+    "diagnostics": [
+      {
+        "code": "YUNKA-DX-CHANGE-003",
+        "severity": "error",
+        "stage": "architecture-debt",
+        "summary": "canonical evidence required to build a change plan is unavailable or invalid",
+        "detail": "architecture debt proof: audit boundary growth: compile immutable baseline b40550ac7e08369f5c7daf84acefae5fbeab70d5: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.\ntenant.proto:3:1: Import \"yunka/dsl/v1/options.proto\" was not found or had errors.",
+        "actions": [
+          {
+            "kind": "command",
+            "label": "Regenerate canonical facts",
+            "value": "yunka generate"
+          },
+          {
+            "kind": "command",
+            "label": "Validate canonical facts",
+            "value": "yunka check --format agent-json"
+          }
+        ]
+      }
+    ],
+    "conformant": false
+  }
+}
+--- FAIL: TestIssue151DefaultProtocolWithoutIgnore (16.64s)
+    default_control_state_test.go:54: default verify (including Go tests): 
 FAIL
-FAIL	yunka.io/app/cmd/change	3.191s
-ok  	yunka.io/app/cmd/audit	0.599s
-ok  	yunka.io/app/cmd/auditcore	0.184s
+FAIL	yunka.io/app/cmd/change	21.279s
+ok  	yunka.io/app/cmd/audit	0.911s
+ok  	yunka.io/app/cmd/auditcore	0.135s
 FAIL
