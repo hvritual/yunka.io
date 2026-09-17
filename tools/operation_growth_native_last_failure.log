@@ -1,4 +1,4 @@
-run=35205810953
+run=35206601363
 product_expected=01cf8157d8660e816cdc40cd5d36a2ff618a3dc8
 
 == tools/operation_growth_native_last.log ==
@@ -6,26 +6,39 @@ operation-growth native patch prepared
 boundary validation compatibility fixes prepared
 semantic boundary v2 and fixture alignment prepared
 remaining fixture and immutable-base support fixes prepared
+audit include-profile binding and final positive fixture prepared
 
 == tools/operation_growth_native_candidate.log ==
-candidate=a1ae8c2f69bbd4eaca734127ef1ce0d042f2c48a
-tree=37bbb9d479ed93ff39000aac8ebdf4362e511073
+candidate=82de11c4dd36b1036dc2b6898e22504181a93b6e
+tree=af6dd08ed5747038770457cbc3d5be4fa6573471
 
 == tools/operation_growth_native_qualification.log ==
 toolchain-check: go=1.25.13 protoc=3.21.12 govulncheck=v1.7.0
-ok  	github.com/hvritual/yunka.io/pkg/contract	0.165s
-ok  	yunka.io/app/cmd/boundarycore	0.008s
---- FAIL: TestAddOperationRequiresExplicitSemanticsAndCreatesLandingFile (0.04s)
-    main_test.go:68: add operation: Operation Growth boundary outcome=architecture_review_required; review the plan boundaryDecision before changing the Service
-FAIL
-FAIL	yunka.io/app/cmd/add	0.478s
-ok  	yunka.io/app/cmd/projectflow	2.988s
+ok  	github.com/hvritual/yunka.io/pkg/contract	0.183s
+ok  	yunka.io/app/cmd/boundarycore	0.012s
+ok  	yunka.io/app/cmd/add	0.270s
+ok  	yunka.io/app/cmd/projectflow	2.705s
+--- FAIL: TestT4RemediationBindingRejectsUnknownFinding (0.11s)
+    changeset_remediation_test.go:14: bind remediation finding: change remediation bind: audit baseline: audit boundary growth: compile immutable baseline 187a2bcb6760a1faeaf5b9a6e03010c634ad6f80: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestT4RemediationCheckRejectsRemainingTarget (0.11s)
+    changeset_remediation_test.go:22: bind remediation finding: change remediation bind: audit baseline: audit boundary growth: compile immutable baseline 187a2bcb6760a1faeaf5b9a6e03010c634ad6f80: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestT4RemediationCheckRejectsReplacementWithNewDebt (0.10s)
+    changeset_remediation_test.go:36: bind remediation finding: change remediation bind: audit baseline: audit boundary growth: compile immutable baseline 187a2bcb6760a1faeaf5b9a6e03010c634ad6f80: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestT4RemediationCheckPassesOnlyWhenFindingIsActuallyFixed (0.10s)
+    changeset_remediation_test.go:56: bind remediation finding: change remediation bind: audit baseline: audit boundary growth: compile immutable baseline 187a2bcb6760a1faeaf5b9a6e03010c634ad6f80: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
+--- FAIL: TestT4RemediationBindingIsDigestBoundAndStrict (0.10s)
+    changeset_remediation_test.go:74: bind remediation finding: change remediation bind: audit baseline: audit boundary growth: compile immutable baseline f21cdc02233799b02fb93b9875ac783bf83c0524: contract source snapshot: contract: protoc failed: exit status 1: yunka/dsl/v1/options.proto: File not found.
+        tenant.proto:3:1: Import "yunka/dsl/v1/options.proto" was not found or had errors.
 {
   "schemaVersion": 2,
-  "baseSha": "c1b8d40603785418fe83f9f675c81b40ca8b36e0",
+  "baseSha": "0ec3df75d828d28143c6641f991694fe4fc0d4bc",
   "reconciliation": {
     "schemaVersion": 2,
-    "baseSha": "c1b8d40603785418fe83f9f675c81b40ca8b36e0",
+    "baseSha": "0ec3df75d828d28143c6641f991694fe4fc0d4bc",
     "operationId": "change-set",
     "changes": [
       {
@@ -59,7 +72,7 @@ ok  	yunka.io/app/cmd/projectflow	2.988s
   },
   "contractSources": {
     "policy": "operation-declaration-sources/v1",
-    "baseSha": "c1b8d40603785418fe83f9f675c81b40ca8b36e0",
+    "baseSha": "0ec3df75d828d28143c6641f991694fe4fc0d4bc",
     "evidence": "canonical_base_and_current_source_compilation",
     "subjects": [
       {
@@ -100,10 +113,365 @@ ok  	yunka.io/app/cmd/projectflow	2.988s
   },
   "conformant": false
 }
---- FAIL: TestIssue151DefaultProtocolWithoutIgnore (0.08s)
-    default_control_state_test.go:32: prepare complete canonical baseline: generate protobuf Go: protobuf-go: protoc failed: exit status 1: --go_out: github.com/hvritual/yunka.io/pkg/contractdsl/v1/options.pb.go: generated file does not match prefix "example.com/ax7pressure"
+change contract .git/yunka/change-contract.json
+base            031721d7d863634e7287ed2673d1f4ec474beedd
+operation       tenant.suspend
+intent          both
+editable paths  1
+editable scopes 1
+allowed semantic 
+next            yunka change check
+{
+  "schemaVersion": 2,
+  "baseSha": "031721d7d863634e7287ed2673d1f4ec474beedd",
+  "operationId": "tenant.suspend",
+  "changes": [],
+  "violations": []
+}
+{
+  "path": ".git/yunka/change-attestation.json",
+  "attestation": {
+    "schemaVersion": 2,
+    "baseSha": "031721d7d863634e7287ed2673d1f4ec474beedd",
+    "headSha": "031721d7d863634e7287ed2673d1f4ec474beedd",
+    "operationId": "tenant.suspend",
+    "reconciliation": {
+      "schemaVersion": 2,
+      "baseSha": "031721d7d863634e7287ed2673d1f4ec474beedd",
+      "operationId": "tenant.suspend",
+      "changes": [],
+      "violations": []
+    },
+    "semantic": {
+      "schemaVersion": 1,
+      "operationId": "tenant.suspend",
+      "deltas": [],
+      "violations": []
+    },
+    "architectureDebt": {
+      "baseRef": "031721d7d863634e7287ed2673d1f4ec474beedd",
+      "baseSha": "031721d7d863634e7287ed2673d1f4ec474beedd",
+      "existing": [
+        {
+          "id": "AUDIT-DOC-001:internal/tenant/application:package:application",
+          "rule": "AUDIT-DOC-001",
+          "class": "proven_violation",
+          "subject": "internal/tenant/application#package:application",
+          "summary": "governed package lacks developer-owned package documentation",
+          "invariant": "each governed package with developer-owned production source must expose discoverable package responsibility documentation; generated and test source do not satisfy the handwritten documentation requirement",
+          "path": "internal/tenant/application",
+          "symbol": "application",
+          "reason": "governed package has developer-owned production source but no developer-owned package documentation",
+          "remediation": "add package documentation, preferably in developer-owned doc.go, that makes responsibility, primary concepts, important invariants, and intentional exclusions discoverable; do not edit generated source to satisfy this rule",
+          "evidence": [
+            {
+              "kind": "canonical",
+              "source": "contract.manifest",
+              "detail": "declared domain=tenant"
+            },
+            {
+              "kind": "canonical",
+              "source": "docs/ENGINEERING_QUALITY_RULES.md",
+              "detail": "core packages document purpose, boundary and invariants"
+            },
+            {
+              "kind": "source",
+              "source": "go.package",
+              "path": "internal/tenant/application/tenant_resume.go",
+              "detail": "governed package has developer-owned production source but no developer-owned package documentation"
+            }
+          ]
+        }
+      ],
+      "new": [],
+      "fixed": []
+    },
+    "qualityDebt": {
+      "schemaVersion": 1,
+      "deterministic": {
+        "baseRef": "031721d7d863634e7287ed2673d1f4ec474beedd",
+        "baseSha": "031721d7d863634e7287ed2673d1f4ec474beedd",
+        "existing": [
+          {
+            "id": "AUDIT-DOC-001:internal/tenant/application:package:application",
+            "rule": "AUDIT-DOC-001",
+            "class": "proven_violation",
+            "subject": "internal/tenant/application#package:application",
+            "summary": "governed package lacks developer-owned package documentation",
+            "invariant": "each governed package with developer-owned production source must expose discoverable package responsibility documentation; generated and test source do not satisfy the handwritten documentation requirement",
+            "path": "internal/tenant/application",
+            "symbol": "application",
+            "reason": "governed package has developer-owned production source but no developer-owned package documentation",
+            "remediation": "add package documentation, preferably in developer-owned doc.go, that makes responsibility, primary concepts, important invariants, and intentional exclusions discoverable; do not edit generated source to satisfy this rule",
+            "evidence": [
+              {
+                "kind": "canonical",
+                "source": "contract.manifest",
+                "detail": "declared domain=tenant"
+              },
+              {
+                "kind": "canonical",
+                "source": "docs/ENGINEERING_QUALITY_RULES.md",
+                "detail": "core packages document purpose, boundary and invariants"
+              },
+              {
+                "kind": "source",
+                "source": "go.package",
+                "path": "internal/tenant/application/tenant_resume.go",
+                "detail": "governed package has developer-owned production source but no developer-owned package documentation"
+              }
+            ]
+          }
+        ],
+        "new": [],
+        "fixed": []
+      },
+      "blockingNew": [],
+      "waivedBlocking": [],
+      "unwaivedBlocking": [],
+      "proofSha256": "94396f940479b4e9b91b3d8b1cd94f11e127a42d66e347c7189dbff457bab20e"
+    },
+    "gates": [
+      {
+        "name": "git-delta",
+        "status": "pass"
+      },
+      {
+        "name": "yunka-check",
+        "status": "pass"
+      },
+      {
+        "name": "semantic-delta",
+        "status": "pass"
+      },
+      {
+        "name": "architecture-debt",
+        "status": "pass",
+        "detail": "existing=1 new=0 fixed=0 blocking_new=0"
+      },
+      {
+        "name": "quality-debt",
+        "status": "pass",
+        "detail": "deterministic(existing=1 new=0 fixed=0 blocking=0 waived=0 unwaived=0) advisory(existing=0 new=0 resolved=0)"
+      },
+      {
+        "name": "go-test",
+        "status": "pass"
+      }
+    ],
+    "diagnostics": [],
+    "conformant": true
+  }
+}
+{
+  "path": ".git/yunka/change-attestation.json",
+  "attestation": {
+    "schemaVersion": 2,
+    "baseSha": "031721d7d863634e7287ed2673d1f4ec474beedd",
+    "headSha": "031721d7d863634e7287ed2673d1f4ec474beedd",
+    "operationId": "tenant.suspend",
+    "reconciliation": {
+      "schemaVersion": 2,
+      "baseSha": "031721d7d863634e7287ed2673d1f4ec474beedd",
+      "operationId": "tenant.suspend",
+      "changes": [],
+      "violations": []
+    },
+    "semantic": {
+      "schemaVersion": 1,
+      "operationId": "tenant.suspend",
+      "deltas": [],
+      "violations": []
+    },
+    "architectureDebt": {
+      "baseRef": "031721d7d863634e7287ed2673d1f4ec474beedd",
+      "baseSha": "031721d7d863634e7287ed2673d1f4ec474beedd",
+      "existing": [
+        {
+          "id": "AUDIT-DOC-001:internal/tenant/application:package:application",
+          "rule": "AUDIT-DOC-001",
+          "class": "proven_violation",
+          "subject": "internal/tenant/application#package:application",
+          "summary": "governed package lacks developer-owned package documentation",
+          "invariant": "each governed package with developer-owned production source must expose discoverable package responsibility documentation; generated and test source do not satisfy the handwritten documentation requirement",
+          "path": "internal/tenant/application",
+          "symbol": "application",
+          "reason": "governed package has developer-owned production source but no developer-owned package documentation",
+          "remediation": "add package documentation, preferably in developer-owned doc.go, that makes responsibility, primary concepts, important invariants, and intentional exclusions discoverable; do not edit generated source to satisfy this rule",
+          "evidence": [
+            {
+              "kind": "canonical",
+              "source": "contract.manifest",
+              "detail": "declared domain=tenant"
+            },
+            {
+              "kind": "canonical",
+              "source": "docs/ENGINEERING_QUALITY_RULES.md",
+              "detail": "core packages document purpose, boundary and invariants"
+            },
+            {
+              "kind": "source",
+              "source": "go.package",
+              "path": "internal/tenant/application/tenant_resume.go",
+              "detail": "governed package has developer-owned production source but no developer-owned package documentation"
+            }
+          ]
+        }
+      ],
+      "new": [],
+      "fixed": []
+    },
+    "qualityDebt": {
+      "schemaVersion": 1,
+      "deterministic": {
+        "baseRef": "031721d7d863634e7287ed2673d1f4ec474beedd",
+        "baseSha": "031721d7d863634e7287ed2673d1f4ec474beedd",
+        "existing": [
+          {
+            "id": "AUDIT-DOC-001:internal/tenant/application:package:application",
+            "rule": "AUDIT-DOC-001",
+            "class": "proven_violation",
+            "subject": "internal/tenant/application#package:application",
+            "summary": "governed package lacks developer-owned package documentation",
+            "invariant": "each governed package with developer-owned production source must expose discoverable package responsibility documentation; generated and test source do not satisfy the handwritten documentation requirement",
+            "path": "internal/tenant/application",
+            "symbol": "application",
+            "reason": "governed package has developer-owned production source but no developer-owned package documentation",
+            "remediation": "add package documentation, preferably in developer-owned doc.go, that makes responsibility, primary concepts, important invariants, and intentional exclusions discoverable; do not edit generated source to satisfy this rule",
+            "evidence": [
+              {
+                "kind": "canonical",
+                "source": "contract.manifest",
+                "detail": "declared domain=tenant"
+              },
+              {
+                "kind": "canonical",
+                "source": "docs/ENGINEERING_QUALITY_RULES.md",
+                "detail": "core packages document purpose, boundary and invariants"
+              },
+              {
+                "kind": "source",
+                "source": "go.package",
+                "path": "internal/tenant/application/tenant_resume.go",
+                "detail": "governed package has developer-owned production source but no developer-owned package documentation"
+              }
+            ]
+          }
+        ],
+        "new": [],
+        "fixed": []
+      },
+      "blockingNew": [],
+      "waivedBlocking": [],
+      "unwaivedBlocking": [],
+      "proofSha256": "94396f940479b4e9b91b3d8b1cd94f11e127a42d66e347c7189dbff457bab20e"
+    },
+    "gates": [
+      {
+        "name": "git-delta",
+        "status": "pass"
+      },
+      {
+        "name": "yunka-check",
+        "status": "pass"
+      },
+      {
+        "name": "semantic-delta",
+        "status": "pass"
+      },
+      {
+        "name": "architecture-debt",
+        "status": "pass",
+        "detail": "existing=1 new=0 fixed=0 blocking_new=0"
+      },
+      {
+        "name": "quality-debt",
+        "status": "pass",
+        "detail": "deterministic(existing=1 new=0 fixed=0 blocking=0 waived=0 unwaived=0) advisory(existing=0 new=0 resolved=0)"
+      },
+      {
+        "name": "go-test",
+        "status": "pass"
+      }
+    ],
+    "diagnostics": [],
+    "conformant": true
+  }
+}
+{
+  "schemaVersion": 2,
+  "baseSha": "031721d7d863634e7287ed2673d1f4ec474beedd",
+  "operationId": "tenant.suspend",
+  "changes": [],
+  "violations": []
+}
+{
+  "schemaVersion": 2,
+  "baseSha": "031721d7d863634e7287ed2673d1f4ec474beedd",
+  "operationId": "tenant.suspend",
+  "changes": [
+    {
+      "status": "A",
+      "path": ".yunka/undeclared.txt",
+      "class": "outside"
+    }
+  ],
+  "violations": [
+    {
+      "kind": "scope",
+      "path": ".yunka/undeclared.txt",
+      "detail": "actual Git delta is outside the declared change contract"
+    }
+  ]
+}
+{
+  "schemaVersion": 2,
+  "baseSha": "031721d7d863634e7287ed2673d1f4ec474beedd",
+  "operationId": "tenant.suspend",
+  "changes": [
+    {
+      "status": "A",
+      "path": ".yunka/change-contract.json",
+      "class": "outside"
+    }
+  ],
+  "violations": [
+    {
+      "kind": "scope",
+      "path": ".yunka/change-contract.json",
+      "detail": "actual Git delta is outside the declared change contract"
+    }
+  ]
+}
+{
+  "schemaVersion": 2,
+  "baseSha": "031721d7d863634e7287ed2673d1f4ec474beedd",
+  "operationId": "tenant.suspend",
+  "changes": [
+    {
+      "status": "A",
+      "path": "outside.txt",
+      "class": "outside"
+    }
+  ],
+  "violations": [
+    {
+      "kind": "scope",
+      "path": "outside.txt",
+      "detail": "actual Git delta is outside the declared change contract"
+    }
+  ]
+}
+change contract .git/yunka/change-contract.json
+base            031721d7d863634e7287ed2673d1f4ec474beedd
+operation       tenant.suspend
+intent          both
+editable paths  1
+editable scopes 1
+allowed semantic 
+next            yunka change check
 FAIL
-FAIL	yunka.io/app/cmd/change	5.550s
-ok  	yunka.io/app/cmd/audit	0.785s
-ok  	yunka.io/app/cmd/auditcore	0.200s
+FAIL	yunka.io/app/cmd/change	22.540s
+ok  	yunka.io/app/cmd/audit	0.602s
+ok  	yunka.io/app/cmd/auditcore	0.180s
 FAIL
