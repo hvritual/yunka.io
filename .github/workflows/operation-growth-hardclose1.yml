@@ -82,6 +82,7 @@ jobs:
           cd product
           python3 ../controller/tools/operation_growth_hardclose1.py
           python3 ../controller/tools/operation_growth_hardclose1_fix.py
+          python3 ../controller/tools/operation_growth_hardclose1_testfix.py
           gofmt -w \
             app/cmd/add/boundary_gate.go \
             app/cmd/add/plan_validation.go \
