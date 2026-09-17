@@ -1,5 +1,208 @@
-run=35202441981
+run=35202554215
 product_expected=01cf8157d8660e816cdc40cd5d36a2ff618a3dc8
 
 == native materialization ==
 operation-growth native patch prepared
+
+== focused qualification ==
+toolchain-check: go=1.25.13 protoc=3.21.12 govulncheck=v1.7.0
+--- FAIL: TestIssue161BoundaryIntentGeneratedWireAndValidation (0.00s)
+    boundary_intent_test.go:117: singular message merge lost: (*contract.OperationDeclaration)(nil) boundary intent: exactly one of aggregate or aggregate_not_applicable_reason is required
+--- FAIL: TestIssue161BoundaryIntentLegacyAndInvalidManifest (0.00s)
+    boundary_intent_test.go:161: invalid load=<nil>
+--- FAIL: TestIssue160InventorySharedClosureMoveAndDeterminism (0.01s)
+    inventory_provenance_test.go:109: typed manifest not v4: {
+          "schemaVersion": 5,
+          "files": [
+            {
+              "name": "alpha/common.proto",
+              "package": "alpha.v1",
+              "syntax": "proto3",
+              "dependencies": [
+                "shared/model.proto"
+              ]
+            },
+            {
+              "name": "alpha/service.proto",
+              "package": "alpha.v1",
+              "syntax": "proto3",
+              "dependencies": [
+                "alpha/common.proto"
+              ],
+              "externalDependencies": [
+                "yunka/dsl/v1/options.proto"
+              ],
+              "domain": {
+                "name": "alpha",
+                "version": "v1"
+              }
+            },
+            {
+              "name": "beta/common.proto",
+              "package": "beta.v1",
+              "syntax": "proto3"
+            },
+            {
+              "name": "beta/service.proto",
+              "package": "beta.v1",
+              "syntax": "proto3",
+              "dependencies": [
+                "beta/common.proto"
+              ],
+              "externalDependencies": [
+                "yunka/dsl/v1/options.proto"
+              ],
+              "domain": {
+                "name": "beta",
+                "version": "v1"
+              }
+            },
+            {
+              "name": "shared/model.proto",
+              "package": "shared.v1",
+              "syntax": "proto3"
+            }
+          ],
+          "messages": [
+            {
+              "name": "Request",
+              "fullName": "alpha.v1.Request",
+              "sourceFile": "alpha/common.proto",
+              "fields": [
+                {
+                  "name": "metadata",
+                  "jsonName": "metadata",
+                  "number": 1,
+                  "kind": "map",
+                  "type": "map",
+                  "map": true,
+                  "mapKeyType": "string",
+                  "mapValueKind": "message",
+                  "mapValueType": "shared.v1.Metadata"
+                }
+              ],
+              "dto": {
+                "kind": "input"
+              }
+            },
+            {
+              "name": "Response",
+              "fullName": "alpha.v1.Response",
+              "sourceFile": "alpha/common.proto",
+              "fields": [
+                {
+                  "name": "kind",
+                  "jsonName": "kind",
+                  "number": 1,
+                  "kind": "enum",
+                  "type": "shared.v1.Metadata.Kind"
+                }
+              ],
+              "dto": {
+                "kind": "output"
+              }
+            },
+            {
+              "name": "Request",
+              "fullName": "beta.v1.Request",
+              "sourceFile": "beta/common.proto",
+              "fields": null,
+              "dto": {
+                "kind": "input"
+              }
+            },
+            {
+              "name": "Response",
+              "fullName": "beta.v1.Response",
+              "sourceFile": "beta/common.proto",
+              "fields": null,
+              "dto": {
+                "kind": "output"
+              }
+            },
+            {
+              "name": "Metadata",
+              "fullName": "shared.v1.Metadata",
+              "sourceFile": "shared/model.proto",
+              "fields": [
+                {
+                  "name": "kind",
+                  "jsonName": "kind",
+                  "number": 1,
+                  "kind": "enum",
+                  "type": "shared.v1.Metadata.Kind"
+                }
+              ]
+            }
+          ],
+          "enums": [
+            {
+              "name": "Kind",
+              "fullName": "shared.v1.Metadata.Kind",
+              "sourceFile": "shared/model.proto",
+              "values": [
+                {
+                  "name": "UNKNOWN",
+                  "number": 0
+                },
+                {
+                  "name": "TEXT",
+                  "number": 1
+                }
+              ]
+            }
+          ],
+          "services": [
+            {
+              "name": "API",
+              "fullName": "alpha.v1.API",
+              "sourceFile": "alpha/service.proto",
+              "domain": "alpha",
+              "application": {
+                "name": "management"
+              },
+              "methods": [
+                {
+                  "name": "Echo",
+                  "fullName": "alpha.v1.API.Echo",
+                  "sourceFile": "alpha/service.proto",
+                  "request": "alpha.v1.Request",
+                  "response": "alpha.v1.Response",
+                  "operation": {
+                    "id": "alpha.echo",
+                    "useCase": "echo",
+                    "permissionMode": "all",
+                    "public": true
+                  }
+                }
+              ]
+            },
+            {
+              "name": "API",
+              "fullName": "beta.v1.API",
+              "sourceFile": "beta/service.proto",
+              "domain": "beta",
+              "application": {
+                "name": "management"
+              },
+              "methods": [
+                {
+                  "name": "Echo",
+                  "fullName": "beta.v1.API.Echo",
+                  "sourceFile": "beta/service.proto",
+                  "request": "beta.v1.Request",
+                  "response": "beta.v1.Response",
+                  "operation": {
+                    "id": "beta.echo",
+                    "useCase": "echo",
+                    "permissionMode": "all",
+                    "public": true
+                  }
+                }
+              ]
+            }
+          ]
+        }
+FAIL
+FAIL	github.com/hvritual/yunka.io/pkg/contract	0.148s
+FAIL
