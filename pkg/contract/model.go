@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-const ManifestVersion = 4
+const ManifestVersion = 5
 
 type Manifest struct {
 	SchemaVersion int       `json:"schemaVersion"`
@@ -52,6 +52,12 @@ type ExecutionPolicy struct {
 	Idempotency string `json:"idempotency,omitempty"`
 }
 
+type BoundaryIntent struct {
+	Context                      string `json:"context"`
+	Aggregate                    string `json:"aggregate,omitempty"`
+	AggregateNotApplicableReason string `json:"aggregateNotApplicableReason,omitempty"`
+}
+
 type OperationDeclaration struct {
 	ID                 string           `json:"id"`
 	UseCase            string           `json:"useCase"`
@@ -66,6 +72,7 @@ type OperationDeclaration struct {
 	RequestType        string           `json:"requestType,omitempty"`
 	ResponseType       string           `json:"responseType,omitempty"`
 	ApplicationMethod  string           `json:"applicationMethod,omitempty"`
+	Boundary           *BoundaryIntent  `json:"boundary,omitempty"`
 }
 
 type Message struct {
@@ -142,7 +149,7 @@ type HTTPBinding struct {
 }
 
 func (manifest *Manifest) Normalize() {
-	if manifest.SchemaVersion == 0 || manifest.SchemaVersion == 1 || manifest.SchemaVersion == 2 || manifest.SchemaVersion == 3 {
+	if manifest.SchemaVersion == 0 || manifest.SchemaVersion == 1 || manifest.SchemaVersion == 2 || manifest.SchemaVersion == 3 || manifest.SchemaVersion == 4 {
 		manifest.SchemaVersion = ManifestVersion
 	}
 	for i := range manifest.Files {
@@ -233,6 +240,11 @@ func normalizeOperationDeclaration(operation *OperationDeclaration) {
 	operation.RequestType = normalizeTypeName(operation.RequestType)
 	operation.ResponseType = normalizeTypeName(operation.ResponseType)
 	operation.ApplicationMethod = strings.TrimSpace(operation.ApplicationMethod)
+	if operation.Boundary != nil {
+		operation.Boundary.Context = strings.TrimSpace(operation.Boundary.Context)
+		operation.Boundary.Aggregate = strings.TrimSpace(operation.Boundary.Aggregate)
+		operation.Boundary.AggregateNotApplicableReason = strings.TrimSpace(operation.Boundary.AggregateNotApplicableReason)
+	}
 	if operation.Execution != nil {
 		operation.Execution.Transaction = strings.TrimSpace(operation.Execution.Transaction)
 		operation.Execution.Idempotency = strings.TrimSpace(operation.Execution.Idempotency)
@@ -247,6 +259,10 @@ func cloneOperationDeclaration(operation OperationDeclaration) OperationDeclarat
 	if operation.Execution != nil {
 		execution := *operation.Execution
 		clone.Execution = &execution
+	}
+	if operation.Boundary != nil {
+		boundary := *operation.Boundary
+		clone.Boundary = &boundary
 	}
 	return clone
 }

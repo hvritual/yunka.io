@@ -6,14 +6,19 @@ import (
 
 	"yunka.io/app/cmd/audit"
 	"yunka.io/app/cmd/auditcore"
+	"yunka.io/app/cmd/projectflow"
 )
 
 func collectArchitectureDebt(root, baseSHA string) (auditcore.DebtDelta, error) {
+	return collectArchitectureDebtWithOptions(projectflow.Options{Root: root}, baseSHA)
+}
+
+func collectArchitectureDebtWithOptions(options projectflow.Options, baseSHA string) (auditcore.DebtDelta, error) {
 	baseSHA = strings.TrimSpace(baseSHA)
 	if baseSHA == "" {
 		return auditcore.DebtDelta{}, fmt.Errorf("architecture debt proof: base SHA is required")
 	}
-	report, err := audit.BuildWithBase(root, baseSHA)
+	report, err := audit.BuildWithBaseOptions(options, baseSHA)
 	if err != nil {
 		return auditcore.DebtDelta{}, fmt.Errorf("architecture debt proof: %w", err)
 	}

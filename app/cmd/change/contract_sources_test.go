@@ -269,7 +269,7 @@ func TestIssue160SourceScopeMultiSubjectAndCreate(t *testing.T) {
 	})
 	t.Run("create-with-unrelated-edit", func(t *testing.T) {
 		f := newSourceScopeFixture(t, false, false)
-		options := add.OperationOptions{Root: f.root, ApplicationKey: "scope/lifecycle", OperationID: "scope.create", UseCase: "create", Access: "protected", Permissions: []string{"scope.write"}, PermissionMode: "all", Tenant: "required", Authentication: []string{"jwt"}, Transaction: "local", Idempotency: "none", Composition: "local"}
+		options := add.OperationOptions{Root: f.root, ApplicationKey: "scope/lifecycle", OperationID: "scope.create", UseCase: "create", Access: "protected", Permissions: []string{"scope.write"}, PermissionMode: "all", Tenant: "required", Authentication: []string{"jwt"}, Transaction: "local", Idempotency: "none", Composition: "local", BoundaryContext: "scope.lifecycle", BoundaryAggregate: "scope"}
 		plan, err := add.PlanOperation(options)
 		if err != nil {
 			t.Fatal(err)
@@ -335,10 +335,10 @@ option (yunka.dsl.v1.domain) = { name: "scope" version: "v1" };
 service LifecycleService {
  option (yunka.dsl.v1.application) = { name: "lifecycle" };
  rpc Update(UpdateRequest) returns(UpdateResponse) {
-  option (yunka.dsl.v1.operation) = { id: "scope.update" use_case: "update" permissions: "scope.write" tenant_required: true authentication: AUTHENTICATION_JWT composition: COMPOSITION_LOCAL execution: {transaction: TRANSACTION_LOCAL idempotency: IDEMPOTENCY_NONE} };
+  option (yunka.dsl.v1.operation) = { id: "scope.update" use_case: "update" permissions: "scope.write" tenant_required: true authentication: AUTHENTICATION_JWT composition: COMPOSITION_LOCAL execution: {transaction: TRANSACTION_LOCAL idempotency: IDEMPOTENCY_NONE} boundary: { context: "scope.lifecycle" aggregate: "scope" } };
  }
  rpc Other(OtherRequest) returns(OtherResponse) {
-  option (yunka.dsl.v1.operation) = { id: "scope.other" use_case: "other" public: true execution: {transaction: TRANSACTION_NONE idempotency: IDEMPOTENCY_NONE} };
+  option (yunka.dsl.v1.operation) = { id: "scope.other" use_case: "other" public: true execution: {transaction: TRANSACTION_NONE idempotency: IDEMPOTENCY_NONE} boundary: { context: "scope.lifecycle" aggregate: "scope" } };
  }
 }
 `

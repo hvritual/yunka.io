@@ -2,6 +2,7 @@ package add
 
 func explicitOperationSemantics(options OperationOptions) *OperationSemantics {
 	result := &OperationSemantics{
+		Boundary:           boundarySemantics(operationBoundaryIntent(options)),
 		UseCase:            options.UseCase,
 		Access:             options.Access,
 		Permissions:        append([]string{}, options.Permissions...),

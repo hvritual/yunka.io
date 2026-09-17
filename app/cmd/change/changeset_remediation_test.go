@@ -1,6 +1,7 @@
 package change
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +13,7 @@ import (
 
 func TestT4RemediationBindingRejectsUnknownFinding(t *testing.T) {
 	fixture, value, _, _ := newRemediationPressureFixture(t)
-	_, err := BuildRemediationBinding(fixture.Root, value, []string{"AUDIT-NOT-REAL"})
+	_, err := BuildRemediationBindingWithOptions(fixture.compilerOptions(), value, []string{"AUDIT-NOT-REAL"})
 	if err == nil || !strings.Contains(err.Error(), "must be a proven finding present") {
 		t.Fatalf("unknown remediation finding was not rejected: %v", err)
 	}
@@ -20,7 +21,7 @@ func TestT4RemediationBindingRejectsUnknownFinding(t *testing.T) {
 
 func TestT4RemediationCheckRejectsRemainingTarget(t *testing.T) {
 	fixture, value, binding, findingID := newRemediationPressureFixture(t)
-	report, err := ReconcileRemediation(fixture.Root, value, binding)
+	report, err := ReconcileRemediationWithOptions(context.Background(), fixture.compilerOptions(), value, binding)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +38,7 @@ func TestT4RemediationCheckRejectsReplacementWithNewDebt(t *testing.T) {
 	badPath := remediationPressurePath(fixture.Root)
 	writePressureFile(t, badPath, "package application\n\nimport _ \"github.com/hvritual/yunka.io/gateway/authz\"\n")
 
-	report, err := ReconcileRemediation(fixture.Root, value, binding)
+	report, err := ReconcileRemediationWithOptions(context.Background(), fixture.compilerOptions(), value, binding)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +59,7 @@ func TestT4RemediationCheckPassesOnlyWhenFindingIsActuallyFixed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	report, err := ReconcileRemediation(fixture.Root, value, binding)
+	report, err := ReconcileRemediationWithOptions(context.Background(), fixture.compilerOptions(), value, binding)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +90,7 @@ func TestT4RemediationBindingIsDigestBoundAndStrict(t *testing.T) {
 
 	tampered := value
 	tampered.Subjects[0].Existing.Intent = IntentBoth
-	if _, err := ReconcileRemediation(fixture.Root, tampered, binding); err == nil || !strings.Contains(err.Error(), "digest mismatch") {
+	if _, err := ReconcileRemediationWithOptions(context.Background(), fixture.compilerOptions(), tampered, binding); err == nil || !strings.Contains(err.Error(), "digest mismatch") {
 		t.Fatalf("tampered ChangeSet escaped remediation digest binding: %v", err)
 	}
 }
@@ -137,7 +138,7 @@ func newRemediationPressureFixture(t *testing.T) (pressureFixture, ChangeSet, Re
 	if findingID == "" {
 		t.Fatalf("pressure baseline did not produce %s: %#v", auditcore.RulePlatformProviderBypass, auditReport.Findings)
 	}
-	binding, err := BuildRemediationBinding(fixture.Root, value, []string{findingID})
+	binding, err := BuildRemediationBindingWithOptions(fixture.compilerOptions(), value, []string{findingID})
 	if err != nil {
 		t.Fatalf("bind remediation finding: %v", err)
 	}

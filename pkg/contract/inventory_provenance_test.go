@@ -105,8 +105,8 @@ func TestIssue160InventorySharedClosureMoveAndDeterminism(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(one.Manifest, []byte(`"schemaVersion": 4`)) {
-		t.Fatalf("typed manifest not v4: %s", one.Manifest)
+	if !bytes.Contains(one.Manifest, []byte(`"schemaVersion": 5`)) {
+		t.Fatalf("typed manifest not v5: %s", one.Manifest)
 	}
 	out := filepath.Join(root, "out")
 	if err := WriteArtifacts(out, one); err != nil {

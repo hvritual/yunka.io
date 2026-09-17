@@ -54,15 +54,17 @@ func TestAddOperationRequiresExplicitSemanticsAndCreatesLandingFile(t *testing.T
 	}
 
 	report, err := AddOperation(OperationOptions{
-		Root:           root,
-		ApplicationKey: "tenant/lifecycle",
-		OperationID:    "tenant.suspend",
-		UseCase:        "suspend_tenant",
-		Access:         "public",
-		Tenant:         "optional",
-		Transaction:    "none",
-		Idempotency:    "none",
-		Composition:    "none",
+		Root:              root,
+		ApplicationKey:    "tenant/lifecycle",
+		OperationID:       "tenant.suspend",
+		UseCase:           "suspend_tenant",
+		Access:            "public",
+		Tenant:            "optional",
+		Transaction:       "none",
+		Idempotency:       "none",
+		Composition:       "none",
+		BoundaryContext:   "tenant.lifecycle",
+		BoundaryAggregate: "tenant",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +110,7 @@ func TestAddOperationRefusesExistingImplementationLandingBeforeProtoMutation(t *
 	mustWriteFile(t, landing, "package application\n\n// existing developer code\n")
 	_, err := AddOperation(OperationOptions{
 		Root: root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.suspend", UseCase: "suspend_tenant",
-		Access: "public", Tenant: "optional", Transaction: "none", Idempotency: "none", Composition: "none",
+		Access: "public", Tenant: "optional", Transaction: "none", Idempotency: "none", Composition: "none", BoundaryContext: "tenant.lifecycle", BoundaryAggregate: "tenant",
 	})
 	if err == nil {
 		t.Fatal("expected landing conflict")
@@ -209,6 +211,11 @@ func scaffoldProject(t *testing.T, files map[string]string) string {
 	if err := os.MkdirAll(filepath.Join(root, "modules"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	support, err := os.ReadFile(filepath.Join("..", "..", "..", "contracts", "proto", "yunka", "dsl", "v1", "options.proto"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustWriteFile(t, filepath.Join(root, "contracts", "proto", "yunka", "dsl", "v1", "options.proto"), string(support))
 	for relative, contents := range files {
 		mustWriteFile(t, filepath.Join(root, filepath.FromSlash(relative)), contents)
 	}

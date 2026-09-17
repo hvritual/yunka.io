@@ -56,6 +56,12 @@ func RevalidateOperationPlan(root string, candidate Report) (Report, error) {
 		Idempotency:        semantics.Idempotency,
 		Composition:        semantics.Composition,
 		RequiresOperations: append([]string{}, semantics.RequiresOperations...),
+		ProtoPaths:         append([]string(nil), candidate.ProtoPaths...),
+	}
+	if semantics.Boundary != nil {
+		options.BoundaryContext = semantics.Boundary.Context
+		options.BoundaryAggregate = semantics.Boundary.Aggregate
+		options.BoundaryNoAggregateReason = semantics.Boundary.AggregateNotApplicableReason
 	}
 	if semantics.HTTP != nil {
 		options.HTTPMethod = semantics.HTTP.Method
@@ -76,6 +82,9 @@ func RevalidateOperationPlan(root string, candidate Report) (Report, error) {
 	}
 	if candidateJSON != rebuiltJSON {
 		return Report{}, fmt.Errorf("add operation plan: supplied plan does not match canonical replan for the current project")
+	}
+	if !boundaryAllowsMutation(rebuilt.BoundaryDecision) {
+		return Report{}, fmt.Errorf("add operation plan: %w", boundaryBlockedError(rebuilt.BoundaryDecision))
 	}
 	return rebuilt, nil
 }

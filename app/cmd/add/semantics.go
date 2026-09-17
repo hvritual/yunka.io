@@ -29,6 +29,9 @@ func validateOperationOptions(options *OperationOptions) error {
 	options.HTTPMethod = strings.ToUpper(strings.TrimSpace(options.HTTPMethod))
 	options.HTTPPath = strings.TrimSpace(options.HTTPPath)
 	options.HTTPBody = strings.TrimSpace(options.HTTPBody)
+	options.BoundaryContext = strings.TrimSpace(options.BoundaryContext)
+	options.BoundaryAggregate = strings.TrimSpace(options.BoundaryAggregate)
+	options.BoundaryNoAggregateReason = strings.TrimSpace(options.BoundaryNoAggregateReason)
 
 	if !validPolicyKey(options.OperationID) {
 		return fmt.Errorf("add operation: operation ID %q must be an explicit stable lowercase key", options.OperationID)
@@ -96,6 +99,11 @@ func validateOperationOptions(options *OperationOptions) error {
 	if options.HTTPMethod != "" && !oneOf(options.HTTPMethod, "GET", "POST", "PUT", "PATCH", "DELETE") {
 		return fmt.Errorf("add operation: unsupported HTTP method %s", options.HTTPMethod)
 	}
+	if intent := operationBoundaryIntent(*options); intent != nil {
+		if err := contract.ValidateBoundaryIntent(intent); err != nil {
+			return fmt.Errorf("add operation: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -147,6 +155,15 @@ func renderRPCOperation(rpcName, requestType, responseType string, options Opera
 		fmt.Fprintf(&b, "      composition: %s\n", compositionEnum(options.Composition))
 	}
 	fmt.Fprintf(&b, "      execution: { transaction: %s idempotency: %s }\n", transactionEnum(options.Transaction), idempotencyEnum(options.Idempotency))
+	if intent := operationBoundaryIntent(options); intent != nil {
+		fmt.Fprintf(&b, "      boundary: { context: %q", intent.Context)
+		if intent.Aggregate != "" {
+			fmt.Fprintf(&b, " aggregate: %q", intent.Aggregate)
+		} else {
+			fmt.Fprintf(&b, " aggregate_not_applicable_reason: %q", intent.AggregateNotApplicableReason)
+		}
+		b.WriteString(" }\n")
+	}
 	b.WriteString("    };\n")
 	b.WriteString("  }\n")
 	return b.String()

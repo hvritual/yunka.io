@@ -15,6 +15,9 @@ type operationPlanOwner struct {
 
 func CompileOperationPlans(manifest Manifest) (operationplan.Set, error) {
 	manifest.Normalize()
+	if err := validateManifestBoundaryIntents(manifest); err != nil {
+		return operationplan.Set{}, fmt.Errorf("contract operation plan: %w", err)
+	}
 	applications := make(map[string]Service)
 	appDeps := make(map[string][]string)
 	for _, service := range manifest.Services {

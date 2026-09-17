@@ -44,28 +44,31 @@ type OperationHTTPSemantics struct {
 }
 
 type OperationSemantics struct {
-	UseCase            string                  `json:"useCase"`
-	Access             string                  `json:"access"`
-	Permissions        []string                `json:"permissions"`
-	PermissionMode     string                  `json:"permissionMode,omitempty"`
-	Tenant             string                  `json:"tenant"`
-	Authentication     []string                `json:"authentication"`
-	Transaction        string                  `json:"transaction"`
-	Idempotency        string                  `json:"idempotency"`
-	Composition        string                  `json:"composition"`
-	RequiresOperations []string                `json:"requiresOperations"`
-	HTTP               *OperationHTTPSemantics `json:"http,omitempty"`
+	Boundary           *OperationBoundarySemantics `json:"boundary,omitempty"`
+	UseCase            string                      `json:"useCase"`
+	Access             string                      `json:"access"`
+	Permissions        []string                    `json:"permissions"`
+	PermissionMode     string                      `json:"permissionMode,omitempty"`
+	Tenant             string                      `json:"tenant"`
+	Authentication     []string                    `json:"authentication"`
+	Transaction        string                      `json:"transaction"`
+	Idempotency        string                      `json:"idempotency"`
+	Composition        string                      `json:"composition"`
+	RequiresOperations []string                    `json:"requiresOperations"`
+	HTTP               *OperationHTTPSemantics     `json:"http,omitempty"`
 }
 
 type Report struct {
-	SchemaVersion     int                 `json:"schemaVersion"`
-	Kind              string              `json:"kind"`
-	Identity          map[string]string   `json:"identity"`
-	Mutations         []Mutation          `json:"mutations"`
-	Effects           []Effect            `json:"generatedEffects,omitempty"`
-	ExplicitSemantics *OperationSemantics `json:"explicitSemantics,omitempty"`
-	NextActions       []NextAction        `json:"nextActions,omitempty"`
-	Notes             []string            `json:"notes,omitempty"`
+	SchemaVersion     int                        `json:"schemaVersion"`
+	Kind              string                     `json:"kind"`
+	Identity          map[string]string          `json:"identity"`
+	Mutations         []Mutation                 `json:"mutations"`
+	Effects           []Effect                   `json:"generatedEffects,omitempty"`
+	ExplicitSemantics *OperationSemantics        `json:"explicitSemantics,omitempty"`
+	BoundaryDecision  *OperationBoundaryDecision `json:"boundaryDecision,omitempty"`
+	ProtoPaths        []string                   `json:"protoPaths,omitempty"`
+	NextActions       []NextAction               `json:"nextActions,omitempty"`
+	Notes             []string                   `json:"notes,omitempty"`
 }
 
 type ApplicationOptions struct {
@@ -75,26 +78,30 @@ type ApplicationOptions struct {
 }
 
 type OperationOptions struct {
-	Root               string
-	ApplicationKey     string
-	OperationID        string
-	Source             string
-	UseCase            string
-	RPCName            string
-	RequestType        string
-	ResponseType       string
-	Access             string
-	Permissions        []string
-	PermissionMode     string
-	Tenant             string
-	Authentication     []string
-	Transaction        string
-	Idempotency        string
-	Composition        string
-	RequiresOperations []string
-	HTTPMethod         string
-	HTTPPath           string
-	HTTPBody           string
+	Root                      string
+	ApplicationKey            string
+	OperationID               string
+	Source                    string
+	UseCase                   string
+	RPCName                   string
+	RequestType               string
+	ResponseType              string
+	Access                    string
+	Permissions               []string
+	PermissionMode            string
+	Tenant                    string
+	Authentication            []string
+	Transaction               string
+	Idempotency               string
+	Composition               string
+	RequiresOperations        []string
+	HTTPMethod                string
+	HTTPPath                  string
+	HTTPBody                  string
+	BoundaryContext           string
+	BoundaryAggregate         string
+	BoundaryNoAggregateReason string
+	ProtoPaths                []string
 }
 
 type EventOptions struct {
@@ -191,6 +198,10 @@ func operationCommand() cli.Command {
 		cli.StringFlag{Name: "http-method", Usage: "optional explicit HTTP method"},
 		cli.StringFlag{Name: "http-path", Usage: "optional explicit HTTP path"},
 		cli.StringFlag{Name: "http-body", Usage: "optional HTTP body mapping; typically *"},
+		cli.StringFlag{Name: "boundary-context", Usage: "explicit Service Boundary context key for Operation Growth"},
+		cli.StringFlag{Name: "boundary-aggregate", Usage: "explicit aggregate key; mutually exclusive with --boundary-no-aggregate-reason"},
+		cli.StringFlag{Name: "boundary-no-aggregate-reason", Usage: "explicit reason why aggregate does not apply"},
+		cli.StringSliceFlag{Name: "proto-path", Usage: "additional protobuf include directory; repeatable for proto-root projects"},
 	)
 	return cli.Command{
 		Name:  "operation",
@@ -198,26 +209,30 @@ func operationCommand() cli.Command {
 		Flags: flags,
 		Action: func(c *cli.Context) error {
 			options := OperationOptions{
-				Root:               c.String("root"),
-				ApplicationKey:     c.Args().Get(0),
-				OperationID:        c.Args().Get(1),
-				Source:             c.String("source"),
-				UseCase:            c.String("use-case"),
-				RPCName:            c.String("rpc-name"),
-				RequestType:        c.String("request-type"),
-				ResponseType:       c.String("response-type"),
-				Access:             c.String("access"),
-				Permissions:        c.StringSlice("permission"),
-				PermissionMode:     c.String("permission-mode"),
-				Tenant:             c.String("tenant"),
-				Authentication:     c.StringSlice("authentication"),
-				Transaction:        c.String("transaction"),
-				Idempotency:        c.String("idempotency"),
-				Composition:        c.String("composition"),
-				RequiresOperations: c.StringSlice("requires-operation"),
-				HTTPMethod:         c.String("http-method"),
-				HTTPPath:           c.String("http-path"),
-				HTTPBody:           c.String("http-body"),
+				Root:                      c.String("root"),
+				ApplicationKey:            c.Args().Get(0),
+				OperationID:               c.Args().Get(1),
+				Source:                    c.String("source"),
+				UseCase:                   c.String("use-case"),
+				RPCName:                   c.String("rpc-name"),
+				RequestType:               c.String("request-type"),
+				ResponseType:              c.String("response-type"),
+				Access:                    c.String("access"),
+				Permissions:               c.StringSlice("permission"),
+				PermissionMode:            c.String("permission-mode"),
+				Tenant:                    c.String("tenant"),
+				Authentication:            c.StringSlice("authentication"),
+				Transaction:               c.String("transaction"),
+				Idempotency:               c.String("idempotency"),
+				Composition:               c.String("composition"),
+				RequiresOperations:        c.StringSlice("requires-operation"),
+				HTTPMethod:                c.String("http-method"),
+				HTTPPath:                  c.String("http-path"),
+				HTTPBody:                  c.String("http-body"),
+				BoundaryContext:           c.String("boundary-context"),
+				BoundaryAggregate:         c.String("boundary-aggregate"),
+				BoundaryNoAggregateReason: c.String("boundary-no-aggregate-reason"),
+				ProtoPaths:                append([]string(nil), c.StringSlice("proto-path")...),
 			}
 			if c.Bool("plan") {
 				report, err := PlanOperation(options)

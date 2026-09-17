@@ -1,6 +1,7 @@
 package change
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 
 	"yunka.io/app/cmd/audit"
 	"yunka.io/app/cmd/auditcore"
+	"yunka.io/app/cmd/projectflow"
 )
 
 const (
@@ -45,6 +47,11 @@ type RemediationCheckReport struct {
 }
 
 func BuildRemediationBinding(root string, value ChangeSet, findingIDs []string) (RemediationBinding, error) {
+	return BuildRemediationBindingWithOptions(projectflow.Options{Root: root}, value, findingIDs)
+}
+
+func BuildRemediationBindingWithOptions(options projectflow.Options, value ChangeSet, findingIDs []string) (RemediationBinding, error) {
+	root := options.Root
 	if err := ensureCleanWorktree(root); err != nil {
 		return RemediationBinding{}, &Failure{Kind: FailureEvidence, Err: err}
 	}
@@ -60,7 +67,7 @@ func BuildRemediationBinding(root string, value ChangeSet, findingIDs []string) 
 	if err != nil {
 		return RemediationBinding{}, &Failure{Kind: FailureEvidence, Err: err}
 	}
-	report, err := audit.BuildWithBase(root, value.BaseSHA)
+	report, err := audit.BuildWithBaseOptions(options, value.BaseSHA)
 	if err != nil {
 		return RemediationBinding{}, &Failure{Kind: FailureEvidence, Err: fmt.Errorf("change remediation bind: audit baseline: %w", err)}
 	}
@@ -129,6 +136,10 @@ func LoadRemediationBinding(root, input string) (RemediationBinding, string, err
 }
 
 func ReconcileRemediation(root string, value ChangeSet, binding RemediationBinding) (RemediationCheckReport, error) {
+	return ReconcileRemediationWithOptions(context.Background(), projectflow.Options{Root: root}, value, binding)
+}
+
+func ReconcileRemediationWithOptions(ctx context.Context, options projectflow.Options, value ChangeSet, binding RemediationBinding) (RemediationCheckReport, error) {
 	normalizeChangeSet(&value)
 	if err := validateChangeSet(value); err != nil {
 		return RemediationCheckReport{}, err
@@ -148,11 +159,11 @@ func ReconcileRemediation(root string, value ChangeSet, binding RemediationBindi
 		return RemediationCheckReport{}, fmt.Errorf("change remediation check: ChangeSet digest mismatch; binding=%s current=%s", binding.ChangeSetDigest, digest)
 	}
 
-	changeReport, err := ReconcileChangeSet(root, value)
+	changeReport, err := ReconcileChangeSetWithOptions(ctx, options, value)
 	if err != nil {
 		return RemediationCheckReport{}, err
 	}
-	auditReport, err := audit.BuildWithBase(root, value.BaseSHA)
+	auditReport, err := audit.BuildWithBaseOptions(options, value.BaseSHA)
 	if err != nil {
 		return RemediationCheckReport{}, fmt.Errorf("change remediation check: audit debt: %w", err)
 	}

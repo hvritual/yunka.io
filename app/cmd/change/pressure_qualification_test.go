@@ -129,7 +129,12 @@ func newPressureFixture(t *testing.T) pressureFixture {
 		t.Fatal(err)
 	}
 	writePressureFile(t, filepath.Join(root, "contracts", "proto", "tenant.proto"), pressureDomainProto())
-
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	repositoryRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "../../.."))
+	protoPath := filepath.Join(repositoryRoot, "contracts", "proto")
 	if _, err := add.AddApplication(add.ApplicationOptions{Root: root, Key: "tenant/lifecycle"}); err != nil {
 		t.Fatalf("add application: %v", err)
 	}
@@ -143,6 +148,7 @@ func newPressureFixture(t *testing.T) pressureFixture {
 			Root: root, ApplicationKey: "tenant/lifecycle", OperationID: operation.id, UseCase: operation.useCase,
 			Access: "protected", Permissions: []string{operation.id}, PermissionMode: "all", Tenant: "required",
 			Authentication: []string{"jwt"}, Transaction: "local", Idempotency: "none", Composition: "local",
+			BoundaryContext: "tenant.lifecycle", BoundaryAggregate: "tenant", ProtoPaths: []string{protoPath},
 		}); err != nil {
 			t.Fatalf("add operation %s: %v", operation.id, err)
 		}
@@ -151,12 +157,6 @@ func newPressureFixture(t *testing.T) pressureFixture {
 		t.Fatalf("add baseline module: %v", err)
 	}
 
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller failed")
-	}
-	repositoryRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "../../.."))
-	protoPath := filepath.Join(repositoryRoot, "contracts", "proto")
 	fixture := pressureFixture{Root: root, ProtoPath: protoPath, ContractPath: DefaultChangeContractPath}
 	generatePressureProject(t, fixture)
 	gitPressure(t, root, "init")

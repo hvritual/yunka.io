@@ -22,6 +22,8 @@ func Command() cli.Command {
 		Flags: []cli.Flag{
 			cli.StringFlag{Name: "root", Value: ".", Usage: "project root"},
 			cli.StringFlag{Name: "base", Usage: "optional Git ref used to classify proven findings as existing, new, or fixed debt"},
+			cli.StringFlag{Name: "protoc", EnvVar: "PROTOC", Usage: "protoc binary used for base/current Operation Growth evidence"},
+			cli.StringSliceFlag{Name: "proto-path", Usage: "additional protobuf include path used for base/current Operation Growth evidence; may be repeated"},
 			cli.StringFlag{Name: "format", Value: "text", Usage: "output format: text, json, or agent-json"},
 		},
 		Action: func(c *cli.Context) error {
@@ -30,7 +32,7 @@ func Command() cli.Command {
 			if strings.TrimSpace(c.String("base")) == "" {
 				report, err = Build(c.String("root"))
 			} else {
-				report, err = BuildWithBase(c.String("root"), c.String("base"))
+				report, err = BuildWithBaseOptions(projectflow.Options{Root: c.String("root"), Protoc: c.String("protoc"), ProtoPaths: c.StringSlice("proto-path")}, c.String("base"))
 			}
 			if err != nil {
 				return err
@@ -54,7 +56,11 @@ func Build(root string) (auditcore.Report, error) {
 }
 
 func BuildWithBase(root, baseRef string) (auditcore.Report, error) {
-	current, descriptor, err := buildCurrent(root)
+	return BuildWithBaseOptions(projectflow.Options{Root: root}, baseRef)
+}
+
+func BuildWithBaseOptions(options projectflow.Options, baseRef string) (auditcore.Report, error) {
+	current, descriptor, err := buildCurrent(options.Root)
 	if err != nil {
 		return auditcore.Report{}, err
 	}
@@ -75,6 +81,11 @@ func BuildWithBase(root, baseRef string) (auditcore.Report, error) {
 	if descriptor.GoModule != baselineDescriptor.GoModule {
 		return auditcore.Report{}, fmt.Errorf("audit debt: baseline module %q differs from current module %q; choose a baseline after the module-identity migration", baselineDescriptor.GoModule, descriptor.GoModule)
 	}
+	growth, err := boundaryGrowthFindings(projectflow.Options{Root: descriptor.Root, Protoc: options.Protoc, ProtoPaths: append([]string(nil), options.ProtoPaths...)}, baselineRoot, baseSHA)
+	if err != nil {
+		return auditcore.Report{}, err
+	}
+	current.Findings = append(current.Findings, growth...)
 	debt := auditcore.CompareProvenFindings(baseline.Findings, current.Findings)
 	debt.BaseRef = baseRef
 	debt.BaseSHA = baseSHA

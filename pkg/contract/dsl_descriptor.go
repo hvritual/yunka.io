@@ -322,6 +322,16 @@ func parseOperationDeclaration(data []byte) (*OperationDeclaration, error) {
 			result.ResponseType = string(field.Bytes)
 		case 13:
 			result.ApplicationMethod = string(field.Bytes)
+		case 14:
+			if field.Type != 2 {
+				return fmt.Errorf("boundary intent: operation field 14 must be a message")
+			}
+			if result.Boundary == nil {
+				result.Boundary = &BoundaryIntent{}
+			}
+			if err := mergeBoundaryIntent(result.Boundary, field.Bytes); err != nil {
+				return err
+			}
 		}
 		return nil
 	}); err != nil {
@@ -330,6 +340,9 @@ func parseOperationDeclaration(data []byte) (*OperationDeclaration, error) {
 	result.Permissions = stableStrings(result.Permissions)
 	result.Authentication = stableStrings(result.Authentication)
 	result.RequiresOperations = stableStrings(result.RequiresOperations)
+	if err := ValidateBoundaryIntent(result.Boundary); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 

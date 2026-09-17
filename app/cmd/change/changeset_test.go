@@ -88,6 +88,7 @@ func writeCreatePlan(t *testing.T, fixture pressureFixture, operationID, useCase
 		Root: fixture.Root, ApplicationKey: "tenant/lifecycle", OperationID: operationID, UseCase: useCase,
 		Access: "protected", Permissions: []string{operationID}, PermissionMode: "all", Tenant: "required",
 		Authentication: []string{"jwt"}, Transaction: "local", Idempotency: "none", Composition: "local",
+		BoundaryContext: "tenant.lifecycle", BoundaryAggregate: "tenant", ProtoPaths: []string{fixture.ProtoPath},
 	})
 	if err != nil {
 		t.Fatalf("plan operation %s: %v", operationID, err)
