@@ -2,7 +2,6 @@
 from pathlib import Path
 
 ROOT = Path.cwd()
-
 def read(path): return (ROOT / path).read_text()
 def write(path, text): (ROOT / path).write_text(text)
 def replace_once(path, old, new):
@@ -53,7 +52,6 @@ replace_once(
 }
 
 func ReconcileRemediationWithOptions(ctx context.Context, options projectflow.Options, value ChangeSet, binding RemediationBinding) (RemediationCheckReport, error) {
-\troot := options.Root
 \tnormalizeChangeSet(&value)''')
 replace_once(
     "app/cmd/change/changeset_remediation.go",
