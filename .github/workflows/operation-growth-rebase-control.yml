@@ -67,32 +67,42 @@ jobs:
       - name: Apply only still-relevant old capabilities onto current main
         shell: bash
         run: |
-          set -euo pipefail
+          set -u
           git fetch origin \
             7d7fc663f7086df9735ee9089c75f65d2fd100e4 \
             23789633f2e0dbcd20230cacca42e814047d86bc \
             f8fdce6c3bd7bd63eef05ae23b3fc9ba83c3b0de \
             62fe8e194b60637d8fee1d0bec90d9a67ccd9490
 
-          git diff --binary 7d7fc663f7086df9735ee9089c75f65d2fd100e4 23789633f2e0dbcd20230cacca42e814047d86bc -- \
+          apply_range() {
+            label="$1"; from="$2"; to="$3"; shift 3
+            echo "=== ${label} ==="
+            if ! git diff --binary "$from" "$to" -- "$@" | git apply --3way; then
+              echo "FAILED_RANGE=${label}" >&2
+              echo "--- unmerged paths ---" >&2
+              git diff --name-only --diff-filter=U >&2 || true
+              echo "--- status ---" >&2
+              git status --short >&2 || true
+              echo "--- conflict markers ---" >&2
+              git grep -n -E '^(<<<<<<<|=======|>>>>>>>)' -- . >&2 || true
+              exit 1
+            fi
+          }
+
+          apply_range foundation \
+            7d7fc663f7086df9735ee9089c75f65d2fd100e4 23789633f2e0dbcd20230cacca42e814047d86bc \
             contracts/proto/yunka/dsl/v1/options.proto \
             pkg/contract pkg/contractdsl/v1/options.pb.go \
-            app/cmd/boundarycore app/cmd/boundary app/cmd/main.go \
-            | git apply --3way
+            app/cmd/boundarycore app/cmd/boundary app/cmd/main.go
 
-          git diff --binary 23789633f2e0dbcd20230cacca42e814047d86bc f8fdce6c3bd7bd63eef05ae23b3fc9ba83c3b0de -- \
-            app/cmd/boundarycore \
-            | git apply --3way
+          apply_range decision \
+            23789633f2e0dbcd20230cacca42e814047d86bc f8fdce6c3bd7bd63eef05ae23b3fc9ba83c3b0de \
+            app/cmd/boundarycore
 
-          git diff --binary f8fdce6c3bd7bd63eef05ae23b3fc9ba83c3b0de 62fe8e194b60637d8fee1d0bec90d9a67ccd9490 -- \
-            app/cmd/add app/cmd/projectflow \
-            | git apply --3way
+          apply_range authoring \
+            f8fdce6c3bd7bd63eef05ae23b3fc9ba83c3b0de 62fe8e194b60637d8fee1d0bec90d9a67ccd9490 \
+            app/cmd/add app/cmd/projectflow
 
-          if git ls-files -u | grep -q .; then
-            echo "3-way transplant left conflicts:" >&2
-            git status --short >&2
-            exit 1
-          fi
           git status --short
 
       - name: Regenerate canonical protobuf outputs
