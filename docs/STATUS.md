@@ -4,7 +4,7 @@
 > Authority: current framework/wave/release/pressure status  
 > Live Git HEAD authority: resolve the `main` ref from Git/GitHub; it is not duplicated as a permanent fact here  
 > Behavioral reconciliation baseline: `19bed965852d9dc2ef39e91dcadd7fb6bea4c871` (qualified candidate merged unchanged by PR #119)  
-> Reconciled date: 2026-09-10
+> Reconciled date: 2026-09-17
 > Governance: [`DOCUMENTATION_GOVERNANCE.md`](DOCUMENTATION_GOVERNANCE.md)
 
 ## Current framework state
@@ -24,6 +24,7 @@
 | Distributed execution trace closure | **Complete / production-qualified / merged** | issue #118 / PR #119; exact candidate `19bed965852d9dc2ef39e91dcadd7fb6bea4c871` passed CI #418 and production #178 and was merged unchanged into `main` |
 | Separately versioned infrastructure extension module | **Complete / production-qualified / merged** | issue #121 / PR #122; exact candidate `fc09f296cccb14ae18891bc43642d5efe43bd484` passed CI #430 and production #190, then merged as `70611d6cee5dd4e37ae6a803bcb38b938acd59c9`; independent `infras/vX.Y.Z` tag surface exists, but no `infras/v0.1.0` release tag is claimed yet |
 | Typed infrastructure capability export / binding | **Complete / production-qualified / merged** | issue #124 / PR #131; exact candidate `c3123fb4a3e7731f0edf5539c3d8003fc0e41bc7` passed CI #475 and production #233 after synchronization with AX6 main, merged as `d06a6330db9093e0bc586decb6bdc00122b4aa99`, and exact-main push CI #476 / production #234 also passed |
+| Engineering Quality / human-reviewable AI code | **Complete / globally qualified / merged** | issue #192 global acceptance passed on exact behavioral main `fe63375b84be89c068ad57b81cc7def578cf30fc` after #220 evidence-integrity repair through PR #222; exact-main CI `35162731142`, Production `35162731126`, source-policy `35162731168`, template `35162731173`, and global acceptance `35127746651` passed |
 | Active numbered Yunka framework wave | **None selected** | new framework work remains pressure-driven rather than roadmap-driven; AX/Terminalization control-plane work does not by itself create a numbered framework wave |
 | Proven open Yunka P0/P1 runtime/compiler/authz/persistence/trace-closure defects | **0 known after #181 closure** | Biz CE-08 proved C9 cross-domain child codegen issue #181; PR #183 closed it with framework PR/main qualification and locked-baseline real-consumer reverse qualification. Do not promote hypotheses into framework defects without executable consumer evidence |
 
@@ -461,6 +462,49 @@ AG-01I main integration was completed at `4dd2a264c73a2ce6b85ad7ae6238046762e7e0
 AG-05 review hardening preserves three independently reproduced constraints: [CGO tool PATH](waves/AG-05-cgo-toolpath-review.md), [GOROOT overrides](waves/AG-05-goroot-review.md), and [writable cache paths](waves/AG-05-cache-path-review.md). Start the checker with GOROOT unset and keep writable cache/home/temp locations outside the audited root. Failure to establish these prerequisites is INCOMPLETE before invoking tools, not an accepted audit followed by worktree pollution. The full frozen IoT legacy-module finding remains INCOMPLETE and is never replaced by its narrower current-module PASS.
 
 These tests characterize the language boundary, including expected examples of insufficient encapsulation. They do not certify arbitrary Go code, all operating systems, consumer root-UoW behavior, or a same-process/OS security sandbox. Canonical tool downloads are disabled inside fixture execution; this is not a network firewall. Unix process-group cleanup has Linux qualification only; non-Unix execution reports INCOMPLETE until its process-tree backend is implemented and qualified.
+
+## Engineering Quality global acceptance — issues #192 / #220
+
+**State: COMPLETE / GLOBALLY QUALIFIED / MERGED.**
+
+The human-reviewable AI-code initiative is accepted on exact behavioral main
+`fe63375b84be89c068ad57b81cc7def578cf30fc`, tree
+`ca1b922106e15175b31c74c538fef348dfd0bcec`. PR #222 integrated the #220
+control-plane evidence-integrity repair by non-force fast-forward, so the
+accepted main commit and previously qualified repair candidate are identical.
+
+The repair carries compact semantic evidence binding through validated semantic
+review attestations and finding deltas, re-reads immutable baseline source from
+Git objects and current source from the active project, re-derives request/source
+identity, and requires the active Change `BaseSHA`, `HeadSHA`, and candidate
+identity to match before advisory debt can enter `QualityDebtProof`. Human review
+packet construction/checking revalidates the same candidate. Stale current-review
+head, same-head stale source bytes, and review-baseline/Change-baseline mismatch
+now fail closed. Valid semantic findings remain visible and advisory-only; this
+change does not grant semantic advice mutation or merge authority.
+
+Fresh global acceptance run `35127746651` rechecked the eight #192 clauses
+against the exact accepted source. The contracts/consumer branch passed the
+integrated quality matrix with 211 top-level tests, required semantic/debt/review/
+migration tests, pinned Biz and IoT qualifications, zero required-test skips, and
+unchanged source readback. Its Production branch passed the unchanged canonical
+`make verify-production` gate with the locked toolchain and MySQL 8.4, followed by
+clean source readback and evidence hashing.
+
+Separate exact-main push gates also passed: CI `35162731142` including Verify and
+determinism, Production `35162731126` including MySQL 8.4 and clean worktree,
+AG-05 source-policy `35162731168`, and AG-06 template qualification
+`35162731173`. Candidate qualification for PR #222 additionally passed semantic
+review, quality-debt, review-packet and quality-migration gates before integration.
+External review was not performed and is not required by current repository
+policy; automated qualification is not represented as independent approval.
+
+Acceptance remains bounded to the documented engineering-quality rules and named
+consumer scopes. It does not claim universal business/DDD correctness, automatic
+mutation/merge authority, repository-wide historical-debt removal, or completion
+of unrelated #161, #177, #178/#188 or remaining AG work. Runtime, Executor,
+Authz, UoW, protobuf business contracts, dependencies and consumer source are
+unchanged by the #220 repair.
 
 ## Bounded engineering-quality migration — issue #200
 
