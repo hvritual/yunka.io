@@ -55,12 +55,16 @@ jobs:
           git -C "$RUNNER_TEMP/biz" checkout --quiet c89ec471306c91f49fdf265f1766495abb1f4f08
           git clone --quiet https://github.com/hvritual/iot-delivery-system.git "$RUNNER_TEMP/iot"
           git -C "$RUNNER_TEMP/iot" checkout --quiet c38ce0efcbe11d8ef9201381f895c7e9a85ddbc0
+          test "$(git -C "$RUNNER_TEMP/iot" ls-tree HEAD third_party/yunka | awk '{print $3}')" = "057ebcf88a87303eb633eb6e604d306f633dfac0"
+          git clone --quiet https://github.com/hvritual/yunka.io.git "$RUNNER_TEMP/iot-runtime"
+          git -C "$RUNNER_TEMP/iot-runtime" checkout --quiet 057ebcf88a87303eb633eb6e604d306f633dfac0
       - name: Build and run quality debt regressions
         working-directory: app
         shell: bash
         env:
           YUNKA_QUALITY_DEBT_BIZ_ROOT: ${{ runner.temp }}/biz
           YUNKA_QUALITY_DEBT_IOT_ROOT: ${{ runner.temp }}/iot
+          YUNKA_QUALITY_DEBT_IOT_PROTO_PATH: ${{ runner.temp }}/iot-runtime/contracts/proto
         run: |
           set -euo pipefail
           go test ./cmd/change -run '^(TestQualityDebt|TestQualityWaiver|TestArchitectureDebtProof|TestReviewQualityDebt)' -count=1 -v
@@ -72,3 +76,4 @@ jobs:
           test -z "$(git status --porcelain --untracked-files=all)"
           test -z "$(git -C "$RUNNER_TEMP/biz" status --porcelain --untracked-files=all)"
           test -z "$(git -C "$RUNNER_TEMP/iot" status --porcelain --untracked-files=all)"
+          test -z "$(git -C "$RUNNER_TEMP/iot-runtime" status --porcelain --untracked-files=all)"
