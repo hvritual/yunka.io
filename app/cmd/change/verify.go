@@ -35,7 +35,7 @@ type ChangeAttestation struct {
 	Reconciliation   Reconciliation          `json:"reconciliation"`
 	Semantic         SemanticReport          `json:"semantic"`
 	ArchitectureDebt *auditcore.DebtDelta    `json:"architectureDebt,omitempty"`
-	QualityDebt      *QualityDebtProof        `json:"qualityDebt,omitempty"`
+	QualityDebt      *QualityDebtProof       `json:"qualityDebt,omitempty"`
 	Gates            []GateResult            `json:"gates"`
 	Diagnostics      []diagnostic.Diagnostic `json:"diagnostics"`
 	Conformant       bool                    `json:"conformant"`
@@ -164,7 +164,7 @@ func VerifyChange(ctx context.Context, options VerifyOptions) (ChangeAttestation
 			}
 		}
 
-		architectureDebt, architectureDebtErr := collectArchitectureDebt(descriptor.Root, contractValue.BaseSHA)
+		architectureDebt, architectureDebtErr := collectArchitectureDebtWithOptions(projectflow.Options{Root: descriptor.Root, Protoc: options.Protoc, ProtoPaths: append([]string(nil), options.ProtoPaths...)}, contractValue.BaseSHA)
 		if architectureDebtErr != nil {
 			attestation.Gates = append(attestation.Gates, GateResult{Name: "architecture-debt", Status: "fail", Detail: architectureDebtErr.Error()})
 			attestation.Gates = append(attestation.Gates, GateResult{Name: "quality-debt", Status: "skipped", Detail: "deterministic debt evidence failed"})

@@ -122,6 +122,10 @@ func changeOperation(options OperationOptions, apply bool) (Report, error) {
 	if !responseExists {
 		updated = appendProtoBlock(updated, renderDTOMessage(responseType, "DTO_OUTPUT", "response fields"))
 	}
+	boundaryDecision, err := evaluateOperationBoundary(inputs.Project.Root, source.Relative, domain, application, packageName, rpcName, requestType, responseType, options)
+	if err != nil {
+		return Report{}, sourceFailure(source.Relative, err)
+	}
 	owner, err := requireEditable(inputs.Project.Root, source.Relative)
 	if err != nil {
 		return Report{}, err
@@ -169,6 +173,8 @@ func changeOperation(options OperationOptions, apply bool) (Report, error) {
 			{Command: "go test ./...", Purpose: "verify the developer implementation and affected packages"},
 			{Command: "yunka dev", Purpose: "verify runtime readiness and behavior"},
 		},
+		BoundaryDecision: boundaryDecision,
+		ProtoPaths:       append([]string(nil), options.ProtoPaths...),
 		Notes: []string{
 			"Request/response messages are empty structural DTOs; add business fields explicitly.",
 			"Access, tenant, transaction, idempotency, composition, permissions, authentication, dependencies, and HTTP facts come only from the caller flags.",
@@ -191,6 +197,10 @@ func changeOperation(options OperationOptions, apply bool) (Report, error) {
 		report.Notes = append([]string{"Plan only: no project files were written; rerun the same explicit add operation request without --plan to apply after review."}, report.Notes...)
 		normalizeReport(&report)
 		return report, nil
+	}
+	if !boundaryAllowsMutation(boundaryDecision) {
+		normalizeReport(&report)
+		return report, conflictFailure(source.Relative, boundaryBlockedError(boundaryDecision))
 	}
 
 	if sealed {

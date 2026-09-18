@@ -8,28 +8,42 @@ import (
 
 	"yunka.io/app/cmd/audit"
 	"yunka.io/app/cmd/auditcore"
+	"yunka.io/app/cmd/projectflow"
 )
 
 func TestQualityDebtConsumerQualification(t *testing.T) {
 	bizRoot := strings.TrimSpace(os.Getenv("YUNKA_QUALITY_DEBT_BIZ_ROOT"))
 	iotRoot := strings.TrimSpace(os.Getenv("YUNKA_QUALITY_DEBT_IOT_ROOT"))
+	iotProtoPath := strings.TrimSpace(os.Getenv("YUNKA_QUALITY_DEBT_IOT_PROTO_PATH"))
 	if bizRoot == "" || iotRoot == "" {
 		return
 	}
-	for name, root := range map[string]string{"biz": bizRoot, "iot": iotRoot} {
-		t.Run(name, func(t *testing.T) {
-			qualifyQualityDebtConsumer(t, root)
+	cases := []struct {
+		name       string
+		root       string
+		protoPaths []string
+	}{
+		{name: "biz", root: bizRoot},
+		{name: "iot", root: iotRoot, protoPaths: []string{iotProtoPath}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if testCase.name == "iot" && iotProtoPath == "" {
+				t.Fatal("YUNKA_QUALITY_DEBT_IOT_PROTO_PATH is required for the pinned IoT DSL include")
+			}
+			qualifyQualityDebtConsumer(t, testCase.root, testCase.protoPaths)
 		})
 	}
 }
 
-func qualifyQualityDebtConsumer(t *testing.T, root string) {
+func qualifyQualityDebtConsumer(t *testing.T, root string, protoPaths []string) {
 	t.Helper()
-	first, err := audit.BuildWithBase(root, "HEAD")
+	options := projectflow.Options{Root: root, ProtoPaths: append([]string(nil), protoPaths...)}
+	first, err := audit.BuildWithBaseOptions(options, "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := audit.BuildWithBase(root, "HEAD")
+	second, err := audit.BuildWithBaseOptions(options, "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}

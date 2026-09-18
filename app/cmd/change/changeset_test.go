@@ -60,6 +60,18 @@ func TestBuildChangeSetComposesExistingV1AndCreatePlanOnOneBase(t *testing.T) {
 	}
 }
 
+func TestBuildChangeSetRejectsCreatePlanBoundToDifferentBase(t *testing.T) {
+	fixture := newPressureFixture(t)
+	// Advance only the Git identity. HEAD^ remains the complete generated
+	// baseline, while the plan is intentionally bound to the newer HEAD.
+	gitPressure(t, fixture.Root, "commit", "--allow-empty", "-m", "advance authoring head")
+	plan := writeCreatePlan(t, fixture, "tenant.archive", "archive_tenant")
+	_, _, err := BuildChangeSet(fixture.Root, "HEAD^", nil, []string{plan})
+	if err == nil || !strings.Contains(err.Error(), "boundary decision base") || !strings.Contains(err.Error(), "differs from ChangeSet base") {
+		t.Fatalf("mismatched create-plan base escaped ChangeSet binding: %v", err)
+	}
+}
+
 func TestBuildChangeSetRejectsDuplicateSubjectOperation(t *testing.T) {
 	fixture := newPressureFixture(t)
 	_, _, err := BuildChangeSet(fixture.Root, "HEAD", []string{fixture.ContractPath, fixture.ContractPath}, nil)
@@ -88,6 +100,7 @@ func writeCreatePlan(t *testing.T, fixture pressureFixture, operationID, useCase
 		Root: fixture.Root, ApplicationKey: "tenant/lifecycle", OperationID: operationID, UseCase: useCase,
 		Access: "protected", Permissions: []string{operationID}, PermissionMode: "all", Tenant: "required",
 		Authentication: []string{"jwt"}, Transaction: "local", Idempotency: "none", Composition: "local",
+		BoundaryContext: "tenant.lifecycle", BoundaryAggregate: "tenant", ProtoPaths: []string{fixture.ProtoPath},
 	})
 	if err != nil {
 		t.Fatalf("plan operation %s: %v", operationID, err)

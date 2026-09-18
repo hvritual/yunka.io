@@ -158,6 +158,7 @@ func reconcileChangeSetSemanticFacts(value ChangeSet, base, current canonicalFac
 		}
 	}
 	report.Deltas = append(report.Deltas, compareChangeSetApplications(base, current, applicationAllowances)...)
+	report.Deltas = append(report.Deltas, operationGrowthSemanticDeltas(value, base.Manifest, current.Manifest)...)
 	for _, delta := range report.Deltas {
 		if !delta.Allowed {
 			report.Violations = append(report.Violations, delta)

@@ -3,6 +3,7 @@ package add
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -54,15 +55,17 @@ func TestAddOperationRequiresExplicitSemanticsAndCreatesLandingFile(t *testing.T
 	}
 
 	report, err := AddOperation(OperationOptions{
-		Root:           root,
-		ApplicationKey: "tenant/lifecycle",
-		OperationID:    "tenant.suspend",
-		UseCase:        "suspend_tenant",
-		Access:         "public",
-		Tenant:         "optional",
-		Transaction:    "none",
-		Idempotency:    "none",
-		Composition:    "none",
+		Root:              root,
+		ApplicationKey:    "tenant/lifecycle",
+		OperationID:       "tenant.suspend",
+		UseCase:           "suspend_tenant",
+		Access:            "public",
+		Tenant:            "optional",
+		Transaction:       "none",
+		Idempotency:       "none",
+		Composition:       "none",
+		BoundaryContext:   "tenant.lifecycle",
+		BoundaryAggregate: "tenant",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +111,7 @@ func TestAddOperationRefusesExistingImplementationLandingBeforeProtoMutation(t *
 	mustWriteFile(t, landing, "package application\n\n// existing developer code\n")
 	_, err := AddOperation(OperationOptions{
 		Root: root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.suspend", UseCase: "suspend_tenant",
-		Access: "public", Tenant: "optional", Transaction: "none", Idempotency: "none", Composition: "none",
+		Access: "public", Tenant: "optional", Transaction: "none", Idempotency: "none", Composition: "none", BoundaryContext: "tenant.lifecycle", BoundaryAggregate: "tenant",
 	})
 	if err == nil {
 		t.Fatal("expected landing conflict")
@@ -209,10 +212,30 @@ func scaffoldProject(t *testing.T, files map[string]string) string {
 	if err := os.MkdirAll(filepath.Join(root, "modules"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	support, err := os.ReadFile(filepath.Join("..", "..", "..", "contracts", "proto", "yunka", "dsl", "v1", "options.proto"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustWriteFile(t, filepath.Join(root, "contracts", "proto", "yunka", "dsl", "v1", "options.proto"), string(support))
 	for relative, contents := range files {
 		mustWriteFile(t, filepath.Join(root, filepath.FromSlash(relative)), contents)
 	}
+	mustGit(t, root, "init", "-q")
+	mustGit(t, root, "config", "user.name", "Yunka Test")
+	mustGit(t, root, "config", "user.email", "yunka-test@example.invalid")
+	mustGit(t, root, "add", "-A")
+	mustGit(t, root, "commit", "-q", "-m", "baseline")
 	return root
+}
+
+func mustGit(t *testing.T, root string, args ...string) string {
+	t.Helper()
+	command := exec.Command("git", append([]string{"-C", root}, args...)...)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s: %v: %s", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
+	}
+	return strings.TrimSpace(string(output))
 }
 
 func typedDomainProto(domain, pkg string) string {

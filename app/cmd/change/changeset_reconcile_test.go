@@ -14,7 +14,7 @@ func TestReconcileChangeSetAcceptsMatchingExistingAndCreateSubjects(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := add.AddOperation(changeSetCreateOptions(fixture.Root, true)); err != nil {
+	if _, err := add.AddOperation(changeSetCreateOptions(fixture, true)); err != nil {
 		t.Fatalf("apply create operation: %v", err)
 	}
 	generatePressureProject(t, fixture)
@@ -35,9 +35,10 @@ func TestReconcileChangeSetRejectsCreateSemanticDriftFromPlannedIntent(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := add.AddOperation(changeSetCreateOptions(fixture.Root, false)); err != nil {
-		t.Fatalf("apply drifted create operation: %v", err)
+	if _, err := add.AddOperation(changeSetCreateOptions(fixture, true)); err != nil {
+		t.Fatalf("apply planned create operation: %v", err)
 	}
+	mutateRPCOption(t, fixture, "Archive", "tenant_required: true", "tenant_required: false")
 	generatePressureProject(t, fixture)
 
 	report, err := ReconcileChangeSetWithOptions(context.Background(), fixture.compilerOptions(), value)
@@ -59,7 +60,7 @@ func TestReconcileChangeSetRejectsUndeclaredOperationDrift(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := add.AddOperation(changeSetCreateOptions(fixture.Root, true)); err != nil {
+	if _, err := add.AddOperation(changeSetCreateOptions(fixture, true)); err != nil {
 		t.Fatalf("apply create operation: %v", err)
 	}
 	mutateRPCOption(t, fixture, "Resume", "tenant_required: true", "tenant_required: false")
@@ -77,17 +78,19 @@ func TestReconcileChangeSetRejectsUndeclaredOperationDrift(t *testing.T) {
 	t.Fatalf("undeclared Operation drift escaped ChangeSet reconciliation: %#v", report.Semantic.Violations)
 }
 
-func changeSetCreateOptions(root string, matching bool) add.OperationOptions {
+func changeSetCreateOptions(fixture pressureFixture, matching bool) add.OperationOptions {
 	if matching {
 		return add.OperationOptions{
-			Root: root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.archive", UseCase: "archive_tenant",
+			Root: fixture.Root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.archive", UseCase: "archive_tenant",
 			Access: "protected", Permissions: []string{"tenant.archive"}, PermissionMode: "all", Tenant: "required",
 			Authentication: []string{"jwt"}, Transaction: "local", Idempotency: "none", Composition: "local",
+			BoundaryContext: "tenant.lifecycle", BoundaryAggregate: "tenant", ProtoPaths: []string{fixture.ProtoPath},
 		}
 	}
 	return add.OperationOptions{
-		Root: root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.archive", UseCase: "archive_tenant",
+		Root: fixture.Root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.archive", UseCase: "archive_tenant",
 		Access: "public", Tenant: "optional", Transaction: "none", Idempotency: "none", Composition: "none",
+		BoundaryContext: "tenant.lifecycle", BoundaryAggregate: "tenant", ProtoPaths: []string{fixture.ProtoPath},
 	}
 }
 

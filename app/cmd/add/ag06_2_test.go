@@ -24,7 +24,7 @@ func TestAG062AddOperationPreservesExistingSealedStarter(t *testing.T) {
 
 	report, err := AddOperation(OperationOptions{
 		Root: root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.suspend", UseCase: "suspend_tenant",
-		Access: "public", Tenant: "optional", Transaction: "none", Idempotency: "none", Composition: "none",
+		Access: "public", Tenant: "optional", Transaction: "none", Idempotency: "none", Composition: "none", BoundaryContext: "tenant.lifecycle", BoundaryAggregate: "tenant",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -63,7 +63,7 @@ func TestAG062AddOperationRejectsPartialSealedStarterBeforeMutation(t *testing.T
 	mustWriteFile(t, filepath.Join(root, filepath.FromSlash(layout.Build)), "package owner\n")
 	_, err = AddOperation(OperationOptions{
 		Root: root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.suspend", UseCase: "suspend_tenant",
-		Access: "public", Tenant: "optional", Transaction: "none", Idempotency: "none", Composition: "none",
+		Access: "public", Tenant: "optional", Transaction: "none", Idempotency: "none", Composition: "none", BoundaryContext: "tenant.lifecycle", BoundaryAggregate: "tenant",
 	})
 	if err == nil {
 		t.Fatal("partial sealed starter accepted")

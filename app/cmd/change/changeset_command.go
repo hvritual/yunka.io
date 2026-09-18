@@ -112,6 +112,7 @@ func setRemediationBindCommand() cli.Command {
 		Usage: "bind one or more currently proven Audit finding IDs to the active ChangeSet before mutation",
 		Flags: []cli.Flag{
 			cli.StringFlag{Name: "root", Value: ".", Usage: "project root"},
+			sourceProtocFlag(), sourceIncludesFlag(),
 			cli.StringFlag{Name: "set", Value: DefaultChangeSetPath, Usage: "ChangeSet path"},
 			cli.StringSliceFlag{Name: "finding", Usage: "exact proven Audit finding ID to remediate; repeatable"},
 			cli.StringFlag{Name: "output", Value: DefaultRemediationBindingPath, Usage: "remediation binding path, relative to project root unless absolute"},
@@ -133,7 +134,9 @@ func setRemediationBindCommand() cli.Command {
 			if err != nil {
 				return printFailure("yunka change set remediation bind", format, Diagnose(&Failure{Kind: FailureEvidence, Err: fmt.Errorf("change remediation bind: load ChangeSet: %w", err)}), 1)
 			}
-			binding, err := BuildRemediationBinding(descriptor.Root, value, c.StringSlice("finding"))
+			compiler := sourceCompilerOptions(c)
+			compiler.Root = descriptor.Root
+			binding, err := BuildRemediationBindingWithOptions(compiler, value, c.StringSlice("finding"))
 			if err != nil {
 				return printFailure("yunka change set remediation bind", format, Diagnose(err), 1)
 			}
@@ -157,6 +160,7 @@ func setRemediationCheckCommand() cli.Command {
 		Usage: "prove the bound Audit findings are fixed without introducing new proven architecture debt",
 		Flags: []cli.Flag{
 			cli.StringFlag{Name: "root", Value: ".", Usage: "project root"},
+			sourceProtocFlag(), sourceIncludesFlag(),
 			cli.StringFlag{Name: "set", Value: DefaultChangeSetPath, Usage: "ChangeSet path"},
 			cli.StringFlag{Name: "binding", Value: DefaultRemediationBindingPath, Usage: "remediation binding path"},
 			cli.StringFlag{Name: "format", Value: FormatText, Usage: "output format: text, json, or agent-json"},
@@ -181,7 +185,9 @@ func setRemediationCheckCommand() cli.Command {
 			if err != nil {
 				return printFailure("yunka change set remediation check", format, Diagnose(&Failure{Kind: FailureEvidence, Err: fmt.Errorf("change remediation check: load binding: %w", err)}), 1)
 			}
-			report, err := ReconcileRemediation(descriptor.Root, value, binding)
+			compiler := sourceCompilerOptions(c)
+			compiler.Root = descriptor.Root
+			report, err := ReconcileRemediationWithOptions(context.Background(), compiler, value, binding)
 			if err != nil {
 				return printFailure("yunka change set remediation check", format, Diagnose(&Failure{Kind: FailureEvidence, Err: err}), 1)
 			}

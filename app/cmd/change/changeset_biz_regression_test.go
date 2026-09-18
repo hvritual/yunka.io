@@ -16,7 +16,7 @@ func TestT4CreateChangeSetBindsLegacyProtobufOutputsAndNormalizesAPIKey(t *testi
 	gitPressure(t, fixture.Root, "add", "contracts/tenant/tenant.pb.go", "contracts/tenant/tenant_grpc.pb.go")
 	gitPressure(t, fixture.Root, "commit", "-m", "legacy protobuf generated outputs")
 
-	options := apiKeyArchiveOptions(fixture.Root)
+	options := apiKeyArchiveOptions(fixture)
 	planPath := writePlanReport(t, fixture.Root, options, "t4-biz-legacy-plan.json")
 	value, _, err := BuildChangeSet(fixture.Root, "HEAD", nil, []string{planPath})
 	if err != nil {
@@ -46,6 +46,7 @@ func TestT4CreateChangeSetCanonicalizesServiceAuthenticationEndToEnd(t *testing.
 		Root: fixture.Root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.rotate-key", UseCase: "rotate_tenant_key",
 		Access: "protected", Permissions: []string{"tenant.manage"}, PermissionMode: "all", Tenant: "required",
 		Authentication: []string{"service", "jwt", "api-key"}, Transaction: "local", Idempotency: "none", Composition: "local",
+		BoundaryContext: "tenant.lifecycle", BoundaryAggregate: "tenant", ProtoPaths: []string{fixture.ProtoPath},
 	}
 	planPath := writePlanReport(t, fixture.Root, options, "t4-service-auth-plan.json")
 	value, _, err := BuildChangeSet(fixture.Root, "HEAD", nil, []string{planPath})
@@ -72,7 +73,7 @@ func TestT4CreateChangeSetRejectsSpoofedLegacyProtobufOutput(t *testing.T) {
 	gitPressure(t, fixture.Root, "add", "contracts/tenant/tenant.pb.go")
 	gitPressure(t, fixture.Root, "commit", "-m", "spoof protobuf output")
 
-	planPath := writePlanReport(t, fixture.Root, apiKeyArchiveOptions(fixture.Root), "t4-biz-spoof-plan.json")
+	planPath := writePlanReport(t, fixture.Root, apiKeyArchiveOptions(fixture), "t4-biz-spoof-plan.json")
 	_, _, err := BuildChangeSet(fixture.Root, "HEAD", nil, []string{planPath})
 	if err == nil || !strings.Contains(err.Error(), "does not prove generator ownership") {
 		t.Fatalf("spoofed protobuf output was not rejected: %v", err)
@@ -91,7 +92,7 @@ func TestT4CreateChangeSetStrictManifestBindsOnlyCurrentSourceOutputs(t *testing
 }
 `)
 
-	planPath := writePlanReport(t, fixture.Root, apiKeyArchiveOptions(fixture.Root), "t4-biz-strict-plan.json")
+	planPath := writePlanReport(t, fixture.Root, apiKeyArchiveOptions(fixture), "t4-biz-strict-plan.json")
 	value, _, err := BuildChangeSet(fixture.Root, "HEAD", nil, []string{planPath})
 	if err != nil {
 		t.Fatal(err)
@@ -107,11 +108,12 @@ func TestT4CreateChangeSetStrictManifestBindsOnlyCurrentSourceOutputs(t *testing
 	}
 }
 
-func apiKeyArchiveOptions(root string) add.OperationOptions {
+func apiKeyArchiveOptions(fixture pressureFixture) add.OperationOptions {
 	return add.OperationOptions{
-		Root: root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.archive", UseCase: "archive_tenant",
+		Root: fixture.Root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.archive", UseCase: "archive_tenant",
 		Access: "protected", Permissions: []string{"tenant.archive"}, PermissionMode: "all", Tenant: "required",
 		Authentication: []string{"api-key"}, Transaction: "local", Idempotency: "none", Composition: "local",
+		BoundaryContext: "tenant.lifecycle", BoundaryAggregate: "tenant", ProtoPaths: []string{fixture.ProtoPath},
 	}
 }
 

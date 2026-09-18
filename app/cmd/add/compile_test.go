@@ -19,7 +19,7 @@ func TestAX5ScaffoldCompilesThroughCanonicalContractChain(t *testing.T) {
 	if _, err := AddOperation(OperationOptions{
 		Root: root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.suspend", UseCase: "suspend_tenant",
 		Access: "protected", Permissions: []string{"tenant.suspend"}, PermissionMode: "all", Tenant: "required",
-		Authentication: []string{"jwt"}, Transaction: "local", Idempotency: "required", Composition: "local",
+		Authentication: []string{"jwt"}, Transaction: "local", Idempotency: "required", Composition: "local", BoundaryContext: "tenant.lifecycle", BoundaryAggregate: "tenant",
 	}); err != nil {
 		t.Fatal(err)
 	}

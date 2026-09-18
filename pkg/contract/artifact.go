@@ -149,6 +149,9 @@ func LoadManifest(path string) (Manifest, error) {
 		return Manifest{}, fmt.Errorf("contract: unsupported manifest schemaVersion %d", manifest.SchemaVersion)
 	}
 	manifest.Normalize()
+	if err := validateManifestBoundaryIntents(manifest); err != nil {
+		return Manifest{}, fmt.Errorf("contract: manifest boundary intent: %w", err)
+	}
 	return manifest, nil
 }
 

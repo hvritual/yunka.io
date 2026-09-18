@@ -12,21 +12,23 @@ func TestPlanOperationIsReadOnlyDeterministicAndMatchesApply(t *testing.T) {
 	original := typedApplicationProto("tenant", "tenant.v1", "lifecycle", "TenantLifecycleApplication")
 	root := scaffoldProject(t, map[string]string{"contracts/proto/tenant.proto": original})
 	options := OperationOptions{
-		Root:           root,
-		ApplicationKey: "tenant/lifecycle",
-		OperationID:    "tenant.suspend",
-		UseCase:        "suspend_tenant",
-		Access:         "protected",
-		Permissions:    []string{"tenant.manage"},
-		PermissionMode: "all",
-		Tenant:         "required",
-		Authentication: []string{"jwt"},
-		Transaction:    "local",
-		Idempotency:    "required",
-		Composition:    "local",
-		HTTPMethod:     "POST",
-		HTTPPath:       "/tenants/{id}:suspend",
-		HTTPBody:       "*",
+		Root:              root,
+		ApplicationKey:    "tenant/lifecycle",
+		OperationID:       "tenant.suspend",
+		UseCase:           "suspend_tenant",
+		Access:            "protected",
+		Permissions:       []string{"tenant.manage"},
+		PermissionMode:    "all",
+		Tenant:            "required",
+		Authentication:    []string{"jwt"},
+		Transaction:       "local",
+		Idempotency:       "required",
+		Composition:       "local",
+		HTTPMethod:        "POST",
+		HTTPPath:          "/tenants/{id}:suspend",
+		HTTPBody:          "*",
+		BoundaryContext:   "tenant.lifecycle",
+		BoundaryAggregate: "tenant",
 	}
 
 	first, err := PlanOperation(options)
@@ -41,6 +43,7 @@ func TestPlanOperationIsReadOnlyDeterministicAndMatchesApply(t *testing.T) {
 		t.Fatalf("plan kind first=%q second=%q", first.Kind, second.Kind)
 	}
 	wantSemantics := &OperationSemantics{
+		Boundary:           &OperationBoundarySemantics{Context: "tenant.lifecycle", Aggregate: "tenant"},
 		UseCase:            "suspend_tenant",
 		Access:             "protected",
 		Permissions:        []string{"tenant.manage"},
@@ -110,6 +113,7 @@ func TestPlanOperationCanonicalizesAuthenticationVocabulary(t *testing.T) {
 		Root: root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.rotate-key", UseCase: "rotate_tenant_key",
 		Access: "protected", Permissions: []string{"tenant.manage"}, PermissionMode: "all", Tenant: "required",
 		Authentication: []string{"service", "jwt", "api-key"}, Transaction: "local", Idempotency: "none", Composition: "local",
+		BoundaryContext: "tenant.lifecycle", BoundaryAggregate: "tenant",
 	}
 
 	plan, err := PlanOperation(options)
@@ -153,6 +157,7 @@ func TestPlanOperationFailsClosedOnExistingLandingWithoutProtoMutation(t *testin
 	_, err := PlanOperation(OperationOptions{
 		Root: root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.suspend", UseCase: "suspend_tenant",
 		Access: "public", Tenant: "optional", Transaction: "none", Idempotency: "none", Composition: "none",
+		BoundaryContext: "tenant.lifecycle", BoundaryAggregate: "tenant",
 	})
 	if err == nil {
 		t.Fatal("expected plan to reject existing implementation landing")

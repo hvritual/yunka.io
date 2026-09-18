@@ -95,13 +95,17 @@ func TestQualityMigrationRealConsumersUseSameContract(t *testing.T) {
 
 	t.Run("iot-durable-test-identity", func(t *testing.T) {
 		workspace, projectRoot := cloneFocusedIoTMigrationWorkspace(t, iotSource, iotRuntime)
+		compiler := projectflow.Options{
+			Root: projectRoot,
+			ProtoPaths: []string{filepath.Join(workspace, "project", "third_party", "yunka", "contracts", "proto")},
+		}
 		prepareMigrationConsumerDependencies(t, projectRoot)
 		installMigrationConsumerBaseline(t, frameworkRoot, projectRoot, "iot-current.json")
 		assertMigrationSourceCoverage(t, workspace, projectRoot)
 
 		oldPath := "internal/delivery/ag03_sqlite_startup_test.go"
 		newPath := "internal/delivery/sqlite_startup_lock_test.go"
-		plan, root, err := BuildQualityMigrationPlanWithCoverage(context.Background(), projectflow.Options{Root: projectRoot}, workspace, "HEAD", []string{MigrationRecipeDurableTestRename}, []string{oldPath, newPath}, ReviewNarrative{
+		plan, root, err := BuildQualityMigrationPlanWithCoverage(context.Background(), compiler, workspace, "HEAD", []string{MigrationRecipeDurableTestRename}, []string{oldPath, newPath}, ReviewNarrative{
 			Problem:            "A durable SQLite startup regression is named after historical delivery identifier AG03 instead of the invariant it protects.",
 			CurrentConcepts:    []string{"task-named SQLite startup regression"},
 			DesiredOwnership:   []string{"SQLite startup external-lock invariant regression"},
@@ -123,7 +127,7 @@ func TestQualityMigrationRealConsumersUseSameContract(t *testing.T) {
 		renameIoTSQLiteRegression(t, projectRoot, oldPath, newPath)
 		commitMigrationCandidate(t, projectRoot, "rename SQLite startup lock regression")
 
-		packet, err := CheckQualityMigration(context.Background(), projectflow.Options{Root: projectRoot}, DefaultQualityMigrationPlanPath)
+		packet, err := CheckQualityMigration(context.Background(), compiler, DefaultQualityMigrationPlanPath)
 		if err != nil {
 			t.Fatal(err)
 		}

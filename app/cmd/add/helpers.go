@@ -301,6 +301,9 @@ func normalizeReport(report *Report) {
 	if report.Identity == nil {
 		report.Identity = map[string]string{}
 	}
+	if report.ProtoPaths == nil {
+		report.ProtoPaths = []string{}
+	}
 	sort.Slice(report.Mutations, func(i, j int) bool {
 		if report.Mutations[i].Path != report.Mutations[j].Path {
 			return report.Mutations[i].Path < report.Mutations[j].Path

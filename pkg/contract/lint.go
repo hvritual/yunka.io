@@ -144,6 +144,9 @@ func Lint(manifest Manifest) []Diagnostic {
 			}
 
 			if operation := method.Operation; operation != nil {
+				if err := ValidateBoundaryIntent(operation.Boundary); err != nil {
+					diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path + ".boundary", Message: err.Error()})
+				}
 				if service.Application == nil || service.Domain == "" {
 					diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "typed operation requires typed domain and application declarations"})
 				}
@@ -260,6 +263,9 @@ func lintInternalOperation(path string, operation *OperationDeclaration, message
 		return nil
 	}
 	var diagnostics []Diagnostic
+	if err := ValidateBoundaryIntent(operation.Boundary); err != nil {
+		diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path + ".boundary", Message: err.Error()})
+	}
 	if !validPolicyKey(operation.ID) {
 		diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: "operation id must be a stable lowercase business key"})
 	} else if owner, duplicate := operationOwners[operation.ID]; duplicate && owner != path {

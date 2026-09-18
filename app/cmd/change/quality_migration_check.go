@@ -111,7 +111,9 @@ func CheckQualityMigration(ctx context.Context, options projectflow.Options, pla
 	if err != nil {
 		return QualityMigrationReviewPacket{}, fmt.Errorf("quality migration check: source coverage: %w", err)
 	}
-	auditReport, err := audit.BuildWithBase(descriptor.Root, plan.BaseSHA)
+	compiler := options
+	compiler.Root = descriptor.Root
+	auditReport, err := audit.BuildWithBaseOptions(compiler, plan.BaseSHA)
 	if err != nil {
 		return QualityMigrationReviewPacket{}, fmt.Errorf("quality migration check: engineering-quality debt: %w", err)
 	}
