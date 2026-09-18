@@ -6,6 +6,9 @@ root = Path.cwd()
 reader = r'''package excelx
 
 import (
+    "archive/zip"
+    "bytes"
+    "encoding/xml"
     "errors"
     "fmt"
     "io"
@@ -30,26 +33,34 @@ func ExcelFromIOReader(reader io.Reader, sheetName string, do func(colIdx int, r
     if err != nil {
         return err
     }
+    activeSheet, err := workbookActiveSheetNameFromBytes(contents)
+    if err != nil {
+        return err
+    }
     file, err := xlsx.OpenBinary(contents, workbookOptions()...)
     if err != nil {
         return err
     }
-    return doExcelReader(file, sheetName, do)
+    return doExcelReader(file, sheetName, activeSheet, do)
 }
 
 func ExcelFromFile(path string, sheetName string, do func(colIdx int, row []string) error) error {
+    activeSheet, err := workbookActiveSheetNameFromFile(path)
+    if err != nil {
+        return err
+    }
     file, err := xlsx.OpenFile(path, workbookOptions()...)
     if err != nil {
         return err
     }
-    return doExcelReader(file, sheetName, do)
+    return doExcelReader(file, sheetName, activeSheet, do)
 }
 
-func doExcelReader(file *xlsx.File, sheetName string, do func(colIdx int, row []string) error) error {
+func doExcelReader(file *xlsx.File, sheetName, activeSheet string, do func(colIdx int, row []string) error) error {
     if do == nil {
         return errors.New("excelx: row callback is required")
     }
-    sheet, err := selectSheet(file, sheetName)
+    sheet, err := selectSheet(file, sheetName, activeSheet)
     if err != nil {
         return err
     }
@@ -83,7 +94,7 @@ func doExcelReader(file *xlsx.File, sheetName string, do func(colIdx int, row []
     })
 }
 
-func selectSheet(file *xlsx.File, sheetName string) (*xlsx.Sheet, error) {
+func selectSheet(file *xlsx.File, sheetName, activeSheet string) (*xlsx.Sheet, error) {
     if file == nil {
         return nil, errors.New("excelx: workbook is required")
     }
@@ -94,10 +105,11 @@ func selectSheet(file *xlsx.File, sheetName string) (*xlsx.Sheet, error) {
         }
         return sheet, nil
     }
-    for _, sheet := range file.Sheets {
-        if sheet != nil && sheet.Selected {
+    if activeSheet != "" {
+        if sheet, ok := file.Sheet[activeSheet]; ok && sheet != nil {
             return sheet, nil
         }
+        return nil, fmt.Errorf("excelx: active sheet %q is not a worksheet", activeSheet)
     }
     for _, sheet := range file.Sheets {
         if sheet != nil {
@@ -129,23 +141,90 @@ func formattedRow(row *xlsx.Row) ([]string, error) {
     })
     return values, err
 }
+
+type workbookMetadata struct {
+    Views  []workbookView  `xml:"bookViews>workbookView"`
+    Sheets []workbookSheet `xml:"sheets>sheet"`
+}
+
+type workbookView struct {
+    ActiveTab *int `xml:"activeTab,attr"`
+}
+
+type workbookSheet struct {
+    Name string `xml:"name,attr"`
+}
+
+func workbookActiveSheetNameFromBytes(contents []byte) (string, error) {
+    archive, err := zip.NewReader(bytes.NewReader(contents), int64(len(contents)))
+    if err != nil {
+        return "", err
+    }
+    return workbookActiveSheetName(archive.File)
+}
+
+func workbookActiveSheetNameFromFile(path string) (string, error) {
+    archive, err := zip.OpenReader(path)
+    if err != nil {
+        return "", err
+    }
+    defer archive.Close()
+    return workbookActiveSheetName(archive.File)
+}
+
+func workbookActiveSheetName(files []*zip.File) (string, error) {
+    for _, entry := range files {
+        if entry.Name != "xl/workbook.xml" {
+            continue
+        }
+        reader, err := entry.Open()
+        if err != nil {
+            return "", err
+        }
+        var metadata workbookMetadata
+        decodeErr := xml.NewDecoder(reader).Decode(&metadata)
+        closeErr := reader.Close()
+        if decodeErr != nil {
+            return "", fmt.Errorf("excelx: decode workbook metadata: %w", decodeErr)
+        }
+        if closeErr != nil {
+            return "", closeErr
+        }
+        if len(metadata.Sheets) == 0 {
+            return "", errors.New("excelx: workbook has no sheets")
+        }
+        activeIndex := 0
+        if len(metadata.Views) > 0 && metadata.Views[0].ActiveTab != nil {
+            activeIndex = *metadata.Views[0].ActiveTab
+        }
+        if activeIndex < 0 || activeIndex >= len(metadata.Sheets) {
+            return "", fmt.Errorf("excelx: workbook active sheet index %d is outside sheet list", activeIndex)
+        }
+        return metadata.Sheets[activeIndex].Name, nil
+    }
+    return "", errors.New("excelx: workbook metadata xl/workbook.xml is missing")
+}
 '''
 
 tests = r'''package excelx
 
 import (
+    "archive/zip"
     "bytes"
     "errors"
+    "fmt"
+    "io"
     "os"
     "path/filepath"
     "reflect"
+    "regexp"
     "strings"
     "testing"
 
     "codeberg.org/tealeg/xlsx/v4"
 )
 
-func TestExcelReaderPreservesSelectedSheetAndSparseRows(t *testing.T) {
+func TestExcelReaderPreservesActiveSheetAndSparseRows(t *testing.T) {
     contents := testWorkbook(t)
 
     var selected [][]string
@@ -156,7 +235,7 @@ func TestExcelReaderPreservesSelectedSheetAndSparseRows(t *testing.T) {
         t.Fatal(err)
     }
     if want := [][]string{{"selected"}}; !reflect.DeepEqual(selected, want) {
-        t.Fatalf("selected sheet rows=%#v want=%#v", selected, want)
+        t.Fatalf("active sheet rows=%#v want=%#v", selected, want)
     }
 
     type observedRow struct {
@@ -229,18 +308,78 @@ func testWorkbook(t *testing.T) []byte {
     if err != nil {
         t.Fatal(err)
     }
-    first.Selected = false
-    selected.Selected = true
     selected.AddRow().AddCell().SetString("selected")
 
     var buffer bytes.Buffer
     if err := file.Write(&buffer); err != nil {
         t.Fatal(err)
     }
-    return buffer.Bytes()
+    return setWorkbookActiveTab(t, buffer.Bytes(), 1)
+}
+
+func setWorkbookActiveTab(t *testing.T, contents []byte, active int) []byte {
+    t.Helper()
+    source, err := zip.NewReader(bytes.NewReader(contents), int64(len(contents)))
+    if err != nil {
+        t.Fatal(err)
+    }
+    var output bytes.Buffer
+    target := zip.NewWriter(&output)
+    found := false
+    activeAttribute := fmt.Sprintf(`activeTab="%d"`, active)
+    activePattern := regexp.MustCompile(`activeTab="[^"]*"`)
+    for _, entry := range source.File {
+        reader, err := entry.Open()
+        if err != nil {
+            t.Fatal(err)
+        }
+        data, err := io.ReadAll(reader)
+        if err != nil {
+            reader.Close()
+            t.Fatal(err)
+        }
+        if err := reader.Close(); err != nil {
+            t.Fatal(err)
+        }
+        if entry.Name == "xl/workbook.xml" {
+            found = true
+            text := string(data)
+            start := strings.Index(text, "<workbookView")
+            if start < 0 {
+                t.Fatal("workbookView is missing")
+            }
+            endRelative := strings.Index(text[start:], ">")
+            if endRelative < 0 {
+                t.Fatal("workbookView start tag is malformed")
+            }
+            end := start + endRelative + 1
+            tag := text[start:end]
+            if activePattern.MatchString(tag) {
+                tag = activePattern.ReplaceAllString(tag, activeAttribute)
+            } else {
+                tag = strings.Replace(tag, "<workbookView", "<workbookView "+activeAttribute, 1)
+            }
+            data = []byte(text[:start] + tag + text[end:])
+        }
+        header := entry.FileHeader
+        writer, err := target.CreateHeader(&header)
+        if err != nil {
+            t.Fatal(err)
+        }
+        if _, err := writer.Write(data); err != nil {
+            t.Fatal(err)
+        }
+    }
+    if !found {
+        t.Fatal("workbook.xml is missing")
+    }
+    if err := target.Close(); err != nil {
+        t.Fatal(err)
+    }
+    return output.Bytes()
 }
 '''
 
 (root / "pkg/excelx/reader.go").write_text(reader)
 (root / "pkg/excelx/reader_test.go").write_text(tests)
-print("excelx reader migration prepared")
+print("excelx reader migration prepared with workbook activeTab compatibility")
