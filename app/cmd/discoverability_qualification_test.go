@@ -76,7 +76,7 @@ func TestC116DQualificationRealBinaryDiscoverability(t *testing.T) {
 		}
 	}
 	for _, command := range []string{
-		"api", "assembly", "check", "contract", "dependency", "dev", "doc", "doctor", "domain", "explain", "generate", "graph", "init", "inspect", "module",
+		"api", "assembly", "boundary", "check", "contract", "dependency", "dev", "doc", "doctor", "domain", "explain", "generate", "graph", "init", "inspect", "module",
 	} {
 		if !c116DHelpHasCommand(firstHelp, command) {
 			t.Fatalf("root help no longer exposes command %q:\n%s", command, firstHelp)
@@ -84,6 +84,19 @@ func TestC116DQualificationRealBinaryDiscoverability(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(firstHelp), "deprecated") {
 		t.Fatalf("root help introduced deprecation language:\n%s", firstHelp)
+	}
+
+	boundaryHelp, runErr := c116DRunCLI(yunkaBinary, appRoot, "boundary", "--help")
+	if runErr != nil {
+		t.Fatalf("boundary --help: %v\n%s", runErr, boundaryHelp)
+	}
+	if !c116DHelpHasCommand(boundaryHelp, "inspect") {
+		t.Fatalf("boundary help does not expose read-only inspect:\n%s", boundaryHelp)
+	}
+	for _, forbidden := range []string{"apply", "write", "repair", "merge", "generate"} {
+		if c116DHelpHasCommand(boundaryHelp, forbidden) {
+			t.Fatalf("boundary help exposes mutation command %q:\n%s", forbidden, boundaryHelp)
+		}
 	}
 
 	expertSubcommands := map[string][]string{
