@@ -1,0 +1,106 @@
+name: operation-growth-excelx-safe-reader
+
+on:
+  push:
+    branches:
+      - control/operation-growth-boundary-gate-20260917
+    paths:
+      - .github/workflows/operation-growth-excelx-safe-reader.yml
+
+permissions:
+  contents: write
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout controller
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: control/operation-growth-boundary-gate-20260917
+          path: controller
+          fetch-depth: 0
+
+      - name: Checkout exact product candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/161-operation-growth-boundary-gate
+          path: product
+          fetch-depth: 0
+
+      - name: Verify exact candidate and unchanged main
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd product
+          test "$(git rev-parse HEAD)" = "559ed1092b303bcb367e7da562b3696da2f7cfec"
+          test "$(git rev-parse HEAD^{tree})" = "b47ec9d577c55c09a2c69244ae53e793591ee5b2"
+          test "$(git rev-parse origin/main)" = "01cf8157d8660e816cdc40cd5d36a2ff618a3dc8"
+
+      - name: Load locked Go version
+        id: toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          source product/tools/toolchain.env
+          echo "go_version=${GO_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "govulncheck_version=${GOVULNCHECK_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.toolchain.outputs.go_version }}
+          cache-dependency-path: product/pkg/go.sum
+
+      - name: Apply framework-local safe XLSX reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd product
+          python3 ../controller/tools/operation_growth_excelx_safe_reader.py
+          gofmt -w pkg/excelx/reader.go pkg/excelx/reader_test.go
+          (cd pkg && GOWORK=off go mod tidy)
+          git diff --check
+          unexpected="$(git status --porcelain | awk '{print $2}' | grep -Ev '^(pkg/excelx/reader\.go|pkg/excelx/reader_test\.go|pkg/go\.mod|pkg/go\.sum)$' || true)"
+          test -z "$unexpected" || { echo "unexpected mutation:" >&2; echo "$unexpected" >&2; exit 1; }
+
+      - name: Framework XLSX security qualification
+        shell: bash
+        env:
+          GOVULNCHECK_VERSION: ${{ steps.toolchain.outputs.govulncheck_version }}
+        run: |
+          set -euo pipefail
+          (cd product/pkg && GOWORK=off go test -count=1 ./excelx)
+          (cd product/pkg && GOWORK=off go run golang.org/x/vuln/cmd/govulncheck@"${GOVULNCHECK_VERSION}" ./...)
+          cd product
+          make tidy
+          git diff --exit-code -- go.work go.work.sum framework/go.mod framework/go.sum gateway/go.mod gateway/go.sum infras/go.mod infras/go.sum app/go.mod app/go.sum
+          git diff --check
+
+      - name: Commit qualified framework-local repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd product
+          git config user.name "Yunka Delivery"
+          git config user.email "quality-delivery@example.invalid"
+          git add pkg/excelx/reader.go pkg/excelx/reader_test.go pkg/go.mod pkg/go.sum
+          git diff --cached --check
+          test -n "$(git diff --cached --name-only)"
+          git commit -m "fix(excelx): remove vulnerable worksheet reader dependency path"
+          test "$(git rev-parse HEAD^)" = "559ed1092b303bcb367e7da562b3696da2f7cfec"
+          test -z "$(git status --porcelain)"
+          echo "candidate=$(git rev-parse HEAD)"
+          echo "tree=$(git rev-parse HEAD^{tree})"
+
+      - name: Publish qualified framework-local repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd product
+          git fetch origin main fix/161-operation-growth-boundary-gate
+          test "$(git rev-parse origin/fix/161-operation-growth-boundary-gate)" = "559ed1092b303bcb367e7da562b3696da2f7cfec"
+          test "$(git rev-parse origin/main)" = "01cf8157d8660e816cdc40cd5d36a2ff618a3dc8"
+          test -z "$(git status --porcelain)"
+          git push origin HEAD:fix/161-operation-growth-boundary-gate
+          echo "published=$(git rev-parse HEAD)"
+          echo "tree=$(git rev-parse HEAD^{tree})"
