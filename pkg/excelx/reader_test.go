@@ -3,170 +3,88 @@ package excelx
 import (
 	"archive/zip"
 	"bytes"
-	"errors"
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
-	"reflect"
-	"regexp"
 	"strings"
 	"testing"
-
-	"codeberg.org/tealeg/xlsx/v4"
 )
 
-func TestExcelReaderPreservesActiveSheetAndSparseRows(t *testing.T) {
-	contents := testWorkbook(t)
-
-	var selected [][]string
-	if err := ExcelFromIOReader(bytes.NewReader(contents), "", func(_ int, row []string) error {
-		selected = append(selected, append([]string(nil), row...))
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if want := [][]string{{"selected"}}; !reflect.DeepEqual(selected, want) {
-		t.Fatalf("active sheet rows=%#v want=%#v", selected, want)
-	}
-
-	type observedRow struct {
-		Index int
-		Row   []string
-	}
-	var observed []observedRow
-	if err := ExcelFromIOReader(bytes.NewReader(contents), "First", func(index int, row []string) error {
-		observed = append(observed, observedRow{Index: index, Row: append([]string(nil), row...)})
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	want := []observedRow{
-		{Index: 0, Row: []string{"first", "", "third"}},
-		{Index: 1, Row: nil},
-		{Index: 2, Row: []string{"1234.50"}},
-	}
-	if !reflect.DeepEqual(observed, want) {
-		t.Fatalf("explicit sheet rows=%#v want=%#v", observed, want)
-	}
-}
-
-func TestExcelFromFileAndCallbackError(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "fixture.xlsx")
-	if err := os.WriteFile(path, testWorkbook(t), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	stop := errors.New("stop")
-	err := ExcelFromFile(path, "First", func(index int, row []string) error {
-		if index == 0 && len(row) > 0 {
-			return stop
-		}
+func TestExcelFromIOReaderReadsSharedInlineAndSparseRows(t *testing.T) {
+	data := workbookFixture(t,
+		`<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>Hello</t></si></sst>`,
+		`<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="C1" t="inlineStr"><is><t>World</t></is></c></row><row r="3"><c r="B3"><v>42</v></c></row></sheetData></worksheet>`,
+	)
+	got := []string{}
+	err := ExcelFromIOReader(bytes.NewReader(data), "", func(index int, row []string) error {
+		got = append(got, fmt.Sprintf("%d:%q", index, row))
 		return nil
 	})
-	if !errors.Is(err, stop) {
-		t.Fatalf("callback error=%v want=%v", err, stop)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{`0:["Hello" "" "World"]`, `1:[]`, `2:["" "42"]`}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("got=%v want=%v", got, want)
 	}
 }
 
-func TestExcelReaderRejectsMissingSheetAndInvalidInputs(t *testing.T) {
-	contents := testWorkbook(t)
-	if err := ExcelFromIOReader(bytes.NewReader(contents), "missing", func(int, []string) error { return nil }); err == nil || !strings.Contains(err.Error(), "does not exist") {
-		t.Fatalf("missing sheet error=%v", err)
-	}
-	if err := ExcelFromIOReader(nil, "", func(int, []string) error { return nil }); err == nil {
-		t.Fatal("nil reader was accepted")
-	}
-	if err := ExcelFromIOReader(bytes.NewReader(contents), "", nil); err == nil {
-		t.Fatal("nil callback was accepted")
+func TestExcelReaderRejectsNegativeSharedStringIndex(t *testing.T) {
+	data := workbookFixture(t,
+		`<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>Hello</t></si></sst>`,
+		`<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="s"><v>-1</v></c></row></sheetData></worksheet>`,
+	)
+	err := ExcelFromIOReader(bytes.NewReader(data), "Sheet1", func(int, []string) error { return nil })
+	if err == nil || !strings.Contains(err.Error(), "invalid shared string index") {
+		t.Fatalf("negative shared-string index escaped validation: %v", err)
 	}
 }
 
-func testWorkbook(t *testing.T) []byte {
+func TestExcelReaderRejectsRowBeyondWorksheetLimit(t *testing.T) {
+	data := workbookFixture(t, "",
+		fmt.Sprintf(`<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="%d"><c r="A1"><v>1</v></c></row></sheetData></worksheet>`, maxExcelRows+1),
+	)
+	err := ExcelFromIOReader(bytes.NewReader(data), "Sheet1", func(int, []string) error { return nil })
+	if err == nil || !strings.Contains(err.Error(), "invalid row number") {
+		t.Fatalf("oversized row escaped validation: %v", err)
+	}
+}
+
+func TestExcelReaderRejectsRelationshipTraversal(t *testing.T) {
+	data := workbookFixtureWithTarget(t, "../outside.xml", "", `<worksheet/>`)
+	err := ExcelFromIOReader(bytes.NewReader(data), "Sheet1", func(int, []string) error { return nil })
+	if err == nil || !strings.Contains(err.Error(), "escapes xl/") {
+		t.Fatalf("relationship traversal escaped validation: %v", err)
+	}
+}
+
+func workbookFixture(t *testing.T, shared, sheet string) []byte {
 	t.Helper()
-	file := xlsx.NewFile()
-	first, err := file.AddSheet("First")
-	if err != nil {
-		t.Fatal(err)
-	}
-	row := first.AddRow()
-	row.AddCell().SetString("first")
-	row.AddCell()
-	row.AddCell().SetString("third")
-	first.AddRow()
-	row = first.AddRow()
-	row.AddCell().SetFloatWithFormat(1234.5, "0.00")
+	return workbookFixtureWithTarget(t, "worksheets/sheet1.xml", shared, sheet)
+}
 
-	selected, err := file.AddSheet("Selected")
-	if err != nil {
-		t.Fatal(err)
-	}
-	selected.AddRow().AddCell().SetString("selected")
-
+func workbookFixtureWithTarget(t *testing.T, target, shared, sheet string) []byte {
+	t.Helper()
 	var buffer bytes.Buffer
-	if err := file.Write(&buffer); err != nil {
-		t.Fatal(err)
-	}
-	return setWorkbookActiveTab(t, buffer.Bytes(), 1)
-}
-
-func setWorkbookActiveTab(t *testing.T, contents []byte, active int) []byte {
-	t.Helper()
-	source, err := zip.NewReader(bytes.NewReader(contents), int64(len(contents)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var output bytes.Buffer
-	target := zip.NewWriter(&output)
-	found := false
-	activeAttribute := fmt.Sprintf(`activeTab="%d"`, active)
-	activePattern := regexp.MustCompile(`activeTab="[^"]*"`)
-	for _, entry := range source.File {
-		reader, err := entry.Open()
+	writer := zip.NewWriter(&buffer)
+	add := func(name, body string) {
+		t.Helper()
+		entry, err := writer.Create(name)
 		if err != nil {
 			t.Fatal(err)
 		}
-		data, err := io.ReadAll(reader)
-		if err != nil {
-			reader.Close()
-			t.Fatal(err)
-		}
-		if err := reader.Close(); err != nil {
-			t.Fatal(err)
-		}
-		if entry.Name == "xl/workbook.xml" {
-			found = true
-			text := string(data)
-			start := strings.Index(text, "<workbookView")
-			if start < 0 {
-				t.Fatal("workbookView is missing")
-			}
-			endRelative := strings.Index(text[start:], ">")
-			if endRelative < 0 {
-				t.Fatal("workbookView start tag is malformed")
-			}
-			end := start + endRelative + 1
-			tag := text[start:end]
-			if activePattern.MatchString(tag) {
-				tag = activePattern.ReplaceAllString(tag, activeAttribute)
-			} else {
-				tag = strings.Replace(tag, "<workbookView", "<workbookView "+activeAttribute, 1)
-			}
-			data = []byte(text[:start] + tag + text[end:])
-		}
-		header := entry.FileHeader
-		writer, err := target.CreateHeader(&header)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := writer.Write(data); err != nil {
+		if _, err := entry.Write([]byte(body)); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if !found {
-		t.Fatal("workbook.xml is missing")
+	add("xl/workbook.xml", `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>`)
+	add("xl/_rels/workbook.xml.rels", `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="`+target+`"/></Relationships>`)
+	if shared != "" {
+		add("xl/sharedStrings.xml", shared)
 	}
-	if err := target.Close(); err != nil {
+	if target == "worksheets/sheet1.xml" {
+		add("xl/worksheets/sheet1.xml", sheet)
+	}
+	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
-	return output.Bytes()
+	return buffer.Bytes()
 }

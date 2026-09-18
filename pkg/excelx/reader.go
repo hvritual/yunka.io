@@ -2,200 +2,497 @@ package excelx
 
 import (
 	"archive/zip"
-	"bytes"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
-
-	"codeberg.org/tealeg/xlsx/v4"
+	"os"
+	"path"
+	"strconv"
+	"strings"
+	"unicode"
 )
 
-const excelMaxColumns = 16384
-
-func workbookOptions() []xlsx.FileOption {
-	return []xlsx.FileOption{
-		xlsx.RowLimit(xlsx.Excel2006MaxRowCount),
-		xlsx.ColLimit(excelMaxColumns),
-	}
-}
+const (
+	maxWorkbookPartSize  = 16 << 20
+	maxSharedStringsSize = 256 << 20
+	maxWorksheetPartSize = 512 << 20
+	maxExcelRows         = 1048576
+	maxExcelColumns      = 16384
+)
 
 func ExcelFromIOReader(reader io.Reader, sheetName string, do func(colIdx int, row []string) error) error {
 	if reader == nil {
-		return errors.New("excelx: reader is required")
+		return errors.New("excelx: reader is nil")
 	}
-	contents, err := io.ReadAll(reader)
+	tmp, err := os.CreateTemp("", "yunka-excelx-*.xlsx")
 	if err != nil {
-		return err
+		return fmt.Errorf("excelx: create temporary workbook: %w", err)
 	}
-	activeSheet, err := workbookActiveSheetNameFromBytes(contents)
-	if err != nil {
-		return err
+	name := tmp.Name()
+	defer os.Remove(name)
+
+	if _, err := io.Copy(tmp, reader); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("excelx: spool workbook: %w", err)
 	}
-	file, err := xlsx.OpenBinary(contents, workbookOptions()...)
-	if err != nil {
-		return err
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("excelx: close temporary workbook: %w", err)
 	}
-	return doExcelReader(file, sheetName, activeSheet, do)
+	return ExcelFromFile(name, sheetName, do)
 }
 
-func ExcelFromFile(path string, sheetName string, do func(colIdx int, row []string) error) error {
-	activeSheet, err := workbookActiveSheetNameFromFile(path)
-	if err != nil {
-		return err
-	}
-	file, err := xlsx.OpenFile(path, workbookOptions()...)
-	if err != nil {
-		return err
-	}
-	return doExcelReader(file, sheetName, activeSheet, do)
-}
-
-func doExcelReader(file *xlsx.File, sheetName, activeSheet string, do func(colIdx int, row []string) error) error {
+func ExcelFromFile(fileName string, sheetName string, do func(colIdx int, row []string) error) error {
 	if do == nil {
-		return errors.New("excelx: row callback is required")
+		return errors.New("excelx: row callback is nil")
 	}
-	sheet, err := selectSheet(file, sheetName, activeSheet)
+	archive, err := zip.OpenReader(fileName)
 	if err != nil {
-		return err
+		return fmt.Errorf("excelx: open workbook: %w", err)
 	}
-
-	nextRow := 0
-	return sheet.ForEachRow(func(row *xlsx.Row) error {
-		rowIndex := row.GetCoordinate()
-		if rowIndex < nextRow {
-			return fmt.Errorf("excelx: worksheet row order moved backwards: row=%d next=%d", rowIndex+1, nextRow+1)
-		}
-		values, err := formattedRow(row)
-		if err != nil {
-			return fmt.Errorf("excelx: format row %d: %w", rowIndex+1, err)
-		}
-		// Excelize GetRows omits trailing empty rows, but materializes empty
-		// gaps once a later non-empty row exists. Preserve that public behavior.
-		if len(values) == 0 {
-			return nil
-		}
-		for nextRow < rowIndex {
-			if err := do(nextRow, nil); err != nil {
-				return err
-			}
-			nextRow++
-		}
-		if err := do(rowIndex, values); err != nil {
-			return err
-		}
-		nextRow = rowIndex + 1
-		return nil
-	})
-}
-
-func selectSheet(file *xlsx.File, sheetName, activeSheet string) (*xlsx.Sheet, error) {
-	if file == nil {
-		return nil, errors.New("excelx: workbook is required")
-	}
-	if sheetName != "" {
-		sheet, ok := file.Sheet[sheetName]
-		if !ok || sheet == nil {
-			return nil, fmt.Errorf("excelx: sheet %q does not exist", sheetName)
-		}
-		return sheet, nil
-	}
-	if activeSheet != "" {
-		if sheet, ok := file.Sheet[activeSheet]; ok && sheet != nil {
-			return sheet, nil
-		}
-		return nil, fmt.Errorf("excelx: active sheet %q is not a worksheet", activeSheet)
-	}
-	for _, sheet := range file.Sheets {
-		if sheet != nil {
-			return sheet, nil
-		}
-	}
-	return nil, errors.New("excelx: workbook has no worksheets")
-}
-
-func formattedRow(row *xlsx.Row) ([]string, error) {
-	values := []string(nil)
-	err := row.ForEachCell(func(cell *xlsx.Cell) error {
-		column, _ := cell.GetCoordinates()
-		if column < 0 || column >= excelMaxColumns {
-			return fmt.Errorf("cell column %d is outside Excel limits", column+1)
-		}
-		value, err := cell.FormattedValue()
-		if err != nil {
-			return err
-		}
-		if value == "" && !cell.HasFormula() {
-			return nil
-		}
-		if missing := column + 1 - len(values); missing > 0 {
-			values = append(values, make([]string, missing)...)
-		}
-		values[column] = value
-		return nil
-	})
-	return values, err
-}
-
-type workbookMetadata struct {
-	Views  []workbookView  `xml:"bookViews>workbookView"`
-	Sheets []workbookSheet `xml:"sheets>sheet"`
-}
-
-type workbookView struct {
-	ActiveTab *int `xml:"activeTab,attr"`
+	defer archive.Close()
+	return readWorkbookRows(archive.File, sheetName, do)
 }
 
 type workbookSheet struct {
-	Name string `xml:"name,attr"`
+	Name  string
+	RelID string
 }
 
-func workbookActiveSheetNameFromBytes(contents []byte) (string, error) {
-	archive, err := zip.NewReader(bytes.NewReader(contents), int64(len(contents)))
-	if err != nil {
-		return "", err
+type workbookInfo struct {
+	ActiveTab int
+	Sheets    []workbookSheet
+}
+
+type workbookXML struct {
+	BookViews struct {
+		Views []struct {
+			ActiveTab int `xml:"activeTab,attr"`
+		} `xml:"workbookView"`
+	} `xml:"bookViews"`
+	Sheets []struct {
+		Name  string `xml:"name,attr"`
+		RelID string `xml:"id,attr"`
+	} `xml:"sheets>sheet"`
+}
+
+type relsXML struct {
+	Relationships []struct {
+		ID     string `xml:"Id,attr"`
+		Target string `xml:"Target,attr"`
+		Type   string `xml:"Type,attr"`
+	} `xml:"Relationship"`
+}
+
+func readWorkbookRows(files []*zip.File, requestedSheet string, do func(colIdx int, row []string) error) error {
+	index := make(map[string]*zip.File, len(files))
+	for _, file := range files {
+		index[path.Clean(strings.ReplaceAll(file.Name, "\\", "/"))] = file
 	}
-	return workbookActiveSheetName(archive.File)
-}
 
-func workbookActiveSheetNameFromFile(path string) (string, error) {
-	archive, err := zip.OpenReader(path)
+	info, err := loadWorkbookInfo(index)
 	if err != nil {
-		return "", err
+		return err
 	}
-	defer archive.Close()
-	return workbookActiveSheetName(archive.File)
+	targetSheet, err := chooseSheet(info, requestedSheet)
+	if err != nil {
+		return err
+	}
+	relationships, err := loadWorkbookRelationships(index)
+	if err != nil {
+		return err
+	}
+	target, ok := relationships[targetSheet.RelID]
+	if !ok {
+		return fmt.Errorf("excelx: relationship %q for sheet %q is missing", targetSheet.RelID, targetSheet.Name)
+	}
+	worksheetPath, err := resolveWorkbookTarget(target)
+	if err != nil {
+		return err
+	}
+	worksheet, ok := index[worksheetPath]
+	if !ok {
+		return fmt.Errorf("excelx: worksheet %q for sheet %q is missing", worksheetPath, targetSheet.Name)
+	}
+	shared, err := loadSharedStrings(index)
+	if err != nil {
+		return err
+	}
+	return streamWorksheet(worksheet, shared, do)
 }
 
-func workbookActiveSheetName(files []*zip.File) (string, error) {
-	for _, entry := range files {
-		if entry.Name != "xl/workbook.xml" {
+func loadWorkbookInfo(index map[string]*zip.File) (workbookInfo, error) {
+	file, ok := index["xl/workbook.xml"]
+	if !ok {
+		return workbookInfo{}, errors.New("excelx: xl/workbook.xml is missing")
+	}
+	if err := checkPartSize(file, maxWorkbookPartSize); err != nil {
+		return workbookInfo{}, err
+	}
+	reader, err := file.Open()
+	if err != nil {
+		return workbookInfo{}, fmt.Errorf("excelx: open workbook metadata: %w", err)
+	}
+	defer reader.Close()
+
+	var document workbookXML
+	if err := xml.NewDecoder(reader).Decode(&document); err != nil {
+		return workbookInfo{}, fmt.Errorf("excelx: parse workbook metadata: %w", err)
+	}
+	info := workbookInfo{}
+	if len(document.BookViews.Views) > 0 {
+		info.ActiveTab = document.BookViews.Views[0].ActiveTab
+	}
+	for _, sheet := range document.Sheets {
+		info.Sheets = append(info.Sheets, workbookSheet{Name: sheet.Name, RelID: sheet.RelID})
+	}
+	if len(info.Sheets) == 0 {
+		return workbookInfo{}, errors.New("excelx: workbook has no worksheets")
+	}
+	if info.ActiveTab < 0 || info.ActiveTab >= len(info.Sheets) {
+		info.ActiveTab = 0
+	}
+	return info, nil
+}
+
+func loadWorkbookRelationships(index map[string]*zip.File) (map[string]string, error) {
+	file, ok := index["xl/_rels/workbook.xml.rels"]
+	if !ok {
+		return nil, errors.New("excelx: xl/_rels/workbook.xml.rels is missing")
+	}
+	if err := checkPartSize(file, maxWorkbookPartSize); err != nil {
+		return nil, err
+	}
+	reader, err := file.Open()
+	if err != nil {
+		return nil, fmt.Errorf("excelx: open workbook relationships: %w", err)
+	}
+	defer reader.Close()
+
+	var document relsXML
+	if err := xml.NewDecoder(reader).Decode(&document); err != nil {
+		return nil, fmt.Errorf("excelx: parse workbook relationships: %w", err)
+	}
+	result := map[string]string{}
+	for _, relationship := range document.Relationships {
+		if relationship.ID != "" && strings.Contains(relationship.Type, "/worksheet") {
+			result[relationship.ID] = relationship.Target
+		}
+	}
+	return result, nil
+}
+
+func chooseSheet(info workbookInfo, requested string) (workbookSheet, error) {
+	if requested == "" {
+		return info.Sheets[info.ActiveTab], nil
+	}
+	for _, sheet := range info.Sheets {
+		if sheet.Name == requested {
+			return sheet, nil
+		}
+	}
+	return workbookSheet{}, fmt.Errorf("excelx: worksheet %q does not exist", requested)
+}
+
+func resolveWorkbookTarget(target string) (string, error) {
+	target = strings.ReplaceAll(strings.TrimSpace(target), "\\", "/")
+	if target == "" {
+		return "", errors.New("excelx: worksheet relationship target is empty")
+	}
+	var clean string
+	if strings.HasPrefix(target, "/") {
+		clean = path.Clean(strings.TrimPrefix(target, "/"))
+	} else {
+		clean = path.Clean(path.Join("xl", target))
+	}
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") || !strings.HasPrefix(clean, "xl/") {
+		return "", fmt.Errorf("excelx: worksheet relationship target %q escapes xl/", target)
+	}
+	return clean, nil
+}
+
+func checkPartSize(file *zip.File, max uint64) error {
+	if file.UncompressedSize64 > max {
+		return fmt.Errorf("excelx: workbook part %q is too large: %d > %d", file.Name, file.UncompressedSize64, max)
+	}
+	return nil
+}
+
+func loadSharedStrings(index map[string]*zip.File) ([]string, error) {
+	file, ok := index["xl/sharedStrings.xml"]
+	if !ok {
+		return []string{}, nil
+	}
+	if err := checkPartSize(file, maxSharedStringsSize); err != nil {
+		return nil, err
+	}
+	reader, err := file.Open()
+	if err != nil {
+		return nil, fmt.Errorf("excelx: open shared strings: %w", err)
+	}
+	defer reader.Close()
+
+	decoder := xml.NewDecoder(reader)
+	result := []string{}
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("excelx: parse shared strings: %w", err)
+		}
+		start, ok := token.(xml.StartElement)
+		if !ok || start.Name.Local != "si" {
 			continue
 		}
-		reader, err := entry.Open()
+		value, err := collectRichText(decoder, start.Name)
+		if err != nil {
+			return nil, fmt.Errorf("excelx: parse shared string: %w", err)
+		}
+		result = append(result, value)
+	}
+	return result, nil
+}
+
+func collectRichText(decoder *xml.Decoder, end xml.Name) (string, error) {
+	var builder strings.Builder
+	phoneticDepth := 0
+	for {
+		token, err := decoder.Token()
 		if err != nil {
 			return "", err
 		}
-		var metadata workbookMetadata
-		decodeErr := xml.NewDecoder(reader).Decode(&metadata)
-		closeErr := reader.Close()
-		if decodeErr != nil {
-			return "", fmt.Errorf("excelx: decode workbook metadata: %w", decodeErr)
+		switch value := token.(type) {
+		case xml.StartElement:
+			if value.Name.Local == "rPh" {
+				phoneticDepth++
+				continue
+			}
+			if value.Name.Local == "t" && phoneticDepth == 0 {
+				var text string
+				if err := decoder.DecodeElement(&text, &value); err != nil {
+					return "", err
+				}
+				builder.WriteString(text)
+			}
+		case xml.EndElement:
+			if value.Name.Local == "rPh" && phoneticDepth > 0 {
+				phoneticDepth--
+				continue
+			}
+			if value.Name == end {
+				return builder.String(), nil
+			}
 		}
-		if closeErr != nil {
-			return "", closeErr
-		}
-		if len(metadata.Sheets) == 0 {
-			return "", errors.New("excelx: workbook has no sheets")
-		}
-		activeIndex := 0
-		if len(metadata.Views) > 0 && metadata.Views[0].ActiveTab != nil {
-			activeIndex = *metadata.Views[0].ActiveTab
-		}
-		if activeIndex < 0 || activeIndex >= len(metadata.Sheets) {
-			return "", fmt.Errorf("excelx: workbook active sheet index %d is outside sheet list", activeIndex)
-		}
-		return metadata.Sheets[activeIndex].Name, nil
 	}
-	return "", errors.New("excelx: workbook metadata xl/workbook.xml is missing")
+}
+
+type worksheetCell struct {
+	Ref   string
+	Type  string
+	Value string
+}
+
+func streamWorksheet(file *zip.File, shared []string, do func(int, []string) error) error {
+	if err := checkPartSize(file, maxWorksheetPartSize); err != nil {
+		return err
+	}
+	reader, err := file.Open()
+	if err != nil {
+		return fmt.Errorf("excelx: open worksheet %q: %w", file.Name, err)
+	}
+	defer reader.Close()
+
+	decoder := xml.NewDecoder(reader)
+	nextRow := 1
+	pendingEmpty := 0
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("excelx: parse worksheet %q: %w", file.Name, err)
+		}
+		start, ok := token.(xml.StartElement)
+		if !ok || start.Name.Local != "row" {
+			continue
+		}
+
+		rowNumber := nextRow
+		for _, attribute := range start.Attr {
+			if attribute.Name.Local != "r" || attribute.Value == "" {
+				continue
+			}
+			parsed, parseErr := strconv.Atoi(attribute.Value)
+			if parseErr != nil || parsed < 1 || parsed > maxExcelRows {
+				return fmt.Errorf("excelx: invalid row number %q", attribute.Value)
+			}
+			rowNumber = parsed
+			break
+		}
+		if rowNumber < nextRow {
+			return fmt.Errorf("excelx: worksheet row order regressed from %d to %d", nextRow, rowNumber)
+		}
+		pendingEmpty += rowNumber - nextRow
+
+		row, err := parseRow(decoder, start.Name, shared)
+		if err != nil {
+			return err
+		}
+		if len(row) == 0 {
+			pendingEmpty++
+			nextRow = rowNumber + 1
+			continue
+		}
+		for pendingEmpty > 0 {
+			if err := do(nextRow-pendingEmpty, []string{}); err != nil {
+				return err
+			}
+			pendingEmpty--
+		}
+		if err := do(rowNumber-1, row); err != nil {
+			return err
+		}
+		nextRow = rowNumber + 1
+	}
+	return nil
+}
+
+func parseRow(decoder *xml.Decoder, end xml.Name, shared []string) ([]string, error) {
+	row := []string{}
+	nextColumn := 0
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			return nil, err
+		}
+		switch value := token.(type) {
+		case xml.StartElement:
+			if value.Name.Local != "c" {
+				continue
+			}
+			cell, err := parseCell(decoder, value, shared)
+			if err != nil {
+				return nil, err
+			}
+			column := nextColumn
+			if cell.Ref != "" {
+				parsed, err := columnIndex(cell.Ref)
+				if err != nil {
+					return nil, err
+				}
+				column = parsed
+			}
+			if column < nextColumn {
+				return nil, fmt.Errorf("excelx: cell %q is out of column order", cell.Ref)
+			}
+			for len(row) <= column {
+				row = append(row, "")
+			}
+			row[column] = cell.Value
+			nextColumn = column + 1
+		case xml.EndElement:
+			if value.Name == end {
+				for len(row) > 0 && row[len(row)-1] == "" {
+					row = row[:len(row)-1]
+				}
+				return row, nil
+			}
+		}
+	}
+}
+
+func parseCell(decoder *xml.Decoder, start xml.StartElement, shared []string) (worksheetCell, error) {
+	cell := worksheetCell{}
+	for _, attribute := range start.Attr {
+		switch attribute.Name.Local {
+		case "r":
+			cell.Ref = attribute.Value
+		case "t":
+			cell.Type = attribute.Value
+		}
+	}
+
+	raw := ""
+	inline := ""
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			return cell, err
+		}
+		switch value := token.(type) {
+		case xml.StartElement:
+			switch value.Name.Local {
+			case "v":
+				if err := decoder.DecodeElement(&raw, &value); err != nil {
+					return cell, err
+				}
+			case "is":
+				text, err := collectRichText(decoder, value.Name)
+				if err != nil {
+					return cell, err
+				}
+				inline = text
+			default:
+				if err := decoder.Skip(); err != nil {
+					return cell, err
+				}
+			}
+		case xml.EndElement:
+			if value.Name == start.Name {
+				decoded, err := decodeCellValue(cell.Type, raw, inline, shared)
+				cell.Value = decoded
+				return cell, err
+			}
+		}
+	}
+}
+
+func decodeCellValue(kind, raw, inline string, shared []string) (string, error) {
+	switch kind {
+	case "s":
+		index, err := strconv.Atoi(strings.TrimSpace(raw))
+		if err != nil || index < 0 || index >= len(shared) {
+			return "", fmt.Errorf("excelx: invalid shared string index %q", raw)
+		}
+		return shared[index], nil
+	case "inlineStr":
+		return inline, nil
+	case "b":
+		switch strings.TrimSpace(raw) {
+		case "1":
+			return "TRUE", nil
+		case "0":
+			return "FALSE", nil
+		}
+	}
+	return raw, nil
+}
+
+func columnIndex(reference string) (int, error) {
+	reference = strings.TrimSpace(reference)
+	if reference == "" {
+		return 0, errors.New("excelx: empty cell reference")
+	}
+	number := 0
+	letters := 0
+	for _, character := range reference {
+		if !unicode.IsLetter(character) {
+			break
+		}
+		if character >= 'a' && character <= 'z' {
+			character -= 'a' - 'A'
+		}
+		if character < 'A' || character > 'Z' {
+			return 0, fmt.Errorf("excelx: invalid cell reference %q", reference)
+		}
+		number = number*26 + int(character-'A'+1)
+		letters++
+	}
+	if letters == 0 || number < 1 || number > maxExcelColumns {
+		return 0, fmt.Errorf("excelx: invalid cell reference %q", reference)
+	}
+	return number - 1, nil
 }

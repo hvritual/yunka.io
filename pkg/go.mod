@@ -5,7 +5,6 @@ go 1.25.0
 toolchain go1.25.13
 
 require (
-	codeberg.org/tealeg/xlsx/v4 v4.1.1
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DATA-DOG/go-sqlmock v1.5.1
 	github.com/aliyun/aliyun-log-go-sdk v0.1.127
@@ -26,18 +25,6 @@ require (
 	google.golang.org/protobuf v1.36.11
 	gorm.io/driver/mysql v1.5.2
 	gorm.io/gorm v1.25.5
-)
-
-require (
-	github.com/frankban/quicktest v1.14.6 // indirect
-	github.com/google/btree v1.0.0 // indirect
-	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/kr/pretty v0.3.1 // indirect
-	github.com/kr/text v0.2.0 // indirect
-	github.com/peterbourgon/diskv/v3 v3.0.1 // indirect
-	github.com/rogpeppe/fastuuid v1.2.0 // indirect
-	github.com/rogpeppe/go-internal v1.14.1 // indirect
-	github.com/shabbyrobe/xmlwriter v0.0.0-20200208144257-9fca06d00ffa // indirect
 )
 
 require (
