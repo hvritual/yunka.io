@@ -11,7 +11,7 @@ import (
 	"yunka.io/app/cmd/projectflow"
 )
 
-const RuleOperationGrowthBoundary = "AUDIT-BOUNDARY-001"
+const RuleOperationGrowthBoundary = auditcore.RuleOperationGrowthBoundary
 
 func boundaryGrowthFindings(currentOptions projectflow.Options, baselineRoot, baseSHA string) ([]auditcore.Finding, error) {
 	currentRoot, err := filepath.Abs(strings.TrimSpace(currentOptions.Root))

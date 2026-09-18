@@ -90,6 +90,7 @@ func Normalize(report *Report) {
 	report.QualityPolicy.BlockingRules = uniqueStrings(report.QualityPolicy.BlockingRules)
 	NormalizeSource(&report.Source)
 	normalizeFindings(report.Findings)
+	EnforceMandatoryBlocking(report.Findings)
 	if report.Findings == nil {
 		report.Findings = []Finding{}
 	}
@@ -99,6 +100,9 @@ func Normalize(report *Report) {
 		normalizeFindings(report.Debt.Existing)
 		normalizeFindings(report.Debt.New)
 		normalizeFindings(report.Debt.Fixed)
+		EnforceMandatoryBlocking(report.Debt.Existing)
+		EnforceMandatoryBlocking(report.Debt.New)
+		EnforceMandatoryBlocking(report.Debt.Fixed)
 		if report.Debt.Existing == nil {
 			report.Debt.Existing = []Finding{}
 		}
@@ -216,6 +220,9 @@ func validateFindings(values []Finding, provenOnly bool) error {
 		case FindingProvenViolation:
 			if finding.Invariant == "" {
 				return fmt.Errorf("proven finding %s invariant is required", finding.ID)
+			}
+			if IsMandatoryBlockingRule(finding.Rule) && !finding.Blocking {
+				return fmt.Errorf("mandatory finding %s rule %s must remain blocking", finding.ID, finding.Rule)
 			}
 		case FindingEvidenceObservation:
 			if finding.Blocking {

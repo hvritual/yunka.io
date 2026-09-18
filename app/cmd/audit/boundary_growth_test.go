@@ -25,6 +25,7 @@ func TestBuildWithBaseBlocksDirectOperationGrowthEvenWithStaleGeneratedManifest(
 	data, _ := json.MarshalIndent(manifest, "", "  ")
 	writeAuditProjectFile(t, filepath.Join(root, "contracts", "generated", contract.ManifestFilename), string(append(data, '\n')))
 	writeAuditProjectFile(t, filepath.Join(root, "internal", "sales", "application", "service.go"), "// Package application owns the fixture.\npackage application\n")
+	writeAuditProjectFile(t, filepath.Join(root, auditcore.QualityPolicyRelativePath), "{\"schemaVersion\":1,\"blockingRules\":[]}\n")
 	gitAudit(t, root, "init")
 	gitAudit(t, root, "config", "user.email", "audit@example.invalid")
 	gitAudit(t, root, "config", "user.name", "Yunka Audit Test")
@@ -46,6 +47,9 @@ func TestBuildWithBaseBlocksDirectOperationGrowthEvenWithStaleGeneratedManifest(
 	}
 	if !found {
 		t.Fatalf("new debt=%#v", report.Debt.New)
+	}
+	if !report.QualityPolicy.Present || len(report.QualityPolicy.BlockingRules) != 0 {
+		t.Fatalf("expected explicit empty quality policy, got %#v", report.QualityPolicy)
 	}
 	if len(auditcore.BlockingNewFindings(report)) == 0 {
 		t.Fatal("direct growth was not blocking")

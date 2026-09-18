@@ -17,12 +17,16 @@ const (
 	QualityPolicySchemaVersion = 1
 	QualityPolicyRelativePath  = ".yunka/engineering-quality.json"
 
-	RuleGeneratedOwnershipMix = "AUDIT-GEN-001"
+	RuleGeneratedOwnershipMix  = "AUDIT-GEN-001"
 	RuleStaleGeneratedArtifact = "AUDIT-GEN-002"
 	RuleGeneratedArtifactDrift = "AUDIT-GEN-003"
 	RuleFileLineLimit          = "AUDIT-SIZE-001"
 	RuleFileDeclarationLimit   = "AUDIT-SIZE-002"
 	RuleFileBranchLimit        = "AUDIT-COMPLEXITY-001"
+
+	// RuleOperationGrowthBoundary is mandatory architecture correctness. It is
+	// intentionally excluded from configurable QualityPolicy.blockingRules.
+	RuleOperationGrowthBoundary = "AUDIT-BOUNDARY-001"
 )
 
 type QualityLimits struct {
@@ -119,9 +123,27 @@ func supportedBlockingRuleSet() map[string]struct{} {
 		RuleGeneratedOwnershipMix:        {},
 		RuleStaleGeneratedArtifact:       {},
 		RuleGeneratedArtifactDrift:       {},
-		RuleFileLineLimit:                 {},
-		RuleFileDeclarationLimit:          {},
-		RuleFileBranchLimit:               {},
+		RuleFileLineLimit:                {},
+		RuleFileDeclarationLimit:         {},
+		RuleFileBranchLimit:              {},
+	}
+}
+
+func IsMandatoryBlockingRule(rule string) bool {
+	switch strings.TrimSpace(rule) {
+	case RuleOperationGrowthBoundary:
+		return true
+	default:
+		return false
+	}
+}
+
+func EnforceMandatoryBlocking(findings []Finding) {
+	for index := range findings {
+		finding := &findings[index]
+		if finding.Class == FindingProvenViolation && IsMandatoryBlockingRule(finding.Rule) {
+			finding.Blocking = true
+		}
 	}
 }
 
@@ -130,7 +152,7 @@ func ApplyBlockingPolicy(findings []Finding, policy QualityPolicy) {
 	for index := range findings {
 		finding := &findings[index]
 		_, enabled := blocking[finding.Rule]
-		finding.Blocking = enabled && finding.Class == FindingProvenViolation
+		finding.Blocking = finding.Class == FindingProvenViolation && (enabled || IsMandatoryBlockingRule(finding.Rule))
 	}
 }
 
