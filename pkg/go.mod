@@ -5,6 +5,7 @@ go 1.25.0
 toolchain go1.25.13
 
 require (
+	codeberg.org/tealeg/xlsx/v4 v4.1.1
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DATA-DOG/go-sqlmock v1.5.1
 	github.com/aliyun/aliyun-log-go-sdk v0.1.127
@@ -18,7 +19,6 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rs/xid v1.2.1
 	github.com/stretchr/testify v1.11.1
-	github.com/xuri/excelize/v2 v2.8.0
 	go.etcd.io/etcd/api/v3 v3.6.14
 	go.etcd.io/etcd/client/v3 v3.6.14
 	golang.org/x/crypto v0.55.0
@@ -26,6 +26,18 @@ require (
 	google.golang.org/protobuf v1.36.11
 	gorm.io/driver/mysql v1.5.2
 	gorm.io/gorm v1.25.5
+)
+
+require (
+	github.com/frankban/quicktest v1.14.6 // indirect
+	github.com/google/btree v1.0.0 // indirect
+	github.com/google/go-cmp v0.7.0 // indirect
+	github.com/kr/pretty v0.3.1 // indirect
+	github.com/kr/text v0.2.0 // indirect
+	github.com/peterbourgon/diskv/v3 v3.0.1 // indirect
+	github.com/rogpeppe/fastuuid v1.2.0 // indirect
+	github.com/rogpeppe/go-internal v1.14.1 // indirect
+	github.com/shabbyrobe/xmlwriter v0.0.0-20200208144257-9fca06d00ffa // indirect
 )
 
 require (
@@ -42,13 +54,8 @@ require (
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
 	github.com/miekg/dns v1.1.72 // indirect
-	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/richardlehane/mscfb v1.0.4 // indirect
-	github.com/richardlehane/msoleps v1.0.3 // indirect
-	github.com/xuri/efp v0.0.0-20230802181842-ad255f2331ca // indirect
-	github.com/xuri/nfp v0.0.0-20230819163627-dc951e3ffe1a // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.6.14 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
