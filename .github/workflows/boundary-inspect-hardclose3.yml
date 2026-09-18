@@ -71,12 +71,20 @@ jobs:
           unzip -q "$archive" -d "$install_root"
           echo "$install_root/bin" >> "$GITHUB_PATH"
 
+      - name: Prime locked RPC generator tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd product
+          make rpc-tools rpc-toolchain-check
+
       - name: Materialize public read-only boundary inspect
         shell: bash
         run: |
           set -euo pipefail
           cd product
           python3 ../controller/tools/boundary_inspect_hardclose3.py
+          python3 ../controller/tools/boundary_inspect_hardclose3_fix1.py
           gofmt -w \
             app/cmd/boundary/command.go \
             app/cmd/boundary/command_test.go \
