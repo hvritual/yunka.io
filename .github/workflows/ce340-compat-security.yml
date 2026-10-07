@@ -1,0 +1,130 @@
+name: CE340 compatibility security authoring
+on:
+  push:
+    branches: [control/ce340-compat-security-20261008]
+permissions:
+  contents: read
+jobs:
+  author-and-qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - name: Read exact authoring instructions
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+      - name: Read exact compatibility source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 06076ce2fc170c89c7356ee070d74ebf1de340cf
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Load unchanged toolchain
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          source source/tools/toolchain.env
+          echo "go=$GO_VERSION" >> "$GITHUB_OUTPUT"
+          echo "protoc=$PROTOC_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "protoc_sha=$PROTOC_LINUX_X86_64_SHA256" >> "$GITHUB_OUTPUT"
+          mkdir -p "$RUNNER_TEMP/ce340-security"
+          git -C source rev-parse HEAD > "$RUNNER_TEMP/ce340-security/source-sha.txt"
+          git -C control rev-parse HEAD > "$RUNNER_TEMP/ce340-security/authoring-sha.txt"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go }}
+          cache: false
+      - name: Install locked tools
+        shell: bash
+        env:
+          PROTOC_RELEASE: ${{ steps.lock.outputs.protoc }}
+          PROTOC_SHA: ${{ steps.lock.outputs.protoc_sha }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 --max-time 120 \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" \
+            -o "$RUNNER_TEMP/protoc.zip"
+          echo "$PROTOC_SHA  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+          source source/tools/toolchain.env
+          GOBIN="$RUNNER_TEMP/vuln-bin" go install "golang.org/x/vuln/cmd/govulncheck@$GOVULNCHECK_VERSION"
+      - name: Preserve vulnerable baseline evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          for module in pkg framework; do
+            set +e
+            (cd "source/$module" && "$RUNNER_TEMP/vuln-bin/govulncheck" ./...) > "$RUNNER_TEMP/ce340-security/baseline-$module.log" 2>&1
+            status=$?
+            set -e
+            echo "$status" > "$RUNNER_TEMP/ce340-security/baseline-$module.exit"
+            tail -n 35 "$RUNNER_TEMP/ce340-security/baseline-$module.log"
+            test "$status" -eq 0 -o "$status" -eq 3
+          done
+          test "$(cat "$RUNNER_TEMP/ce340-security/baseline-pkg.exit")" = 3
+          grep -q GO-2026-6348 "$RUNNER_TEMP/ce340-security/baseline-pkg.log"
+          git -C source diff --exit-code
+      - name: Prepare dependency-only proposal
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 control/tools/prepare_compat_security.py --root source --output "$RUNNER_TEMP/ce340-security" \
+            2>&1 | tee "$RUNNER_TEMP/ce340-security/prepare.log"
+          git -C source diff --cached --stat
+      - name: Run unchanged full production qualification
+        shell: bash
+        env:
+          YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?charset=utf8mb4&parseTime=true&loc=UTC&multiStatements=true
+        run: |
+          set -euo pipefail
+          make -C source verify-production 2>&1 | tee "$RUNNER_TEMP/ce340-security/verify-production.log"
+          make -C source tidy contract 2>&1 | tee "$RUNNER_TEMP/ce340-security/determinism.log"
+          git -C source diff --exit-code
+          test -z "$(git -C source ls-files --others --exclude-standard)"
+          test "$(git -C source write-tree)" = "$(cat "$RUNNER_TEMP/ce340-security/proposed-tree.txt")"
+          echo PASS > "$RUNNER_TEMP/ce340-security/qualification.txt"
+      - name: Publish isolated candidate, never merge
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(cat "$RUNNER_TEMP/ce340-security/qualification.txt")" = PASS
+          gh auth setup-git
+          branch=fix/ce340-compatible-security
+          test -z "$(git -C source ls-remote --heads origin "refs/heads/$branch")"
+          git -C source config user.name 'github-actions[bot]'
+          git -C source config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C source commit -m 'chore(deps): backport fixed dependencies for CE340 compatibility' \
+            -m 'Refs #226 and hvritual/biz#340. Dependency-only candidate; original full verify-production, current vulnerability scan and deterministic generation passed. No main or consumer ref changed.'
+          candidate=$(git -C source rev-parse HEAD)
+          git -C source push origin "$candidate:refs/heads/$branch"
+          test "$(git -C source ls-remote origin "refs/heads/$branch" | cut -f1)" = "$candidate"
+          printf '%s\n' "$candidate" > "$RUNNER_TEMP/ce340-security/candidate-sha.txt"
+          git -C source archive --format=tar --output="$RUNNER_TEMP/ce340-security/candidate-source.tar" HEAD
+          printf 'CANDIDATE=%s\nCLASSIFICATION=COMPATIBILITY_ONLY\nMERGED=false\n' "$candidate"
+      - name: Retain exact evidence and proposal even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ce340-compat-security-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ce340-security/
+          if-no-files-found: error
+          retention-days: 14
