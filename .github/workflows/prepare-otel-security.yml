@@ -1,0 +1,151 @@
+name: prepare-otel-security
+on:
+  push:
+    branches: [codex/control-otel-security]
+    paths: [.github/workflows/prepare-otel-security.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BASE_SHA: 3b70323d29c694e4e44142b66c16e2e25ac0f9de
+      CANDIDATE_BRANCH: fix/otel-security-baseline
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 3b70323d29c694e4e44142b66c16e2e25ac0f9de
+          fetch-depth: 0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.25.13'
+          cache-dependency-path: '**/go.sum'
+      - name: Verify exact untouched baseline and reproduce security failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          for doc in AGENTS.md PROJECT_MEMORY.md docs/STATUS.md docs/ENGINEERING_QUALITY_RULES.md; do sha256sum "$doc"; done
+          mkdir -p "$RUNNER_TEMP/otel-security"
+          git rev-parse HEAD 'HEAD^{tree}' > "$RUNNER_TEMP/otel-security/base-identity.txt"
+          set +e
+          make vuln > "$RUNNER_TEMP/otel-security/baseline-vuln.log" 2>&1
+          code=$?
+          set -e
+          echo "$code" > "$RUNNER_TEMP/otel-security/baseline-exit.txt"
+          test "$code" -ne 0
+          for finding in GO-2026-6615 GO-2026-6508 GO-2026-6505; do grep -F "$finding" "$RUNNER_TEMP/otel-security/baseline-vuln.log"; done
+          git diff --exit-code
+      - name: Resolve the coherent fixed OpenTelemetry module family
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git ls-remote --heads origin "$CANDIDATE_BRANCH")"
+          git switch -c "$CANDIDATE_BRANCH"
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          env = dict(os.environ, GOWORK='off')
+          for module in ('pkg', 'framework', 'gateway', 'infras', 'app'):
+              manifest = json.loads(subprocess.check_output(['go', 'mod', 'edit', '-json'], cwd=module, env=env))
+              upgrades = []
+              for requirement in manifest.get('Require', []):
+                  path, old = requirement['Path'], requirement['Version']
+                  if path == 'go.opentelemetry.io/otel' or path.startswith('go.opentelemetry.io/otel/'):
+                      new = {'v1.44.0': 'v1.45.0', 'v0.20.0': 'v0.21.0', 'v0.66.0': 'v0.67.0'}.get(old)
+                      if new:
+                          upgrades.append(path + '@' + new)
+              if upgrades:
+                  print(module, upgrades, flush=True)
+                  subprocess.run(['go', 'get', *upgrades], cwd=module, env=env, check=True)
+          policy_path = pathlib.Path('tools/dependency-policy.json')
+          policy = json.loads(policy_path.read_text())
+          fixes = {
+              'go.opentelemetry.io/otel/sdk': 'v1.45.0',
+              'go.opentelemetry.io/otel/sdk/log': 'v0.21.0',
+              'go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc': 'v0.21.0',
+              'go.opentelemetry.io/otel/exporters/otlp/otlptrace': 'v1.45.0',
+              'go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc': 'v1.45.0',
+              'go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp': 'v1.45.0',
+          }
+          current = {item['path']: item for item in policy['requiredModules']}
+          for path, version in fixes.items():
+              if path in current:
+                  current[path]['version'] = version
+              else:
+                  policy['requiredModules'].append({'path': path, 'version': version})
+          policy_path.write_text(json.dumps(policy, indent=2) + '\n')
+          status_path = pathlib.Path('docs/STATUS.md')
+          status = status_path.read_text()
+          note = '''## OpenTelemetry security dependency closure — issue #237
+
+          Issue #237 records reachable GO-2026-6615, GO-2026-6508 and
+          GO-2026-6505 on unchanged main 3b70323d29c694e4e44142b66c16e2e25ac0f9de.
+          The independent dependency candidate selects the coherent OpenTelemetry
+          1.45.0 stable / 0.21.0 log family and locks the affected modules in the
+          existing dependency policy. Runtime source, contracts, generated files,
+          consumer pins and normal security/test workflows are unchanged.
+
+          Candidate presence is not acceptance. Exact baseline reproduction,
+          candidate CI/Production and subsequent main run identities belong to
+          [issue #237](https://github.com/hvritual/yunka.io/issues/237).
+          Issue #228 must separately align with the accepted security main and
+          requalify its own candidate; its previous tests are not inherited as
+          current-head or actual-main acceptance.
+
+          '''
+          status = status.replace('## Current framework state\n', note + '## Current framework state\n', 1)
+          status_path.write_text(status)
+          PY
+          make tidy
+          python3 - <<'PY'
+          import os, pathlib, re, subprocess
+          base = os.environ['BASE_SHA']
+          changed = subprocess.check_output(['git','diff','--name-only',base], text=True).splitlines()
+          allowed = re.compile(r'^(?:(pkg|framework|gateway|infras|app)/go\.(mod|sum)|go\.work\.sum|tools/dependency-policy\.json|docs/STATUS\.md)$')
+          assert changed and all(allowed.fullmatch(p) for p in changed), changed
+          for module in ('pkg','framework','gateway','infras','app'):
+              p = f'{module}/go.mod'
+              old = subprocess.check_output(['git','show',f'{base}:{p}'], text=True)
+              new = pathlib.Path(p).read_text()
+              for key in ('module ', 'go ', 'toolchain '):
+                  assert [s for s in old.splitlines() if s.startswith(key)] == [s for s in new.splitlines() if s.startswith(key)], (p,key)
+          print('Exact metadata-only scope:', changed)
+          PY
+          git diff --check
+          git config user.name 'Yunka Delivery'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pkg/go.mod pkg/go.sum framework/go.mod framework/go.sum gateway/go.mod gateway/go.sum infras/go.mod infras/go.sum app/go.mod app/go.sum go.work.sum tools/dependency-policy.json docs/STATUS.md
+          git commit -m 'fix(deps): update OpenTelemetry security baseline'
+          git rev-parse HEAD 'HEAD^{tree}' > "$RUNNER_TEMP/otel-security/candidate-identity.txt"
+          git diff --stat "$BASE_SHA" > "$RUNNER_TEMP/otel-security/delta-stat.txt"
+          git diff "$BASE_SHA" > "$RUNNER_TEMP/otel-security/candidate.patch"
+      - name: Verify fixed dependency graph and observability behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          make dependency-check > "$RUNNER_TEMP/otel-security/dependency-check.log" 2>&1
+          make vuln > "$RUNNER_TEMP/otel-security/candidate-vuln.log" 2>&1
+          (cd framework && go test -count=1 ./observability/... && go test -race -count=1 ./observability/...) > "$RUNNER_TEMP/otel-security/observability-tests.log" 2>&1
+          make tidy > "$RUNNER_TEMP/otel-security/tidy-readback.log" 2>&1
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=all)"
+      - name: Publish exact verified candidate without moving main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_SHA"
+          test -z "$(git ls-remote --heads origin "$CANDIDATE_BRANCH")"
+          git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          test "$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
+          cat "$RUNNER_TEMP/otel-security/candidate-identity.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: otel-security-preparation
+          path: ${{ runner.temp }}/otel-security
+          if-no-files-found: error
+          retention-days: 30
