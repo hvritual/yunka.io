@@ -27,7 +27,8 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
-          git rev-parse --verify 'HEAD^{commit}' 'refs/remotes/origin/main^{commit}'
+          git rev-parse --verify 'HEAD^{commit}'
+          git rev-parse --verify 'refs/remotes/origin/main^{commit}'
       - name: Adversarial exact-Git baseline regression
         shell: bash
         run: python3 tools/test_qualify_branch_baseline.py -v
