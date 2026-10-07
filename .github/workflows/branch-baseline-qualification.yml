@@ -1,0 +1,69 @@
+name: branch-baseline-qualification
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  baseline-identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Resolve authoritative live main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+          git rev-parse --verify 'HEAD^{commit}' 'refs/remotes/origin/main^{commit}'
+      - name: Adversarial exact-Git baseline regression
+        shell: bash
+        run: python3 tools/test_qualify_branch_baseline.py -v
+      - name: Classify immutable candidate and verify trusted qualification receipts
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CHECKED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          YUNKA_MAINTENANCE_POLICY: ${{ vars.YUNKA_MAINTENANCE_POLICY }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          mode=pr
+          if [[ "$EVENT_NAME" != pull_request ]]; then
+            mode=main
+          fi
+          output="$RUNNER_TEMP/branch-baseline-qualification.json"
+          python3 tools/qualify_branch_baseline.py \
+            --repo-root . --mode "$mode" \
+            --base-ref "${BASE_REF:-}" --base-sha "${BASE_SHA:-}" \
+            --checked-sha "$CHECKED_SHA" --repository "$REPOSITORY" > "$output"
+          code=$?
+          cat "$output"
+          exit "$code"
+      - name: Verify qualification never mutated source
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=all)"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: branch-baseline-qualification
+          path: ${{ runner.temp }}/branch-baseline-qualification.json
+          if-no-files-found: warn
+          retention-days: 30
