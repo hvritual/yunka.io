@@ -124,6 +124,18 @@ class BranchIdentityTests(RepositoryFixture):
         self.assertEqual(data["verifiedRuns"], [])
         self.assertTrue(all(d["matchesMain"] for d in data["dependencyBaseline"]))
 
+    def test_missing_dependency_manifest_is_incomplete_evidence(self) -> None:
+        sha = self.feature()
+        (self.root / "go.work").unlink()
+        invoke(self.root, "add", "-u")
+        invoke(self.root, "commit", "-qm", "Remove required manifest")
+        sha = invoke(self.root, "rev-parse", "HEAD")
+        data = self.assess(sha=sha)
+        self.assertEqual(data["classification"], "UNCLASSIFIED")
+        self.assertEqual(data["blockedReason"], "DEPENDENCY_BASELINE_EVIDENCE_MISSING")
+        self.assertFalse(next(x for x in data["dependencyBaseline"]
+                              if x["path"] == "go.work")["matchesMain"])
+
     def test_main_moving_invalidates_an_older_candidate(self) -> None:
         old_sha = self.main_sha
         sha = self.feature()
@@ -197,6 +209,19 @@ class CompatibilityTests(RepositoryFixture):
         data = self.assess(base_ref="compat/example", base_sha=base, sha=head,
                            trusted=json.dumps(record))
         self.assertEqual(data["blockedReason"], "MAINTENANCE_AUTHORITY_MISSING")
+
+    def test_malformed_backport_and_run_record_do_not_raise(self) -> None:
+        base, head = self.legacy()
+        record = json.loads(self.policy(base, base))
+        record["branches"][0]["securityBackportSha"] = 17
+        invalid = self.assess(base_ref="compat/example", base_sha=base, sha=head,
+                              trusted=json.dumps(record))
+        self.assertEqual(invalid["blockedReason"], "SECURITY_BACKPORT_NOT_IN_CANDIDATE")
+        record["branches"][0]["securityBackportSha"] = base
+        record["branches"][0]["qualification"] = ["untrusted", "runs"]
+        invalid = self.assess(base_ref="compat/example", base_sha=base, sha=head,
+                              trusted=json.dumps(record))
+        self.assertEqual(invalid["blockedReason"], "INDEPENDENT_RUNS_REQUIRED")
 
     def test_backport_must_be_in_exact_candidate_history(self) -> None:
         base, head = self.legacy()
