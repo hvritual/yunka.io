@@ -48,6 +48,30 @@
     {
       "path": "google.golang.org/genproto/googleapis/rpc",
       "version": "v0.0.0-20260807164820-c8921c73eeea"
+    },
+    {
+      "path": "go.opentelemetry.io/otel/sdk",
+      "version": "v1.45.0"
+    },
+    {
+      "path": "go.opentelemetry.io/otel/sdk/log",
+      "version": "v0.21.0"
+    },
+    {
+      "path": "go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc",
+      "version": "v0.21.0"
+    },
+    {
+      "path": "go.opentelemetry.io/otel/exporters/otlp/otlptrace",
+      "version": "v1.45.0"
+    },
+    {
+      "path": "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc",
+      "version": "v1.45.0"
+    },
+    {
+      "path": "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp",
+      "version": "v1.45.0"
     }
   ],
   "workspaceModules": [],
