@@ -90,13 +90,18 @@ def blob_digest(root: Path, sha: str, path: str) -> str | None:
 
 
 def drift(root: Path, main_sha: str, head_sha: str) -> list[dict]:
-    return [
-        {"path": name, "mainSHA256": blob_digest(root, main_sha, name),
-         "candidateSHA256": blob_digest(root, head_sha, name),
-         "matchesMain": blob_digest(root, main_sha, name) ==
-                        blob_digest(root, head_sha, name)}
-        for name in FILES
-    ]
+    result = []
+    for name in FILES:
+        main_digest = blob_digest(root, main_sha, name)
+        candidate_digest = blob_digest(root, head_sha, name)
+        result.append({
+            "path": name, "mainSHA256": main_digest,
+            "candidateSHA256": candidate_digest,
+            "matchesMain": main_digest is not None
+                           and candidate_digest is not None
+                           and main_digest == candidate_digest,
+        })
+    return result
 
 
 def maintenance_policy(source: str, branch: str, base_sha: str) -> dict | None:
@@ -155,7 +160,10 @@ def qualified_run(run: dict, jobs: list[dict], checked_sha: str,
             run.get("event") != "pull_request")):
         return False
     prs = run.get("pull_requests") or []
-    if not any(isinstance(pr, dict) and pr.get("base", {}).get("ref") == base_ref for pr in prs):
+    if not any(
+        isinstance(pr, dict) and isinstance(pr.get("base"), dict)
+        and pr["base"].get("ref") == base_ref for pr in prs
+    ):
         return False
     return any(
         item.get("name") == job and item.get("conclusion") == "success"
@@ -195,6 +203,9 @@ def assess(root: Path, mode: str, base_ref: str, base_sha: str,
         report.update(classification=classification, status="BLOCKED", blockedReason=code)
         return report
 
+    if any(item["mainSHA256"] is None or item["candidateSHA256"] is None
+           for item in report["dependencyBaseline"]):
+        return block("DEPENDENCY_BASELINE_EVIDENCE_MISSING")
     if exact_sha(root, checked_sha) != head:
         return block("CHECKED_HEAD_MISMATCH")
     if mode == "main":
@@ -227,11 +238,13 @@ def assess(root: Path, mode: str, base_ref: str, base_sha: str,
     if until < (today or dt.datetime.now(dt.timezone.utc).date()):
         return block("MAINTENANCE_EXPIRED")
     backport = policy.get("securityBackportSha", "")
-    if not FULL_SHA.fullmatch(backport) or not ancestor(root, exact_sha(root, backport), head):
+    if not isinstance(backport, str) or not FULL_SHA.fullmatch(backport) or not ancestor(root, exact_sha(root, backport), head):
         return block("SECURITY_BACKPORT_NOT_IN_CANDIDATE")
 
     report["classification"] = "MAINTAINED_COMPAT"
     qualification = policy.get("qualification") or {}
+    if not isinstance(qualification, dict):
+        return block("INDEPENDENT_RUNS_REQUIRED", "MAINTAINED_COMPAT")
     run_ids = (qualification.get("ciRunId"), qualification.get("productionRunId"))
     if any(type(n) is not int or n < 1 for n in run_ids):
         return block("INDEPENDENT_RUNS_REQUIRED", "MAINTAINED_COMPAT")
