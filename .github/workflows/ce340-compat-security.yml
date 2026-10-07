@@ -88,6 +88,36 @@ jobs:
           python3 control/tools/prepare_compat_security.py --root source --output "$RUNNER_TEMP/ce340-security" \
             2>&1 | tee "$RUNNER_TEMP/ce340-security/prepare.log"
           git -C source diff --cached --stat
+      - name: Freeze checksum-complete dependency candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C source rpc-tools contract build
+          for module in pkg framework gateway app; do
+            (cd "source/$module" && go list -deps -test ./... >/dev/null)
+            (cd "source/$module" && go list -deps -test -tags=integration ./... >/dev/null)
+          done
+          make -C source tidy
+          python3 - <<'PYCODE'
+          import hashlib, json, subprocess
+          from pathlib import Path
+          root = Path('source')
+          allowed = {'go.work.sum', 'tools/dependency-policy.json'} | {
+              f'{module}/{name}' for module in ('pkg', 'framework', 'gateway', 'app') for name in ('go.mod', 'go.sum')}
+          changed = subprocess.check_output(['git', 'diff', '--name-only', 'HEAD'], cwd=root, text=True).splitlines()
+          assert changed and not set(changed) - allowed, changed
+          subprocess.run(['git', 'diff', '--check'], cwd=root, check=True)
+          subprocess.run(['git', 'add', '--', *changed], cwd=root, check=True)
+          PYCODE
+          git -C source config user.name 'github-actions[bot]'
+          git -C source config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C source commit -m 'chore(deps): backport fixed dependencies for CE340 compatibility' \
+            -m 'Refs #226 and hvritual/biz#340. Dependency-only candidate; qualification is pending. No main, PR or consumer reference moved.'
+          test -z "$(git -C source status --porcelain)"
+          git -C source rev-parse HEAD > "$RUNNER_TEMP/ce340-security/candidate-sha.txt"
+          git -C source rev-parse 'HEAD^{tree}' > "$RUNNER_TEMP/ce340-security/candidate-tree.txt"
+          git -C source diff --binary 06076ce2fc170c89c7356ee070d74ebf1de340cf HEAD > "$RUNNER_TEMP/ce340-security/candidate.patch"
+          git -C source archive --format=tar --output="$RUNNER_TEMP/ce340-security/candidate-source.tar" HEAD
       - name: Run unchanged full production qualification
         shell: bash
         env:
@@ -98,7 +128,8 @@ jobs:
           make -C source tidy contract 2>&1 | tee "$RUNNER_TEMP/ce340-security/determinism.log"
           git -C source diff --exit-code
           test -z "$(git -C source ls-files --others --exclude-standard)"
-          test "$(git -C source write-tree)" = "$(cat "$RUNNER_TEMP/ce340-security/proposed-tree.txt")"
+          test -z "$(git -C source status --porcelain)"
+          test "$(git -C source write-tree)" = "$(cat "$RUNNER_TEMP/ce340-security/candidate-tree.txt")"
           echo PASS > "$RUNNER_TEMP/ce340-security/qualification.txt"
       - name: Publish isolated candidate, never merge
         shell: bash
@@ -110,11 +141,8 @@ jobs:
           gh auth setup-git
           branch=fix/ce340-compatible-security
           test -z "$(git -C source ls-remote --heads origin "refs/heads/$branch")"
-          git -C source config user.name 'github-actions[bot]'
-          git -C source config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git -C source commit -m 'chore(deps): backport fixed dependencies for CE340 compatibility' \
-            -m 'Refs #226 and hvritual/biz#340. Dependency-only candidate; original full verify-production, current vulnerability scan and deterministic generation passed. No main or consumer ref changed.'
           candidate=$(git -C source rev-parse HEAD)
+          test "$candidate" = "$(cat "$RUNNER_TEMP/ce340-security/candidate-sha.txt")"
           git -C source push origin "$candidate:refs/heads/$branch"
           test "$(git -C source ls-remote origin "refs/heads/$branch" | cut -f1)" = "$candidate"
           printf '%s\n' "$candidate" > "$RUNNER_TEMP/ce340-security/candidate-sha.txt"
