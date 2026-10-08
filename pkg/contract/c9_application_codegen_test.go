@@ -66,8 +66,7 @@ func TestRenderC9ApplicationCodeEmitsOnlyExecutorTransports(t *testing.T) {
 		"operation execution unavailable",
 	} {
 		if strings.Contains(rest, forbidden) {
-			t.Fatalf("REST generator duplicated error policy %q:
-%s", forbidden, rest)
+			t.Fatalf("REST generator duplicated error policy %q:\n%s", forbidden, rest)
 		}
 	}
 
