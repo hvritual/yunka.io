@@ -106,6 +106,42 @@ jobs:
       - name: Verify
         run: make verify
 
+      - name: Require and read back exact generated HTTP/gRPC conformance matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/yunka-protocol-conformance/matrix.json"
+          test -s "$evidence"
+          python3 - "$evidence" <<'PY'
+          import json, pathlib, re, subprocess, sys
+          data = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip()
+          if data["schemaVersion"] != 1 or data["candidateSHA"] != head or data["candidateTree"] != tree:
+              raise SystemExit("conformance evidence does not identify this exact checked-out Git commit/tree")
+          for key in ("protobufSHA256", "descriptorSHA256", "generatedSHA256"):
+              if not re.fullmatch(r"[0-9a-f]{64}", data.get(key, "")):
+                  raise SystemExit("conformance evidence missing a stable " + key)
+          cases = data["cases"]
+          if data["caseCount"] != len(cases) or len(cases) < 30:
+              raise SystemExit("conformance case inventory is incomplete")
+          if len({item["case"] for item in cases}) != len(cases):
+              raise SystemExit("conformance evidence includes duplicate cases")
+          if any(item["request-equivalent"] is False or item["response-equivalent"] is False for item in cases):
+              raise SystemExit("semantic parity failed")
+          if not any(not item["supported"] for item in cases):
+              raise SystemExit("unsupported URL binding diagnostics are missing")
+          print(f"HTTP_GRPC_CONFORMANCE_ACCEPTED commit={head} tree={tree} generated={data['generatedSHA256']} cases={len(cases)}")
+          PY
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: c9-http-grpc-semantic-matrix
+          path: ${{ runner.temp }}/yunka-protocol-conformance/matrix.json
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Determinism recheck
         shell: bash
         run: |
