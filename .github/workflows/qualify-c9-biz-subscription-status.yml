@@ -80,7 +80,7 @@ jobs:
             -go-plugin "$GITHUB_WORKSPACE/candidate/.yunka/bin/protoc-gen-go" \
             -grpc-plugin "$GITHUB_WORKSPACE/candidate/.yunka/bin/protoc-gen-go-grpc" \
             | tee "$RUNNER_TEMP/biz-c9-rest/runtime.txt"
-          grep -F '--- PASS: TestOriginalBizGetMySubscriptionREST404AndRPCNotFound' \
+          grep -F -- '--- PASS: TestOriginalBizGetMySubscriptionREST404AndRPCNotFound' \
             "$RUNNER_TEMP/biz-c9-rest/runtime.txt"
           printf 'candidate=%s\nsource=%s\n' "$FRAMEWORK_SHA" "$BIZ_SHA" > "$RUNNER_TEMP/biz-c9-rest/identities.txt"
           sha256sum "$GITHUB_WORKSPACE/biz/contracts/proto/commercial/v1/subscription.proto" \
