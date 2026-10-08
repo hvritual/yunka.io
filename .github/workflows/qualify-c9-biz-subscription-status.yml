@@ -61,7 +61,7 @@ jobs:
           sha256sum "$RUNNER_TEMP/googleapis/google/api/"*.proto
           make -C candidate rpc-tools
           make -C candidate rpc-toolchain-check
-      - name: Execute generated C9 REST/gRPC for Biz original Subscription Contract
+      - name: Execute diagnostic original Biz Subscription C9 REST/gRPC status
         shell: bash
         working-directory: candidate/pkg
         run: |
