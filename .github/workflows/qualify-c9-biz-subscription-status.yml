@@ -1,0 +1,97 @@
+name: qualify-c9-biz-subscription-status
+
+on:
+  push:
+    branches: [codex/control-c9-biz-subscription-response]
+    paths:
+      - .github/workflows/qualify-c9-biz-subscription-status.yml
+
+permissions:
+  contents: read
+
+jobs:
+  qualify-real-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FRAMEWORK_SHA: d34d1bc4c2363ff4399ba8ee555ce797a8a5f42c
+      BIZ_SHA: 1e677d35596aa424e8337a62ede971c8429caaf2
+      GOOGLEAPIS_SHA: e63fb893d2fd6767bc9ca4116401f2d1e9202db3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: control
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: hvritual/yunka.io
+          ref: ${{ env.FRAMEWORK_SHA }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: hvritual/biz
+          ref: ${{ env.BIZ_SHA }}
+          path: biz
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: "1.25.13"
+          cache: false
+      - name: Install exact canonical Go/Protobuf tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          source candidate/tools/toolchain.env
+          test "$GO_VERSION" = "1.25.13"
+          archive="$RUNNER_TEMP/protoc.zip"
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" \
+            --output "$archive"
+          echo "${PROTOC_LINUX_X86_64_SHA256}  $archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/protoc"
+          unzip -q "$archive" -d "$RUNNER_TEMP/protoc"
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+          mkdir -p "$RUNNER_TEMP/googleapis/google/api"
+          for name in annotations.proto http.proto; do
+            curl --fail --silent --show-error --location --retry 3 \
+              "https://raw.githubusercontent.com/googleapis/googleapis/${GOOGLEAPIS_SHA}/google/api/${name}" \
+              --output "$RUNNER_TEMP/googleapis/google/api/${name}"
+          done
+          sha256sum "$RUNNER_TEMP/googleapis/google/api/"*.proto
+          make -C candidate rpc-tools
+          make -C candidate rpc-toolchain-check
+      - name: Execute generated C9 REST/GPRC for Biz original Subscription Contract
+        shell: bash
+        working-directory: candidate/pkg
+        run: |
+          set -euo pipefail
+          test "$(git -C .. rev-parse HEAD)" = "$FRAMEWORK_SHA"
+          test "$(git -C ../../biz rev-parse HEAD)" = "$BIZ_SHA"
+          test -z "$(git -C .. status --porcelain)"
+          test -z "$(git -C ../../biz status --porcelain)"
+          mkdir -p "$RUNNER_TEMP/biz-c9-rest"
+          export PROTOC_INCLUDE="$RUNNER_TEMP/protoc/include"
+          GOWORK=off go run "$GITHUB_WORKSPACE/control/controls/biz_subscription_rest_notfound.go" \
+            -biz "$GITHUB_WORKSPACE/biz" \
+            -framework "$GITHUB_WORKSPACE/candidate" \
+            -google "$RUNNER_TEMP/googleapis" \
+            -protoc "$(command -v protoc)" \
+            -go-plugin "$GITHUB_WORKSPACE/candidate/.yunka/bin/protoc-gen-go" \
+            -grpc-plugin "$GITHUB_WORKSPACE/candidate/.yunka/bin/protoc-gen-go-grpc" \
+            | tee "$RUNNER_TEMP/biz-c9-rest/runtime.txt"
+          grep -F '--- PASS: TestOriginalBizGetMySubscriptionREST404AndRPCNotFound' \
+            "$RUNNER_TEMP/biz-c9-rest/runtime.txt"
+          printf 'candidate=%s\nsource=%s\n' "$FRAMEWORK_SHA" "$BIZ_SHA" > "$RUNNER_TEMP/biz-c9-rest/identities.txt"
+          sha256sum "$GITHUB_WORKSPACE/biz/contracts/proto/commercial/v1/subscription.proto" \
+            >> "$RUNNER_TEMP/biz-c9-rest/identities.txt"
+          test -z "$(git -C "$GITHUB_WORKSPACE/biz" status --porcelain)"
+          test -z "$(git -C "$GITHUB_WORKSPACE/candidate" status --porcelain)"
+          test -z "$(git -C "$GITHUB_WORKSPACE/control" status --porcelain)"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: scoped-real-biz-subscription-c9-rest
+          path: ${{ runner.temp }}/biz-c9-rest
+          if-no-files-found: warn
+          retention-days: 30
