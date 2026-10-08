@@ -1,0 +1,36 @@
+name: http-binding-source
+on:
+  push:
+    branches: [control/http-binding-semantics]
+    paths: [.github/workflows/http-binding-source.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: d7902c98cc124d0b55fb7081df015633c550a0a0
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Export exact existing source without modifying product files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = d7902c98cc124d0b55fb7081df015633c550a0a0
+          git status --short --branch
+          git branch --show-current
+          git remote -v
+          mkdir -p "$RUNNER_TEMP/source"
+          git archive --format=tar HEAD > "$RUNNER_TEMP/source/yunka-source.tar"
+          git rev-parse HEAD HEAD^{tree} > "$RUNNER_TEMP/source/identity.txt"
+          sha256sum "$RUNNER_TEMP/source/yunka-source.tar"
+          test -z "$(git status --porcelain --untracked-files=all)"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: http-binding-source
+          path: ${{ runner.temp }}/source
+          if-no-files-found: error
+          retention-days: 14
