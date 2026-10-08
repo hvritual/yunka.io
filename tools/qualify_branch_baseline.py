@@ -11,7 +11,7 @@ import datetime as dt
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import subprocess
 import sys
@@ -48,7 +48,8 @@ class BaselineError(ValueError):
 
 def git(root: Path, *args: str, allow_failure: bool = False) -> subprocess.CompletedProcess:
     result = subprocess.run(
-        ["git", "-C", str(root), *args], capture_output=True, check=False
+        ["git", "-C", str(root), *args], capture_output=True, check=False,
+        timeout=30, env=dict(os.environ, GIT_NO_REPLACE_OBJECTS="1")
     )
     if result.returncode and not allow_failure:
         raise BaselineError(
@@ -89,14 +90,42 @@ def blob_digest(root: Path, sha: str, path: str) -> str | None:
     return hashlib.sha256(result.stdout).hexdigest()
 
 
+def dependency_inventory(root: Path, sha: str) -> tuple[set[str], set[str]]:
+    """Read each release's own module inventory; old releases need not own infras."""
+    try:
+        policy = json.loads(git(root, "show", sha + ":tools/dependency-policy.json").stdout)
+        modules = policy["moduleFiles"]
+    except (ValueError, KeyError, TypeError) as exc:
+        raise BaselineError("DEPENDENCY_POLICY_INVALID") from exc
+    if not isinstance(modules, list) or not modules:
+        raise BaselineError("DEPENDENCY_POLICY_INVALID")
+    required = {"tools/dependency-policy.json", "tools/toolchain.env", "go.work"}
+    optional = {"go.work.sum"}
+    for name in modules:
+        if (not isinstance(name, str) or not name or "\\" in name
+                or PurePosixPath(name).is_absolute() or ".." in name.split("/")
+                or str(PurePosixPath(name)) != name
+                or PurePosixPath(name).name not in {"go.mod", "go.work"}):
+            raise BaselineError("DEPENDENCY_POLICY_INVALID")
+        required.add(name)
+        if name.endswith("go.mod"):
+            optional.add(name[:-3] + "sum")
+    return required, optional
+
+
 def drift(root: Path, main_sha: str, head_sha: str) -> list[dict]:
+    left, left_optional = dependency_inventory(root, main_sha)
+    right, right_optional = dependency_inventory(root, head_sha)
     result = []
-    for name in FILES:
+    for name in sorted(left | right | left_optional | right_optional):
         main_digest = blob_digest(root, main_sha, name)
         candidate_digest = blob_digest(root, head_sha, name)
+        if main_digest is None and candidate_digest is None and name not in left | right:
+            continue  # A pure-Go module legitimately may have no go.sum.
         result.append({
             "path": name, "mainSHA256": main_digest,
             "candidateSHA256": candidate_digest,
+            "mainRequired": name in left, "candidateRequired": name in right,
             "matchesMain": main_digest is not None
                            and candidate_digest is not None
                            and main_digest == candidate_digest,
@@ -111,7 +140,7 @@ def maintenance_policy(source: str, branch: str, base_sha: str) -> dict | None:
         data = json.loads(source)
     except json.JSONDecodeError as exc:
         raise BaselineError("MALFORMED_MAINTENANCE_POLICY") from exc
-    if not isinstance(data, dict) or data.get("schemaVersion") != 1 or not isinstance(data.get("branches"), list):
+    if not isinstance(data, dict) or type(data.get("schemaVersion")) is not int or data.get("schemaVersion") != 1 or not isinstance(data.get("branches"), list):
         raise BaselineError("INVALID_MAINTENANCE_POLICY")
     candidates = [
         item for item in data["branches"]
@@ -144,7 +173,8 @@ def provider_run(repository: str, number: int, token: str,
 
     run = read(url)
     jobs = read(url + "/jobs?per_page=100")
-    if not isinstance(run, dict) or not isinstance(jobs.get("jobs"), list):
+    if (not isinstance(run, dict) or run.get("id") != number
+            or not isinstance(jobs, dict) or not isinstance(jobs.get("jobs"), list)):
         raise BaselineError("MALFORMED_PROVIDER_RECEIPT")
     if jobs.get("total_count", len(jobs["jobs"])) > len(jobs["jobs"]):
         raise BaselineError("INCOMPLETE_PROVIDER_JOBS")
@@ -152,25 +182,47 @@ def provider_run(repository: str, number: int, token: str,
 
 
 def qualified_run(run: dict, jobs: list[dict], checked_sha: str,
-                  base_ref: str, workflow: str, job: str, step: str) -> bool:
+                  base_ref: str, base_sha: str, repository: str,
+                  workflow: str, job: str, step: str) -> bool:
+    """Bind a provider receipt to repository, workflow path and exact PR pair.
+
+    A successful workflow with the same display name or branch name is not
+    interchangeable with the actual workflow/base/head under review.
+    """
+    if not isinstance(run, dict) or not isinstance(jobs, list):
+        return False
+    repo = run.get("repository")
+    if not isinstance(repo, dict) or repo.get("full_name") != repository:
+        return False
     if any((run.get("name") != workflow,
+            run.get("path") != ".github/workflows/" + workflow + ".yml",
             run.get("head_sha") != checked_sha,
             run.get("status") != "completed",
             run.get("conclusion") != "success",
             run.get("event") != "pull_request")):
         return False
-    prs = run.get("pull_requests") or []
+    prs = run.get("pull_requests")
+    if not isinstance(prs, list):
+        return False
     if not any(
         isinstance(pr, dict) and isinstance(pr.get("base"), dict)
-        and pr["base"].get("ref") == base_ref for pr in prs
+        and isinstance(pr.get("head"), dict)
+        and pr["base"].get("ref") == base_ref
+        and pr["base"].get("sha") == base_sha
+        and pr["head"].get("sha") == checked_sha for pr in prs
     ):
         return False
-    return any(
-        item.get("name") == job and item.get("conclusion") == "success"
-        and any(s.get("name") == step and s.get("conclusion") == "success"
-                for s in item.get("steps", []))
-        for item in jobs
-    )
+    for item in jobs:
+        if not isinstance(item, dict) or not isinstance(item.get("steps"), list):
+            return False
+        if (item.get("name") == job and item.get("status") == "completed"
+                and item.get("conclusion") == "success"
+                and any(isinstance(s, dict) and s.get("name") == step
+                        and s.get("status") == "completed"
+                        and s.get("conclusion") == "success"
+                        for s in item["steps"])):
+            return True
+    return False
 
 
 def assess(root: Path, mode: str, base_ref: str, base_sha: str,
@@ -195,6 +247,7 @@ def assess(root: Path, mode: str, base_ref: str, base_sha: str,
         "status": "BLOCKED",
         "blockedReason": None,
         "requiredGates": list(MAIN_GATES if base_ref == "main" or mode == "main" else COMPAT_GATES),
+        "requiredGatesScope": "minimum; applicable existing workflows remain independently required",
         "verifiedRuns": [],
         "dependencyBaseline": drift(root, main, head),
     }
@@ -203,7 +256,8 @@ def assess(root: Path, mode: str, base_ref: str, base_sha: str,
         report.update(classification=classification, status="BLOCKED", blockedReason=code)
         return report
 
-    if any(item["mainSHA256"] is None or item["candidateSHA256"] is None
+    if any((item["mainRequired"] and item["mainSHA256"] is None)
+           or (item["candidateRequired"] and item["candidateSHA256"] is None)
            for item in report["dependencyBaseline"]):
         return block("DEPENDENCY_BASELINE_EVIDENCE_MISSING")
     if exact_sha(root, checked_sha) != head:
@@ -255,9 +309,10 @@ def assess(root: Path, mode: str, base_ref: str, base_sha: str,
         production, production_jobs = run_reader(run_ids[1])
     except BaselineError:
         return block("PROVIDER_READBACK_UNAVAILABLE", "MAINTAINED_COMPAT")
-    if not qualified_run(ci, ci_jobs, head, base_ref, "ci", "verify", "Verify"):
+    if not qualified_run(ci, ci_jobs, head, base_ref, base_sha, repository,
+                         "ci", "verify", "Verify"):
         return block("CI_SECURITY_RECEIPT_MISMATCH", "MAINTAINED_COMPAT")
-    if not qualified_run(production, production_jobs, head, base_ref, "production",
+    if not qualified_run(production, production_jobs, head, base_ref, base_sha, repository, "production",
                          "verify-production", "Verify production on MySQL 8.4"):
         return block("PRODUCTION_RECEIPT_MISMATCH", "MAINTAINED_COMPAT")
     report["verifiedRuns"] = [
@@ -295,7 +350,7 @@ def main() -> int:
         report = assess(root, args.mode, args.base_ref, args.base_sha,
                         args.checked_sha, args.repository, trusted,
                         run_reader=lambda number: provider_run(args.repository, number, token))
-    except BaselineError as exc:
+    except (BaselineError, OSError, subprocess.TimeoutExpired) as exc:
         report = {"schemaVersion": 1, "classification": "UNCLASSIFIED",
                   "status": "BLOCKED", "blockedReason": str(exc),
                   "checkedSha": args.checked_sha, "requiredGates": list(MAIN_GATES)}

@@ -16,12 +16,47 @@ The independent dependency candidate selects the coherent OpenTelemetry
 existing dependency policy. Runtime source, contracts, generated files,
 consumer pins and normal security/test workflows are unchanged.
 
-Candidate presence is not acceptance. Exact baseline reproduction,
-candidate CI/Production and subsequent main run identities belong to
-[issue #237](https://github.com/hvritual/yunka.io/issues/237).
+**State: COMPLETE / QUALIFIED / MERGED through PR #238.**
+
+Accepted security main is `992a3de67928ca0624ce9c563dab52e0c2487a8a`.
+Candidate CI `37704786756`, Production `37704786768`, source policy
+`37704786762`, consumer types `37704786698` and template
+`37704786804` all passed. Separate actual-main push workflows passed:
+- ci: `37705638420`.
+- production: `37705638278`.
+- ag04-consumer-types: `37705638269`.
+- ag05-source-policy: `37705638357`.
+- ag06-template-qualification: `37705638268`.
+
+Unchanged-base reproduction and fixed scanner/observability tests are in
+preparation run `37704399531`. No scan suppression was used.
+Exact acceptance is retained on [issue #237](https://github.com/hvritual/yunka.io/issues/237);
+these historical receipts are scoped to the accepted security SHA.
 Issue #228 must separately align with the accepted security main and
 requalify its own candidate; its previous tests are not inherited as
 current-head or actual-main acceptance.
+
+## Branch baseline qualification — issue #228
+
+The read-only branch classifier and its PR/main workflow distinguish
+CURRENT_MAIN, MAINTAINED_COMPAT and UNCLASSIFIED without granting merge
+authority. Candidate/base/main identities, release-specific dependency
+inventories and existing checksum files are derived from Git. Compatibility
+receipts must match repository, workflow path and exact base/head pair;
+absent maintenance, stale evidence or incomplete jobs fail closed.
+
+The completion increment retains the original Git history and aligns it
+with the independently accepted #237 security main. The permanent regression
+inventory contains 21 top-level tests; the old stale-base validator behavior
+and bounded correction were independently exercised in probe run 37705010504.
+Source implementation is not an acceptance claim. Exact candidate, merged
+SHA/tree and separate actual-main CI/Production/baseline acceptance are
+recorded on [issue #228](https://github.com/hvritual/yunka.io/issues/228)
+and [PR #236](https://github.com/hvritual/yunka.io/pull/236).
+
+See [the qualification contract](BRANCH_BASELINE_QUALIFICATION.md).
+Native GitHub required-status rulesets, compatibility maintenance approval,
+consumer upgrades and unrelated PR #226 are not changed by this delivery.
 
 ## Current framework state
 

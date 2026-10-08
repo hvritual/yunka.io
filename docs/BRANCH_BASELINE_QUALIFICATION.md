@@ -1,59 +1,110 @@
 # Branch baseline qualification
 
 > Document class: **CURRENT**
-> Tracking: Issue #228
-> Current status authority: `docs/STATUS.md`
+> Tracking: [Issue #228](https://github.com/hvritual/yunka.io/issues/228)
+> Current status authority: [STATUS.md](STATUS.md)
 
 ## Contract
 
 `tools/qualify_branch_baseline.py` is a read-only Git identity evaluator.
-It reports a classification and required downstream gates. It does not
-repair dependencies, approve a merge, or claim that CI has passed.
+It reports classification and required downstream gates, not dependency repair,
+merge approval, completed CI, or universal security of the checked code.
 
-- `CURRENT_MAIN`: an exact PR base at live `origin/main`, with HEAD descending from that base.
-- `MAINTAINED_COMPAT`: an explicitly maintained non-main base with named owner, support horizon, reachable security backport, and matching independent CI/Production receipts.
-- `UNCLASSIFIED`: missing, stale or inconsistent evidence; fail closed.
+| Classification | Meaning |
+| --- | --- |
+| `CURRENT_MAIN` | The PR targets main, its exact base equals the fetched live main, and checked HEAD descends from that base. |
+| `MAINTAINED_COMPAT` | A non-main base has an explicit maintenance record, responsible owner, active support horizon, reachable security-backport commit and independently checked exact-candidate receipts. |
+| `UNCLASSIFIED` | Required identity or maintenance evidence is absent, stale or inconsistent. The report is blocked. |
 
-`READY_FOR_CHECKS` is only permission to run existing checks; it is not acceptance.
-`MAIN_COMMIT_IDENTIFIED` proves Git identity but not post-merge workflow success.
+`READY_FOR_CHECKS` is identity eligibility, not CI acceptance.
+`READY_FOR_COMPAT_REVIEW` is only maintained-branch eligibility, never current-main acceptance.
+`MAIN_COMMIT_IDENTIFIED` proves that the inspected commit equals live main; it does not verify workflows still running for that commit.
 
-## Evidence
+## Immutable dependency and receipt evidence
 
-The JSON output identifies checked and main SHA/tree, PR base, merge-base,
-dependency baseline file digests, the required gates and any blocking reason.
-Dependency drift is not automatically a security finding; the existing
-`make vuln`, normal CI and Production suites retain that authority.
+The report includes checked/main SHA and tree, PR base, merge-base, dependency
+file digests, required gates and blocking reason. Each release's own existing
+`tools/dependency-policy.json` supplies its module inventory. An older release
+is not required to contain modules introduced later. The report compares the
+union of the two inventories and retains existing `go.sum` and `go.work.sum`
+identities, including checksum-only changes. Missing required files fail;
+optional checksum files absent on both sides are not fabricated.
 
-## Workflow
+Dependency difference is not automatically a vulnerability. The existing
+`make vuln`, normal CI and Production suites own security and execution proof.
+The `requiredGates` list is the minimum; all other applicable repository
+source/type/template and consumer gates remain independently required.
+
+For compatibility eligibility the Actions API receipt must match the repository,
+canonical workflow path, exact head SHA, exact PR base ref and SHA, and PR head.
+The workflow, required job and required verification step must all have
+completed successfully. A matching workflow display name or branch name alone
+is not evidence of the reviewed candidate. Missing provider evidence fails
+closed. Original failed runs remain historical evidence, not current approval.
+
+## Workflow and trust boundary
 
 `.github/workflows/branch-baseline-qualification.yml` runs on PRs and main pushes.
-It fetches live main, tests adversarial Git histories, executes the read-only
-classifier and stores its JSON output as a CI artifact.
+It fetches live main, executes real Git-history regressions, writes the report
+outside tracked source and retains it as an artifact. Normal CI, Production,
+vulnerability scanning and post-integration acceptance remain separate.
 
-An optional repository-admin-controlled Actions variable named
-`YUNKA_MAINTENANCE_POLICY` supplies compatibility policy; PR text and
-candidate-controlled files cannot grant compatibility authority.
-The maintenance record binds branch/base, owner, support-until date,
-security backport SHA, and independently validated exact-head run IDs.
-The GitHub Actions API must confirm candidate identity and successful
-CI Verify / Production Verify jobs. No data is accepted as proof solely
-because an AI, PR author or document reports success.
+An optional repository-admin-controlled Actions variable,
+`YUNKA_MAINTENANCE_POLICY`, supplies compatibility eligibility:
+
+```json
+{
+  "schemaVersion": 1,
+  "branches": [{
+    "baseRef": "compat/example",
+    "baseSha": "<exact reviewed PR base SHA>",
+    "owner": "<responsible maintainer>",
+    "supportUntil": "<reviewed YYYY-MM-DD support end>",
+    "securityBackportSha": "<reviewed ancestor commit>",
+    "qualification": {
+      "ciRunId": 123,
+      "productionRunId": 456
+    }
+  }]
+}
+```
+
+This is a schema example, not an approved maintenance record or real run IDs.
+The referenced CI and Production executions must independently exist for the
+exact candidate. The tool does not create those runs or activate compatibility
+maintenance. A maintenance record or reachable backport alone is insufficient.
+The standard production workflow currently targets main PRs; maintaining a
+compatibility line therefore also requires an independently reviewed means to
+obtain its exact-candidate production evidence, not a fabricated receipt.
+
+PR prose and candidate files are not maintenance approval inputs. In local use,
+an environment variable is still caller-provided; local output is not proof of
+repository-admin authorization. The workflow and verifier are reviewable code,
+not a security sandbox against an actor allowed to rewrite their implementation.
 
 ## Local invocation
 
+After refreshing `origin/main` and checking out the exact candidate:
+
 ```bash
-python3 tools/test_qualify_branch_baseline.py -v
+PYTHONDONTWRITEBYTECODE=1 python3 tools/test_qualify_branch_baseline.py -v
 python3 tools/qualify_branch_baseline.py --mode pr \
   --base-ref main --base-sha "$BASE_SHA" --checked-sha "$HEAD_SHA"
 ```
 
-This command requires complete Git history and a fresh `origin/main`.
-Use `--mode main` with the actual integrated SHA for post-integration
-identity readback; verify subsequent CI and Production receipts separately.
+Complete Git history and the current remote-tracking ref are required. Exit 0
+means the reported identity/eligibility state, not fully accepted delivery.
+Exit 2 means blocked or incomplete evidence. For integrated identity readback,
+use `--mode main --checked-sha "$ACTUAL_MAIN_SHA"`; then inspect the separate
+actual-main CI and Production receipts. No equivalent-tree comparison is
+reported as an additional execution.
 
 ## Governance limits
 
-GitHub required-status rulesets are not changed by this task. Their
-activation and admin approval are separate from generating a check.
-Neither an old compatibility branch nor a passing baseline check can
-substitute for qualification against the current main branch.
+GitHub required-status rulesets and administrator approval are separate from
+creating a check. This task does not activate repository rulesets, authorize a
+compatibility line, upgrade consumer pins, or make a passing branch check
+sufficient to merge. A qualifying PR must still pass its applicable exact-head
+checks and follow the existing non-force integration and live-main readback
+policy. No changes to Runtime, Executor, Authz, UoW or C9 behavior are authorized
+by classification.

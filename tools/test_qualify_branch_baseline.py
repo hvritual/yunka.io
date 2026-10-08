@@ -45,6 +45,10 @@ class RepositoryFixture(unittest.TestCase):
             path = self.root / file
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("baseline\n", encoding="utf-8")
+        (self.root / "tools/dependency-policy.json").write_text(
+            json.dumps({"schemaVersion": 3, "moduleFiles": list(baseline.FILES[2:])}),
+            encoding="utf-8",
+        )
         invoke(self.root, "add", ".")
         invoke(self.root, "commit", "-qm", "Canonical baseline")
         self.main_sha = invoke(self.root, "rev-parse", "HEAD")
@@ -97,16 +101,20 @@ class RepositoryFixture(unittest.TestCase):
 
 
 def successful_run(sha: str, workflow: str, job_name: str,
-                   step_name: str, branch: str = "compat/example") -> tuple[dict, list[dict]]:
+                   step_name: str, branch: str = "compat/example",
+                   base_sha: str = "") -> tuple[dict, list[dict]]:
     return (
         {
             "name": workflow, "head_sha": sha, "status": "completed",
             "conclusion": "success", "event": "pull_request",
-            "pull_requests": [{"base": {"ref": branch}}],
+            "path": ".github/workflows/" + workflow + ".yml",
+            "repository": {"full_name": "hvritual/yunka.io"},
+            "pull_requests": [{"base": {"ref": branch, "sha": base_sha},
+                               "head": {"sha": sha}}],
         },
         [{
-            "name": job_name, "conclusion": "success",
-            "steps": [{"name": step_name, "conclusion": "success"}],
+            "name": job_name, "status": "completed", "conclusion": "success",
+            "steps": [{"name": step_name, "status": "completed", "conclusion": "success"}],
         }],
     )
 
@@ -135,6 +143,17 @@ class BranchIdentityTests(RepositoryFixture):
         self.assertEqual(data["blockedReason"], "DEPENDENCY_BASELINE_EVIDENCE_MISSING")
         self.assertFalse(next(x for x in data["dependencyBaseline"]
                               if x["path"] == "go.work")["matchesMain"])
+
+    def test_checksum_only_changes_are_visible(self) -> None:
+        self.feature()
+        sha = commit(self.root, "pkg/go.sum", "new dependency checksum\n")
+        report = self.assess(sha=sha)
+        evidence = next(item for item in report["dependencyBaseline"]
+                        if item["path"] == "pkg/go.sum")
+        self.assertIsNone(evidence["mainSHA256"])
+        self.assertIsNotNone(evidence["candidateSHA256"])
+        self.assertFalse(evidence["matchesMain"])
+        self.assertEqual(report["status"], "READY_FOR_CHECKS")
 
     def test_main_moving_invalidates_an_older_candidate(self) -> None:
         old_sha = self.main_sha
@@ -223,6 +242,72 @@ class CompatibilityTests(RepositoryFixture):
                               trusted=json.dumps(record))
         self.assertEqual(invalid["blockedReason"], "INDEPENDENT_RUNS_REQUIRED")
 
+    def test_old_release_module_inventory_does_not_require_new_modules(self) -> None:
+        base, head = self.legacy()
+        policy_path = self.root / "tools/dependency-policy.json"
+        policy = json.loads(policy_path.read_text())
+        policy["moduleFiles"].remove("infras/go.mod")
+        policy_path.write_text(json.dumps(policy))
+        (self.root / "infras/go.mod").unlink()
+        invoke(self.root, "add", "-A")
+        invoke(self.root, "commit", "-qm", "Retain old release module inventory")
+        head = invoke(self.root, "rev-parse", "HEAD")
+        report = self.assess(base_ref="compat/example", base_sha=base, sha=head)
+        self.assertEqual(report["classification"], "UNCLASSIFIED")
+        self.assertEqual(report["blockedReason"], "MAINTENANCE_AUTHORITY_MISSING")
+        evidence = next(item for item in report["dependencyBaseline"]
+                        if item["path"] == "infras/go.mod")
+        self.assertFalse(evidence["candidateRequired"])
+        self.assertIsNone(evidence["candidateSHA256"])
+
+    def test_same_branch_receipts_from_another_base_are_rejected(self) -> None:
+        base, head = self.legacy()
+        def reader(number):
+            return successful_run(
+                head, "ci" if number == 101 else "production",
+                "verify" if number == 101 else "verify-production",
+                "Verify" if number == 101 else "Verify production on MySQL 8.4",
+                base_sha=self.main_sha,
+            )
+        report = self.assess(base_ref="compat/example", base_sha=base, sha=head,
+                             trusted=self.policy(base, base, ci=101, production=102),
+                             reader=reader)
+        self.assertEqual(report["blockedReason"], "CI_SECURITY_RECEIPT_MISMATCH")
+
+    def test_workflow_display_name_and_foreign_repository_are_not_authority(self) -> None:
+        base, head = self.legacy()
+        for changed in ("workflow", "repository", "pr_head", "job_status", "step_status"):
+            with self.subTest(changed=changed):
+                def reader(number):
+                    run, jobs = successful_run(
+                        head, "ci" if number == 101 else "production",
+                        "verify" if number == 101 else "verify-production",
+                        "Verify" if number == 101 else "Verify production on MySQL 8.4",
+                        base_sha=base,
+                    )
+                    if changed == "workflow":
+                        run["path"] = ".github/workflows/unrelated.yml"
+                    elif changed == "repository":
+                        run["repository"]["full_name"] = "other/repository"
+                    elif changed == "pr_head":
+                        run["pull_requests"][0]["head"]["sha"] = base
+                    elif changed == "job_status":
+                        jobs[0]["status"] = "in_progress"
+                    else:
+                        jobs[0]["steps"][0]["status"] = "in_progress"
+                    return run, jobs
+                report = self.assess(base_ref="compat/example", base_sha=base, sha=head,
+                                     trusted=self.policy(base, base, ci=101, production=102),
+                                     reader=reader)
+                self.assertEqual(report["blockedReason"], "CI_SECURITY_RECEIPT_MISMATCH")
+
+    def test_malformed_provider_receipt_does_not_raise(self) -> None:
+        base, head = self.legacy()
+        report = self.assess(base_ref="compat/example", base_sha=base, sha=head,
+                             trusted=self.policy(base, base, ci=101, production=102),
+                             reader=lambda number: (None, ["invalid"]))
+        self.assertEqual(report["blockedReason"], "CI_SECURITY_RECEIPT_MISMATCH")
+
     def test_backport_must_be_in_exact_candidate_history(self) -> None:
         base, head = self.legacy()
         data = self.assess(base_ref="compat/example", base_sha=base, sha=head,
@@ -243,6 +328,7 @@ class CompatibilityTests(RepositoryFixture):
             "ci" if number == 101 else "production",
             "verify" if number == 101 else "verify-production",
             "Verify" if number == 101 else "Verify production on MySQL 8.4",
+            base_sha=base,
         )
         data = self.assess(base_ref="compat/example", base_sha=base, sha=head,
                            trusted=self.policy(base, base, ci=101, production=102),
@@ -256,6 +342,7 @@ class CompatibilityTests(RepositoryFixture):
             head, "ci" if number == 101 else "production",
             "verify" if number == 101 else "verify-production",
             "Verify" if number == 101 else "Verify production on MySQL 8.4",
+            base_sha=base,
             branch="main",
         )
         data = self.assess(base_ref="compat/example", base_sha=base, sha=head,
@@ -269,6 +356,7 @@ class CompatibilityTests(RepositoryFixture):
             head, "ci" if number == 101 else "production",
             "verify" if number == 101 else "verify-production",
             "Verify" if number == 101 else "Verify production on MySQL 8.4",
+            base_sha=base,
         )
         data = self.assess(base_ref="compat/example", base_sha=base, sha=head,
                            trusted=self.policy(base, base, ci=101, production=102),
