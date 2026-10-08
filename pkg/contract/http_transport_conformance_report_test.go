@@ -251,8 +251,7 @@ func saveConformanceReport(t *testing.T, report transportConformanceReport) {
 		t.Fatal(err)
 	}
 	output := filepath.Join(dir, "matrix.json")
-	if err := os.WriteFile(output, append(data, '
-'), 0o644); err != nil {
+	if err := os.WriteFile(output, append(data, '\n'), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("machine-readable protocol qualification: %s", output)
