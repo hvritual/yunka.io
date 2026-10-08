@@ -17,10 +17,45 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: hvritual/yunka.io
-          ref: 53d4178376332c01c950ff754d6c0e13dc88940a
+          ref: 087eadf7d628144447d8f1952d934a018d155c79
           persist-credentials: false
       - name: Verify exact source identity
-        run: test "$(git rev-parse HEAD)" = 53d4178376332c01c950ff754d6c0e13dc88940a
+        run: test "$(git rev-parse HEAD)" = 087eadf7d628144447d8f1952d934a018d155c79
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: "1.25.13"
+          cache: false
+      - name: Install locked protoc and protoc-gen-go toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" \
+            --output "$RUNNER_TEMP/protoc.zip"
+          echo "${PROTOC_LINUX_X86_64_SHA256}  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/protoc"
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+          make rpc-tools rpc-toolchain-check
+      - name: Execute only canonical generated C9 HTTP/gRPC parity test
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd pkg
+          YUNKA_REQUIRE_C9_RUNTIME=1 \
+          PROTOC="$(command -v protoc)" \
+          PROTOC_GEN_GO="$GITHUB_WORKSPACE/.yunka/bin/protoc-gen-go" \
+          PROTOC_GEN_GO_GRPC="$GITHUB_WORKSPACE/.yunka/bin/protoc-gen-go-grpc" \
+            go test -count=1 -timeout=8m -run '^TestGeneratedHTTPBindingTransportParity        run: |
+          set -euo pipefail
+          gofmt -e -d pkg/contract/http_transport_conformance_report_test.go
+          gofmt -e -d pkg/contract/http_transport_conformance_fixture_test.go
+          gofmt -e -d pkg/contract/http_binding_runtime_test.go
+          git diff --exit-code
+ -v ./contract
+          python3 "$GITHUB_WORKSPACE/tools/verify_http_grpc_conformance.py" \
+            "$RUNNER_TEMP/yunka-protocol-conformance/matrix.json"
       - name: Parse every added/modified Go source with standard gofmt
         run: |
           set -euo pipefail
