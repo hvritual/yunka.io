@@ -118,6 +118,8 @@ jobs:
           '''
           source = source.replace('## Current framework state\n', note+'## Current framework state\n', 1)
           status_path.write_text(source)
+          doc = pathlib.Path('docs/BRANCH_BASELINE_QUALIFICATION.md')
+          doc.write_text('\n'.join(line.rstrip() for line in doc.read_text().splitlines())+'\n')
           PY
           git diff --check
           git add tools/qualify_branch_baseline.py tools/test_qualify_branch_baseline.py docs/BRANCH_BASELINE_QUALIFICATION.md docs/STATUS.md
