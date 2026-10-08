@@ -9,7 +9,12 @@ import (
 )
 
 func TestPlanOperationIsReadOnlyDeterministicAndMatchesApply(t *testing.T) {
-	original := typedApplicationProto("tenant", "tenant.v1", "lifecycle", "TenantLifecycleApplication")
+	original := typedApplicationProto("tenant", "tenant.v1", "lifecycle", "TenantLifecycleApplication") + `
+message SuspendRequest {
+  option (yunka.dsl.v1.dto) = { kind: DTO_INPUT };
+  string id = 1;
+}
+`
 	root := scaffoldProject(t, map[string]string{"contracts/proto/tenant.proto": original})
 	options := OperationOptions{
 		Root:              root,
@@ -102,6 +107,50 @@ func TestPlanOperationIsReadOnlyDeterministicAndMatchesApply(t *testing.T) {
 	}
 	if _, statErr := os.Stat(landing); statErr != nil {
 		t.Fatalf("apply did not create implementation landing: %v", statErr)
+	}
+}
+
+// A URL path variable must be declared by the request DTO. The structural
+// scaffolder does not infer business fields, so rejecting this declaration
+// before either planning or applying prevents an unbound REST contract.
+func TestOperationPlanningRejectsUnboundHTTPPathWithoutChangingSource(t *testing.T) {
+	original := typedApplicationProto("tenant", "tenant.v1", "lifecycle", "TenantLifecycleApplication")
+	root := scaffoldProject(t, map[string]string{"contracts/proto/tenant.proto": original})
+	options := OperationOptions{
+		Root: root, ApplicationKey: "tenant/lifecycle", OperationID: "tenant.suspend",
+		UseCase: "suspend_tenant", Access: "protected", Permissions: []string{"tenant.manage"},
+		PermissionMode: "all", Tenant: "required", Authentication: []string{"jwt"},
+		Transaction: "local", Idempotency: "required", Composition: "local",
+		HTTPMethod: "POST", HTTPPath: "/tenants/{id}:suspend", HTTPBody: "*",
+		BoundaryContext: "tenant.lifecycle", BoundaryAggregate: "tenant",
+	}
+	for _, run := range []struct {
+		name string
+		apply bool
+	}{
+		{name: "plan"},
+		{name: "apply", apply: true},
+	} {
+		t.Run(run.name, func(t *testing.T) {
+			var err error
+			if run.apply {
+				_, err = AddOperation(options)
+			} else {
+				_, err = PlanOperation(options)
+			}
+			if err == nil || !strings.Contains(err.Error(), "UNSUPPORTED_HTTP_BINDING") ||
+				!strings.Contains(err.Error(), "path field not found") ||
+				!strings.Contains(err.Error(), `field "id"`) {
+				t.Fatalf("unbound path variable must fail closed: %v", err)
+			}
+			if got := readFile(t, filepath.Join(root, "contracts", "proto", "tenant.proto")); got != original {
+				t.Fatalf("invalid HTTP binding mutated canonical source:\n%s", got)
+			}
+			landing := filepath.Join(root, "internal", "tenant", "application", "tenant_suspend.go")
+			if _, statErr := os.Stat(landing); !os.IsNotExist(statErr) {
+				t.Fatalf("invalid HTTP binding created an implementation landing: %v", statErr)
+			}
+		})
 	}
 }
 
