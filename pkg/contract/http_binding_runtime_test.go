@@ -2,6 +2,8 @@ package contract
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -89,6 +91,7 @@ replace github.com/hvritual/yunka.io/gateway => %s
 		t.Fatalf("contract artifact drift: %v", err)
 	}
 	writeC84FixtureFile(t, filepath.Join(root, "transport_test.go"), httpBindingFixtureTests)
+	writeC84FixtureFile(t, filepath.Join(root, "transport_conformance_test.go"), httpTransportConformanceFixture)
 	cmd = exec.CommandContext(ctx, "go", "test", "-mod=mod", "-race", "-count=1", "-timeout=90s", "-v", "./...")
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(), "GOWORK=off")
@@ -96,9 +99,29 @@ replace github.com/hvritual/yunka.io/gateway => %s
 	if err != nil {
 		t.Fatalf("generated HTTP/gRPC binding parity failed: %v\n%s", err, output)
 	}
-	if !strings.Contains(string(output), "TestRepeatedQueryParametersReachApplication") {
-		t.Fatalf("required runtime case did not execute: %s", output)
+	if !strings.Contains(string(output), "TestRepeatedQueryParametersReachApplication") ||
+		!strings.Contains(string(output), "TestTransportConformanceCanonicalIdempotencyAcrossTransports") {
+		t.Fatalf("required generated transport cases did not run: %s", output)
 	}
+	rows, err := readConformanceRows(string(output))
+	if err != nil { t.Fatal(err) }
+	unsupported, err := unsupportedConformanceCases()
+	if err != nil { t.Fatal(err) }
+	rows = append(rows, unsupported...)
+	sourceSHA, err := conformanceGitIdentity(repositoryRoot, "HEAD^{commit}")
+	if err != nil { t.Fatal(err) }
+	treeSHA, err := conformanceGitIdentity(repositoryRoot, "HEAD^{tree}")
+	if err != nil { t.Fatal(err) }
+	pbDigest := sha256.Sum256([]byte(httpBindingFixtureProto))
+	report := transportConformanceReport{
+		SchemaVersion: 1, CandidateSHA: sourceSHA, CandidateTree: treeSHA,
+		ProtobufSHA256: hex.EncodeToString(pbDigest[:]),
+		DescriptorSHA256: compiled.DescriptorSHA,
+		GeneratedSHA256: conformanceGeneratedFingerprint(files),
+		GeneratedFileCount: len(files), CaseCount: len(rows), Cases: rows,
+		Summary: fmt.Sprintf("%d independently checked semantic cases: supported values, compile rejections, HTTP/gRPC Execution and bounded transport differences", len(rows)),
+	}
+	saveConformanceReport(t, report)
 	t.Logf("generated HTTP/gRPC parity with real Executor and authorization:\n%s", output)
 }
 
@@ -148,6 +171,10 @@ service QueryApplication {
   option (google.api.http) = { post:"/v1/tenants/{tenant_id}/query" body:"*" };
   option (yunka.dsl.v1.operation) = { id:"query.submit" use_case:"submit" permissions:"query.read" permission_mode:PERMISSION_ALL tenant_required:true authentication:AUTHENTICATION_JWT };
  }
+ rpc Change(QueryRequest) returns (QueryResponse) {
+  option (google.api.http) = { post:"/v1/tenants/{tenant_id}/change" body:"*" };
+  option (yunka.dsl.v1.operation) = { id:"query.change" use_case:"change" permissions:"query.read" permission_mode:PERMISSION_ALL tenant_required:true authentication:AUTHENTICATION_JWT execution:{transaction:TRANSACTION_LOCAL idempotency:IDEMPOTENCY_REQUIRED} };
+ }
 }
 `
 
@@ -171,6 +198,7 @@ import (
  rpc "example.com/bindingfixture/internal/query/transport/rpc"
  "github.com/hvritual/yunka.io/framework/core/identity"
  "github.com/hvritual/yunka.io/framework/operation"
+ "github.com/hvritual/yunka.io/framework/execution"
  "github.com/hvritual/yunka.io/gateway/authz"
  grpcgo "google.golang.org/grpc"
  "google.golang.org/grpc/codes"
@@ -204,16 +232,21 @@ func (a *application) accept(ctx context.Context, id string, req *queryv1.QueryR
 }
 func (a *application) Read(ctx context.Context, req *queryv1.QueryRequest) (*queryv1.QueryResponse,error) {return a.accept(ctx,"query.read",req)}
 func (a *application) Submit(ctx context.Context, req *queryv1.QueryRequest) (*queryv1.QueryResponse,error) {return a.accept(ctx,"query.submit",req)}
+func (a *application) Change(ctx context.Context, req *queryv1.QueryRequest) (*queryv1.QueryResponse,error) {return a.accept(ctx,"query.change",req)}
 func (a *application) count() int {a.mu.Lock();defer a.mu.Unlock();return len(a.received)}
 
 func principal() identity.Principal {return identity.Principal{Subject:"user",TenantID:"tenant-a",UserID:"user",Roles:[]string{"reader"},AuthMethod:identity.AuthMethodJWT,Authenticated:true}}
 
-type transports struct {http *httptest.Server; rpc queryv1.QueryApplicationClient; app *application}
+type transports struct {http *httptest.Server; rpc queryv1.QueryApplicationClient; app *application; store *execution.MemoryIdempotencyStore; executor *conformanceExecutor; transactions *conformanceTransactionFactory}
 func start(t *testing.T, p identity.Principal) transports {
  t.Helper()
  authorizer,err:=authz.NewRBACAuthorizer(grants{});if err!=nil{t.Fatal(err)}
  security,err:=authz.NewExecutionSecurity(authorizer,nil);if err!=nil{t.Fatal(err)}
- executor:=operation.NewExecutor(security,nil);app:=&application{}
+ store:=execution.NewMemoryIdempotencyStore()
+ coordinator,err:=execution.NewIdempotencyCoordinator(store);if err!=nil{t.Fatal(err)}
+ transactions:=&conformanceTransactionFactory{}
+ executor:=&conformanceExecutor{wrapped:operation.NewExecutorWithOptions(security,operation.ExecutorOptions{Idempotency:coordinator,Transactions:transactions})}
+ app:=&application{}
  mux:=http.NewServeMux();if err=rest.RegisterOperationExecutor(mux,app,executor);err!=nil{t.Fatal(err)}
  httpServer:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){mux.ServeHTTP(w,r.WithContext(identity.WithPrincipal(r.Context(),p)))}));t.Cleanup(httpServer.Close)
  listener:=bufconn.Listen(1024*1024)
@@ -222,7 +255,7 @@ func start(t *testing.T, p identity.Principal) transports {
  go func(){_ = server.Serve(listener)}();t.Cleanup(server.Stop)
  ctx,cancel:=context.WithTimeout(context.Background(),5*time.Second);defer cancel()
  conn,err:=grpcgo.DialContext(ctx,"bufnet",grpcgo.WithContextDialer(func(ctx context.Context,_ string)(net.Conn,error){return listener.DialContext(ctx)}),grpcgo.WithTransportCredentials(insecure.NewCredentials()),grpcgo.WithBlock());if err!=nil{t.Fatal(err)};t.Cleanup(func(){_ = conn.Close()})
- return transports{http:httpServer,rpc:queryv1.NewQueryApplicationClient(conn),app:app}
+ return transports{http:httpServer,rpc:queryv1.NewQueryApplicationClient(conn),app:app,store:store,executor:executor,transactions:transactions}
 }
 func (tr transports) request(t *testing.T, method, rawQuery, body string) (int,*queryv1.QueryRequest) {
  t.Helper();req,err:=http.NewRequest(method,tr.http.URL+"/v1/tenants/tenant-a/query",strings.NewReader(body));if err!=nil{t.Fatal(err)};req.URL.RawQuery=rawQuery

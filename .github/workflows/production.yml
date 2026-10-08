@@ -83,3 +83,18 @@ jobs:
       - name: Require clean worktree
         shell: bash
         run: git diff --exit-code
+
+      - name: Require and read back exact generated HTTP/gRPC conformance matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/verify_http_grpc_conformance.py \
+            "$RUNNER_TEMP/yunka-protocol-conformance/matrix.json"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: c9-http-grpc-semantic-matrix
+          path: ${{ runner.temp }}/yunka-protocol-conformance/matrix.json
+          if-no-files-found: warn
+          retention-days: 30

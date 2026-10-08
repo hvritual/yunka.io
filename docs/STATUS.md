@@ -98,6 +98,30 @@ The historical PR #226 remains a separate old compatibility-branch delivery;
 this contract does not upgrade consumer pins or approve that branch's
 security baseline. The broader protocol parity contract remains #231.
 
+## Generated C9 HTTP/gRPC semantic conformance — issue #231
+
+The required generated runtime qualification now collects one machine-readable
+conformance result per real HTTP/gRPC test (success values, JSON/query names,
+path/body ownership, validation, authorization, bounded status/error mapping
+and canonical idempotency behavior). Genuine protoc-generated REST and RPC
+adapters execute one controlled Application and shared Executor. Compile-time
+`UNSUPPORTED_HTTP_BINDING` negatives remain distinctly classified and cannot
+masquerade as transport equivalence.
+
+A deterministic matrix binds the exact Git commit/tree, protobuf descriptor
+and generated adapter SHA-256 and is revalidated/uploaded independently by
+PR/actual-main CI and Production/MySQL workflows. Missing evidence, false
+semantic equivalence and incorrect support declarations fail closed;
+[the executable conformance contract](architecture/HTTP-GRPC-SEMANTIC-CONFORMANCE.md)
+records supported semantics and transport-specific differences.
+
+**Source presence is not full release acceptance.** The exact candidate,
+reproduction, consumer-pressure scope and fresh merged-main receipts live on
+[Issue #231](https://github.com/hvritual/yunka.io/issues/231). No new Executor,
+Authz, transaction/UoW, RPC/REST Runtime or Consumer code is authorized by
+this qualification task; full cross-Consumer version qualification is
+separate #235 work.
+
 ## Current framework state
 
 | Area | Current state | Evidence / disposition |
