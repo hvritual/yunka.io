@@ -22,6 +22,9 @@ func GenerateOpenAPI(manifest Manifest, options OpenAPIOptions) ([]byte, error) 
 	if options.Version == "" {
 		options.Version = "0.0.0"
 	}
+	if err := validateApplicationHTTPBindings(manifest); err != nil {
+		return nil, err
+	}
 	messages := messageIndex(manifest)
 	enums := enumIndex(manifest)
 	external := collectExternalContractTypes(manifest)
@@ -99,7 +102,15 @@ func GenerateOpenAPI(manifest Manifest, options OpenAPIOptions) ([]byte, error) 
 				}
 				request, hasRequest := messages[method.Request]
 				if hasRequest {
-					applyHTTPParameters(operation, binding, request, enums)
+					if service.Application != nil {
+						plan, err := compileHTTPBindingPlan(method, binding, messages)
+						if err != nil {
+							return nil, err
+						}
+						applyPlannedHTTPParameters(operation, plan, request, enums)
+					} else {
+						applyHTTPParameters(operation, binding, request, enums)
+					}
 				}
 				pathItem, _ := paths[binding.Path].(map[string]any)
 				if pathItem == nil {

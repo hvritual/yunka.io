@@ -206,6 +206,11 @@ func Lint(manifest Manifest) []Diagnostic {
 				}
 			}
 			for _, binding := range method.HTTP {
+				if service.Application != nil {
+					if _, err := compileHTTPBindingPlan(method, binding, messages); err != nil {
+						diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: err.Error()})
+					}
+				}
 				if err := validateHTTPMethod(binding.Method); err != nil {
 					diagnostics = append(diagnostics, Diagnostic{Severity: SeverityError, Path: path, Message: err.Error()})
 				}

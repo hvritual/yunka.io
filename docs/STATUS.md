@@ -58,6 +58,25 @@ See [the qualification contract](BRANCH_BASELINE_QUALIFICATION.md).
 Native GitHub required-status rulesets, compatibility maintenance approval,
 consumer upgrades and unrelated PR #226 are not changed by this delivery.
 
+## Typed HTTP parameter correctness — issues #177 / #230
+
+The binding implementation derives a temporary plan from canonical protobuf and
+explicit HTTP bindings. Scalar/repeated-scalar query inputs, protobuf/JSON aliases,
+path/body ownership and unsupported URL shapes now share one compiler support
+boundary across typed adapters, lint, OpenAPI and TypeScript. The retained untyped
+inventory projection remains descriptive and byte-compatible.
+
+The required generated HTTP/gRPC runtime regression uses actual protobuf HTTP
+annotations, one canonical Executor, and positive/negative input and authorization
+controls. [The binding contract](architecture/HTTP-BINDING-SEMANTICS.md) records the
+supported scope and behavioral compatibility changes. Exact old-base reproduction,
+candidate/consumer qualification, integration and actual-main readback are tracked
+on issues #177 and #230; source presence is not a final acceptance claim.
+
+This delta does not alter Kernel, Authz, root UoW, error mapping (#229), Consumer
+pins or the separately planned general conformance matrix (#231). Unsupported
+nested/map/enum/oneof URL input is explicitly rejected, not claimed implemented.
+
 ## Current framework state
 
 | Area | Current state | Evidence / disposition |
