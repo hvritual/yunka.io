@@ -42,7 +42,7 @@ preserving the existing C9 response format.
 | 2 | Framework `execution.ErrIdempotencyKeyRequired` | 400 | `idempotency key required` |
 | 2 | Framework `execution.ErrIdempotencyInProgress` or `ErrIdempotencyCompleted` | 409 | `idempotency conflict` |
 | 3 | Framework `operation.ErrExecutorUnavailable`, `ErrSecurityUnavailable`, `ErrSecurityNilContext` or `ErrIdempotencyUnavailable` | 500 | `operation execution unavailable` |
-| 4 | Explicit application gRPC `codes.NotFound` | **404** | `application resource not found` |
+| 4 | Explicit application gRPC `codes.NotFound` | **404** | `application not found` |
 | 4 | Explicit application gRPC `codes.Aborted` / `codes.AlreadyExists` | 409 | `application conflict` |
 | 5 | `codes.InvalidArgument`, unrecognized/unsupported gRPC codes and all ordinary Go errors | 400 | `application request failed` |
 
