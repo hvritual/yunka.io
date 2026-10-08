@@ -51,16 +51,26 @@ func TestRenderC9ApplicationCodeEmitsOnlyExecutorTransports(t *testing.T) {
 	if !strings.Contains(rest, "operation.ExecuteTyped") || strings.Contains(rest, "runtime.Prepare") {
 		t.Fatalf("REST is not executor-backed:\n%s", rest)
 	}
-	if !strings.Contains(rest, `status.Code(err); code == codes.Aborted || code == codes.AlreadyExists`) ||
-		!strings.Contains(rest, `http.Error(writer, "application conflict", http.StatusConflict)`) {
-		t.Fatalf("REST adapter must map explicit gRPC conflicts to HTTP 409:\n%s", rest)
+	if !strings.Contains(rest, "httpbinding.WriteOperationError(writer, err)") {
+		t.Fatalf("canonical C9 REST adapter does not delegate errors to the shared gateway mapper:\n%s", rest)
 	}
-	if !strings.Contains(rest, `"google.golang.org/grpc/codes"`) || !strings.Contains(rest, `"google.golang.org/grpc/status"`) {
-		t.Fatalf("REST conflict mapping imports are missing:\n%s", rest)
+	if strings.Count(rest, "httpbinding.WriteOperationError(writer, err)") != 1 {
+		t.Fatalf("generated REST adapter has duplicate error mapping entry points:\n%s", rest)
 	}
-	if !strings.Contains(rest, `http.Error(writer, "application request failed", http.StatusBadRequest)`) {
-		t.Fatalf("unknown application errors must remain generic bad requests:\n%s", rest)
+	for _, forbidden := range []string{
+		`"google.golang.org/grpc/codes"`,
+		`"google.golang.org/grpc/status"`,
+		`"github.com/hvritual/yunka.io/gateway/authz"`,
+		"status.Code(err)", "authz.IsDenied(err)",
+		"application conflict", "application request failed",
+		"operation execution unavailable",
+	} {
+		if strings.Contains(rest, forbidden) {
+			t.Fatalf("REST generator duplicated error policy %q:
+%s", forbidden, rest)
+		}
 	}
+
 }
 
 func TestRenderC9ApplicationCodeGeneratesChildOperationCapability(t *testing.T) {
