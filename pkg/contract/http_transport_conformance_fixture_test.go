@@ -274,7 +274,7 @@ func TestTransportConformanceFrameworkUnavailableDoesNotExecuteApplication(t *te
 	if string(body)!="operation execution unavailable\n"{
 		t.Fatalf("safe framework unavailable HTTP response changed: %q",body)
 	}
-	recordedConformance(t,"framework/security-unavailable",nil,equalProof(),code,codes.Internal.String(),
+	recordedConformance(t,"framework/executor-unavailable",nil,equalProof(),code,codes.Internal.String(),
 		"test-only fault injection returns real Executor sentinel; both generated adapters fail safely before Application")
 }
 `
