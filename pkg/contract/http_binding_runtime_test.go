@@ -281,7 +281,7 @@ func TestGeneratedRESTStatusMatchesApplicationGRPCStatusWithoutLeakingDetails(t 
    body,err:=io.ReadAll(res.Body);_ = res.Body.Close();if err!=nil{t.Fatal(err)}
    if res.StatusCode!=tc.httpCode{t.Fatalf("REST status=%d want=%d body=%q",res.StatusCode,tc.httpCode,body)}
    if strings.Contains(string(body),"private-"){t.Fatalf("application data leaked in generated REST response: %q",body)}
-   if tc.name=="missing" && !strings.Contains(string(body),"application resource not found"){
+   if tc.name=="missing" && !strings.Contains(string(body),"application not found"){
     t.Fatalf("NotFound HTTP envelope is not the shared bounded mapping: %q",body)
    }
    _,appErr:=tr.rpc.Read(context.Background(),&queryv1.QueryRequest{TenantId:"tenant-a",DisplayName:tc.name})
