@@ -22,7 +22,7 @@ def fixed_version(path, version):
     if path == 'google.golang.org/grpc':
         if version != 'v1.82.1':
             raise ValueError(f'unexpected gRPC baseline {version}')
-        return 'v1.83.1'
+        return 'v1.83.2'
     if path == 'github.com/xuri/excelize/v2':
         if version != 'v2.8.0':
             raise ValueError(f'unexpected Excelize baseline {version}')
@@ -68,7 +68,7 @@ def main():
     pins = [row for row in policy['requiredModules'] if row['path'] == 'google.golang.org/grpc']
     if len(pins) != 1 or pins[0]['version'] != 'v1.82.1':
         raise SystemExit('unexpected dependency policy baseline')
-    pins[0]['version'] = 'v1.83.1'
+    pins[0]['version'] = 'v1.83.2'
     policy_path.write_text(json.dumps(policy, ensure_ascii=False, indent=2) + '\n')
     (out / 'requested-upgrades.json').write_text(json.dumps(changes, indent=2) + '\n')
     subprocess.run(['make', 'tidy'], cwd=root, check=True)
