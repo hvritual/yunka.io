@@ -7,6 +7,7 @@ const httpTransportConformanceFixture = `package bindingfixture
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -38,6 +39,30 @@ func (runtime *conformanceExecutor) Execute(ctx context.Context, plan operationp
 		return nil, operation.ErrExecutorUnavailable
 	}
 	return runtime.wrapped.Execute(ctx, plan, input, invoke)
+}
+
+// Local transaction is mandatory for idempotent Operations in the actual
+// canonical plan. This test-only UoW does not impersonate a durable store.
+type conformanceUnitOfWork struct {
+	commitCount *atomic.Int32
+}
+func (unit conformanceUnitOfWork) Commit(context.Context) error {
+	unit.commitCount.Add(1)
+	return nil
+}
+func (conformanceUnitOfWork) Rollback(context.Context) error { return nil }
+func (conformanceUnitOfWork) Close() error { return nil }
+
+type conformanceTransactionFactory struct {
+	begins atomic.Int32
+	commits atomic.Int32
+}
+func (f *conformanceTransactionFactory) Begin(_ context.Context, mode execution.TransactionMode) (execution.UnitOfWork, error) {
+	if mode != execution.TransactionLocal {
+		return nil, fmt.Errorf("expected a local root transaction, got %q", mode)
+	}
+	f.begins.Add(1)
+	return conformanceUnitOfWork{commitCount:&f.commits}, nil
 }
 
 func recordedConformance(t *testing.T, name string, req, resp *bool, httpStatus int, grpcStatus, diagnostic string) {
@@ -257,6 +282,10 @@ func TestTransportConformanceCanonicalIdempotencyAcrossTransports(t *testing.T){
 		_,rpcErr:=tr.rpc.Change(idempotencyContext("grpc-only-key"),request)
 		if before!=2||tr.app.count()!=before||httpDuplicate!=409||status.Code(rpcErr)!=codes.AlreadyExists {
 			t.Fatalf("duplicate was not suppressed: before=%d after=%d HTTP=%d RPC=%v",before,tr.app.count(),httpDuplicate,status.Code(rpcErr))
+		}
+		if tr.transactions.begins.Load()!=2 || tr.transactions.commits.Load()!=2 {
+			t.Fatalf("only two successful idempotent claims may start/commit local roots: begins=%d commits=%d",
+				tr.transactions.begins.Load(),tr.transactions.commits.Load())
 		}
 		recordedConformance(t,"idempotency/completed",equalProof(),equalProof(),httpDuplicate,codes.AlreadyExists.String(),
 			"two successful first claims and both duplicate claims were suppressed by canonical idempotency coordinator")
