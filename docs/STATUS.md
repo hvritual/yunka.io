@@ -7,6 +7,22 @@
 > Reconciled date: 2026-09-17
 > Governance: [`DOCUMENTATION_GOVERNANCE.md`](DOCUMENTATION_GOVERNANCE.md)
 
+## OpenTelemetry security dependency closure — issue #237
+
+Issue #237 records reachable GO-2026-6615, GO-2026-6508 and
+GO-2026-6505 on unchanged main 3b70323d29c694e4e44142b66c16e2e25ac0f9de.
+The independent dependency candidate selects the coherent OpenTelemetry
+1.45.0 stable / 0.21.0 log family and locks the affected modules in the
+existing dependency policy. Runtime source, contracts, generated files,
+consumer pins and normal security/test workflows are unchanged.
+
+Candidate presence is not acceptance. Exact baseline reproduction,
+candidate CI/Production and subsequent main run identities belong to
+[issue #237](https://github.com/hvritual/yunka.io/issues/237).
+Issue #228 must separately align with the accepted security main and
+requalify its own candidate; its previous tests are not inherited as
+current-head or actual-main acceptance.
+
 ## Current framework state
 
 | Area | Current state | Evidence / disposition |
