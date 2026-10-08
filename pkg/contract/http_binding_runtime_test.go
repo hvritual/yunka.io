@@ -173,7 +173,7 @@ service QueryApplication {
  }
  rpc Change(QueryRequest) returns (QueryResponse) {
   option (google.api.http) = { post:"/v1/tenants/{tenant_id}/change" body:"*" };
-  option (yunka.dsl.v1.operation) = { id:"query.change" use_case:"change" permissions:"query.read" permission_mode:PERMISSION_ALL tenant_required:true authentication:AUTHENTICATION_JWT execution:{transaction:TRANSACTION_NONE idempotency:IDEMPOTENCY_REQUIRED} };
+  option (yunka.dsl.v1.operation) = { id:"query.change" use_case:"change" permissions:"query.read" permission_mode:PERMISSION_ALL tenant_required:true authentication:AUTHENTICATION_JWT execution:{transaction:TRANSACTION_LOCAL idempotency:IDEMPOTENCY_REQUIRED} };
  }
 }
 `
@@ -237,14 +237,15 @@ func (a *application) count() int {a.mu.Lock();defer a.mu.Unlock();return len(a.
 
 func principal() identity.Principal {return identity.Principal{Subject:"user",TenantID:"tenant-a",UserID:"user",Roles:[]string{"reader"},AuthMethod:identity.AuthMethodJWT,Authenticated:true}}
 
-type transports struct {http *httptest.Server; rpc queryv1.QueryApplicationClient; app *application; store *execution.MemoryIdempotencyStore; executor *conformanceExecutor}
+type transports struct {http *httptest.Server; rpc queryv1.QueryApplicationClient; app *application; store *execution.MemoryIdempotencyStore; executor *conformanceExecutor; transactions *conformanceTransactionFactory}
 func start(t *testing.T, p identity.Principal) transports {
  t.Helper()
  authorizer,err:=authz.NewRBACAuthorizer(grants{});if err!=nil{t.Fatal(err)}
  security,err:=authz.NewExecutionSecurity(authorizer,nil);if err!=nil{t.Fatal(err)}
  store:=execution.NewMemoryIdempotencyStore()
  coordinator,err:=execution.NewIdempotencyCoordinator(store);if err!=nil{t.Fatal(err)}
- executor:=&conformanceExecutor{wrapped:operation.NewExecutorWithOptions(security,operation.ExecutorOptions{Idempotency:coordinator})}
+ transactions:=&conformanceTransactionFactory{}
+ executor:=&conformanceExecutor{wrapped:operation.NewExecutorWithOptions(security,operation.ExecutorOptions{Idempotency:coordinator,Transactions:transactions})}
  app:=&application{}
  mux:=http.NewServeMux();if err=rest.RegisterOperationExecutor(mux,app,executor);err!=nil{t.Fatal(err)}
  httpServer:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){mux.ServeHTTP(w,r.WithContext(identity.WithPrincipal(r.Context(),p)))}));t.Cleanup(httpServer.Close)
@@ -254,7 +255,7 @@ func start(t *testing.T, p identity.Principal) transports {
  go func(){_ = server.Serve(listener)}();t.Cleanup(server.Stop)
  ctx,cancel:=context.WithTimeout(context.Background(),5*time.Second);defer cancel()
  conn,err:=grpcgo.DialContext(ctx,"bufnet",grpcgo.WithContextDialer(func(ctx context.Context,_ string)(net.Conn,error){return listener.DialContext(ctx)}),grpcgo.WithTransportCredentials(insecure.NewCredentials()),grpcgo.WithBlock());if err!=nil{t.Fatal(err)};t.Cleanup(func(){_ = conn.Close()})
- return transports{http:httpServer,rpc:queryv1.NewQueryApplicationClient(conn),app:app,store:store,executor:executor}
+ return transports{http:httpServer,rpc:queryv1.NewQueryApplicationClient(conn),app:app,store:store,executor:executor,transactions:transactions}
 }
 func (tr transports) request(t *testing.T, method, rawQuery, body string) (int,*queryv1.QueryRequest) {
  t.Helper();req,err:=http.NewRequest(method,tr.http.URL+"/v1/tenants/tenant-a/query",strings.NewReader(body));if err!=nil{t.Fatal(err)};req.URL.RawQuery=rawQuery
