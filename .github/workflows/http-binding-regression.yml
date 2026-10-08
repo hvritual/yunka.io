@@ -1,0 +1,79 @@
+name: http-binding-regression
+on:
+  push:
+    branches: [control/http-binding-semantics]
+    paths: [.github/workflows/http-binding-regression.yml]
+permissions:
+  contents: read
+jobs:
+  reproduce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CONTROL_SHA: ${{ github.sha }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: d7902c98cc124d0b55fb7081df015633c550a0a0
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.25.13'
+          cache-dependency-path: |
+            pkg/go.sum
+            framework/go.sum
+            gateway/go.sum
+      - name: Install locked protoc and generators
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "$PROTOC_LINUX_X86_64_SHA256  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          export PATH="$RUNNER_TEMP/protoc/bin:$PATH"
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+          make toolchain-check rpc-tools rpc-toolchain-check
+      - name: Install only the integrity-checked permanent runtime regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show "$CONTROL_SHA:.control/http-binding-runtime.json" > "$RUNNER_TEMP/runtime.json"
+          python3 - <<'PY'
+          import base64, hashlib, json, os, pathlib, zlib
+          payload = json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'runtime.json').read_text())
+          # Correct two staging transcription errors before validating the original source digest.
+          encoded = payload['data'].replace('CfraPPq5w','CfraPq5w').replace('PiX3ULyWQ','PiX3yWQ')
+          raw = zlib.decompress(base64.b64decode(encoded,validate=True))
+          assert hashlib.sha256(raw).hexdigest() == payload['sha256'], 'Staged source checksum mismatch'
+          files = json.loads(raw)
+          assert set(files) == {'pkg/contract/http_binding_runtime_test.go'}
+          for name, content in files.items():
+              path = pathlib.Path(name)
+              assert not path.exists()
+              path.write_text(content)
+          PY
+      - name: Require a real generated-runtime parameter-loss failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/reproduction"
+          export PROTOC="$(command -v protoc)" PROTOC_GEN_GO="$PWD/.yunka/bin/protoc-gen-go" PROTOC_GEN_GO_GRPC="$PWD/.yunka/bin/protoc-gen-go-grpc" YUNKA_REQUIRE_C9_RUNTIME=1
+          set +e
+          (cd pkg && go test -count=1 -v ./contract -run '^TestGeneratedHTTPBindingTransportParity$') > "$RUNNER_TEMP/reproduction/runtime-red.log" 2>&1
+          code=$?
+          set -e
+          tail -n 160 "$RUNNER_TEMP/reproduction/runtime-red.log"
+          test "$code" -ne 0
+          grep -q 'HTTP_BINDING_PARAMETER_LOSS' "$RUNNER_TEMP/reproduction/runtime-red.log"
+          git diff --exit-code
+          printf '%s\n' d7902c98cc124d0b55fb7081df015633c550a0a0 > "$RUNNER_TEMP/reproduction/base.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: http-binding-reproduction
+          path: ${{ runner.temp }}/reproduction
+          if-no-files-found: warn
+          retention-days: 30
