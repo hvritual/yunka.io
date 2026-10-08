@@ -1,0 +1,30 @@
+name: qualify-c9-parity-syntax
+
+on:
+  push:
+    branches: [codex/control-c9-parity-syntax]
+    paths:
+      - .github/workflows/qualify-c9-parity-syntax.yml
+
+permissions:
+  contents: read
+
+jobs:
+  check-generated-conformance-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: hvritual/yunka.io
+          ref: e60a518df1aa97e43e246e70a81571c65ab21813
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = e60a518df1aa97e43e246e70a81571c65ab21813
+      - name: Parse every added/modified Go source with standard gofmt
+        run: |
+          set -euo pipefail
+          gofmt -e -d pkg/contract/http_transport_conformance_report_test.go
+          gofmt -e -d pkg/contract/http_transport_conformance_fixture_test.go
+          gofmt -e -d pkg/contract/http_binding_runtime_test.go
+          git diff --exit-code
