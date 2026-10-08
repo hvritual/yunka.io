@@ -59,41 +59,13 @@ jobs:
               --output "$RUNNER_TEMP/googleapis/google/api/${item}"
           done
           sha256sum "$RUNNER_TEMP/googleapis/google/api/"*.proto
-      - name: Targeted regression for the original app/add CI failure
+      - name: Repeat the failing plan/apply and missing-path regression
         shell: bash
         working-directory: candidate/app
         run: |
           set -euo pipefail
-          PROTOC="$(command -v protoc)" go test -count=1 ./cmd/add             -run '^(TestPlanOperationIsReadOnlyDeterministicAndMatchesApply|TestOperationPlanningRejectsUnboundHTTPPathWithoutChangingSource)        shell: bash
-        working-directory: candidate/pkg
-        run: |
-          set -euo pipefail
-          test "$(git -C ../ rev-parse HEAD)" = "$FRAMEWORK_SHA"
-          test "$(git -C ../../biz rev-parse HEAD)" = "$BIZ_SHA"
-          protoc --version
-          mkdir -p "$RUNNER_TEMP/biz-http-reverse"
-          GOWORK=off go run \
-            "$GITHUB_WORKSPACE/control/controls/biz_http_binding_reverse.go" \
-            -biz "$GITHUB_WORKSPACE/biz" \
-            -framework "$GITHUB_WORKSPACE/candidate" \
-            -google-proto "$RUNNER_TEMP/googleapis" \
-            -protoc "$(command -v protoc)" \
-            | tee "$RUNNER_TEMP/biz-http-reverse/contract-projection.json"
-          {
-            printf 'framework_candidate=%s\nbiz_source=%s\ngoogleapis_source=%s\n' "$FRAMEWORK_SHA" "$BIZ_SHA" "$GOOGLEAPIS_SHA"
-            sha256sum "$GITHUB_WORKSPACE/biz/contracts/proto/commercial/v1/entitlement.proto"
-          } > "$RUNNER_TEMP/biz-http-reverse/provenance.txt"
-          test -z "$(git -C "$GITHUB_WORKSPACE/control" status --porcelain)"
-          test -z "$(git -C "$GITHUB_WORKSPACE/candidate" status --porcelain)"
-          test -z "$(git -C "$GITHUB_WORKSPACE/biz" status --porcelain)"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always()
-        with:
-          name: original-biz-http-binding-reverse
-          path: ${{ runner.temp }}/biz-http-reverse
-          if-no-files-found: warn
-          retention-days: 30
- -v
+          PROTOC="$(command -v protoc)" go test -count=1 ./cmd/add -run TestPlanOperationIsReadOnlyDeterministicAndMatchesApply -v
+          PROTOC="$(command -v protoc)" go test -count=1 ./cmd/add -run TestOperationPlanningRejectsUnboundHTTPPathWithoutChangingSource -v
       - name: Verify original Biz protobuf through candidate compiler and generated REST projection
         shell: bash
         working-directory: candidate/pkg
