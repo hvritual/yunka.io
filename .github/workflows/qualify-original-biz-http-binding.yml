@@ -1,0 +1,91 @@
+name: qualify-original-biz-http-binding
+
+on:
+  push:
+    branches: [codex/control-biz-http-binding]
+    paths:
+      - .github/workflows/qualify-original-biz-http-binding.yml
+
+permissions:
+  contents: read
+
+jobs:
+  reverse-qualification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      FRAMEWORK_SHA: 6a39b8d33aedd92278f0b7d76b8f963c814c02c6
+      BIZ_SHA: a72119b7bd00e32abb840f3c93ed486fc8b004dd
+      GOOGLEAPIS_SHA: e63fb893d2fd6767bc9ca4116401f2d1e9202db3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: control
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: hvritual/yunka.io
+          ref: ${{ env.FRAMEWORK_SHA }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: hvritual/biz
+          ref: ${{ env.BIZ_SHA }}
+          path: biz
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: "1.25.13"
+          cache: false
+      - name: Install exact locked protobuf and google.api.http definitions
+        shell: bash
+        run: |
+          set -euo pipefail
+          source candidate/tools/toolchain.env
+          test "$GO_VERSION" = "1.25.13"
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" \
+            --output "$RUNNER_TEMP/protoc.zip"
+          echo "${PROTOC_LINUX_X86_64_SHA256}  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/protoc"
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+          mkdir -p "$RUNNER_TEMP/googleapis/google/api"
+          for item in annotations.proto http.proto; do
+            curl --fail --silent --show-error --location --retry 3 \
+              "https://raw.githubusercontent.com/googleapis/googleapis/${GOOGLEAPIS_SHA}/google/api/${item}" \
+              --output "$RUNNER_TEMP/googleapis/google/api/${item}"
+          done
+          sha256sum "$RUNNER_TEMP/googleapis/google/api/"*.proto
+      - name: Verify original Biz protobuf through candidate compiler and generated REST projection
+        shell: bash
+        working-directory: candidate/pkg
+        run: |
+          set -euo pipefail
+          test "$(git -C ../ rev-parse HEAD)" = "$FRAMEWORK_SHA"
+          test "$(git -C ../../biz rev-parse HEAD)" = "$BIZ_SHA"
+          protoc --version
+          mkdir -p "$RUNNER_TEMP/biz-http-reverse"
+          GOWORK=off go run \
+            "$GITHUB_WORKSPACE/control/controls/biz_http_binding_reverse.go" \
+            -biz "$GITHUB_WORKSPACE/biz" \
+            -framework "$GITHUB_WORKSPACE/candidate" \
+            -google-proto "$RUNNER_TEMP/googleapis" \
+            -protoc "$(command -v protoc)" \
+            | tee "$RUNNER_TEMP/biz-http-reverse/contract-projection.json"
+          {
+            printf 'framework_candidate=%s\nbiz_source=%s\ngoogleapis_source=%s\n' "$FRAMEWORK_SHA" "$BIZ_SHA" "$GOOGLEAPIS_SHA"
+            sha256sum "$GITHUB_WORKSPACE/biz/contracts/proto/commercial/v1/entitlement.proto"
+          } > "$RUNNER_TEMP/biz-http-reverse/provenance.txt"
+          test -z "$(git -C "$GITHUB_WORKSPACE/control" status --porcelain)"
+          test -z "$(git -C "$GITHUB_WORKSPACE/candidate" status --porcelain)"
+          test -z "$(git -C "$GITHUB_WORKSPACE/biz" status --porcelain)"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: original-biz-http-binding-reverse
+          path: ${{ runner.temp }}/biz-http-reverse
+          if-no-files-found: warn
+          retention-days: 30
