@@ -1,0 +1,184 @@
+name: publish-baseline-completion
+on:
+  push:
+    branches: [codex/control-baseline-completion]
+    paths: [.github/workflows/publish-baseline-completion.yml]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      CONTROL_SHA: ${{ github.sha }}
+      SECURITY_SHA: 992a3de67928ca0624ce9c563dab52e0c2487a8a
+      ORIGINAL_HEAD: dbe602f3e389cf6efe8e46534585e093bc371d92
+      OUTPUT_BRANCH: codex/baseline-completion-candidate
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: dbe602f3e389cf6efe8e46534585e093bc371d92
+          fetch-depth: 0
+      - name: Require independently completed security-main push qualification
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/baseline-completion"
+          python3 - <<'PY'
+          import json, os, pathlib, time, urllib.request
+          sha = os.environ['SECURITY_SHA']
+          runs = {'ci':37705638420, 'production':37705638278, 'ag04-consumer-types':37705638269, 'ag05-source-policy':37705638357, 'ag06-template-qualification':37705638268}
+          prefix = 'https://api.github.com/repos/hvritual/yunka.io'
+          def read(path):
+              request = urllib.request.Request(prefix+path, headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'], 'Accept':'application/vnd.github+json'})
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  return json.load(response)
+          deadline = time.monotonic() + 900
+          previous = None
+          while True:
+              assert read('/git/ref/heads/main')['object']['sha'] == sha, 'Concurrent main change requires reconciliation'
+              evidence = []
+              for name, run_id in runs.items():
+                  run = read('/actions/runs/'+str(run_id))
+                  assert run['head_sha'] == sha and run['event'] == 'push' and run['head_branch'] == 'main' and run['name'] == name
+                  if run['status'] == 'completed':
+                      assert run['conclusion'] == 'success', (name, run['conclusion'])
+                  evidence.append({'name':name,'id':run_id,'headSha':sha,'event':run['event'],'status':run['status'],'conclusion':run['conclusion'],'url':run['html_url']})
+              current = [(r['name'],r['status'],r['conclusion']) for r in evidence]
+              if current != previous:
+                  print(json.dumps(current), flush=True)
+                  previous = current
+              if all(r['status'] == 'completed' for r in evidence):
+                  break
+              assert time.monotonic() < deadline, 'Security-main qualification still incomplete'
+              time.sleep(30)
+          for name, required in {'ci':{'Verify','Determinism recheck'},'production':{'Verify production on MySQL 8.4','Require clean worktree'}}.items():
+              jobs = read('/actions/runs/'+str(runs[name])+'/jobs?per_page=100')
+              assert jobs['total_count'] == len(jobs['jobs'])
+              passed = {step['name'] for job in jobs['jobs'] if job['conclusion']=='success' for step in job.get('steps',[]) if step['status']=='completed' and step['conclusion']=='success'}
+              assert required <= passed, (name, required-passed)
+          out = pathlib.Path(os.environ['RUNNER_TEMP'])/'baseline-completion/security-main-acceptance.json'
+          out.write_text(json.dumps({'sha':sha,'runs':evidence},indent=2)+'\n')
+          print('All five separate actual-main workflows verified', sha)
+          PY
+      - name: Preserve existing PR history and apply the tested bounded correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$ORIGINAL_HEAD"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+          test "$(git rev-parse origin/main)" = "$SECURITY_SHA"
+          test "$(git ls-remote origin refs/heads/codex/branch-baseline-qualification | cut -f1)" = "$ORIGINAL_HEAD"
+          test -z "$(git ls-remote --heads origin "$OUTPUT_BRANCH")"
+          git config user.name 'Yunka Delivery'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$OUTPUT_BRANCH"
+          git merge --no-ff "$SECURITY_SHA" -m 'chore(governance): align qualification with accepted security main'
+          git show "$CONTROL_SHA:.control/finish_baseline.py" > "$RUNNER_TEMP/finish-baseline.py"
+          python3 -B "$RUNNER_TEMP/finish-baseline.py"
+          git show "$CONTROL_SHA:.control/BRANCH_BASELINE_QUALIFICATION.md" > docs/BRANCH_BASELINE_QUALIFICATION.md
+          python3 - <<'PY'
+          import json, os, pathlib
+          status_path = pathlib.Path('docs/STATUS.md')
+          source = status_path.read_text()
+          acceptance = json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'baseline-completion/security-main-acceptance.json').read_text())
+          old = 'Candidate presence is not acceptance. Exact baseline reproduction,\ncandidate CI/Production and subsequent main run identities belong to\n[issue #237](https://github.com/hvritual/yunka.io/issues/237).'
+          assert old in source
+          lines = ['**State: COMPLETE / QUALIFIED / MERGED through PR #238.**', '', 'Accepted security main is `'+acceptance['sha']+'`.', 'Candidate CI `37704786756`, Production `37704786768`, source policy', '`37704786762`, consumer types `37704786698` and template', '`37704786804` all passed. Separate actual-main push workflows passed:']
+          lines += ['- '+r['name']+': `'+str(r['id'])+'`.' for r in acceptance['runs']]
+          lines += ['', 'Unchanged-base reproduction and fixed scanner/observability tests are in', 'preparation run `37704399531`. No scan suppression was used.', 'Exact acceptance is retained on [issue #237](https://github.com/hvritual/yunka.io/issues/237);', 'these historical receipts are scoped to the accepted security SHA.']
+          source = source.replace(old, '\n'.join(lines), 1)
+          note = '''## Branch baseline qualification — issue #228
+
+          The read-only branch classifier and its PR/main workflow distinguish
+          CURRENT_MAIN, MAINTAINED_COMPAT and UNCLASSIFIED without granting merge
+          authority. Candidate/base/main identities, release-specific dependency
+          inventories and existing checksum files are derived from Git. Compatibility
+          receipts must match repository, workflow path and exact base/head pair;
+          absent maintenance, stale evidence or incomplete jobs fail closed.
+
+          The completion increment retains the original Git history and aligns it
+          with the independently accepted #237 security main. The permanent regression
+          inventory contains 21 top-level tests; the old stale-base validator behavior
+          and bounded correction were independently exercised in probe run 37705010504.
+          Source implementation is not an acceptance claim. Exact candidate, merged
+          SHA/tree and separate actual-main CI/Production/baseline acceptance are
+          recorded on [issue #228](https://github.com/hvritual/yunka.io/issues/228)
+          and [PR #236](https://github.com/hvritual/yunka.io/pull/236).
+
+          See [the qualification contract](BRANCH_BASELINE_QUALIFICATION.md).
+          Native GitHub required-status rulesets, compatibility maintenance approval,
+          consumer upgrades and unrelated PR #226 are not changed by this delivery.
+
+          '''
+          source = source.replace('## Current framework state\n', note+'## Current framework state\n', 1)
+          status_path.write_text(source)
+          PY
+          git diff --check
+          git add tools/qualify_branch_baseline.py tools/test_qualify_branch_baseline.py docs/BRANCH_BASELINE_QUALIFICATION.md docs/STATUS.md
+          git commit -m 'fix(governance): bind exact receipt identity and release dependency evidence'
+      - name: Qualify the exact candidate and preserve a real old-compat counterexample
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/baseline-completion"
+          python3 -B tools/test_qualify_branch_baseline.py -v > "$output/tests.txt" 2>&1
+          cat "$output/tests.txt"
+          for pass in one two; do
+            python3 -B tools/qualify_branch_baseline.py --mode pr --base-ref main --base-sha "$SECURITY_SHA" --checked-sha "$(git rev-parse HEAD)" > "$output/current-$pass.json"
+          done
+          cmp "$output/current-one.json" "$output/current-two.json"
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          output = pathlib.Path(os.environ['RUNNER_TEMP'])/'baseline-completion'
+          report = json.loads((output/'current-one.json').read_text())
+          assert report['classification']=='CURRENT_MAIN' and report['status']=='READY_FOR_CHECKS'
+          assert report['mainSha']==os.environ['SECURITY_SHA']
+          assert all(item['matchesMain'] for item in report['dependencyBaseline'])
+          allowed = {'.github/workflows/branch-baseline-qualification.yml','docs/BRANCH_BASELINE_QUALIFICATION.md','docs/STATUS.md','tools/qualify_branch_baseline.py','tools/test_qualify_branch_baseline.py'}
+          changed = set(subprocess.check_output(['git','diff','--name-only',os.environ['SECURITY_SHA'],'HEAD'],text=True).splitlines())
+          assert changed == allowed, changed
+          PY
+          git worktree add --detach "$RUNNER_TEMP/compat-counterexample" 06076ce2fc170c89c7356ee070d74ebf1de340cf
+          set +e
+          env -u YUNKA_MAINTENANCE_POLICY python3 -B tools/qualify_branch_baseline.py --repo-root "$RUNNER_TEMP/compat-counterexample" --mode pr --base-ref compat/biz-ce13-httpstatus --base-sha 9ee6640f5e19777b4c04d9e4937a93e2035eacda --checked-sha 06076ce2fc170c89c7356ee070d74ebf1de340cf > "$output/legacy-counterexample.json"
+          code=$?
+          set -e
+          test "$code" -eq 2
+          python3 - <<'PY'
+          import json, os, pathlib
+          report = json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'baseline-completion/legacy-counterexample.json').read_text())
+          assert report['classification']=='UNCLASSIFIED' and report['status']=='BLOCKED', report
+          assert report['blockedReason']=='MAINTENANCE_AUTHORITY_MISSING', report
+          print('Exact historical PR #226 candidate is not current main:', report['blockedReason'])
+          PY
+          test -z "$(git -C "$RUNNER_TEMP/compat-counterexample" status --porcelain --untracked-files=all)"
+          git worktree remove "$RUNNER_TEMP/compat-counterexample"
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=all)"
+          git merge-base --is-ancestor "$ORIGINAL_HEAD" HEAD
+          git merge-base --is-ancestor "$SECURITY_SHA" HEAD
+          git rev-parse HEAD 'HEAD^{tree}' > "$output/candidate-identity.txt"
+          git diff "$SECURITY_SHA" HEAD > "$output/candidate.patch"
+          cat "$output/candidate-identity.txt"
+      - name: Publish the exact runner-created candidate without advancing the PR or main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SECURITY_SHA"
+          test "$(git ls-remote origin refs/heads/codex/branch-baseline-qualification | cut -f1)" = "$ORIGINAL_HEAD"
+          test -z "$(git ls-remote --heads origin "$OUTPUT_BRANCH")"
+          git push origin "HEAD:refs/heads/$OUTPUT_BRANCH"
+          test "$(git ls-remote origin "refs/heads/$OUTPUT_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: baseline-completion-preparation
+          path: ${{ runner.temp }}/baseline-completion
+          if-no-files-found: error
+          retention-days: 30
