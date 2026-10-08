@@ -188,6 +188,15 @@ type application struct {mu sync.Mutex; received []*queryv1.QueryRequest}
 func (a *application) accept(ctx context.Context, id string, req *queryv1.QueryRequest) (*queryv1.QueryResponse,error) {
  if _,err:=authz.RequireAuthorizedOperation(ctx,authz.OperationID(id));err!=nil{return nil,err}
  a.mu.Lock();a.received=append(a.received,proto.Clone(req).(*queryv1.QueryRequest));a.mu.Unlock()
+ switch req.DisplayName {
+ case "missing": return nil,status.Error(codes.NotFound,"private-resource-name-must-not-leak")
+ case "aborted": return nil,status.Error(codes.Aborted,"private-conflict-details-must-not-leak")
+ case "existing": return nil,status.Error(codes.AlreadyExists,"private-constraint-must-not-leak")
+ case "invalid": return nil,status.Error(codes.InvalidArgument,"private-input-must-not-leak")
+ case "application-internal": return nil,status.Error(codes.Internal,"private-backend-info-must-not-leak")
+ case "application-denied": return nil,status.Error(codes.PermissionDenied,"private-auth-info-must-not-leak")
+ case "ordinary-error": return nil,fmt.Errorf("private-plain-error-must-not-leak")
+ }
  if req.TenantId!="tenant-a" {return nil,status.Error(codes.PermissionDenied,"resource tenant mismatch")}
  if len(req.CapabilityCodes)>128 {return nil,status.Error(codes.InvalidArgument,"too many capability codes")}
  for _,code:=range req.CapabilityCodes {if code=="unknown.capability" {return nil,status.Error(codes.InvalidArgument,"unknown capability")}}
@@ -249,6 +258,38 @@ func TestAmbiguousOrMalformedQueriesNeverReachApplication(t *testing.T) {
   t.Run(query,func(t *testing.T){before:=tr.app.count();code,_:=tr.request(t,"GET",query,"");if code!=400||tr.app.count()!=before{t.Fatalf("invalid query reached Application: %q status=%d",query,code)}})
  }
 }
+// The transport test uses actual generated C9 handlers, a live HTTP server
+// and gRPC client, and a shared Application/Executor rather than inspecting
+// source strings for a status switch.
+func TestGeneratedRESTStatusMatchesApplicationGRPCStatusWithoutLeakingDetails(t *testing.T) {
+ tr:=start(t,principal())
+ cases:=[]struct{name string;appCode codes.Code;httpCode int}{
+  {"missing",codes.NotFound,404},
+  {"aborted",codes.Aborted,409},
+  {"existing",codes.AlreadyExists,409},
+  {"invalid",codes.InvalidArgument,400},
+  {"application-internal",codes.Internal,400},
+  {"application-denied",codes.PermissionDenied,400},
+  {"ordinary-error",codes.Unknown,400},
+ }
+ for _,tc:=range cases {
+  t.Run(tc.name,func(t *testing.T){
+   query:=url.Values{"label":[]string{tc.name}}
+   req,err:=http.NewRequest(http.MethodGet,tr.http.URL+"/v1/tenants/tenant-a/query?"+query.Encode(),nil)
+   if err!=nil{t.Fatal(err)}
+   res,err:=tr.http.Client().Do(req);if err!=nil{t.Fatal(err)}
+   body,err:=io.ReadAll(res.Body);_ = res.Body.Close();if err!=nil{t.Fatal(err)}
+   if res.StatusCode!=tc.httpCode{t.Fatalf("REST status=%d want=%d body=%q",res.StatusCode,tc.httpCode,body)}
+   if strings.Contains(string(body),"private-"){t.Fatalf("application data leaked in generated REST response: %q",body)}
+   if tc.name=="missing" && !strings.Contains(string(body),"application not found"){
+    t.Fatalf("NotFound HTTP envelope is not the shared bounded mapping: %q",body)
+   }
+   _,appErr:=tr.rpc.Read(context.Background(),&queryv1.QueryRequest{TenantId:"tenant-a",DisplayName:tc.name})
+   if status.Code(appErr)!=tc.appCode{t.Fatalf("RPC status=%v expected=%v err=%v",status.Code(appErr),tc.appCode,appErr)}
+  })
+ }
+}
+
 func TestUnknownAndExcessValuesReachTheSameApplicationValidator(t *testing.T) {
  tr:=start(t,principal())
  for _,values:=range [][]string{{"unknown.capability"},strings.Split(strings.Repeat("coffee.read,",128)+"coffee.read",",")} {
