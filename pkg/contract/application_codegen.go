@@ -126,6 +126,9 @@ func operationIdentifier(naming serviceCodegenNaming, method Method) string {
 
 func RenderApplicationCode(manifest Manifest, options ApplicationCodeOptions) ([]GeneratedApplicationFile, error) {
 	manifest.Normalize()
+	if err := validateApplicationHTTPBindings(manifest); err != nil {
+		return nil, err
+	}
 	rootImport := strings.TrimRight(strings.TrimSpace(options.RootImport), "/")
 	if rootImport == "" {
 		return nil, fmt.Errorf("contract application codegen: root import is required")
@@ -499,7 +502,6 @@ func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[
 		if err != nil {
 			return "", err
 		}
-		requestMessage := messages[method.Request]
 		for index, binding := range method.HTTP {
 			bindingCount++
 			handlerName := "handle" + method.Name
@@ -510,42 +512,11 @@ func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[
 			fmt.Fprintf(&registrations, "\tmux.HandleFunc(%q, handler.%s)\n", pattern, handlerName)
 			fmt.Fprintf(&handlers, "func (handler *%s) %s(writer http.ResponseWriter, request *http.Request) {\n", naming.RESTHandler, handlerName)
 			fmt.Fprintf(&handlers, "\twire := &%s.%s{}\n", requestRef.Alias, requestRef.Type)
-			pathFields, _ := simplePathFields(binding.Path)
-			if binding.Body == "*" {
-				imports.add("io", "io")
-				handlers.WriteString("\tbody, err := io.ReadAll(request.Body)\n\tif err != nil { http.Error(writer, \"invalid request body\", http.StatusBadRequest); return }\n\tif len(body) > 0 { if err := protojson.Unmarshal(body, wire); err != nil { http.Error(writer, \"invalid request body\", http.StatusBadRequest); return } }\n")
-			} else {
-				pathSet := make(map[string]struct{}, len(pathFields))
-				for _, value := range pathFields {
-					pathSet[value] = struct{}{}
-				}
-				for _, field := range requestMessage.Fields {
-					if _, pathField := pathSet[field.Name]; pathField || field.Repeated || field.Map || field.Kind == "message" || field.Kind == "enum" {
-						continue
-					}
-					queryExpr := "request.URL.Query().Get(" + strconv.Quote(field.Name) + ")"
-					fmt.Fprintf(&handlers, "\tif raw := %s; raw != \"\" {\n", queryExpr)
-					if scalarAssignmentNeedsStrconv(field) {
-						imports.add("strconv", "strconv")
-					}
-					if err := writeScalarAssignment(&handlers, "wire", field, "raw", false); err != nil {
-						return "", err
-					}
-					handlers.WriteString("\t}\n")
-				}
+			plan, err := compileHTTPBindingPlan(method, binding, messages)
+			if err != nil {
+				return "", err
 			}
-			for _, fieldName := range pathFields {
-				field, ok := findMessageField(requestMessage, fieldName)
-				if !ok {
-					return "", fmt.Errorf("contract application codegen: %s path field %q not found in %s", method.FullName, fieldName, method.Request)
-				}
-				if scalarAssignmentNeedsStrconv(field) {
-					imports.add("strconv", "strconv")
-				}
-				if err := writeScalarAssignment(&handlers, "wire", field, "request.PathValue("+strconv.Quote(fieldName)+")", true); err != nil {
-					return "", fmt.Errorf("contract application codegen: %s: %w", method.FullName, err)
-				}
-			}
+			writeHTTPBinding(&handlers, imports, plan)
 			fullMethod := "/" + strings.TrimPrefix(service.FullName, ".") + "/" + method.Name
 			fmt.Fprintf(&handlers, "\tsecured, err := handler.runtime.Prepare(request.Context(), %q, wire)\n", fullMethod)
 			fmt.Fprintf(&handlers, "\tif err != nil { %s(writer, err); return }\n", naming.SecurityError)
@@ -580,54 +551,6 @@ func renderRESTAdapter(service Service, packages []protoGoPackage, messages map[
 
 func (policy *AuthorizationPolicy) ProtectedLike() bool {
 	return policy != nil && (len(policy.Authentication) > 0 || len(policy.Permissions) > 0 || policy.TenantRequired)
-}
-
-func scalarAssignmentNeedsStrconv(field Field) bool {
-	switch field.Type {
-	case "bool", "int32", "int64", "sint32", "sint64", "sfixed32", "sfixed64", "uint32", "uint64", "fixed32", "fixed64", "float", "double":
-		return true
-	default:
-		return false
-	}
-}
-
-func writeScalarAssignment(builder *strings.Builder, receiver string, field Field, rawExpression string, path bool) error {
-	goName := protoGoFieldName(field.Name)
-	badRequest := "http.Error(writer, \"invalid request parameter\", http.StatusBadRequest); return"
-	switch field.Type {
-	case "string":
-		fmt.Fprintf(builder, "\t%s.%s = %s\n", receiver, goName, rawExpression)
-	case "bool":
-		fmt.Fprintf(builder, "\tparsed, err := strconv.ParseBool(%s); if err != nil { %s }; %s.%s = parsed\n", rawExpression, badRequest, receiver, goName)
-	case "int32", "int64", "sint32", "sint64", "sfixed32", "sfixed64":
-		bits := 64
-		cast := "int64"
-		if strings.Contains(field.Type, "32") {
-			bits, cast = 32, "int32"
-		}
-		fmt.Fprintf(builder, "\tparsed, err := strconv.ParseInt(%s, 10, %d); if err != nil { %s }; %s.%s = %s(parsed)\n", rawExpression, bits, badRequest, receiver, goName, cast)
-	case "uint32", "uint64", "fixed32", "fixed64":
-		bits := 64
-		cast := "uint64"
-		if strings.Contains(field.Type, "32") {
-			bits, cast = 32, "uint32"
-		}
-		fmt.Fprintf(builder, "\tparsed, err := strconv.ParseUint(%s, 10, %d); if err != nil { %s }; %s.%s = %s(parsed)\n", rawExpression, bits, badRequest, receiver, goName, cast)
-	case "float", "double":
-		bits := 64
-		cast := "float64"
-		if field.Type == "float" {
-			bits, cast = 32, "float32"
-		}
-		fmt.Fprintf(builder, "\tparsed, err := strconv.ParseFloat(%s, %d); if err != nil { %s }; %s.%s = %s(parsed)\n", rawExpression, bits, badRequest, receiver, goName, cast)
-	default:
-		location := "query"
-		if path {
-			location = "path"
-		}
-		return fmt.Errorf("%s field %s type %s requires handwritten mapping", location, field.Name, field.Type)
-	}
-	return nil
 }
 
 func findMessageField(message Message, name string) (Field, bool) {

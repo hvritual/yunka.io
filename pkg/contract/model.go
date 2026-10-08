@@ -92,6 +92,7 @@ type Field struct {
 	Repeated     bool   `json:"repeated,omitempty"`
 	Required     bool   `json:"required,omitempty"`
 	Optional     bool   `json:"optional,omitempty"`
+	Oneof        bool   `json:"oneof,omitempty"` // Descriptor membership; synthetic optional oneofs are excluded.
 	Map          bool   `json:"map,omitempty"`
 	MapKeyType   string `json:"mapKeyType,omitempty"`
 	MapValueKind string `json:"mapValueKind,omitempty"`

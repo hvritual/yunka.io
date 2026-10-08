@@ -403,7 +403,6 @@ func renderC9RESTAdapter(service Service, packages []protoGoPackage, messages ma
 		if err != nil {
 			return "", err
 		}
-		requestMessage := messages[method.Request]
 		for index, binding := range method.HTTP {
 			bindingCount++
 			handlerName := "handleOperation" + method.Name
@@ -416,45 +415,11 @@ func renderC9RESTAdapter(service Service, packages []protoGoPackage, messages ma
 			fmt.Fprintf(&registrations, "\tif err := httpbinding.Register(mux, %q, %q, handler.%s); err != nil { return err }\n", strings.ToUpper(binding.Method), binding.Path, handlerName)
 			fmt.Fprintf(&handlers, "func (handler *%s) %s(writer http.ResponseWriter, request *http.Request) {\n", handlerType, handlerName)
 			fmt.Fprintf(&handlers, "\twire := &%s.%s{}\n", requestRef.Alias, requestRef.Type)
-			pathFields, err := simplePathFields(binding.Path)
+			plan, err := compileHTTPBindingPlan(method, binding, messages)
 			if err != nil {
-				return "", fmt.Errorf("contract C9 application codegen: %s: %w", method.FullName, err)
+				return "", err
 			}
-			if binding.Body == "*" {
-				imports.add("io", "io")
-				handlers.WriteString("\tbody, err := io.ReadAll(request.Body)\n\tif err != nil { http.Error(writer, \"invalid request body\", http.StatusBadRequest); return }\n\tif len(body) > 0 { if err := protojson.Unmarshal(body, wire); err != nil { http.Error(writer, \"invalid request body\", http.StatusBadRequest); return } }\n")
-			} else {
-				pathSet := make(map[string]struct{}, len(pathFields))
-				for _, value := range pathFields {
-					pathSet[value] = struct{}{}
-				}
-				for _, field := range requestMessage.Fields {
-					if _, pathField := pathSet[field.Name]; pathField || field.Repeated || field.Map || field.Kind == "message" || field.Kind == "enum" {
-						continue
-					}
-					queryExpr := "request.URL.Query().Get(" + strconv.Quote(field.Name) + ")"
-					fmt.Fprintf(&handlers, "\tif raw := %s; raw != \"\" {\n", queryExpr)
-					if scalarAssignmentNeedsStrconv(field) {
-						imports.add("strconv", "strconv")
-					}
-					if err := writeScalarAssignment(&handlers, "wire", field, "raw", false); err != nil {
-						return "", err
-					}
-					handlers.WriteString("\t}\n")
-				}
-			}
-			for _, fieldName := range pathFields {
-				field, ok := findMessageField(requestMessage, fieldName)
-				if !ok {
-					return "", fmt.Errorf("contract C9 application codegen: %s path field %q not found in %s", method.FullName, fieldName, method.Request)
-				}
-				if scalarAssignmentNeedsStrconv(field) {
-					imports.add("strconv", "strconv")
-				}
-				if err := writeScalarAssignment(&handlers, "wire", field, "request.PathValue("+strconv.Quote(fieldName)+")", true); err != nil {
-					return "", fmt.Errorf("contract C9 application codegen: %s: %w", method.FullName, err)
-				}
-			}
+			writeHTTPBinding(&handlers, imports, plan)
 			handlers.WriteString("\tcallContext := execution.WithIdempotencyKey(request.Context(), request.Header.Get(\"Idempotency-Key\"))\n")
 			fmt.Fprintf(&handlers, "\toutput, err := operation.ExecuteTyped(callContext, handler.executor, %s.%s(), wire, handler.application.%s)\n", policyAlias, c9PlanFunction(naming, method), method.Name)
 			fmt.Fprintf(&handlers, "\tif err != nil { %s(writer, err); return }\n", errorName)

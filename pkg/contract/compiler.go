@@ -244,6 +244,7 @@ func buildField(field fieldDescriptor, all, mapEntries map[string]messageDescrip
 		Repeated: field.Label == 3,
 		Required: field.Label == 2,
 		Optional: field.Proto3Optional,
+		Oneof:    field.OneofIndex != nil && !field.Proto3Optional,
 	}
 	if scalar, ok := scalarType(field.Type); ok {
 		result.Kind = "scalar"

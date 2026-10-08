@@ -13,6 +13,9 @@ type TypeScriptOptions struct {
 
 func GenerateTypeScript(manifest Manifest, options TypeScriptOptions) ([]byte, error) {
 	manifest.Normalize()
+	if err := validateApplicationHTTPBindings(manifest); err != nil {
+		return nil, err
+	}
 	external := collectExternalContractTypes(manifest)
 	var builder strings.Builder
 	if options.Header == "" {
@@ -21,7 +24,11 @@ func GenerateTypeScript(manifest Manifest, options TypeScriptOptions) ([]byte, e
 	builder.WriteString("// ")
 	builder.WriteString(options.Header)
 	builder.WriteString("\n\n")
-	builder.WriteString("export interface HttpBinding {\n  method: string;\n  path: string;\n  body?: string;\n  responseBody?: string;\n}\n\n")
+	builder.WriteString("export interface HttpBinding {\n  method: string;\n  path: string;\n  body?: string;\n  responseBody?: string;\n")
+	if hasTypedDSL(manifest) {
+		builder.WriteString("  queryParameters?: readonly { field: string; jsonName: string; repeated: boolean }[];\n")
+	}
+	builder.WriteString("}\n\n")
 	builder.WriteString("export interface RpcOperation {\n  fullName: string;\n  rpcPath: string;\n  requestType: string;\n  responseType: string;\n  http?: readonly HttpBinding[];\n}\n\n")
 	builder.WriteString("export interface RpcTransport {\n  call<Request, Response>(operation: RpcOperation, request: Request): Promise<Response>;\n}\n\n")
 
@@ -104,6 +111,20 @@ func GenerateTypeScript(manifest Manifest, options TypeScriptOptions) ([]byte, e
 				if binding.ResponseBody != "" {
 					builder.WriteString(", responseBody: ")
 					builder.WriteString(fmt.Sprintf("%q", binding.ResponseBody))
+				}
+				if item.Service.Application != nil {
+					plan, err := compileHTTPBindingPlan(item.Method, binding, messageIndex(manifest))
+					if err != nil {
+						return nil, err
+					}
+					builder.WriteString(", queryParameters: [")
+					for i, field := range plan.Query {
+						if i > 0 {
+							builder.WriteString(", ")
+						}
+						fmt.Fprintf(&builder, "{ field: %q, jsonName: %q, repeated: %t }", field.Name, httpJSONName(field), field.Repeated)
+					}
+					builder.WriteString("]")
 				}
 				builder.WriteString(" },\n")
 			}

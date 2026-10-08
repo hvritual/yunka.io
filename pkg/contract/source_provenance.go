@@ -40,6 +40,10 @@ func legacyManifestProjection(manifest Manifest) Manifest {
 	manifest.Messages = append([]Message(nil), manifest.Messages...)
 	for i := range manifest.Messages {
 		manifest.Messages[i].SourceFile = ""
+		manifest.Messages[i].Fields = append([]Field(nil), manifest.Messages[i].Fields...)
+		for j := range manifest.Messages[i].Fields {
+			manifest.Messages[i].Fields[j].Oneof = false
+		}
 	}
 	manifest.Enums = append([]Enum(nil), manifest.Enums...)
 	for i := range manifest.Enums {
