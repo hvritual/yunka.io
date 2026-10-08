@@ -54,7 +54,7 @@ func classifyOperationError(err error) (int, string) {
 	}
 	switch status.Code(err) {
 	case codes.NotFound:
-		return http.StatusNotFound, "application resource not found"
+		return http.StatusNotFound, "application not found"
 	case codes.Aborted, codes.AlreadyExists:
 		return http.StatusConflict, "application conflict"
 	default:
