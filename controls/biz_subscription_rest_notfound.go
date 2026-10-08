@@ -114,9 +114,7 @@ func run(bizRoot,frameworkRoot,googleRoot,protoc,goPlugin,grpcPlugin string) err
  "replace github.com/hvritual/yunka.io/gateway => "+filepath.ToSlash(filepath.Join(frameworkRoot,"gateway")),
  "replace github.com/hvritual/yunka.io/pkg => "+filepath.ToSlash(filepath.Join(frameworkRoot,"pkg")),
  }
- if err=os.WriteFile(filepath.Join(root,"go.mod"),[]byte(strings.Join(lines,"
-")+"
-"),0644);err!=nil{return err}
+ if err=os.WriteFile(filepath.Join(root,"go.mod"),[]byte(strings.Join(lines,"\n")+"\n"),0644);err!=nil{return err}
  if err=os.WriteFile(filepath.Join(root,"subscription_runtime_test.go"),[]byte(fixtureTest),0644);err!=nil{return err}
  cmd=exec.CommandContext(ctx,"go","test","-mod=mod","-race","-count=1","-timeout=6m","-v","./...")
  cmd.Dir=root;cmd.Env=append(os.Environ(),"GOWORK=off")
@@ -124,8 +122,7 @@ func run(bizRoot,frameworkRoot,googleRoot,protoc,goPlugin,grpcPlugin string) err
  fmt.Print(string(output))
  if err!=nil{return fmt.Errorf("scoped actual Biz generated HTTP/RPC execution failed: %w",err)}
  if !strings.Contains(string(output),"--- PASS: TestOriginalBizGetMySubscriptionREST404AndRPCNotFound"){return fmt.Errorf("real Biz HTTP/RPC test was skipped")}
- fmt.Printf("BIZ_SUBSCRIPTION_C9_NOTFOUND_QUALIFIED framework=%s original_biz_sha256=%s descriptor_sha256=%s scope=scoped_real_Biz_PB_generated_HTTP_and_grpc
-",
+ fmt.Printf("BIZ_SUBSCRIPTION_C9_NOTFOUND_QUALIFIED framework=%s original_biz_sha256=%s descriptor_sha256=%s scope=scoped_real_Biz_PB_generated_HTTP_and_grpc\n",
   frameworkRoot,hex.EncodeToString(digest[:]),compiled.DescriptorSHA)
  return nil
 }
