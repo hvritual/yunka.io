@@ -72,13 +72,15 @@ def main():
     policy_path.write_text(json.dumps(policy, ensure_ascii=False, indent=2) + '\n')
     (out / 'requested-upgrades.json').write_text(json.dumps(changes, indent=2) + '\n')
     subprocess.run(['make', 'tidy'], cwd=root, check=True)
+    # The policy checks the entire selected module graph, not just packages
+    # imported by the application. Resolve its workspace sums before freezing.
+    subprocess.run(['make', 'dependency-check'], cwd=root, check=True)
     changed = run('git', 'diff', '--name-only', cwd=root).splitlines()
     if not changed or set(changed) - ALLOWED:
         raise SystemExit(f'out-of-scope dependency change: {changed}')
     if run('git', 'ls-files', '--others', '--exclude-standard', cwd=root):
         raise SystemExit('unexpected untracked source')
     run('git', 'diff', '--check', cwd=root)
-    # Only dependency facts may enter this index. Any later generator drift must fail.
     subprocess.run(['git', 'add', '--', *changed], cwd=root, check=True)
     tree = run('git', 'write-tree', cwd=root)
     (out / 'proposed-tree.txt').write_text(tree + '\n')
