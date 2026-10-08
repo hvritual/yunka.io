@@ -77,6 +77,27 @@ This delta does not alter Kernel, Authz, root UoW, error mapping (#229), Consume
 pins or the separately planned general conformance matrix (#231). Unsupported
 nested/map/enum/oneof URL input is explicitly rejected, not claimed implemented.
 
+## C9 REST error status mapping — issue #229
+
+The C9 generated REST error handler delegates to the single existing gateway
+HTTP binding owner, `httpbinding.WriteOperationError`. The source-of-truth
+policy is [REST error semantics](architecture/REST-ERROR-SEMANTICS.md).
+It preserves canonical security authorization, idempotency, unavailable and
+unknown-error behaviors, adding only explicit application gRPC
+`codes.NotFound` → HTTP 404. Existing `Aborted`/`AlreadyExists` → 409,
+framework unavailable → 500 and authenticated/unauthenticated policy denials
+remain independently classified. Application error messages are never leaked.
+
+Gateway unit tests validate status/precedence/no-leakage. The existing
+generated C9 HTTP/gRPC executable fixture exercises the status on actual
+generated handlers and Executor. **Source presence is not full delivery
+qualification:** precise candidate/real Biz boundary/main CI/Production
+evidence and the active Issue state belong to
+[Issue #229](https://github.com/hvritual/yunka.io/issues/229).
+The historical PR #226 remains a separate old compatibility-branch delivery;
+this contract does not upgrade consumer pins or approve that branch's
+security baseline. The broader protocol parity contract remains #231.
+
 ## Current framework state
 
 | Area | Current state | Evidence / disposition |
