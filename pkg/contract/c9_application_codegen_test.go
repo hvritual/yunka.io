@@ -55,6 +55,10 @@ func TestRenderC9ApplicationCodeEmitsOnlyExecutorTransports(t *testing.T) {
 		!strings.Contains(rest, `http.Error(writer, "application conflict", http.StatusConflict)`) {
 		t.Fatalf("REST adapter must map explicit gRPC conflicts to HTTP 409:\n%s", rest)
 	}
+	if !strings.Contains(rest, `status.Code(err) == codes.NotFound`) ||
+		!strings.Contains(rest, `http.Error(writer, "application not found", http.StatusNotFound)`) {
+		t.Fatalf("REST adapter must map explicit gRPC not found to HTTP 404:\n%s", rest)
+	}
 	if !strings.Contains(rest, `"google.golang.org/grpc/codes"`) || !strings.Contains(rest, `"google.golang.org/grpc/status"`) {
 		t.Fatalf("REST conflict mapping imports are missing:\n%s", rest)
 	}
