@@ -1,0 +1,72 @@
+name: CE340 merged compatibility readback
+on:
+  push:
+    branches: [control/ce340-compat-readback]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: yunka_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 03abc8327411732de3cb0631449d5b1d831ca6f5
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify actual compatibility integration, not control source
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ce340-compat-readback"
+          test "$(git rev-parse HEAD)" = 03abc8327411732de3cb0631449d5b1d831ca6f5
+          test "$(git ls-remote origin refs/heads/compat/biz-ce13-httpstatus | cut -f1)" = 03abc8327411732de3cb0631449d5b1d831ca6f5
+          git merge-base --is-ancestor 6be63bfedf622a9c123bd24f7fd18b62882ee1e9 HEAD
+          test "$(git rev-parse 'HEAD^{tree}')" = 67a8f0a2e2dae8852630370f67b3696861ee8ed8
+          git rev-parse HEAD > "$RUNNER_TEMP/ce340-compat-readback/sha.txt"
+          git rev-parse 'HEAD^{tree}' > "$RUNNER_TEMP/ce340-compat-readback/tree.txt"
+          source tools/toolchain.env
+          echo "go=$GO_VERSION" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go }}
+          cache: false
+      - name: Install locked protoc
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          curl --fail --silent --show-error --location --retry 3 --max-time 120 \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "$PROTOC_LINUX_X86_64_SHA256  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+      - name: Unchanged production gate and deterministic readback
+        shell: bash
+        env:
+          YUNKA_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/yunka_test?charset=utf8mb4&parseTime=true&loc=UTC&multiStatements=true
+        run: |
+          set -euo pipefail
+          make verify-production 2>&1 | tee "$RUNNER_TEMP/ce340-compat-readback/verify-production.log"
+          make tidy contract 2>&1 | tee "$RUNNER_TEMP/ce340-compat-readback/determinism.log"
+          test -z "$(git status --porcelain)"
+          test "$(git ls-remote origin refs/heads/compat/biz-ce13-httpstatus | cut -f1)" = 03abc8327411732de3cb0631449d5b1d831ca6f5
+          echo COMPAT_INTEGRATION_VERIFIED > "$RUNNER_TEMP/ce340-compat-readback/result.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ce340-compat-readback-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ce340-compat-readback/
+          if-no-files-found: error
+          retention-days: 14
