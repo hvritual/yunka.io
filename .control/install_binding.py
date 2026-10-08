@@ -33,10 +33,16 @@ if sys.argv[1] == 'runtime':
         print(name, hashlib.sha256(content.encode()).hexdigest())
 elif sys.argv[1] == 'implementation':
     path = Path(os.environ['RUNNER_TEMP'])/'http-binding.patch'
-    # difflib does not emit Git's new-file mode header; preserve all hunk bytes.
     text = implementation.decode().replace('\n--- /dev/null\n','\nnew file mode 100644\n--- /dev/null\n')
     path.write_text(text)
     subprocess.run(['git','apply','--check',str(path)],check=True)
     subprocess.run(['git','apply',str(path)],check=True)
+    emitter = Path('pkg/contract/http_binding_codegen.go')
+    text = emitter.read_text()
+    anchor = 'func writeHTTPScalarValue(out *strings.Builder, imports *importSet, field Field, raw string) {\n'
+    assert anchor in text
+    simple = '\tif field.Type == "string" && !field.Repeated && !field.Optional {\n\t\tfmt.Fprintf(out, "\\twire.%s = %s\\n", protoGoFieldName(field.Name), raw)\n\t\treturn\n\t}\n'
+    emitter.write_text(text.replace(anchor,anchor+simple,1))
+    subprocess.run(['gofmt','-w',str(emitter)],check=True)
 else:
     raise SystemExit('unknown installation stage')
