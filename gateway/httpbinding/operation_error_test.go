@@ -76,12 +76,12 @@ func TestWriteOperationErrorPreservesFrameworkPriorityAndSafeStatuses(t *testing
 		},
 		{
 			name: "application not found", err: status.Error(codes.NotFound, secret),
-			status: http.StatusNotFound, message: "application resource not found",
+			status: http.StatusNotFound, message: "application not found",
 		},
 		{
 			name: "wrapped application not found", err: fmt.Errorf("wrapped: %w",
 				status.Error(codes.NotFound, secret)),
-			status: http.StatusNotFound, message: "application resource not found",
+			status: http.StatusNotFound, message: "application not found",
 		},
 		{
 			name: "application aborted", err: status.Error(codes.Aborted, secret),
