@@ -1,0 +1,58 @@
+name: http-binding-prepare
+on:
+  push:
+    branches: [control/http-binding-semantics]
+    paths: ['.control/**', '.github/workflows/http-binding-prepare.yml']
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CONTROL_SHA: ${{ github.sha }}
+      BASE_SHA: d7902c98cc124d0b55fb7081df015633c550a0a0
+      OUTPUT_BRANCH: fix/http-binding-semantics
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: d7902c98cc124d0b55fb7081df015633c550a0a0
+          fetch-depth: 0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.25.13'
+          cache-dependency-path: |
+            pkg/go.sum
+            framework/go.sum
+            gateway/go.sum
+      - name: Install locked tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "$PROTOC_LINUX_X86_64_SHA256  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          export PATH="$RUNNER_TEMP/protoc/bin:$PATH"
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+          make toolchain-check rpc-tools rpc-toolchain-check
+      - name: Old-source failure, fixed behavior and scoped Runner-local Git publication
+        shell: bash
+        run: |
+          git show "$CONTROL_SHA:.control/qualify_binding.sh" > "$RUNNER_TEMP/qualify_binding.sh"
+          bash "$RUNNER_TEMP/qualify_binding.sh"
+      - name: Retain failure evidence without changing the candidate
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/http-binding"
+          git status --porcelain --untracked-files=all > "$RUNNER_TEMP/http-binding/status.txt"
+          git diff > "$RUNNER_TEMP/http-binding/uncommitted.patch"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: http-binding-qualification
+          path: ${{ runner.temp }}/http-binding
+          if-no-files-found: error
+          retention-days: 30
