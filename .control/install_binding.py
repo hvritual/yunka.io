@@ -26,8 +26,6 @@ if sys.argv[1] == 'runtime':
     for name, content in files.items():
         path = Path(name)
         assert not path.exists()
-        # Fixture correction demonstrated by the initial compile-only failure:
-        # RequireAuthorizedOperation takes an OperationID, not a plain string.
         old = 'authz.RequireAuthorizedOperation(ctx,id)'
         assert old in content
         content = content.replace(old,'authz.RequireAuthorizedOperation(ctx,authz.OperationID(id))')
@@ -35,7 +33,9 @@ if sys.argv[1] == 'runtime':
         print(name, hashlib.sha256(content.encode()).hexdigest())
 elif sys.argv[1] == 'implementation':
     path = Path(os.environ['RUNNER_TEMP'])/'http-binding.patch'
-    path.write_bytes(implementation)
+    # difflib does not emit Git's new-file mode header; preserve all hunk bytes.
+    text = implementation.decode().replace('\n--- /dev/null\n','\nnew file mode 100644\n--- /dev/null\n')
+    path.write_text(text)
     subprocess.run(['git','apply','--check',str(path)],check=True)
     subprocess.run(['git','apply',str(path)],check=True)
 else:
