@@ -1,0 +1,24 @@
+syntax = "proto3";
+package catalog.v1;
+
+import "yunka/dsl/v1/options.proto";
+option go_package = "example.com/releaseconsumer/contracts/catalog/v1;catalogv1";
+option (yunka.dsl.v1.domain) = { name: "catalog" version: "v1" };
+
+message GetEntryRequest { string id = 1; }
+message GetEntryResponse { string id = 1; }
+
+service CatalogApplication {
+  option (yunka.dsl.v1.application) = {
+    name: "query"
+    operations: {
+      id: "catalog.get"
+      use_case: "get_entry"
+      public: true
+      request_type: "catalog.v1.GetEntryRequest"
+      response_type: "catalog.v1.GetEntryResponse"
+      application_method: "GetEntry"
+      execution: { transaction: TRANSACTION_READ_ONLY idempotency: IDEMPOTENCY_NONE }
+    }
+  };
+}

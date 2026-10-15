@@ -1,0 +1,100 @@
+name: consumer-release-qualification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '**/go.mod'
+      - '**/go.sum'
+      - app/**
+      - pkg/**
+      - framework/**
+      - gateway/**
+      - infras/**
+      - contracts/proto/**
+      - tools/consumer-release-lock.json
+      - tools/qualify_consumer_release.py
+      - tools/test_qualify_consumer_release.py
+      - tools/release-consumer/**
+      - tools/toolchain.env
+      - tools/module-release-check.sh
+      - .github/workflows/consumer-release-qualification.yml
+  push:
+    branches: [main]
+    paths:
+      - '**/go.mod'
+      - '**/go.sum'
+      - app/**
+      - pkg/**
+      - framework/**
+      - gateway/**
+      - infras/**
+      - contracts/proto/**
+      - tools/consumer-release-lock.json
+      - tools/qualify_consumer_release.py
+      - tools/test_qualify_consumer_release.py
+      - tools/release-consumer/**
+      - tools/toolchain.env
+      - tools/module-release-check.sh
+      - .github/workflows/consumer-release-qualification.yml
+
+permissions:
+  contents: read
+
+jobs:
+  distribution:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GOTOOLCHAIN: local
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Read exact toolchain
+        id: lock
+        run: |
+          source tools/toolchain.env
+          echo "go_version=$GO_VERSION" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ steps.lock.outputs.go_version }}
+          cache: false
+      - name: Install checked protoc and plugins
+        run: |
+          set -euo pipefail
+          source tools/toolchain.env
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_RELEASE}/protoc-${PROTOC_RELEASE}-linux-x86_64.zip" -o "$RUNNER_TEMP/protoc.zip"
+          echo "${PROTOC_LINUX_X86_64_SHA256}  $RUNNER_TEMP/protoc.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/protoc.zip" -d "$RUNNER_TEMP/protoc"
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/.yunka/bin" >> "$GITHUB_PATH"
+          make rpc-tools
+      - name: Negative evidence controls
+        run: python3 -m unittest discover -s tools -p test_qualify_consumer_release.py -v
+      - name: Build bundle and qualify independent module consumer
+        run: python3 tools/qualify_consumer_release.py --out "$RUNNER_TEMP/consumer-release"
+      - name: Read back exact candidate and clean source
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,pathlib,subprocess
+          report=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'consumer-release/qualification.json').read_text())
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          tree=subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip()
+          assert report['status']=='PASS' and report['producerCommit']==head and report['producerTree']==tree
+          assert not subprocess.check_output(['git','status','--porcelain','--untracked-files=all']).strip()
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: consumer-release-candidate
+          path: |
+            ${{ runner.temp }}/consumer-release/*.json
+            ${{ runner.temp }}/consumer-release/*.tar.gz
+            ${{ runner.temp }}/consumer-release/logs
+          if-no-files-found: error
+          retention-days: 30

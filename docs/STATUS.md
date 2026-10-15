@@ -124,6 +124,19 @@ separate #235 work.
 
 ## Current framework state
 
+### Consumer distribution qualification
+
+The cs-biz F0 review reproduced two distribution defects on the existing
+baseline: the v0.1.0 probe requests a missing infras tag, and the current CLI
+fails an independent build against its declared older pkg dependency.
+The bounded repair aligns internal module requirements to externally
+downloaded, checksum-bound SDK pseudo-versions and adds packaged-CLI/external
+consumer qualification. The candidate does not publish or move existing tags,
+grant API stability, complete #234/#188, or qualify cs-biz runtime behavior.
+Exact candidate and CI/Production acceptance remain in its PR; source presence
+is **not yet a qualification or merged-release claim**. See the
+[distribution contract](release/consumer-distribution.md).
+
 | Area | Current state | Evidence / disposition |
 | --- | --- | --- |
 | C9 Operation Contract / execution semantics | **Complete / merged** | C9.9 closed the execution/conformance baseline; later C10/C11/B12 qualifications preserve the same canonical Executor/ExecutionScope ownership |

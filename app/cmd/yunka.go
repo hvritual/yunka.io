@@ -29,10 +29,14 @@ import (
 	"yunka.io/app/cmd/project"
 )
 
+// releaseVersion is set by the producer build; ordinary source builds remain
+// visibly unversioned rather than impersonating a released binary.
+var releaseVersion = "dev"
+
 func main() {
 	app := cli.NewApp()
 	app.Name = `yunka`
-	app.Version = "0.0.1"
+	app.Version = releaseVersion
 	app.Commands = []cli.Command{
 		add.Command(),
 		advisor.Command(),

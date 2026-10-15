@@ -42,6 +42,13 @@ This README is maintained as **current developer/product documentation**. For re
 
 ## Verification
 
+For a CLI candidate bundle and an independent, checksum-locked module consumer,
+run `make module-release-check` with the locked Go/protoc/plugins available.
+`YUNKA_RELEASE_OUT` may select a new evidence directory outside the checkout.
+This uses `tools/consumer-release-lock.json`, not a guessed common module tag.
+The output is a candidate artifact, not an automatically published release;
+see [consumer distribution qualification](docs/release/consumer-distribution.md).
+
 ```bash
 make toolchain-check
 make dependency-check

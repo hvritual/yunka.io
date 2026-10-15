@@ -5,12 +5,12 @@ go 1.25.0
 toolchain go1.25.13
 
 require (
-	github.com/hvritual/yunka.io/pkg v0.1.0
+	github.com/hvritual/yunka.io/pkg v0.1.1-0.20261008054254-352748832503
 	github.com/kataras/golog v0.1.5
 	github.com/pkg/errors v0.9.1
 	github.com/urfave/cli v1.22.5
-	golang.org/x/mod v0.37.0
-	golang.org/x/tools v0.47.0
+	golang.org/x/mod v0.38.0
+	golang.org/x/tools v0.48.0
 )
 
 require (
@@ -21,7 +21,7 @@ require (
 	github.com/rs/xid v1.2.1 // indirect
 	github.com/russross/blackfriday/v2 v2.0.1 // indirect
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
-	golang.org/x/crypto v0.54.0 // indirect
+	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
