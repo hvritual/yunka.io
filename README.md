@@ -10,7 +10,7 @@ After declaring a leaf Application and its Operations, run `yunka add implementa
 
 ## Requirements
 
-- Go 1.25.13
+- Go 1.26.9
 - `protoc` 3.21.12 (protobuf release 21.12) for contract generation and verification
 - GCC when running race tests or the SQLite-backed gateway tests
 

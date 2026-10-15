@@ -93,7 +93,7 @@ creating any target. Existing unplanned Go files in each destination package
 directory must also have compatible package declarations; canonical external test
 packages are allowed. Malformed or conflicting package clauses reject the preflight
 without partial creation. New writes are exclusive and contained by Go's `os.Root`
-APIs (the repository already requires Go 1.25.13). No force/overwrite/update policy
+APIs (the repository already requires Go 1.26.9). No force/overwrite/update policy
 exists. Regeneration never owns or deletes starter files.
 
 This is not a filesystem transaction or concurrent-edit lock. A later I/O error or

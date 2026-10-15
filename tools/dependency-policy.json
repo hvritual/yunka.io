@@ -72,6 +72,10 @@
     {
       "path": "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp",
       "version": "v1.45.0"
+    },
+    {
+      "path": "golang.org/x/net",
+      "version": "v0.60.0"
     }
   ],
   "workspaceModules": [],
