@@ -1,8 +1,8 @@
 module github.com/hvritual/yunka.io/framework
 
-go 1.25.0
+go 1.26.0
 
-toolchain go1.25.13
+toolchain go1.26.9
 
 require (
 	github.com/buger/jsonparser v1.6.1
@@ -10,7 +10,7 @@ require (
 	github.com/go-playground/universal-translator v0.17.0
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/golang/protobuf v1.5.4
-	github.com/hvritual/yunka.io/pkg v0.1.1-0.20261008054254-352748832503
+	github.com/hvritual/yunka.io/pkg v0.1.1-0.20261015114616-bc7c0e1dd6b4
 	github.com/pkg/errors v0.9.1
 	github.com/valyala/fasthttp v1.73.0
 	go.opentelemetry.io/contrib/exporters/autoexport v0.69.0
@@ -72,9 +72,9 @@ require (
 	go.opentelemetry.io/otel/sdk/log v0.21.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
-	golang.org/x/net v0.58.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260810153831-ec0a7760b754 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260807164820-c8921c73eeea // indirect
 	google.golang.org/protobuf v1.36.11 // indirect

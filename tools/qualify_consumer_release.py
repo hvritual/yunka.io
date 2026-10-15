@@ -128,6 +128,9 @@ def qualify(out):
     # Compile each producer module without the workspace that hid the old CLI graph.
     for name in ("framework", "gateway", "infras"):
         run("isolated-build-" + name, [go, "build", "-p=4", "-mod=readonly", "./..."], ROOT / name)
+    scanner = [go, "run", "golang.org/x/vuln/cmd/govulncheck@" + toolchain["GOVULNCHECK_VERSION"], "./..."]
+    for name in ("pkg", "framework", "gateway", "infras", "app"):
+        run("isolated-security-" + name, scanner, ROOT / name)
     bundle = out / "bundle"
     (bundle / "bin").mkdir(parents=True)
     version = "0.0.0-dev+" + commit[:12]
@@ -173,7 +176,10 @@ def qualify(out):
     consumer = out / "consumer"
     shutil.copytree(ROOT / "tools/release-consumer", consumer)
     requires = "\n".join("\t" + m["path"] + " " + m["version"] for m in lock["modules"])
-    (consumer / "go.mod").write_text("module example.com/releaseconsumer\n\ngo 1.25.0\n\nrequire (\n" + requires + "\n)\n")
+    language = re.search(r"(?m)^go ([0-9]+\.[0-9]+\.[0-9]+)$", (ROOT / "app/go.mod").read_text())
+    if not language:
+        raise ValueError("producer language directive missing")
+    (consumer / "go.mod").write_text("module example.com/releaseconsumer\n\ngo " + language[1] + "\n\nrequire (\n" + requires + "\n)\n")
     run("consumer-module", [str(cli), "module", "new", "--name", "catalog", "--root", str(consumer / "modules"), "--no-config", "--no-logger"], consumer)
     run("consumer-init", [str(cli), "init", "--root", str(consumer)], consumer)
     args = ["--root", str(consumer), "--proto-path", str(installed / "include"), "--full", "--format", "json"]
@@ -203,6 +209,7 @@ def qualify(out):
     run("consumer-build", [go, "build", "-buildvcs=false", "-mod=readonly", "./..."], consumer)
     run("consumer-tests", [go, "test", "-buildvcs=false", "-mod=readonly", "-count=1", "-v", "./..."], consumer)
     run("consumer-vet", [go, "vet", "-mod=readonly", "./..."], consumer)
+    run("consumer-security", scanner, consumer)
     audit = json.loads(run("consumer-source-audit", [str(cli), "audit", "source", "--root", str(consumer), "--format", "agent-json", "--timeout", "10m"], consumer))
     if audit.get("status") != "PASS" or not audit.get("sourceUnchanged"):
         raise ValueError("packaged source audit did not establish read-only completeness")

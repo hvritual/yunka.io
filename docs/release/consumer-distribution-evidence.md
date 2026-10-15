@@ -32,3 +32,17 @@ The initial remote distribution candidate `558289969d79cf13536940cbc4dd762f814e6
 Additional packaged-CLI inspection exposed that `-trimpath` erased runtime.GOROOT, so existing source audit correctly returned INCOMPLETE before executing tools. The packaging repair removes that build flag, records the required trusted Go installation root, and requires the packaged source audit to pass on the external consumer. It does not change source/type audit code or the prohibition on inherited/late GOROOT overrides. The receiver must satisfy the explicit toolchain-root condition; arbitrary-path portability is not claimed.
 
 The repository has no root LICENSE/COPYING/NOTICE file in this evaluated tree. The bundle manifest records the actual licensing-file inventory rather than inventing a grant. This candidate does not publish a release, promise SDK API stability, qualify cs-biz's operations, close #234/#188, merge unrelated PRs or deploy.
+
+## Approved security refresh
+
+Human approved Go 1.26.9 / x/net v0.60.0 at 2026-10-15 19:39:44 +08.
+Independent PR #245 accepted source bc7c0e1dd6b4e815951130c7acfbf60371445453
+passed all six candidate and separate main gates, including real MySQL.
+This refresh locks externally downloaded modules from that accepted source;
+old 3527488 download identities and Go1.25.13 artifacts remain historical.
+x/net requires go1.26.0; the independent consumer now derives its language
+directive from the producer. In addition to ordinary workspace CI security,
+the qualifier scans all five isolated producer modules and the external
+consumer with the unchanged locked govulncheck and current database.
+No advisory is suppressed; module-only/non-reachable messages remain in logs.
+New exact candidate/artifact receipts must be established independently.

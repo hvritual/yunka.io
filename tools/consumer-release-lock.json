@@ -1,30 +1,30 @@
 {
   "schemaVersion": 1,
-  "sdkSourceCommit": "3527488325030fbf86fe52804140c936e9d937a4",
+  "sdkSourceCommit": "bc7c0e1dd6b4e815951130c7acfbf60371445453",
   "modules": [
     {
       "path": "github.com/hvritual/yunka.io/pkg",
-      "version": "v0.1.1-0.20261008054254-352748832503",
-      "sum": "h1:8jSz7XtvlWYTjKBQwKJ7QRDAWYUJ2n3KlAyfkBcG7BQ=",
-      "goModSum": "h1:UiXjpcdr8XDps0wdYW933HZ/TYt2gCbO56Tp10Rlc2k="
+      "version": "v0.1.1-0.20261015114616-bc7c0e1dd6b4",
+      "sum": "h1:P0LA7djSxLu5SHXhpDK1ZdDisKwZkqg+TJ/QdTMRfHY=",
+      "goModSum": "h1:TIdo3jxP61ZD0Ufb/3iE79dYJ+Ei01ZtqiCbAC5l3Zk="
     },
     {
       "path": "github.com/hvritual/yunka.io/framework",
-      "version": "v0.1.1-0.20261008054254-352748832503",
-      "sum": "h1:d4mykr1Nw7jOxk4bo4xpHao3JKeX6J2WPfEizl+YnQk=",
-      "goModSum": "h1:B1yHWtjO8uF+6NQUo63MJr88LqpFfp5WeJWfB0/xtHs="
+      "version": "v0.1.1-0.20261015114616-bc7c0e1dd6b4",
+      "sum": "h1:If6azFUDuiin4fSBL7krJxgF1a+AyfuXKUSbUzkYUqc=",
+      "goModSum": "h1:ttZKb+PA8ox9GC86K4nbNIaUZdXYSEKOc7YtrokYdqI="
     },
     {
       "path": "github.com/hvritual/yunka.io/gateway",
-      "version": "v0.1.1-0.20261008054254-352748832503",
-      "sum": "h1:fPYrqvKwXyD6UQMK2m54H+xzczcFOlH+j+vaoclzPyA=",
-      "goModSum": "h1:3jgrmCck8g9TvHxjCDzDCk/WOEpra0tb+HxI4BMpidk="
+      "version": "v0.1.1-0.20261015114616-bc7c0e1dd6b4",
+      "sum": "h1:AzdGbdqQVYUuVmW2xyh0WL0moqZEye/ZkQ3ic03TDwI=",
+      "goModSum": "h1:bJRMgHz5Nj6SSNZLHEiXdVOwaa05MBL/gI3Gwqx68IY="
     },
     {
       "path": "github.com/hvritual/yunka.io/infras",
-      "version": "v0.0.0-20261008054254-352748832503",
-      "sum": "h1:XUlXqP/sbG+gISPnw10fRmLPB7bR8stUQYV1tetZchQ=",
-      "goModSum": "h1:1ERhdCSSPGVjbrnSNoM2SoMN0TFk+uFPm7Bz83Jn5iM="
+      "version": "v0.0.0-20261015114616-bc7c0e1dd6b4",
+      "sum": "h1:NNV0VGd9FPnlqAIGdIR1chL7bofV2V1TNt+yIX82E8w=",
+      "goModSum": "h1:GbQWBjfd8IRCYaEWfDxP4ZanwJmzpNZnelGg+s41YR0="
     }
   ]
 }

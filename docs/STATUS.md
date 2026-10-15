@@ -7,6 +7,15 @@
 > Reconciled date: 2026-09-17
 > Governance: [`DOCUMENTATION_GOVERNANCE.md`](DOCUMENTATION_GOVERNANCE.md)
 
+## Security compiler/network baseline — issue #244
+
+**State: BASELINE QUALIFIED / MERGED through PR #245; distribution refresh pending.**
+Human approved Go 1.26.9 plus x/net v0.60.0 on 2026-10-15. The separate
+security prerequisite preserves existing scanner, generation and Production
+checks. [Scope and retained failures](release/security-baseline.md) bind this
+decision. Accepted source bc7c0e1dd6b4e815951130c7acfbf60371445453 passed all six candidate and separate main gates; actual-main CI 38730752551 and Production/MySQL 38730752561 passed.
+Distribution PR #243 and cs-biz #11 remain dependent on requalification.
+
 ## OpenTelemetry security dependency closure — issue #237
 
 Issue #237 records reachable GO-2026-6615, GO-2026-6508 and

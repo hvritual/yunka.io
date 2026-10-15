@@ -43,7 +43,7 @@ Every repository task must:
 
 ## Toolchain and verification baseline
 
-- Go toolchain baseline: `1.25.13`.
+- Go toolchain baseline: `1.26.9`.
 - Protobuf compiler baseline: protobuf release `21.12` / `libprotoc 3.21.12`.
 - Exact tool versions/checksums are locked by `tools/toolchain.env`.
 - `protoc-gen-go` and `protoc-gen-go-grpc` are the only RPC generators.

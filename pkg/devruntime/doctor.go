@@ -141,7 +141,7 @@ func Doctor(ctx context.Context, options DoctorOptions) DoctorReport {
 		protocExpected = lock.ProtocVersion
 	}
 	if goExpected == "" {
-		goExpected = "1.25.13"
+		goExpected = "1.26.9"
 	}
 	checkTool("go", "version", goExpected, "install the exact Go toolchain locked by tools/toolchain.env")
 	checkTool("protoc", "--version", protocExpected, "install the exact protoc release locked by tools/toolchain.env")
