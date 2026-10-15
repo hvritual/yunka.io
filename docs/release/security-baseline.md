@@ -43,7 +43,7 @@ findings are not represented as a passing text-mode gate.
 
 ## Qualification state
 
-BASELINE QUALIFIED / MERGED through PR #245. Accepted source bc7c0e1dd6b4e815951130c7acfbf60371445453, tree 4e3ae46845f96f520ef913bc956f6a5f458ff144, passed six candidate gates and separate actual-main CI 38730752551, Production/MySQL 38730752561, branch baseline 38730752487, consumer types 38730752460, source policy 38730752562 and template 38730752505. Distribution/artifact requalification remains pending in PR #243.
+BASELINE QUALIFIED / MERGED through PR #245. Accepted source bc7c0e1dd6b4e815951130c7acfbf60371445453, tree 4e3ae46845f96f520ef913bc956f6a5f458ff144, passed six candidate gates and separate actual-main CI 38730752551, Production/MySQL 38730752561, branch baseline 38730752487, consumer types 38730752460, source policy 38730752562 and template 38730752505. Distribution/artifact qualification receipts are recorded separately on PR #243; the earlier security-source receipt does not substitute for them.
 Exact remote commit, run IDs and integration readback belong to issue #244
 and its linked PR. Prior Go 1.25.13 distribution artifacts remain unqualified
 for security and cannot be promoted by this decision alone.

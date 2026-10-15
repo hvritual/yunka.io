@@ -9,12 +9,18 @@
 
 ## Security compiler/network baseline — issue #244
 
-**State: BASELINE QUALIFIED / MERGED through PR #245; distribution refresh pending.**
+**State: BASELINE QUALIFIED / MERGED through PR #245.**
 Human approved Go 1.26.9 plus x/net v0.60.0 on 2026-10-15. The separate
 security prerequisite preserves existing scanner, generation and Production
 checks. [Scope and retained failures](release/security-baseline.md) bind this
 decision. Accepted source bc7c0e1dd6b4e815951130c7acfbf60371445453 passed all six candidate and separate main gates; actual-main CI 38730752551 and Production/MySQL 38730752561 passed.
-Distribution PR #243 and cs-biz #11 remain dependent on requalification.
+The distribution implementation uses four externally resolved module versions,
+a VCS-bound CLI bundle and independent installed-consumer generation, read-only
+audit, build/test/vet and isolated security scans. Exact candidate/artifact and
+actual-main acceptance are recorded on [PR #243](https://github.com/hvritual/yunka.io/pull/243)
+and [issue #244](https://github.com/hvritual/yunka.io/issues/244), separately from
+this accepted security-source receipt. The CI artifact is not a tagged release;
+cs-biz #11/F1 requires its own design and real-consumer admission evidence.
 
 ## OpenTelemetry security dependency closure — issue #237
 
