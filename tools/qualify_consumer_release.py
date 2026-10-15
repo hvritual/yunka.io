@@ -132,7 +132,11 @@ def qualify(out):
     (bundle / "bin").mkdir(parents=True)
     version = "0.0.0-dev+" + commit[:12]
     binary = bundle / "bin/yunka"
-    build = [go, "build", "-p=4", "-mod=readonly", "-trimpath", "-buildvcs=true", "-ldflags=-X main.releaseVersion=" + version, "-o"]
+    # Source/type audit intentionally trusts the checker's compiled-in GOROOT.
+    # -trimpath erases it and makes that existing fail-closed contract unusable.
+    # Keep the root explicit as an installation prerequisite, never override it.
+    required_go_root = run("go-root", [go, "env", "GOROOT"])
+    build = [go, "build", "-p=4", "-mod=readonly", "-buildvcs=true", "-ldflags=-X main.releaseVersion=" + version, "-o"]
     run("cli-build", build + [str(binary), "./cmd"], ROOT / "app")
     second = out / "yunka-second"
     run("cli-rebuild", build + [str(second), "./cmd"], ROOT / "app")
@@ -150,6 +154,7 @@ def qualify(out):
         shutil.copyfile(path, bundle / path.name)
     manifest = {"schemaVersion": 1, "status": "CANDIDATE_NOT_PUBLISHED", "cliModule": "yunka.io/app", "version": version,
                 "producerCommit": commit, "producerTree": tree, "sdkLock": lock, "toolchain": toolchain,
+                "requiredGoRoot": required_go_root,
                 "platform": "linux/amd64", "toolSha256": {name: sha(Path(shutil.which(name))) for name in ("go", "protoc", "protoc-gen-go", "protoc-gen-go-grpc")},
                 "buildInfo": build_info, "repositoryLicenseFiles": [p.name for p in licenses],
                 "files": {p.relative_to(bundle).as_posix(): sha(p) for p in sorted(bundle.rglob("*")) if p.is_file()}}
@@ -198,6 +203,9 @@ def qualify(out):
     run("consumer-build", [go, "build", "-buildvcs=false", "-mod=readonly", "./..."], consumer)
     run("consumer-tests", [go, "test", "-buildvcs=false", "-mod=readonly", "-count=1", "-v", "./..."], consumer)
     run("consumer-vet", [go, "vet", "-mod=readonly", "./..."], consumer)
+    audit = json.loads(run("consumer-source-audit", [str(cli), "audit", "source", "--root", str(consumer), "--format", "agent-json", "--timeout", "10m"], consumer))
+    if audit.get("status") != "PASS" or not audit.get("sourceUnchanged"):
+        raise ValueError("packaged source audit did not establish read-only completeness")
     generated = consumer / "contracts/generated/operation-plans.json"
     original = generated.read_bytes()
     generated.write_bytes(b"{}\n")

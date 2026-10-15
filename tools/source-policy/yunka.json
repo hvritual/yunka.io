@@ -155,6 +155,11 @@
   ],
   "exclusions": [
     {
+      "path": "tools/release-consumer",
+      "kind": "fixture",
+      "reason": "Copied into a disposable independent Go module and compiled/tested by consumer-release-qualification; never producer/runtime source"
+    },
+    {
       "path": "app/cmd/applicationboundary/testdata",
       "kind": "fixture",
       "reason": "Deliberately violating analysistest source; qualified by the typed checker test harness"
