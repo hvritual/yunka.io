@@ -36,7 +36,7 @@ This is a design comparison, not a claim that the unadopted linters were run or
 benchmarked. No external linter runtime or dependency version is added. The
 original design used Go 1.25.13 and app's already-direct x/mod v0.37.0.
 Current qualification identities follow `tools/toolchain.env` and actual module
-graphs; the approved security baseline is Go 1.26.9. Native Go and x/mod
+graphs; the approved security baseline is Go 1.26.10. Native Go and x/mod
 are upstream Go-project tools; no code from the two compared linters is embedded.
 
 There is one source-policy input for component boundaries, module/profile scope,

@@ -2,7 +2,7 @@ module yunka.io/app
 
 go 1.26.0
 
-toolchain go1.26.9
+toolchain go1.26.10
 
 require (
 	github.com/hvritual/yunka.io/pkg v0.1.1-0.20261015114616-bc7c0e1dd6b4
