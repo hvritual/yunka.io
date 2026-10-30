@@ -13,8 +13,8 @@
 
 The cs-biz domain migration reproduced reachable GO-2026-6809 on the unchanged
 Go 1.26.9 baseline through SMTP/TLS certificate verification. The user authorized
-the minimal Go 1.26.10 security upgrade on 2026-10-30. Current workspace/module,
-doctor and workflow version declarations select that patch release; protobuf
+the minimal Go 1.26.10 security upgrade on 2026-10-30. Current workspace/module and
+workflow version declarations select that patch release; protobuf
 tools, the four published SDK versions/checksums and runtime/API contracts remain
 unchanged. Existing Go 1.26.9 qualification below remains historical evidence for
 its exact accepted candidate and is not rewritten as a Go 1.26.10 pass.
