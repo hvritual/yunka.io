@@ -7,6 +7,40 @@
 > Reconciled date: 2026-09-17
 > Governance: [`DOCUMENTATION_GOVERNANCE.md`](DOCUMENTATION_GOVERNANCE.md)
 
+## Certificate verification security prerequisite — Go 1.26.10
+
+**State: AUTHORIZED / CANDIDATE IMPLEMENTED; QUALIFICATION PENDING.**
+
+The cs-biz domain migration reproduced reachable GO-2026-6809 on the unchanged
+Go 1.26.9 baseline through SMTP/TLS certificate verification. The user authorized
+the minimal Go 1.26.10 security upgrade on 2026-10-30. Current workspace/module and
+workflow version declarations select that patch release; protobuf
+tools, the four published SDK versions/checksums and runtime/API contracts remain
+unchanged. Existing Go 1.26.9 qualification below remains historical evidence for
+its exact accepted candidate and is not rewritten as a Go 1.26.10 pass.
+
+The original CI, Production/MySQL, relevant consumer source/type/template gates
+and independent packaged-consumer qualification must establish their own exact
+candidate evidence. No main integration, tag, stable release, deployment or
+cs-biz runtime qualification is claimed. See the bounded
+[compiler security upgrade record](release/compiler-security-upgrade.md).
+
+## Nested Domain source grouping — cs-biz pressure
+
+**State: IMPLEMENTED / QUALIFICATION PENDING.**
+The exact locked cs-biz migration in [PR #82](https://github.com/hvritual/cs-biz/pull/82)
+failed with `DOMAIN_EXEMPTION_TARGET_INVALID`. Its isolated Linux directory
+controls also proved that deleting the exemption hid both the migrated domain
+and a newly unregistered nested domain from the direct-child inventory.
+The bounded compiler candidate discovers canonical domain surfaces through
+grouping directories and reuses that inventory for generation, checks,
+generated-artifact audit and ownership. Duplicate logical identities, aliases,
+and nested Go modules fail closed. Runtime, SDK source and business contracts
+are unchanged. [The change boundary](release/nested-domain-coverage.md) records
+qualification obligations; source presence is not distribution or consumer
+acceptance. The existing Go 1.26.10 candidate is retained for the downstream
+compiler security requirement.
+
 ## Security compiler/network baseline — issue #244
 
 **State: BASELINE QUALIFIED / MERGED through PR #245.**

@@ -81,7 +81,7 @@ func InspectCoverage(root string) ([]CoverageEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	entries, err := os.ReadDir(absolute)
+	entries, err := discoverDomainSurfaces(absolute)
 	if os.IsNotExist(err) {
 		return nil, nil
 	}
@@ -104,39 +104,18 @@ func InspectCoverage(root string) ([]CoverageEntry, error) {
 	result := make([]CoverageEntry, 0, len(entries))
 	seenExemptions := make(map[string]struct{}, len(exemptions))
 	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
-			continue
-		}
-		domainRoot := filepath.Join(absolute, entry.Name())
-		manifestPath := filepath.Join(domainRoot, ManifestName)
-		_, manifestErr := os.Stat(manifestPath)
-		managed := manifestErr == nil
-		if manifestErr != nil && !os.IsNotExist(manifestErr) {
-			return nil, manifestErr
-		}
-		signals, err := domainLikeSignals(domainRoot)
-		if err != nil {
-			return nil, err
-		}
-		if managed {
-			if _, conflict := exemptions[entry.Name()]; conflict {
-				return nil, fmt.Errorf("DOMAIN_COVERAGE_CONFLICT: domain %q has %s and an exemption; remove the exemption", entry.Name(), ManifestName)
+		if entry.State == CoverageManaged {
+			if _, conflict := exemptions[entry.Domain]; conflict {
+				return nil, fmt.Errorf("DOMAIN_COVERAGE_CONFLICT: domain %q has %s and an exemption; remove the exemption", entry.Domain, ManifestName)
 			}
-			result = append(result, CoverageEntry{Domain: entry.Name(), Root: domainRoot, State: CoverageManaged, Signals: signals})
+			result = append(result, entry)
 			continue
 		}
-		if len(signals) == 0 {
-			continue
+		if exemption, ok := exemptions[entry.Domain]; ok {
+			seenExemptions[entry.Domain] = struct{}{}
+			entry.State, entry.Reason, entry.Owner, entry.Expires = CoverageExempt, exemption.Reason, exemption.Owner, exemption.Expires
 		}
-		if exemption, ok := exemptions[entry.Name()]; ok {
-			seenExemptions[entry.Name()] = struct{}{}
-			result = append(result, CoverageEntry{
-				Domain: entry.Name(), Root: domainRoot, State: CoverageExempt, Signals: signals,
-				Reason: exemption.Reason, Owner: exemption.Owner, Expires: exemption.Expires,
-			})
-			continue
-		}
-		result = append(result, CoverageEntry{Domain: entry.Name(), Root: domainRoot, State: CoverageUnknown, Signals: signals})
+		result = append(result, entry)
 	}
 
 	for domain := range exemptions {

@@ -42,12 +42,15 @@ func InspectGeneratedArtifacts(root string) ([]GeneratedArtifactIssue, error) {
 	if err != nil {
 		return nil, err
 	}
-	entries, err := os.ReadDir(absolute)
+	entries, err := InspectCoverage(absolute)
 	if os.IsNotExist(err) {
 		return []GeneratedArtifactIssue{}, nil
 	}
 	if err != nil {
 		return nil, err
+	}
+	if _, err := os.Stat(absolute); os.IsNotExist(err) {
+		return []GeneratedArtifactIssue{}, nil
 	}
 	moduleDirectory, goModule, err := findOwningGoModule(absolute)
 	if err != nil {
@@ -60,32 +63,28 @@ func InspectGeneratedArtifacts(root string) ([]GeneratedArtifactIssue, error) {
 
 	var issues []GeneratedArtifactIssue
 	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+		if entry.State != CoverageManaged {
 			continue
 		}
-		domainRoot := filepath.Join(absolute, entry.Name())
-		if _, err := os.Stat(filepath.Join(domainRoot, ManifestName)); os.IsNotExist(err) {
-			continue
-		} else if err != nil {
-			return nil, err
-		}
+		domainRoot := entry.Root
+
 		rawSpec, err := readManifest(domainRoot)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", entry.Name(), err)
+			return nil, fmt.Errorf("%s: %w", entry.Domain, err)
 		}
 		spec := canonicalizeSpec(upgradeSpec(rawSpec))
 		if spec.TablePrefix != projectConfig.Database.TablePrefix {
-			return nil, fmt.Errorf("%s: table prefix %q differs from project database prefix %q", entry.Name(), spec.TablePrefix, projectConfig.Database.TablePrefix)
+			return nil, fmt.Errorf("%s: table prefix %q differs from project database prefix %q", entry.Domain, spec.TablePrefix, projectConfig.Database.TablePrefix)
 		}
-		if spec.Domain != entry.Name() {
-			return nil, fmt.Errorf("%s: manifest domain=%q must match directory name", entry.Name(), spec.Domain)
+		if spec.Domain != entry.Domain {
+			return nil, fmt.Errorf("%s: manifest domain=%q must match directory name", entry.Domain, spec.Domain)
 		}
 		if err := validateSpec(spec); err != nil {
-			return nil, fmt.Errorf("%s: %w", entry.Name(), err)
+			return nil, fmt.Errorf("%s: %w", entry.Domain, err)
 		}
 		scanned, err := scanPOObjects(domainRoot, spec.Objects, spec.TablePrefix, spec.Domain)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", entry.Name(), err)
+			return nil, fmt.Errorf("%s: %w", entry.Domain, err)
 		}
 		expectedSpec := spec
 		expectedSpec.Objects = scanned
@@ -96,7 +95,7 @@ func InspectGeneratedArtifacts(root string) ([]GeneratedArtifactIssue, error) {
 		}
 		expected, err := renderComplete(expectedSpec, packageImport)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", entry.Name(), err)
+			return nil, fmt.Errorf("%s: %w", entry.Domain, err)
 		}
 
 		walkErr := filepath.WalkDir(domainRoot, func(path string, current os.DirEntry, walkErr error) error {
@@ -123,7 +122,7 @@ func InspectGeneratedArtifacts(root string) ([]GeneratedArtifactIssue, error) {
 				return err
 			}
 			issues = append(issues, GeneratedArtifactIssue{
-				Kind: GeneratedStaleArtifact, Domain: entry.Name(), Path: filepath.ToSlash(projectPath),
+				Kind: GeneratedStaleArtifact, Domain: entry.Domain, Path: filepath.ToSlash(projectPath),
 				Reason: "generator-owned file is no longer present in the canonical Domain renderer output",
 			})
 			return nil
@@ -145,7 +144,7 @@ func InspectGeneratedArtifacts(root string) ([]GeneratedArtifactIssue, error) {
 			}
 			formatted, err := format.Source([]byte(expectedSource))
 			if err != nil {
-				return nil, fmt.Errorf("%s: format %s: %w", entry.Name(), relative, err)
+				return nil, fmt.Errorf("%s: format %s: %w", entry.Domain, relative, err)
 			}
 			expectedSource = string(formatted)
 			actualPath := filepath.Join(domainRoot, filepath.FromSlash(relative))
@@ -157,7 +156,7 @@ func InspectGeneratedArtifacts(root string) ([]GeneratedArtifactIssue, error) {
 			actual, err := os.ReadFile(actualPath)
 			if os.IsNotExist(err) {
 				issues = append(issues, GeneratedArtifactIssue{
-					Kind: GeneratedArtifactDrift, Domain: entry.Name(), Path: projectPath,
+					Kind: GeneratedArtifactDrift, Domain: entry.Domain, Path: projectPath,
 					Reason: "canonical Domain renderer expects a generated file that is missing",
 				})
 				continue
@@ -167,14 +166,14 @@ func InspectGeneratedArtifacts(root string) ([]GeneratedArtifactIssue, error) {
 			}
 			if !strings.HasPrefix(string(actual), generatedDomainMarker) {
 				issues = append(issues, GeneratedArtifactIssue{
-					Kind: GeneratedOwnershipConflict, Domain: entry.Name(), Path: projectPath,
+					Kind: GeneratedOwnershipConflict, Domain: entry.Domain, Path: projectPath,
 					Reason: "canonical generator-owned path contains source without the Domain generated marker",
 				})
 				continue
 			}
 			if string(actual) != expectedSource {
 				issues = append(issues, GeneratedArtifactIssue{
-					Kind: GeneratedArtifactDrift, Domain: entry.Name(), Path: projectPath,
+					Kind: GeneratedArtifactDrift, Domain: entry.Domain, Path: projectPath,
 					Reason: "generator-owned file differs from the canonical Domain renderer output",
 				})
 			}

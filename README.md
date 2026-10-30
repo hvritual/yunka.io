@@ -8,9 +8,21 @@ and the RPC generator.
 
 After declaring a leaf Application and its Operations, run `yunka add implementation --root . --composition-package <exact-Go-package> --format agent-json <domain>/<application>` to preview the canonical-interface-based starter. Add `--apply` to create the owner factory, hidden per-use-case handlers, explicit type policy and task/ADR templates without overwriting developer files. Every handler starts with an explicit not-implemented error; no business success, persistence or runtime registration is generated. AG-06.2 integrates this proven layout into ordinary authoring: Go projects initialized by `yunka init` receive a preserved `.yunka/source-policy.json`, `yunka context` exposes starter/source-audit commands, ownership recognizes that policy, change planning derives the exact sealed handler, and `add operation` avoids a competing flat landing file when a sealed starter already exists. See the [implementation starter contract](docs/architecture/APPLICATION-IMPLEMENTATION-STARTER.md), [default governance contract](docs/architecture/APPLICATION-DEFAULT-GOVERNANCE.md) and [current status](docs/STATUS.md).
 
+## Domain source grouping
+
+Domain discovery follows grouping directories below the configured generated Go
+root until it finds a `domain.json` or a `domain/` source anchor. Flat domains
+and grouped domains such as `internal/modules/customer` share the same coverage,
+generation, generated-file audit and ownership inventory. The domain directory
+name remains its logical identity; duplicate identities at different paths fail.
+Handwritten domains still need an exact `.yunka/domain-coverage.json` exemption.
+Removing that exemption cannot hide a nested domain. Discovery rejects symbolic
+directory aliases and nested Go modules instead of silently omitting their source.
+Existing generated outputs and runtime module registration remain separate.
+
 ## Requirements
 
-- Go 1.26.9
+- Go 1.26.10
 - `protoc` 3.21.12 (protobuf release 21.12) for contract generation and verification
 - GCC when running race tests or the SQLite-backed gateway tests
 

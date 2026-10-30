@@ -2,7 +2,7 @@ module github.com/hvritual/yunka.io/gateway
 
 go 1.26.0
 
-toolchain go1.26.9
+toolchain go1.26.10
 
 require (
 	github.com/aliyun/aliyun-log-go-sdk v0.1.127
