@@ -7,6 +7,24 @@
 > Reconciled date: 2026-09-17
 > Governance: [`DOCUMENTATION_GOVERNANCE.md`](DOCUMENTATION_GOVERNANCE.md)
 
+## Certificate verification security prerequisite — Go 1.26.10
+
+**State: AUTHORIZED / CANDIDATE IMPLEMENTED; QUALIFICATION PENDING.**
+
+The cs-biz domain migration reproduced reachable GO-2026-6809 on the unchanged
+Go 1.26.9 baseline through SMTP/TLS certificate verification. The user authorized
+the minimal Go 1.26.10 security upgrade on 2026-10-30. Current workspace/module and
+workflow version declarations select that patch release; protobuf
+tools, the four published SDK versions/checksums and runtime/API contracts remain
+unchanged. Existing Go 1.26.9 qualification below remains historical evidence for
+its exact accepted candidate and is not rewritten as a Go 1.26.10 pass.
+
+The original CI, Production/MySQL, relevant consumer source/type/template gates
+and independent packaged-consumer qualification must establish their own exact
+candidate evidence. No main integration, tag, stable release, deployment or
+cs-biz runtime qualification is claimed. See the bounded
+[compiler security upgrade record](release/compiler-security-upgrade.md).
+
 ## Security compiler/network baseline — issue #244
 
 **State: BASELINE QUALIFIED / MERGED through PR #245.**
