@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-// RegenerateAll discovers every managed domain directly below root and
+// RegenerateAll discovers every managed domain within root and
 // regenerates its persistence-only artifacts. Domain-like surfaces with no
 // explicit ownership decision fail closed before generation starts.
 func RegenerateAll(root string) (int, error) {

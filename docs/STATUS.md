@@ -25,6 +25,22 @@ candidate evidence. No main integration, tag, stable release, deployment or
 cs-biz runtime qualification is claimed. See the bounded
 [compiler security upgrade record](release/compiler-security-upgrade.md).
 
+## Nested Domain source grouping — cs-biz pressure
+
+**State: IMPLEMENTED / QUALIFICATION PENDING.**
+The exact locked cs-biz migration in [PR #82](https://github.com/hvritual/cs-biz/pull/82)
+failed with `DOMAIN_EXEMPTION_TARGET_INVALID`. Its isolated Linux directory
+controls also proved that deleting the exemption hid both the migrated domain
+and a newly unregistered nested domain from the direct-child inventory.
+The bounded compiler candidate discovers canonical domain surfaces through
+grouping directories and reuses that inventory for generation, checks,
+generated-artifact audit and ownership. Duplicate logical identities, aliases,
+and nested Go modules fail closed. Runtime, SDK source and business contracts
+are unchanged. [The change boundary](release/nested-domain-coverage.md) records
+qualification obligations; source presence is not distribution or consumer
+acceptance. The existing Go 1.26.10 candidate is retained for the downstream
+compiler security requirement.
+
 ## Security compiler/network baseline — issue #244
 
 **State: BASELINE QUALIFIED / MERGED through PR #245.**

@@ -286,16 +286,14 @@ func Check(root string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := ValidateCoverage(absolute); err != nil {
-		return err
-	}
-	entries, err := os.ReadDir(absolute)
-	if os.IsNotExist(err) {
-		return nil
-	}
+	entries, err := ValidateCoverage(absolute)
 	if err != nil {
 		return err
 	}
+	if _, err := os.Stat(absolute); os.IsNotExist(err) {
+		return nil
+	}
+
 	moduleDirectory, goModule, err := findOwningGoModule(absolute)
 	if err != nil {
 		return err
@@ -306,44 +304,42 @@ func Check(root string) error {
 	}
 	var failures []error
 	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+		if entry.State != CoverageManaged {
 			continue
 		}
-		domainRoot := filepath.Join(absolute, entry.Name())
-		if _, err := os.Stat(filepath.Join(domainRoot, ManifestName)); os.IsNotExist(err) {
-			continue
-		}
+		domainRoot := entry.Root
+
 		rawSpec, err := readManifest(domainRoot)
 		if err != nil {
-			failures = append(failures, fmt.Errorf("%s: %w", entry.Name(), err))
+			failures = append(failures, fmt.Errorf("%s: %w", entry.Domain, err))
 			continue
 		}
 		spec := canonicalizeSpec(upgradeSpec(rawSpec))
 		if rawSpec.Version != SpecVersion || len(rawSpec.Objects) == 0 || rawSpec.REST != nil || rawSpec.RPC != nil {
-			failures = append(failures, fmt.Errorf("%s: manifest requires persistence-only V3 upgrade; run yunka domain generate --path %s", entry.Name(), domainRoot))
+			failures = append(failures, fmt.Errorf("%s: manifest requires persistence-only V3 upgrade; run yunka domain generate --path %s", entry.Domain, domainRoot))
 		}
 		if spec.TablePrefix != projectConfig.Database.TablePrefix {
-			failures = append(failures, fmt.Errorf("%s: table prefix %q differs from project database prefix %q", entry.Name(), spec.TablePrefix, projectConfig.Database.TablePrefix))
+			failures = append(failures, fmt.Errorf("%s: table prefix %q differs from project database prefix %q", entry.Domain, spec.TablePrefix, projectConfig.Database.TablePrefix))
 		}
-		if spec.Domain != entry.Name() {
-			failures = append(failures, fmt.Errorf("%s: manifest domain=%q must match directory name", entry.Name(), spec.Domain))
+		if spec.Domain != entry.Domain {
+			failures = append(failures, fmt.Errorf("%s: manifest domain=%q must match directory name", entry.Domain, spec.Domain))
 		}
 		if err := validateSpec(spec); err != nil {
-			failures = append(failures, fmt.Errorf("%s: %w", entry.Name(), err))
+			failures = append(failures, fmt.Errorf("%s: %w", entry.Domain, err))
 			continue
 		}
 		scanned, scanErr := scanPOObjects(domainRoot, spec.Objects, spec.TablePrefix, spec.Domain)
 		if scanErr != nil {
-			failures = append(failures, fmt.Errorf("%s: %w", entry.Name(), scanErr))
+			failures = append(failures, fmt.Errorf("%s: %w", entry.Domain, scanErr))
 			continue
 		}
 		for _, object := range scanned {
 			if _, err := os.Stat(filepath.Join(domainRoot, "infrastructure", "persistence", object.File)); err != nil {
-				failures = append(failures, fmt.Errorf("%s: PO object %s must be stored in snake_case file %s: %w", entry.Name(), object.Name, object.File, err))
+				failures = append(failures, fmt.Errorf("%s: PO object %s must be stored in snake_case file %s: %w", entry.Domain, object.Name, object.File, err))
 			}
 		}
 		if !poContractEqual(spec.Objects, scanned) {
-			failures = append(failures, fmt.Errorf("%s: PO object/field contract drift; run yunka domain generate --path %s", entry.Name(), domainRoot))
+			failures = append(failures, fmt.Errorf("%s: PO object/field contract drift; run yunka domain generate --path %s", entry.Domain, domainRoot))
 		}
 		expectedSpec := spec
 		expectedSpec.Objects = scanned
@@ -355,7 +351,7 @@ func Check(root string) error {
 		}
 		expected, err := renderComplete(expectedSpec, packageImport)
 		if err != nil {
-			failures = append(failures, fmt.Errorf("%s: %w", entry.Name(), err))
+			failures = append(failures, fmt.Errorf("%s: %w", entry.Domain, err))
 			continue
 		}
 		_ = filepath.WalkDir(domainRoot, func(path string, current os.DirEntry, walkErr error) error {
@@ -375,7 +371,7 @@ func Check(root string) error {
 				return readErr
 			}
 			if isFrameworkGenerated(relative, string(contents)) {
-				failures = append(failures, fmt.Errorf("%s: stale generated file %s", entry.Name(), relative))
+				failures = append(failures, fmt.Errorf("%s: stale generated file %s", entry.Domain, relative))
 			}
 			return nil
 		})
@@ -390,11 +386,11 @@ func Check(root string) error {
 			}
 			actual, readErr := os.ReadFile(filepath.Join(domainRoot, filepath.FromSlash(relative)))
 			if readErr != nil {
-				failures = append(failures, fmt.Errorf("%s: missing generated file %s", entry.Name(), relative))
+				failures = append(failures, fmt.Errorf("%s: missing generated file %s", entry.Domain, relative))
 				continue
 			}
 			if string(actual) != source {
-				failures = append(failures, fmt.Errorf("%s: generated drift in %s; run yunka domain generate --path %s", entry.Name(), relative, domainRoot))
+				failures = append(failures, fmt.Errorf("%s: generated drift in %s; run yunka domain generate --path %s", entry.Domain, relative, domainRoot))
 			}
 		}
 	}
